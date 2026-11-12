@@ -286,3 +286,11 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
   ② `_advance_run_create` 里 `actions`/`codes` 未导入（内部错误 70，被 repro 抓到）；
   ③ repro 的注入一度选「重入建第二个实例」，但那条路被**未结案意图/已绑定/writer 非 idle** 三层同时挡着，任何单点注入都不可达 → 改成「把快照写成非原字节」，目标断言落在**快照必须等于确认的原字节**（机制稿 §7.1）。
 - 未做：`run advance/pause/terminate`（B5-2/B5-3）；`_resume_run_create` 在 creation 文件缺失时以空值续做（登记为后续项）。
+
+### B5-2 —— `run advance` 最小闭环（2026-11-12）
+
+- 落点：`runs.advance` + 纯函数 `_applicability`/`_next_step`/`_previous_task_step`/`_human_answer`/`_advance_step_done`；实例记录上落 `run.advance` 动作（`resolve_step` → `create_or_reuse_task` → `record_cursor`）。
+- 判定顺序：结算（成功归档→satisfied；异常归档→`WF_SEMANTIC_DECISION`）→ **等待**（当前步骤任务未完成就停在原地，不跳步）→ 可略（须有决定，记 skipped，不建任务）→ human（答复须属声明选项）→ task（复用映射或按顺序前置建任务，前置须正常归档）。
+- **分界**：「这一步算不算完成、产物够不够用」由人在任务上走四阶段判；实例只引用任务结果，不复制 status/Check。
+- 用例：`test_run_advance.py`（6 例）、`repro/run-advance-creates-task.py`（双模）。
+- 未做：`run pause`/`run terminate`（B5-3）；`step_results` 的产物引用（`outputs`）与「已有产物记复用」未实现——登记为后续项。

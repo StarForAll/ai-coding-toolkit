@@ -1138,6 +1138,329 @@ def _resume_run_create(ctx, key, session, record, action, text):
                                workflow_id, digest, targets.get("instance"))
 
 
+ADVANCE_STEPS = ("resolve_step", "create_or_reuse_task", "record_cursor")
+
+
+def _applicability(creation, doc):
+    """步骤适用性：`creation.steps` 的声明优先；未声明的按定义默认（required 即适用）。"""
+    declared = (creation or {}).get("steps") or {}
+    result = {}
+    for step in doc.get("steps") or []:
+        if not isinstance(step, dict) or not step.get("id"):
+            continue
+        step_id = step["id"]
+        if step_id in declared:
+            result[step_id] = declared[step_id]
+        else:
+            result[step_id] = "skipped" if step.get("required") is False and False else "applicable"
+    return result
+
+
+def _ordered_steps(doc):
+    return [step for step in doc.get("steps") or [] if isinstance(step, dict) and step.get("id")]
+
+
+def _next_step(doc, creation, step_id):
+    """下一个未记录的步骤（`step_results` 里已有结果的跳过）；到头返回 None。"""
+    ordered = _ordered_steps(doc)
+    ids = [step["id"] for step in ordered]
+    start = 0 if not step_id else ids.index(step_id) + 1
+    return ordered[start] if start < len(ordered) else None
+
+
+def _previous_task_step(doc, step_id):
+    """上一个未略过的 task 步骤（顺序前置只直接引用它，human 步骤不生成任务边）。"""
+    ordered = _ordered_steps(doc)
+    previous = None
+    for step in ordered:
+        if step.get("id") == step_id:
+            return previous
+        if step.get("type") == "task":
+            previous = step
+    return previous
+
+
+def _human_answer(decisions, step):
+    """人判答复：`subject` 含该步骤 id；`skip` 表示按 skip 处置（仅可略步骤）。"""
+    for decision in decisions or []:
+        if not isinstance(decision, dict):
+            continue
+        subject = decision.get("subject")
+        text = " ".join(str(item) for item in subject) if isinstance(subject, list) else str(subject or "")
+        if step["id"] not in text:
+            continue
+        return decision
+    return None
+
+
+def advance(ctx, args):
+    """`run advance --run <id> [--decision <path>]`：推进实例游标（机制稿 §7.3）。
+
+    本批覆盖**最小闭环**：首达任务步骤建任务并写顺序边（重入不建第二份）、
+    human 步骤记答复、可略步骤按 skip 记结果、前一任务归档持久化可核后记 satisfied 并推进。
+    实例记录上的 `run.advance` 动作固定目标（新任务/顺序边/游标），中断按原意图续做。
+    """
+    from . import actions as actions_mod, cli, lock, session as session_mod, tasks as tasks_mod, writer as writer_mod
+
+    run_id = args.value("--run")
+    decision_path = args.value("--decision")
+    if not run_id:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run advance requires --run <id>"})
+    decisions = cli._load_decision(decision_path) if decision_path else []
+    key = ctx.key()
+    with lock.acquire(ctx.root, holder_hint="run advance"):
+        record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        if record.get("state") != "held" or holder.get("id") != key:
+            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
+                               next_="由绑定该实例的会话推进；他人持有写权时先走交接/恢复出口")
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") != "run" or scope.get("id") != run_id:
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "writer scope is not this run", "scope": scope,
+                                   "run": run_id})
+        binding = session_mod.load_binding(ctx.root, key) or {}
+        if ((binding.get("object") or {}).get("kind") != "run"
+                or (binding.get("object") or {}).get("id") != run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "session is not bound to this run",
+                                   "binding": binding.get("object")})
+        run = load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
+                                                           "run": run_id})
+        if run.get("terminal"):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+        if run.get("paused"):
+            raise DefinitionError("WF_SEMANTIC_DECISION",
+                                  {"reason": "run is paused", "exit": "先 run resume 或终止实例"})
+        # 固定快照：记录里的摘要必须仍等于快照文件本身（源定义改了不影响已固定实例）
+        snapshot_rel = (run.get("definition") or {}).get("snapshot_path")
+        snapshot_abs = join(ctx.root, snapshot_rel or "")
+        if not snapshot_rel or not os.path.isfile(snapshot_abs):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                  {"reason": "definition snapshot missing", "path": snapshot_rel})
+        with open(snapshot_abs, "rb") as handle:
+            snapshot_bytes = handle.read()
+        digest = "sha256:" + records.sha256_hex(snapshot_bytes)
+        if digest != (run.get("definition") or {}).get("digest"):
+            raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                  {"reason": "snapshot digest mismatch",
+                                   "recorded": (run.get("definition") or {}).get("digest"),
+                                   "current": digest})
+        doc, problems = parse_definition(snapshot_bytes.decode("utf-8"))
+        if doc is None or problems:
+            raise DefinitionError("WF_DEFINITION_INVALID",
+                                  {"reason": "fixed snapshot is not statically valid",
+                                   "problems": problems})
+        creation = run.get("creation_decision") or {}
+        cursor = run.get("cursor") or {}
+        step_results = dict(run.get("step_results") or {})
+        task_map = dict(run.get("task_map") or {})
+        sequence = list(run.get("sequence_changes") or [])
+
+        # ① 先把「已完成的步骤」结掉：前一个任务正常归档且持久化可核 → satisfied 并推进游标
+        current = cursor.get("step_id")
+        settled = None
+        if current:
+            mapping = task_map.get(current) or {}
+            task_id = mapping.get("task_id")
+            task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+            if task is None:
+                raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                      {"reason": "mapped task missing", "step": current,
+                                       "task": task_id})
+            persisted = tasks_mod.archive_persisted(ctx.root, task)
+            if task.get("terminal") == "normal" and persisted.get("persisted"):
+                settled = current
+                step_results[current] = {"kind": "satisfied", "task_id": task_id,
+                                         "at": records.now_str(),
+                                         "terminal": task.get("terminal")}
+            elif task.get("terminal"):
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "task ended abnormally; step is not satisfied",
+                                       "step": current, "task": task_id,
+                                       "terminal": task.get("terminal")},
+                                      next_="按机制稿 §6.4/§7.4 处置该任务后重试")
+
+        # ①' 当前步骤已有任务但还没正常归档：**停在原地等它**，不跳到下一步
+        #    （机制稿 §7.3：任务四阶段完成且归档持久化可核后才记 satisfied 并推进 cursor）
+        if current and settled is None:
+            mapping = task_map.get(current) or {}
+            if mapping.get("task_id"):
+                return codes.result(
+                    "WF_OK", object={"id": run_id},
+                    position_=codes.position(scope="run", step_id=current,
+                                             task_id=mapping["task_id"]),
+                    next_="当前步骤的任务尚未正常归档：在该任务上完成四阶段后重入 advance",
+                    facts={"run": run_id, "step": current, "task": mapping["task_id"],
+                           "waiting": True, "cursor": cursor,
+                           "step_results": step_results})
+
+        # ② 找下一个要处理的步骤
+        step = _next_step(doc, creation, settled or current)
+        if step is None:
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run"),
+                                next_="所有步骤已记录结果：run terminate/finish 仍未交付",
+                                facts={"run": run_id, "cursor": cursor,
+                                       "step_results": step_results, "settled": settled})
+        step_id = step["id"]
+        applicability = _applicability(creation, doc)
+        decided = _human_answer(decisions, step)
+
+        if applicability.get(step_id) == "skipped":
+            # 可略步骤：不为保存答复强建任务；下游替代链已在静态校验里核过
+            if decided is None:
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "skippable step needs a decision",
+                                       "step": step_id,
+                                       "decision_point": ((step.get("skip") or {}).get("decision_point"))},
+                                      next_="用 --decision 记录略过决定（subject 含该步骤 id）")
+            step_results[step_id] = {"kind": "skipped", "at": records.now_str(),
+                                     "decision": decided.get("choice"),
+                                     "decision_detail": decided}
+            run = dict(run, step_results=step_results,
+                       cursor={"step_id": step_id, "task_id": None})
+            records.write_json(run_path(ctx.root, run_id), run)
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run", step_id=step_id),
+                                next_="该步骤已记 skipped；继续 advance 推进下一步",
+                                facts={"run": run_id, "step": step_id, "skipped": True,
+                                       "cursor": run["cursor"], "step_results": step_results})
+
+        if step.get("type") == "human":
+            if decided is None:
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "human step needs an answer", "step": step_id,
+                                       "question": step.get("question"),
+                                       "choices": step.get("choices")},
+                                      next_="用 --decision 记录答复（subject 含该步骤 id）")
+            if decided.get("choice") not in (step.get("choices") or []):
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "answer is not one of the declared choices",
+                                       "step": step_id, "got": decided.get("choice"),
+                                       "choices": step.get("choices")})
+            step_results[step_id] = {"kind": "satisfied", "at": records.now_str(),
+                                     "decision": decided.get("choice")}
+            run = dict(run, step_results=step_results,
+                       cursor={"step_id": step_id, "task_id": None})
+            records.write_json(run_path(ctx.root, run_id), run)
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run", step_id=step_id),
+                                next_="人判步骤已记录；继续 advance 推进下一步",
+                                facts={"run": run_id, "step": step_id, "answer": decided.get("choice"),
+                                       "cursor": run["cursor"]})
+
+        # ③ task 步骤：已映射就复用（重入不建第二份），否则按**预生成 id + 意图固定**创建
+        mapping = task_map.get(step_id) or {}
+        if mapping.get("task_id"):
+            task_id = mapping["task_id"]
+            task = tasks_mod.load_task(ctx.root, task_id)
+            if task is None:
+                raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                      {"reason": "mapped task missing", "task": task_id})
+            return codes.result("WF_OK", object={"id": run_id},
+                                position_=codes.position(scope="run", step_id=step_id,
+                                                         task_id=task_id),
+                                next_="该步骤的任务已生成：在其上完成四阶段后重入 advance 记 satisfied",
+                                facts={"run": run_id, "step": step_id, "task": task_id,
+                                       "reused": True, "cursor": cursor})
+        previous = _previous_task_step(doc, step_id)
+        predecessors = []
+        if previous is not None:
+            prior_task = (task_map.get(previous["id"]) or {}).get("task_id")
+            if not prior_task:
+                raise DefinitionError("WF_DEPENDENCY_UNMET",
+                                      {"reason": "previous task step has no task yet",
+                                       "step": previous["id"]})
+            prior_record = tasks_mod.load_task(ctx.root, prior_task) or {}
+            if prior_record.get("terminal") != "normal":
+                raise DefinitionError("WF_DEPENDENCY_UNMET",
+                                      {"reason": "previous step's task is not normally archived",
+                                       "step": previous["id"], "task": prior_task,
+                                       "terminal": prior_record.get("terminal")},
+                                      next_="先完成并正常归档上一个任务，再推进")
+            predecessors = [prior_task]
+        task = tasks_mod.new_task_record(step.get("task_kind") or "ordinary",
+                                         step.get("title") or step_id)
+        task["run_id"] = run_id
+        task["prerequisites"] = list(predecessors)
+        inputs = {"run": run_id, "step": step_id, "task": task["id"],
+                  "predecessors": sorted(predecessors)}
+        action = actions_mod.new_action("run.advance",
+                                        writer_mod.owner_ref("session", key, scope),
+                                        int(run.get("revision", 0)), inputs,
+                                        steps=list(ADVANCE_STEPS),
+                                        head_before=actions_mod.head_of(ctx.root),
+                                        targets=[{"kind": "run", "id": run_id},
+                                                 {"kind": "task", "id": task["id"]},
+                                                 {"kind": "step", "id": step_id}])
+        run = dict(run, action=action)
+        records.write_json(run_path(ctx.root, run_id), run)
+        template = join(ctx.root, ".wf/templates/task")
+        directory = join(ctx.root, f"{tasks_mod.TASKS_REL}/{tasks_mod.dir_name(task['id'], task['title'])}")
+        staging = join(ctx.root, f"{tasks_mod.TASKS_REL}/.staging-{task['id']}")
+        if os.path.exists(directory) or os.path.exists(staging):
+            raise cli.CliError("WF_TARGET_COLLISION",
+                               {"path": _rel(ctx.root, directory if os.path.exists(directory) else staging)})
+        tasks_mod._publish_task_tree(ctx, directory, staging, template, task)
+        task_map[step_id] = {"task_id": task["id"], "predecessors": sorted(predecessors),
+                             "superseded_ids": []}
+        run = dict(run, task_map=task_map, cursor={"step_id": step_id, "task_id": task["id"]},
+                   action=actions_mod.complete(
+                       action, summary="run.advance",
+                       control_assertion=cli._control_assertion(
+                           ctx, "run.advance", writer_mod.owner_ref("session", key, scope),
+                           action, [f"task:{task['id']}"])))
+        records.write_json(run_path(ctx.root, run_id), run)
+        session_mod.write_runtime(ctx.root, key, {
+            "binding_digest": records.plain_digest(binding),
+            "instance_id": binding.get("instance_id"),
+            "object": {"kind": "run", "id": run_id},
+            "current_task": task["id"],
+            "cursor": run["cursor"],
+        })
+    stale = [step for step in ADVANCE_STEPS if not _advance_step_done(ctx, run_id, run, step)]
+    if stale:
+        raise DefinitionError("WF_PERSISTENCE_FAILED",
+                              {"reason": "run.advance step postcondition missing", "steps": stale},
+                              next_="重入 run advance 续做（按已固定的任务 id，不新建第二份）")
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", step_id=step_id, task_id=task["id"],
+                                 action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_="在该任务上完成四阶段（Plan/Execute/Check/Finish）后重入 advance 记 satisfied",
+        facts={"run": run_id, "step": step_id, "task": task["id"],
+               "directory": _rel(ctx.root, directory),
+               "predecessors": predecessors, "cursor": run["cursor"],
+               "terminated": sequence},
+    )
+
+
+def _advance_step_done(ctx, run_id, run, step):
+    """`run.advance` 各步的真实后置（不看步骤字段）。"""
+    from . import tasks as tasks_mod
+
+    cursor = run.get("cursor") or {}
+    step_id = cursor.get("step_id")
+    mapping = (run.get("task_map") or {}).get(step_id) or {}
+    task_id = mapping.get("task_id")
+    if step == "resolve_step":
+        return bool(step_id)
+    if step == "create_or_reuse_task":
+        if not task_id:
+            return False
+        record = tasks_mod.load_task(ctx.root, task_id)
+        return isinstance(record, dict) and record.get("run_id") == run_id
+    if step == "record_cursor":
+        return cursor.get("task_id") == task_id and bool(task_id)
+    return False
+
+
 def locate(ctx, args):
     """`run locate --run <id>`：只读定位（机制稿 §2.1 的绑定内定位）。"""
     from . import codes, tasks as tasks_mod
@@ -1168,10 +1491,6 @@ def locate(ctx, args):
                                "task_map": run.get("task_map") or {},
                                "sequence_changes": run.get("sequence_changes") or [],
                                "tasks": tasks})
-
-
-def advance(*_args, **_kwargs):
-    raise assets.CapabilityUnavailable("run advance (D12)", ROUND)
 
 
 def pause(*_args, **_kwargs):
