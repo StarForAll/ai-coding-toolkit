@@ -4342,11 +4342,10 @@ def inspect(ctx):
         "bindings": bindings,
         "spec": _spec_summary(ctx.root),
         "governance": _governance_summary(ctx.root, tasks, archived),
-        # A5：治理面明确声明本轮**未输出**的类别，避免读者把四类当成全量覆盖
-        "governance_omitted": [
-            {"category": "manual_compare", "note": "「需人工比对」清单（witnessed/potential 模式对）延至第二轮"},
-            {"category": "author_order", "note": "author 复核顺序（ai 优先、extracted 前置）延至第二轮"},
-        ],
+        # 治理面声明本轮**未输出**的类别（A5 纪律）：交付后不得再有「未声明且未输出」的类。
+        # 2026-11-12：`manual_compare`/`author_order`/`out_of_scope_duplicates` 均已交付，
+        # 清单据此清空——空列表本身是断言（「没有隐瞒的类别」），不是省略。
+        "governance_omitted": [],
     }
     warnings = []
     for receipt in receipts:
@@ -4365,6 +4364,176 @@ def inspect(ctx):
                          "active_dirs": len(active)})
     return codes.result("WF_OK", position_=codes.position(scope="maintenance" if writer.get("holder") else None),
                         next_="按报告逐项处置；修复另取授权", facts=facts, warnings=warnings)
+
+
+def _scan_repo_paths(root):
+    """本次巡检可读的合法仓库路径：已跟踪 + 未忽略的未跟踪（不含 `.git/`）。
+
+    只看工作树，不做历史回扫（机制稿 §8.5 的比对范围就是「本次有效 active spec 的合法模式
+    × 同一次巡检的项目路径范围」）。读不出就抛 OSError，由调用方记 unknown 而不是当零。
+    """
+    proc = subprocess.run(["git", "-c", "core.quotePath=false", "ls-files", "-z",
+                           "--cached", "--others", "--exclude-standard"],
+                          cwd=str(root), capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        return None
+    paths = []
+    for item in proc.stdout.split("\0"):
+        if not item or item.startswith(".git/"):
+            continue
+        paths.append(item)
+    return sorted(set(paths))
+
+
+def _manual_compare(root):
+    """「需人工比对」清单（机制稿 §8.5 三步算法；设计稿 §6.2）。
+
+    分类只有两种：`witnessed`（有当前路径同时命中两份规则——证明适用范围相交，**不证明内容矛盾**）
+    与 `potential`（前缀规则不能排除重叠、且无当前见证）。**不判定语义矛盾**：那要人对照正文。
+    未知不当零：无合法 paths、条目非法、扫描不可用都进 `unverified`，且不据此给出候选结论。
+    """
+    from . import paths as paths_mod
+    from . import spec as spec_mod
+
+    unverified = []
+    entries = []
+    for entry in spec_mod.all_specs(root):
+        problems = list(entry.get("problems") or []) + list(entry.get("path_problems") or [])
+        if problems:
+            unverified.append({"path": entry.get("path"), "reason": "spec unparsable or illegal",
+                               "problems": problems})
+            continue
+        if (entry.get("metadata") or {}).get("status") != "active":
+            continue
+        patterns = [item for item in entry.get("paths") or [] if isinstance(item, str) and item]
+        if not patterns:
+            unverified.append({"path": entry.get("path"),
+                               "reason": "active spec declares no legal paths"})
+            continue
+        entries.append({"path": entry.get("path"), "patterns": sorted(set(patterns))})
+
+    repo_paths = _scan_repo_paths(root)
+    if repo_paths is None:
+        unverified.append({"reason": "repository path scan unavailable"})
+        repo_paths = []
+
+    hits = {}
+    for item in entries:
+        matched = {}
+        for pattern in item["patterns"]:
+            for path in repo_paths:
+                if paths_mod.match_path(pattern, path):
+                    matched.setdefault(path, set()).add(pattern)
+        hits[item["path"]] = matched
+
+    witnessed, potential = [], []
+    for index, left in enumerate(entries):
+        for right in entries[index + 1:]:
+            pair = [left["path"], right["path"]]
+            shared = sorted(set(hits[left["path"]]) & set(hits[right["path"]]))
+            if shared:
+                pairs = sorted({tuple(sorted((sorted(hits[left["path"]][path])[0],
+                                              sorted(hits[right["path"]][path])[0])))
+                                for path in shared})
+                witnessed.append({
+                    "pair": pair,
+                    "patterns": [[a, b] for a, b in pairs],
+                    "witnesses": shared,
+                    "class": "witnessed",
+                    "label": "已证实交集",
+                })
+                continue
+            unexcluded = [[a, b] for a in left["patterns"] for b in right["patterns"]
+                          if not paths_mod.provably_disjoint(a, b)]
+            if not unexcluded:
+                continue     # 全部模式组合可证不相交 → 不进比对候选
+            potential.append({
+                "pair": pair,
+                "unexcluded": unexcluded,
+                "basis": "前缀检查不能排除、无当前路径见证",
+                "class": "potential",
+                "label": "待核实的潜在交集",
+            })
+
+    return {
+        "witnessed": witnessed,
+        "potential": potential,
+        "unverified": unverified,
+        "counts": {"witnessed": len(witnessed), "potential": len(potential),
+                   "candidates": len(witnessed) + len(potential),
+                   "unexpanded": 0},
+        "scan": {"spec_files": len(entries) + len(unverified), "repo_paths_scanned": len(repo_paths)},
+    }
+
+
+def _author_order(root):
+    """`author` 复核顺序（机制稿 §8.5 知识治理清单）：`extracted` 前置、`author=ai` 优先。
+
+    只给**顺序与依据**，不判「该不该复核」——那是人按正文与证据决定。
+    """
+    from . import spec as spec_mod
+
+    queue = []
+    for entry in spec_mod.all_specs(root):
+        problems = list(entry.get("problems") or []) + list(entry.get("path_problems") or [])
+        if problems or (entry.get("metadata") or {}).get("status") != "active":
+            continue
+        metadata = entry.get("metadata") or {}
+        verified = metadata.get("verified_at")
+        extracted = verified in (None, "extracted")
+        author = metadata.get("author")
+        reasons = []
+        if extracted:
+            reasons.append("extracted" if verified == "extracted" else "verified_at 缺失")
+        if author == "ai":
+            reasons.append("author=ai")
+        queue.append((0 if extracted else 1, 0 if author == "ai" else 1,
+                      entry.get("path") or "", {
+                          "path": entry.get("path"),
+                          "author": author,
+                          "verified_at": verified,
+                          "reason": " 且 ".join(reasons) if reasons else "已核实的 human 结论",
+                      }))
+    queue.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [item[3] for item in queue]
+
+
+def _out_of_scope_duplicates(root):
+    """知识拒绝项的重复登记核对（机制稿 §8.4：同 concept 多文件由巡检报重复）。
+
+    一概念一文件；重提只追加 `## 既往请求`，不新建文件。出现多份即**报重复登记**，
+    由人合并或删除——不自动取舍（哪一份是权威是判断，不是事实）。
+    读不出/无 concept 的文件单列 `unverified`：未知不当零。
+    """
+    from . import spec as spec_mod
+
+    directory = join(root, ".wf/out-of-scope")
+    if not os.path.isdir(directory):
+        return {"duplicates": [], "unverified": [], "files": 0}
+    by_concept = {}
+    unverified = []
+    files = 0
+    for name in sorted(os.listdir(directory)):
+        if not name.endswith(".md"):
+            continue
+        relative = f".wf/out-of-scope/{name}"
+        try:
+            with open(os.path.join(directory, name), "r", encoding="utf-8") as handle:
+                metadata, problems = spec_mod.parse_frontmatter_text(handle.read())
+        except OSError as exc:
+            unverified.append({"path": relative, "reason": f"unreadable: {exc}"})
+            continue
+        files += 1
+        concept = metadata.get("concept")
+        if problems or not isinstance(concept, str) or not concept:
+            unverified.append({"path": relative,
+                               "reason": "frontmatter unparsable or concept missing",
+                               "problems": problems})
+            continue
+        by_concept.setdefault(concept, []).append(relative)
+    duplicates = [{"concept": concept, "files": sorted(paths)}
+                  for concept, paths in sorted(by_concept.items()) if len(paths) > 1]
+    return {"duplicates": duplicates, "unverified": unverified, "files": files}
 
 
 def _governance_summary(root, tasks, archived):
@@ -4506,6 +4675,10 @@ def _governance_summary(root, tasks, archived):
             "problem": window_problem,
             "statistic_complete": not unknown,
         },
+        # 两级治理输出（机制稿 §8.5）：只给事实与分类，语义矛盾交人对照正文。
+        "manual_compare": _manual_compare(root),
+        "author_order": _author_order(root),
+        "out_of_scope_duplicates": _out_of_scope_duplicates(root),
         "inspection": {
             "every_tasks": every,
             "normal_archived": len(normal),
