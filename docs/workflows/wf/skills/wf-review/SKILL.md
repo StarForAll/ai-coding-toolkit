@@ -31,6 +31,7 @@ user-invoked: true
 1. 运行上面的 `review-context`，拿到 `report_path` 与 `materials`。
 2. 只读 `materials` 里的材料（`diff.patch` 是相对 HEAD 的差异；`prd.md` 是本次批准的需求；`check.json` 是 Check 锚点；`tests.json` 是已执行的验证命令）。需要时可只读仓库补充，但不越出排除面。
 3. 报告写到 `report_path`（文件名 `review-<agent>.md` **就是身份**，正文不必再写 `reviewer-id`/`source-cli`）。写完后把文件头部的 `status=in-progress` 改成 `status=done`——`review-import` 只认 `done`。
+   **报告已存在时先看状态行**：`status=in-progress` 是你自己这次的占位（`review-context` 写的骨架），正常续写；**已是 `status=done`** 说明该槽位本轮已完成一份报告、只是还没导入——**停止并回报给人，不要覆盖**。
 4. 按固定检查轴逐项检查：范围、验收、契约/spec、跨层回归、可测性。
 5. 材料不足以覆盖某个轴时**停止并回报**，不自行扩大读取范围；越界与缺材料写进 `scope-exceptions`。
 6. 报告 = 头部状态行 + Markdown 正文 + 唯一协议块：

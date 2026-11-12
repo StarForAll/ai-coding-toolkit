@@ -701,7 +701,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:54dba187d36e383de9005d2ef5be93458f8bbeaa0bc1e84a4da6a461bd040ba0",
+      "digest": "sha256:0997dc100595bb0ee1c2bb83587eda6f01fee17d80c903dc0dcd1653abab39c9",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:dcfc982140a332b1e7ada8bf6dad34b8e5c2ea953a5f3439a80bdfa0899658e4",
+    "rules_digest": "sha256:cc5f997b708a033e509739bb37533a097d0493dfed364bf6119dc5a26ece9395",
     "systems": [
       "linux"
     ],
