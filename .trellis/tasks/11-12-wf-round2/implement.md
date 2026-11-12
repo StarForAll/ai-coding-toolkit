@@ -371,8 +371,10 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 
 **本轮已落地（B1-甲 + A2-甲 + A 类同步）**：机制稿 §5.1/§11.3 的 `persist_pending` 加入 `run.finish`；§3.5 的 d 档语义改写为「命中批准触碰面却被另一活动任务显式登记为未处置 WIP」，并写明「已提交但归属不可解析」不在其范围；§12.1 的 D03/D07/D08/D11/D12/D13 轮次列改为已交付（D07/D11/D13 括注待补的过程义务）；§11.3 状态动作表补 `run.create/pause/resume/finish`、`definition.prepare`、`task.rework/replace`、`dependency.change`；§0.1 叙述同批记录。
 
-**C 类排期（都在第二轮面内，不推第三轮）**：
-1. C2 + C6：`run terminate` 的固定提交步骤 + 预览（同一条命令的入口与后置）；
-2. C4 + C5 + C7：返工入口内 release、替换预览、复评「待复评」事实（同一类“先给事实再让人确认”）；
-3. C3：巡检四类三态（纯报告）；
-4. C1：`definition prepare` 的 `definition.prepare` 动作意图（与 B1 同源的终态语义）。
+**C 类排期（都在第二轮面内，不推第三轮）—— 2026-11-12 全部补齐**：
+1. ✅ C2 + C6（`6430b940`）：`run terminate` 的 `persist_record` 固定提交步骤（`persist_pending` → 授权提交 → 只读双核 → `done`）+ `--preview` 只读清单；计划元素 `decision_ref` 支持 Decision 数组（首项处置、其余提交授权）。
+2. ✅ C4 + C5 + C7（`fdbc9db4`）：返工普通任务分支在入口内 `release`；`task-replace --preview`；`task-reassess` 未持权返回 `waiting + pending_reassessment`（不再抛 `WF_WRITER_BUSY`）。
+3. ✅ C3（`a2594373`）：`inspect` 的 `four_class_verdicts`——四类各自 `passed/failed/unknown` + `uncovered` + `overall`，`unknown` 不等于通过。
+4. ✅ C1（`c94294ea`）：`definition prepare` 在准备记录上登记 `definition.prepare` 动作；草稿同样登记并标 `draft-only`。
+
+补齐后机制稿 §12.1 的 D07/D11/D13 括注与 D24 行已同步为「已交付」，不再留「待补」字样。
