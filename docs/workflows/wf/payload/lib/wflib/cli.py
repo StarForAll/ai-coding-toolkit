@@ -1084,6 +1084,42 @@ def cmd_enable(ctx, args):
     )
 
 
+def _runtime_current_task(ctx, kind, target):
+    """运行态缓存里的 `current_task`：任务绑定就是它本身；实例绑定取实例游标所指的任务。"""
+    if kind == "task":
+        return target
+    from . import runs as runs_mod
+
+    run = runs_mod.load_run(ctx.root, target) or {}
+    return (run.get("cursor") or {}).get("task_id")
+
+
+def _eligible_run_bind(ctx, run_id):
+    """实例绑定的资格（机制稿 §6.1 的绑定面）：实例存在、未终态。
+
+    不核 `cursor.task_id`——那是**推进**的前置（`tasks.bind_task_for_write` 在写入口核），
+    绑定只确认"这个会话要接的是哪个在途实例"。已结束的实例不给绑定：正常结束只回报结果，
+    异常结束要在新会话绑定**保留任务**（`independent_resume`），不是重新绑这个实例。
+    """
+    from . import runs as runs_mod
+
+    run = runs_mod.load_run(ctx.root, run_id)
+    if not isinstance(run, dict):
+        raise CliError("WF_HISTORY_UNRESOLVED",
+                       {"reason": "run record missing or unreadable", "run": run_id},
+                       next_="只读核对实例记录；不新建同名实例覆盖")
+    if run.get("terminal") == "normal":
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "run ended normally", "run": run_id},
+                       next_="正常结束的实例只回报结果；下一个对象由新会话选择")
+    if run.get("terminal") == "abnormal":
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "run ended abnormally; bind its retained task instead",
+                        "run": run_id, "terminal": "abnormal"},
+                       next_="在新会话绑定保留任务（其 task.independent_resume 记录了许可）")
+    return {"kind": "run", "id": run_id}
+
+
 def _eligible_task_bind(ctx, task):
     """独立接续资格（机制稿 §6.1）的绑定面。
 
@@ -1162,7 +1198,7 @@ def _resume_bind(ctx, key, session, object_ref, target, kind, record):
             "binding_digest": records.plain_digest(binding),
             "instance_id": binding.get("instance_id"),
             "object": object_ref,
-            "current_task": target if kind == "task" else None,
+            "current_task": _runtime_current_task(ctx, kind, target),
             "cursor": None,
         },
     )
@@ -1182,12 +1218,6 @@ def cmd_bind(ctx, args, kind="task"):
     _check_layout(ctx.root)
     if kind == "task" and args.value("--run"):
         kind = "run"      # `--run` 走实例分支（此前该分支不可达，属死代码）
-    if kind == "run":
-        # 实例绑定属第二轮：必须在绑定/恢复分支之前拒绝，否则已绑定的会话
-        # 会以 WF_OK 走通并写出错误对象类型的运行态（第十九轮复审 N19-3）。
-        raise CliError("WF_CAPABILITY_UNAVAILABLE",
-                       {"capability": "bind --run", "round": 2, "target": args.value("--run")},
-                       next_="实例绑定等第二轮交付；首轮用 bind --task <id>")
     target = args.value("--task") or args.value("--run")
     if not target:
         raise CliError("WF_PATH_INVALID", {"reason": "bind requires --task <id> or --run <id>"})
@@ -1235,10 +1265,8 @@ def cmd_bind(ctx, args, kind="task"):
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": target})
         _eligible_task_bind(ctx, task)
         object_ref = {"kind": "task", "id": target}
-    else:  # 兜底：正常路径已在入口拒绝 `--run`
-        raise CliError("WF_CAPABILITY_UNAVAILABLE",
-                       {"capability": "bind --run", "round": 2, "target": target},
-                       next_="实例绑定等第二轮交付；首轮用 bind --task <id>")
+    else:  # 实例绑定：新会话接续在途实例（机制稿 §6.1 的绑定面）
+        object_ref = _eligible_run_bind(ctx, target)
     with _lock(ctx.root, hint="bind"):
         # 同对象接续允许进入核验路径（保留 WIP 随响应交回新会话）；其他对象仍阻断
         assert_no_foreign_wip(ctx, exclude_id=(object_ref or {}).get("id"))
@@ -1303,7 +1331,7 @@ def cmd_bind(ctx, args, kind="task"):
                     "binding_digest": records.plain_digest(binding),
                     "instance_id": instance_id,
                     "object": object_ref,
-                    "current_task": target if kind == "task" else None,
+                    "current_task": _runtime_current_task(ctx, kind, target),
                     "cursor": None,
                 },
             )
@@ -1489,6 +1517,36 @@ def _writer_acquire(ctx):
     )
 
 
+def _ensure_run_releasable(ctx, run_id):
+    """实例写权释放的前置（机制稿 §4.4 的同一口径）：实例已暂停或已终态，且当前任务无保留 WIP。"""
+    from . import runs as runs_mod, tasks as tasks_mod
+
+    run = runs_mod.load_run(ctx.root, run_id)
+    if not isinstance(run, dict):
+        raise CliError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+    if not run.get("terminal") and not run.get("paused"):
+        raise CliError("WF_SEMANTIC_DECISION",
+                       {"reason": "release requires a paused or ended instance",
+                        "run": run_id, "paused": bool(run.get("paused")),
+                        "terminal": run.get("terminal")},
+                       next_="先 run pause（或 run terminate / run finish）再释放写权")
+    task_id = (run.get("cursor") or {}).get("task_id")
+    if not task_id:
+        return
+    task = tasks_mod.load_task(ctx.root, task_id) or {}
+    retained = tasks_mod.wip_paths(task)
+    if retained:
+        from . import scope as scope_mod
+
+        dirty = set(scope_mod.uncommitted_paths(ctx.root))
+        still = [path for path in retained if path in dirty]
+        if still:
+            raise CliError("WF_WORKSPACE_UNRESOLVED",
+                           {"reason": "run task keeps undisposed WIP", "task": task_id,
+                            "paths": still},
+                           next_="先处置这些路径（提交/反向修正/承接）再释放")
+
+
 def _writer_release(ctx):
     record, holder = ctx.require_held()
     key = ctx.key()
@@ -1503,8 +1561,11 @@ def _writer_release(ctx):
         if task is None:
             raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
         tasks_mod.ensure_releasable(task, ctx.root)
+    elif object_ref.get("kind") == "run":
+        _ensure_run_releasable(ctx, object_ref.get("id"))
     else:
-        raise CliError("WF_BINDING_MISMATCH", {"reason": "release for run requires instance capability (round 2)"})
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "bound object is neither task nor run", "object": object_ref})
     with _lock(ctx.root, hint="writer release"):
         # 锁内重新执行完整核验：状态、持有者、范围与代次（机制稿 §4.2）
         ctx.require_held()
