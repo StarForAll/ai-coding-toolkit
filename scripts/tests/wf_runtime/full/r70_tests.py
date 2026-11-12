@@ -80,12 +80,12 @@ def run_uninstall(target, mutator=None):
                              "--project", target, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
-    while "请输入令牌确认" not in buffer:
+    while "请输入预览指纹确认" not in buffer:
         char = proc.stdout.read(1)
         if not char:
             break
         buffer += char
-    token = re.search(r"令牌：([0-9a-f]{32})", buffer)
+    token = re.search(r"预览指纹：([0-9a-f]{8})", buffer)
     # 进程可能在提示前就退出（前置不成立/已无内容可卸）：此时写管道会 BrokenPipe 掩盖真实原因。
     # 直接把它已输出的内容带回去，由断言显示事实。
     if token is None and proc.poll() is not None:
@@ -95,7 +95,7 @@ def run_uninstall(target, mutator=None):
     if mutator:
         mutator()
     try:
-        proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+        proc.stdin.write((token.group(1) if token else "0" * 8) + "\n")
         proc.stdin.flush()
     except BrokenPipeError:
         pass

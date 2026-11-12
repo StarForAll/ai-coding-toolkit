@@ -133,14 +133,14 @@ import re as _re
 preview = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"),
                           "--project", F, "--dispose", "/tmp/dispose_plan.json"],
                          capture_output=True, text=True)
-token = _re.search(r"令牌：([0-9a-f]{32})", preview.stdout)
+token = _re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
 apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"),
                             "--project", F, "--dispose", "/tmp/dispose_plan.json",
-                            "--apply", "--nonce", token.group(1) if token else "0" * 32],
+                            "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
-rec("V3", "人处置维护组并回写 disposition（预览+令牌）",
-    "repair --dispose 预览给出令牌并写回回执",
+rec("V3", "人处置维护组并回写 disposition（预览+短指纹）",
+    "repair --dispose 预览给出短指纹并写回回执",
     f"token={'yes' if token else 'no'} {apply_run.stdout.strip().splitlines()[-1] if apply_run.stdout.strip() else apply_run.stderr[-120:]}",
     bool(token) and apply_run.returncode == 0 and "WF_OK" in apply_run.stdout)
 

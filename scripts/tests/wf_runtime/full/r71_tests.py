@@ -98,15 +98,15 @@ def run_dispose(plan_path, mutator=None):
                              "--dispose", plan_path, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
-    while "请输入令牌确认" not in buffer:
+    while "请输入预览指纹确认" not in buffer:
         char = proc.stdout.read(1)
         if not char:
             break
         buffer += char
-    token = re.search(r"令牌：([0-9a-f]{32})", buffer)
+    token = re.search(r"预览指纹：([0-9a-f]{8})", buffer)
     if mutator:
         mutator()
-    proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+    proc.stdin.write((token.group(1) if token else "0" * 8) + "\n")
     proc.stdin.flush()
     rest = proc.stdout.read()
     proc.wait(timeout=90)
@@ -171,13 +171,13 @@ def reset_writer():
     proc = subprocess.Popen(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
-    while "请输入令牌确认" not in buffer:
+    while "请输入预览指纹确认" not in buffer:
         char = proc.stdout.read(1)
         if not char:
             break
         buffer += char
-    token = re.search(r"令牌：([0-9a-f]{32})", buffer)
-    proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+    token = re.search(r"预览指纹：([0-9a-f]{8})", buffer)
+    proc.stdin.write((token.group(1) if token else "0" * 8) + "\n")
     proc.stdin.flush()
     proc.stdout.read()
     proc.wait(timeout=90)

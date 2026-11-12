@@ -38,9 +38,9 @@ def check():
         H.patch(os.path.join(project, ".wf/bin/uninstall.py"), FROM, TO)
 
     preview = uninstall(project)
-    token = re.search(r"令牌：([0-9a-f]{32})", preview.stdout or "")
+    token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout or "")
     if not token:
-        raise H.Precondition(f"预览未给令牌：{(preview.stdout or '')[-160:]}")
+        raise H.Precondition(f"预览未给指纹：{(preview.stdout or '')[-160:]}")
     applied = uninstall(project, "--apply", "--nonce", token.group(1), feed=token.group(1) + "\n")
     if applied.returncode != 0:
         raise H.Precondition(f"卸载应用失败：{(applied.stdout or applied.stderr)[-200:]}")

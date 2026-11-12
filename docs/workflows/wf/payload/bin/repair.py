@@ -2,7 +2,7 @@
 """repair.py — 独立受控修复入口（实现稿 §3.3、§4.5.1；机制稿 §5.4）。
 
 单文件、仅标准库、**不导入 wflib**：坏运行时下仍可达。
-预览 → 终端令牌 → 同锁重核 → 受控应用 → 回执。首轮只做写权/绑定/锚点最小恢复。
+预览 → 终端短指纹 → 同锁重核 → 受控应用 → 回执。首轮只做写权/绑定/锚点最小恢复。
 """
 
 from __future__ import annotations
@@ -41,35 +41,38 @@ def now_str():
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-# --- 预览令牌（与 uninstall.py 逐字一致；由 build-wf-release.py --verify-token-parity 比对） ---
+# --- 预览短指纹（与 uninstall.py 逐字一致；由 build-wf-release.py --verify-token-parity 比对） ---
 
 
 class PreviewToken:
-    """预览令牌（机制稿 §10.3）：随机 128 位 nonce，仅本次预览有效。
+    """预览确认（E1/E2：短指纹，不再打印随机长串）。
 
-    令牌只绑定「本次预览摘要 + 本次过程」；重新预览即销毁旧 nonce，跨会话不恢复许可。
-    真正的漂移防护在应用路径：确认后**在同一把锁内**重算预览并比对摘要。
+    指纹 = 本次预览摘要的前 8 位十六进制：同一份预览得同一个指纹，预览一变指纹就变。
+    它只绑「本次预览摘要 + 本次过程」，重新预览即销毁；跨会话不恢复许可。
+    真正的漂移防护仍在应用路径：确认后**在同一把锁内**重算预览并比对摘要
+    （指纹只回答"确认的是哪一版预览"，不冒充防伪）。
     """
 
     def __init__(self):
-        self._nonce = None
+        self._fingerprint = None
         self._digest = None
 
     def issue(self, preview, nonce=None):
         self._digest = digest_of(preview)
-        self._nonce = nonce or secrets.token_hex(16)
-        return self._nonce
+        derived = self._digest.split(":", 1)[-1][:8]
+        self._fingerprint = str(nonce) if nonce else derived
+        return self._fingerprint
 
     def confirm(self, supplied):
-        if self._nonce is None or self._digest is None:
+        if self._fingerprint is None or self._digest is None:
             return False
-        return secrets.compare_digest(str(supplied), self._nonce)
+        return secrets.compare_digest(str(supplied).strip().lower(), self._fingerprint)
 
     def digest(self):
         return self._digest
 
     def invalidate(self):
-        self._nonce = None
+        self._fingerprint = None
         self._digest = None
 
     def revalidate(self, supplied):
@@ -86,7 +89,7 @@ def token_parity_check(nonce=None):
     first = token.confirm(issued)
     token.invalidate()
     after = token.revalidate(issued)
-    sys.stdout.write(f"nonce={issued}\n")
+    sys.stdout.write(f"fingerprint={issued}\n")
     sys.stdout.write(f"digest={digest_of(PARITY_PREVIEW)}\n")
     sys.stdout.write(f"first={'ok' if first else 'reject'}\n")
     sys.stdout.write(f"after={'expired' if not after else 'accepted'}\n")
@@ -317,19 +320,19 @@ def dispose_flow(root, plan_path, apply_now, nonce, json_mode):
         f"处置：{json.dumps(preview['disposition'], ensure_ascii=False, sort_keys=True)}",
         "写入范围：仅该回执的 disposition 字段",
         f"预览摘要：{token.digest()}",
-        f"令牌：{issued}",
+        f"预览指纹：{issued}",
     ]
     sys.stdout.write("\n".join(lines) + "\n")
     sys.stdout.flush()
     if not apply_now:
-        sys.stdout.write("确认后在同一个终端加 --apply 重跑并输入令牌。\n")
+        sys.stdout.write("确认后在同一个终端加 --apply 重跑并输入预览指纹。\n")
         sys.stdout.flush()
         return ok("", {"preview": preview, "token_digest": token.digest()}, json_mode)
-    sys.stdout.write("请输入令牌确认：")
+    sys.stdout.write("请输入预览指纹确认：")
     sys.stdout.flush()
     supplied = sys.stdin.readline().strip() if sys.stdin else ""
     if not token.confirm(supplied):
-        return blocker("WF_PREVIEW_STALE", "令牌不匹配或预览已失效（需在同一进程重新预览）", {}, json_mode)
+        return blocker("WF_PREVIEW_STALE", "预览指纹不匹配或预览已失效（需在同一进程重新预览）", {}, json_mode)
     try:
         with Lock(root):
             # 确认后在同一把锁内重算处置预览：计划文件被改动即失效（机制稿 §10.3）
@@ -358,8 +361,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 受控修复（独立单文件入口）")
     parser.add_argument("--project", required=False)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--nonce", default=None, help="仅测试形态：注入固定 nonce")
-    parser.add_argument("--dispose", default=None, help="维护组处置计划（预览 → 令牌 → 回写）")
+    parser.add_argument("--nonce", default=None, help="仅测试形态：注入固定预览指纹")
+    parser.add_argument("--dispose", default=None, help="维护组处置计划（预览 → 短指纹 → 回写）")
     parser.add_argument("--token-parity-check", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
@@ -386,19 +389,19 @@ def main(argv=None):
         f"绑定记录：{len(preview['bindings'])} 条",
         "候选修复：把 writer 置为 idle（代次 +1，保留 maintenance_results），不删绑定、不改业务记录。",
         f"预览摘要：{token.digest()}",
-        f"令牌：{issued}",
+        f"预览指纹：{issued}",
     ]
     sys.stdout.write("\n".join(lines) + "\n")
     sys.stdout.flush()
     if not args.apply:
-        sys.stdout.write("确认旧写者已停止后，在同一终端加 --apply 重跑并输入令牌。\n")
+        sys.stdout.write("确认旧写者已停止后，在同一终端加 --apply 重跑并输入预览指纹。\n")
         sys.stdout.flush()
         return ok("", {"preview": preview, "token_digest": token.digest()}, args.json)
-    sys.stdout.write("请输入令牌确认：")
+    sys.stdout.write("请输入预览指纹确认：")
     sys.stdout.flush()
     supplied = sys.stdin.readline().strip() if sys.stdin else ""
     if not token.confirm(supplied):
-        return blocker("WF_PREVIEW_STALE", "令牌不匹配或预览已失效（需在同一进程重新预览）", {}, args.json)
+        return blocker("WF_PREVIEW_STALE", "预览指纹不匹配或预览已失效（需在同一进程重新预览）", {}, args.json)
     try:
         with Lock(root):
             # 消费存活探测：登记的持锁者仍活着就不能清空写权（人工确认不能替代存活事实）

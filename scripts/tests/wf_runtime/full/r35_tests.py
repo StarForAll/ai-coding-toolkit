@@ -30,9 +30,9 @@ preview = subprocess.run(["/usr/bin/python3", os.path.join(F5, ".wf/bin/uninstal
 rec("R5 正式记录下预览可运行", "输出预览且列出 2 项偏离",
     f"deviations={len(re.findall('local content differs', preview.stdout))}",
     preview.returncode == 0 and len(re.findall("local content differs", preview.stdout)) == 2)
-token = re.search(r"令牌：([0-9a-f]{32})", preview.stdout)
+token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
 apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5,
-                            "--apply", "--nonce", token.group(1) if token else "0" * 32],
+                            "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
 rec("R5 正式记录下卸载应用", "WF_OK",
@@ -71,9 +71,9 @@ rec("R3 部分标记返回能力不可用", "WF_CAPABILITY_UNAVAILABLE",
     "WF_CAPABILITY_UNAVAILABLE" in proc.stdout)
 preview = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/repair.py"), "--project", F3],
                          capture_output=True, text=True)
-token = re.search(r"令牌：([0-9a-f]{32})", preview.stdout)
+token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
 apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/repair.py"), "--project", F3,
-                            "--apply", "--nonce", token.group(1) if token else "0" * 32],
+                            "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
 rec("R3 修复入口在锁不可识别时拒绝应用", "WF_CAPABILITY_UNAVAILABLE",

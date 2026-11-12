@@ -27,8 +27,8 @@ preview = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/uninstall
 rec("A8 预览列出本地偏离", "列 2 项偏离",
     f"count={len(re.findall('local content differs', preview.stdout))}",
     len(re.findall("local content differs", preview.stdout)) == 2)
-token = re.search(r"令牌：([0-9a-f]{32})", preview.stdout)
-rec("A8 预览给出令牌", "32 位十六进制", token.group(1)[:8] if token else None, bool(token))
+token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
+rec("A8 预览给出短指纹", "8 位十六进制", token.group(1) if token else None, bool(token))
 
 apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/uninstall.py"),
                             "--project", F, "--apply", "--nonce", token.group(1)],

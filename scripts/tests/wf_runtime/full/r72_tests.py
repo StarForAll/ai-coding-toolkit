@@ -26,21 +26,21 @@ def make_project(name):
 
 
 def run_uninstall(target):
-    """同进程：读到令牌提示后输入该令牌。"""
+    """同进程：读到指纹提示后输入该指纹。"""
     proc = subprocess.Popen(["/usr/bin/python3", os.path.join(target, ".wf/bin/uninstall.py"),
                              "--project", target, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
-    while "请输入令牌确认" not in buffer:
+    while "请输入预览指纹确认" not in buffer:
         char = proc.stdout.read(1)
         if not char:
             break
         buffer += char
-    token = re.search(r"令牌：([0-9a-f]{32})", buffer)
+    token = re.search(r"预览指纹：([0-9a-f]{8})", buffer)
     if proc.poll() is not None:
         return proc.returncode if proc.returncode is not None else 1, buffer
     try:
-        proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+        proc.stdin.write((token.group(1) if token else "0" * 8) + "\n")
         proc.stdin.flush()
     except BrokenPipeError:
         pass

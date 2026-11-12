@@ -52,20 +52,20 @@ def proposal_digest(files):
 
 
 def run_repair(writer_mutator=None):
-    """同进程起 repair --apply：读到令牌提示后改动写者，再输入令牌。"""
+    """同进程起 repair --apply：读到指纹提示后改动写者，再输入指纹。"""
     writer_path = os.path.join(F, ".wf/writer.json")
     proc = subprocess.Popen(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
-    while "请输入令牌确认" not in buffer:
+    while "请输入预览指纹确认" not in buffer:
         char = proc.stdout.read(1)
         if not char:
             break
         buffer += char
-    token = re.search(r"令牌：([0-9a-f]{32})", buffer)
+    token = re.search(r"预览指纹：([0-9a-f]{8})", buffer)
     if writer_mutator:
         writer_mutator(writer_path)
-    proc.stdin.write((token.group(1) if token else "0" * 32) + "\n")
+    proc.stdin.write((token.group(1) if token else "0" * 8) + "\n")
     proc.stdin.flush()
     rest = proc.stdout.read()
     proc.wait(timeout=60)

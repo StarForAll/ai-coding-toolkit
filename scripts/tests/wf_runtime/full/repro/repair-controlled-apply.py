@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""654 受控修复：预览 → 令牌 → 重核 → 应用 → 回执，令牌错则零写入。
+"""654 受控修复：预览 → 短指纹 → 重核 → 应用 → 回执，指纹错则零写入。
 
 obligation（设计稿 §5.5 / 机制稿 §10.3）：repair 的每一次应用都必须由**本次预览**签发的
-令牌许可；令牌不符时不得改动任何记录（尤其不得把 writer 置 idle）。
+短指纹许可；指纹不符时不得改动任何记录（尤其不得把 writer 置 idle）。
 成功路径必须留下可核事实：代次递增 + 维护回执。
 """
 import json
@@ -60,9 +60,9 @@ def check():
     with open(os.path.join(project, ".wf-lock"), "w", encoding="utf-8") as handle:
         handle.write(f"wf-lock-v1\nholder pid={live_pid} start={live_start}\n")   # 旧写者「仍存活」
     await_token = repair(project)
-    token = _re.search(r"令牌：([0-9a-f]{32})", await_token.stdout or "")
+    token = _re.search(r"预览指纹：([0-9a-f]{8})", await_token.stdout or "")
     if not token:
-        raise H.Precondition(f"预览未给出令牌：{(await_token.stdout or '')[-200:]}")
+        raise H.Precondition(f"预览未给出指纹：{(await_token.stdout or '')[-200:]}")
     bad = repair(project, "--apply", "--nonce", token.group(1), feed=token.group(1) + "\n")
     if bad.returncode == 0:
         problems.append("旧写者仍存活时仍应用成功（人工确认替代了存活事实）")
@@ -73,9 +73,9 @@ def check():
     with open(os.path.join(project, ".wf-lock"), "w", encoding="utf-8") as handle:
         handle.write("wf-lock-v1\nholder pid=999999 start=0\n")
     ready = repair(project)
-    token2 = _re.search(r"令牌：([0-9a-f]{32})", ready.stdout or "")
+    token2 = _re.search(r"预览指纹：([0-9a-f]{8})", ready.stdout or "")
     if not token2:
-        raise H.Precondition("第二次预览未给出令牌")
+        raise H.Precondition("第二次预览未给出指纹")
     good = repair(project, "--apply", "--nonce", token2.group(1), feed=token2.group(1) + "\n")
     after_good = writer(project)
     if good.returncode != 0:

@@ -81,9 +81,9 @@ def check():
     # 卸载后随资产移除
     preview = subprocess.run([H.WF_PYTHON, os.path.join(project, ".wf/bin/uninstall.py"),
                               "--project", project], capture_output=True, text=True)
-    token = re.search(r"令牌：([0-9a-f]{32})", preview.stdout or "")
+    token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout or "")
     if not token:
-        raise H.Precondition("卸载预览未给令牌")
+        raise H.Precondition("卸载预览未给指纹")
     subprocess.run([H.WF_PYTHON, os.path.join(project, ".wf/bin/uninstall.py"), "--project", project,
                     "--apply", "--nonce", token.group(1)], capture_output=True, text=True,
                    input=token.group(1) + "\n")
