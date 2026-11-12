@@ -2710,7 +2710,7 @@ COMMANDS = {
     # `control.task.rework` 声明为 [required] 的两轮交付步骤；删命令会让部署自检
     # （handler entry 必须存在）失败。属权威冲突，先保留桩并登记待裁，不单方面删步骤。
     "task-rework": _task_command("cmd_task_rework"),
-    "task-replace": _unavailable(2, "task replace (D07)"),
+    "task-replace": _task_command("cmd_task_replace"),
     "review-context": _review_command("context"),
     "review-launch": _review_command("launch"),
     "review-import": _review_command("import"),

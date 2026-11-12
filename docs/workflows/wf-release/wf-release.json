@@ -101,7 +101,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:fefbb435db8a9f961cbc03af100a937164ba5a409cef9ddbf64d35f8a8999495",
+      "digest": "sha256:b5d41d6e22b9510f1fbd43147dc172f0684fd58b03825bd0766e4aef4eba2870",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -341,7 +341,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:7657278e8b488cc5657063ad80da934f191a5b274df5d0d3ea4a305d405d8963",
+      "digest": "sha256:c5774e05e7c8e801dd960fb0e84dbc4a462b17078897c3155484c6c6d7e5d952",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:7570ff44834a1c393e3b0cdba561c801cc9783c107ff9cd0f34d2e4d9117ff86",
+    "rules_digest": "sha256:4d4f6f9ea227ffbe67c0299ce5e15852b60fc364741fece407cbd790a0dd500a",
     "systems": [
       "linux"
     ],
