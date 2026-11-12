@@ -2133,8 +2133,19 @@ def _accept_result(task, facts, kept, assertion):
         facts=dict(facts, unknown_acceptances=active, control_assertion=assertion))
 
 
-def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
-    """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。"""
+def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False):
+    """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。
+
+    `register_only=True`（A8）：**只登记复核关闭**，不产生结论——不推导 verdict、不写
+    `result` / `rounds[]` / `attempts`，因此不需要凑齐人数/异种资格。关闭本身的硬条件照旧：
+    结构、`recheck_by` 不得自证、finding 必须属已导入报告（A9 的精确身份）。
+    """
+    if register_only and unavailable_path:
+        raise ReviewError("WF_SEMANTIC_DECISION",
+                          {"reason": "--register-only 只登记关闭，不能同时声明审查不可用"})
+    if register_only and not plan_path:
+        raise ReviewError("WF_SEMANTIC_DECISION",
+                          {"reason": "--register-only 需要 --plan <逐条处置>（没有处置就没有可登记的内容）"})
     if round_no is None:
         _path = _task_dir(ctx, task)
         _record = records.load_json(os.path.join(_path, "task.json"))
@@ -2165,6 +2176,49 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
 
         task = records.load_json(os.path.join(path, "task.json"))
         reviews = task.get("reviews") or {}
+        # ⑥ 消费写点②：本命令观察到「放行记录对应的报告当前可核实」→ 该放行失效。
+        # A8：只登记关闭也是写点，两条路径共用这一次调用（一个写点只消费一次）。
+        consume_recovered(ctx, task)
+        if register_only:
+            # A8：只登记复核关闭。与判定共用同一把锁、同一套处置校验与同一条动作链，
+            # 但**不产生结论**：result / rounds[] / attempts 一律不动。
+            proposers = proposers_from_history(ctx, task)
+            problems = dispositions_problems(dispositions, proposers)
+            if problems:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "problems": problems,
+                    "proposers": [{"round": key[0], "slot": key[1], "finding_id": key[2]}
+                                  for key in sorted(proposers)][:12],
+                    "exits": ["按问题清单补 disposition 字段与复核人后重跑",
+                              "若只想留下记录而不关闭，去掉 decision=accepted"]})
+            reviews["dispositions"] = list(reviews.get("dispositions") or []) + dispositions
+            task["reviews"] = reviews
+            inputs = {"task": task.get("id"), "round": int(round_no), "register_only": True}
+            task, action = tasks_mod._start_task_action(
+                ctx, path, task, "review.close", holder, inputs,
+                ["verify_dispositions", "record_dispositions"])
+            closed = [item for item in dispositions if isinstance(item, dict)
+                      and item.get("decision") == "accepted"]
+            task, assertion = tasks_mod._finish_task_action(
+                ctx, path, task, "review.close", holder, inputs, action)
+            from . import codes as codes_mod
+
+            return codes_mod.result(
+                "WF_OK",
+                object={"id": task.get("id"), "name": task.get("title")},
+                position_=codes_mod.position(scope="task", phase=task.get("phase"),
+                                             task_id=task.get("id"),
+                                             action_id=task["action"]["id"],
+                                             action_state=task["action"]["state"]),
+                next_="关闭已登记（不产生审查结论）；需要结论时另行 review-decide",
+                facts={"register_only": True, "registered": len(dispositions),
+                       "closing": len(closed),
+                       "not_closing": [{"finding_id": item.get("finding_id"),
+                                        "decision": item.get("decision")}
+                                       for item in dispositions
+                                       if isinstance(item, dict) and item.get("decision") != "accepted"],
+                       "control_assertion": assertion},
+            )
         launch = None
         for entry in reviews.get("launches") or []:
             if int(entry.get("round") or 0) == int(round_no):
@@ -2302,8 +2356,6 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None):
                        if isinstance(item, dict) and item.get("decision") != "accepted"]
         if not_closing:
             facts = dict(facts, not_closing=not_closing)
-        # ⑥ 消费写点②：本命令观察到「放行记录对应的报告当前可核实」→ 该放行失效
-        consume_recovered(ctx, task)
         # ⑥ 逐轮决策事实（append-only）：`rounds[]` 为空时先把按 `result` 推断的一条**落盘**，再追加本轮
         rounds = inferred_rounds(reviews)
         rounds.append({"round": int(round_no), "verdict": verdict,
