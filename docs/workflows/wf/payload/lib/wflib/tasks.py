@@ -4302,6 +4302,144 @@ def cmd_task_reassess(ctx, args):
                "control_assertion": assertion})
 
 
+REPLACE_CHOICES = ("replace", "替换")
+
+
+def cmd_task_replace(ctx, args):
+    """替换（机制稿 §6.3）：建继任者 S、登记继承、重连下游与实例映射，最后异常归档 T。
+
+    顺序与「先验证、后落盘」按 §6.3：① 预检 S 的目标/候选图与「S 的拟触碰面是否覆盖继承路径」；
+    ② 建 S 的规划记录（**不代批准**：S 开工仍须自己当前版本批准）；③ 登记继承
+    （写入 S 的 `attribution.inherited`，它是 §3.3「最终触碰集合」的一部分）；
+    ④ 重连下游前置；⑤ 在途实例的 `task_map`/`cursor` 指向 S；⑥ 按异常归档处置 T（复用 `_apply_abandon`）。
+    """
+    from . import cli, lock, paths as paths_mod
+
+    task_id = args.value("--task")
+    decision_path = args.value("--decision")
+    if not task_id or not decision_path:
+        raise TaskError("WF_PATH_INVALID", {"reason": "task-replace requires --task <id> --decision <path>"})
+    decisions = cli._load_decision(decision_path)
+    decision = decisions[0]
+    if str(decision.get("choice") or "") not in REPLACE_CHOICES:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "replace decision choice must be 替换/replace",
+                         "got": decision.get("choice"), "accepted": list(REPLACE_CHOICES)})
+    successor_paths = [path for path in (decision.get("touch_paths") or []) if isinstance(path, str)]
+    _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+    with lock.acquire(ctx.root, holder_hint="task-replace"):
+        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
+                                    else {"run": (_run or {}).get("id")}))[1]
+        path = _require_task_dir(ctx, task_id)
+        task = records.load_json(os.path.join(path, "task.json"))
+        if task.get("status") == "archived" or task.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "archived object does not accept replace", "task": task_id})
+        if task.get("suspended"):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "suspended task must dispose its rework first", "task": task_id})
+        if task.get("paused"):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "paused task must be resumed before replacement",
+                             "task": task_id},
+                            next_="先 task-resume 把暂停处置掉（§6.3 的输入条件），再替换")
+        if not successor_paths:
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "replace decision must declare the successor's touch_paths",
+                             "hint": "人确认 S 的拟触碰面；它必须覆盖继承路径"},
+                            next_="在决定文件里给 touch_paths（S 的拟触碰面）后重入")
+        # 继承路径 = T 的归属路径（机制稿 §3.3 的「替换继承路径」）
+        # 继承的是**交付路径**，不含 T 自己的控制记录（任务目录/实例记录等固定职责记录
+        # 不随业务继承；把它们算进来会让"覆盖继承路径"永远不成立——实测踩到过）
+        installed = scope.installed_asset_paths(ctx.root)
+        inherited = sorted(
+            path for path in (set(scope.attributed_paths(ctx.root, task_id, task.get("baseline_head")))
+                              | set(scope.attributed_by_decision(ctx.root, task)))
+            if not scope._is_control_record(path, task_id, installed, ctx.root))
+        uncovered = [item for item in inherited
+                     if not any(paths_mod.match_path(pattern, item) for pattern in successor_paths)]
+        if uncovered:
+            # §6.3：不覆盖则保留原态并回规划
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "successor touch_paths do not cover the inherited paths",
+                             "inherited": inherited, "uncovered": uncovered,
+                             "successor_paths": successor_paths},
+                            next_="回 Plan 把继承路径纳入 S 的触碰面后重新替换（本次未写入任何记录）")
+        successor = new_task_record("ordinary", f"{task.get('title') or task_id}（接替）")
+        successor_id = successor["id"]
+        directory = join(ctx.root, f"{TASKS_REL}/{dir_name(successor_id, successor['title'])}")
+        staging = join(ctx.root, f"{TASKS_REL}/.staging-{successor_id}")
+        if os.path.exists(directory) or os.path.exists(staging):
+            raise cli.CliError("WF_TARGET_COLLISION", {"path": directory})
+        graph = _prerequisite_graph(ctx.root)
+        graph[successor_id] = list(task.get("prerequisites") or [])
+        cycle = _find_cycle(graph, successor_id)
+        if cycle:
+            raise TaskError("WF_DEPENDENCY_UNMET",
+                            {"reason": "candidate graph has a cycle", "cycle": cycle})
+        inputs = {"task": task_id, "successor": successor_id,
+                  "inherited": inherited, "decision": decision}
+        task, action = _start_task_action(
+            ctx, path, task, "task.replace", holder, inputs,
+            ["preflight", "create_successor", "register_inheritance",
+             "reconnect_downstream", "update_run_map", "abandon_task"])
+        successor["run_id"] = task.get("run_id") if _scope_kind == "run" else None
+        successor["attribution"] = {"decisions": [],
+                                    "inherited": [{"source_task": task_id,
+                                                   "paths": inherited,
+                                                   "decision": decision}]}
+        _publish_task_tree(ctx, directory, staging, join(ctx.root, ".wf/templates/task"), successor)
+        # ④ 下游重连：原本以 T 为前置的活动任务改挂 S（死引用不留）
+        repointed = []
+        for other_path, other in list(iter_tasks(ctx.root)):
+            prerequisites = list(other.get("prerequisites") or [])
+            if task_id not in prerequisites or other.get("id") == successor_id:
+                continue
+            if other.get("status") == "archived":
+                continue
+            other = dict(other, prerequisites=[successor_id if item == task_id else item
+                                               for item in prerequisites])
+            save_task(ctx.root, other_path, other)
+            repointed.append(other.get("id"))
+        # ⑤ 在途实例映射：该步骤的正式任务改为 S，游标跟着走
+        if _scope_kind == "run" and _run and not _run.get("terminal"):
+            from . import runs as runs_mod
+
+            task_map = dict(_run.get("task_map") or {})
+            step_id = next((sid for sid, mapping in task_map.items()
+                            if (mapping or {}).get("task_id") == task_id), None)
+            if step_id:
+                task_map[step_id] = dict(task_map[step_id], task_id=successor_id,
+                                        superseded_ids=list(
+                                            (task_map[step_id] or {}).get("superseded_ids") or []
+                                        ) + [task_id])
+                runs_mod.save_run(ctx.root, dict(_run, task_map=task_map,
+                                                 cursor={"step_id": step_id,
+                                                         "task_id": successor_id}))
+        task["successor_id"] = successor_id
+        task, assertion = _finish_task_action(ctx, path, task, "task.replace", holder, inputs,
+                                              action, evidence_refs=[f"successor:{successor_id}"])
+        # ⑥ 按异常归档处置 T（复用放弃本体；未提交改动由决定文件的 disposition 承载）
+        payload = _apply_abandon(ctx, task_id, task, path, [decision],
+                                 decision.get("disposition"), holder)
+        abandoned = (payload or {}).get("code") in (None, "WF_OK")
+    next_ = ("T 已异常归档、S 已建立但**未批准**：S 须自己当前版本批准后开工（继承的触碰面不是开工许可）"
+             if abandoned else
+             "S 已建立并登记继承；T 的未提交改动尚未处置，按其出口处理后重入 task-abandon")
+    return codes.result(
+        "WF_OK",
+        object={"id": task_id, "name": task.get("title")},
+        position_=codes.position(scope="task", phase="finish", task_id=task_id,
+                                 action_id=task["action"]["id"],
+                                 action_state=task["action"]["state"]),
+        next_=next_,
+        facts={"task": task_id, "successor": successor_id,
+               "directory": os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/"),
+               "inherited": inherited, "repointed": repointed,
+               "run_mapping_updated": bool(_scope_kind == "run" and _run),
+               "abandoned": abandoned,
+               "control_assertion": assertion})
+
 REWORK_CHOICES = ("rework", "返工")
 
 
