@@ -358,6 +358,19 @@ def _reference_problems(doc):
             problems.extend(_verification_problems(verification,
                                                    f"{where}.verifications[{position}]",
                                                    step_id, order, action_order))
+        # 机制稿 §7.1：`skip` 在必需项为 null，**可略项为 {condition, decision_point, downstream}**。
+        # 两个方向都核：必需项不得带 skip；可略项不得缺声明——否则"可略"退化成"必需且无替代"，
+        # 而人以为自己写的是可略（拼错 `required`/`skip` 时正是这种静默后果）。
+        required_flag = step.get("required")
+        skip_decl = step.get("skip")
+        if required_flag is False and not isinstance(skip_decl, dict):
+            problems.append(_problem(5, "skippable step must declare skip "
+                                        "{condition, decision_point, downstream}", where,
+                                     got=skip_decl))
+        if isinstance(skip_decl, dict):
+            if not isinstance(skip_decl.get("condition"), str) or \
+                    not skip_decl.get("condition", "").strip():
+                problems.append(_problem(5, "skip.condition must be non-empty text", where))
         if step.get("type") == "task" and step.get("task_kind") not in TASK_KINDS:
             problems.append(_problem(3, f"task step requires task_kind in {list(TASK_KINDS)}",
                                      where, got=step.get("task_kind")))
@@ -368,12 +381,89 @@ def _reference_problems(doc):
             acceptance = step.get("acceptance")
             if not isinstance(acceptance, list) or not acceptance:
                 problems.append(_problem(3, "task step requires non-empty acceptance", where))
+            else:
+                declared_verifications = {item.get("id") for item in step.get("verifications") or []
+                                          if isinstance(item, dict)}
+                for entry in acceptance:
+                    # 条目可以是给人看的文本，也可以是任务侧同形的 {id, statement, verification_ids}；
+                    # 后者一旦出现就必须指回本步骤声明的验证（机制稿 §7.2「引用来源与顺序」）。
+                    if not isinstance(entry, dict):
+                        continue
+                    refs = entry.get("verification_ids")
+                    if refs is None:
+                        continue
+                    if not isinstance(refs, list):
+                        problems.append(_problem(3, "acceptance verification_ids must be an array",
+                                                 where, got=type(refs).__name__))
+                        continue
+                    unknown = [ref for ref in refs if ref not in declared_verifications]
+                    if unknown:
+                        problems.append(_problem(
+                            3, "acceptance references undeclared verification",
+                            where, got=unknown, declared=sorted(declared_verifications)))
         if step.get("type") == "human":
             if not isinstance(step.get("question"), str) or not step.get("question", "").strip():
                 problems.append(_problem(3, "human step requires non-empty question", where))
             choices = step.get("choices")
             if not isinstance(choices, list) or not choices:
                 problems.append(_problem(3, "human step requires non-empty choices", where))
+    return problems
+
+
+DEFINITION_KEYS = {
+    "root": {"format_version", "workflow_id", "content_version", "purpose", "applicability",
+             "inputs", "steps", "completion"},
+    "step": {"id", "type", "title", "inputs", "outputs", "required", "skip", "human_points",
+             "task_kind", "goal", "acceptance", "actions", "verifications", "question", "choices"},
+    "action": {"id", "text", "inputs", "outputs", "required", "skip", "human_points"},
+    "output": {"id", "kind", "path", "description", "required"},
+    "verification": {"id", "source", "established_by", "stored_in", "consume_at"},
+    "human_point": {"id", "question"},
+    "input": {"type", "required", "description"},
+}
+
+
+def _unknown_key_problems(doc):
+    """未登记键一律拒绝（机制稿 §7.1 的字段表是闭集；§1.1 要求每个键有消费者与失败出口）。
+
+    静默忽略的后果是**行为静默变化**：`required` 拼错 → 该步骤变成必需；`skip` 拼错 → 可略声明整块丢失。
+    说明文本写进 Markdown 正文，机读块只放机读字段。
+    """
+    problems = []
+
+    def check(where, mapping, kind, path):
+        if not isinstance(mapping, dict):
+            return
+        extra = sorted(set(mapping) - DEFINITION_KEYS[kind])
+        if extra:
+            problems.append(_problem(1, f"unknown {kind} key(s) not defined by the format",
+                                     path, got=extra, defined=sorted(DEFINITION_KEYS[kind])))
+
+    check("root", doc, "root", "")
+    for step in doc.get("steps") or []:
+        if not isinstance(step, dict):
+            continue
+        where = f"steps[{step.get('id')}]"
+        check(where, step, "step", where)
+        for action in step.get("actions") or []:
+            if isinstance(action, dict):
+                check(f"{where}.actions[{action.get('id')}]", action, "action",
+                      f"{where}.actions[{action.get('id')}]")
+        for output in step.get("outputs") or []:
+            if isinstance(output, dict):
+                check(f"{where}.outputs[{output.get('id')}]", output, "output",
+                      f"{where}.outputs[{output.get('id')}]")
+        for verification in step.get("verifications") or []:
+            if isinstance(verification, dict):
+                check(f"{where}.verifications[{verification.get('id')}]", verification,
+                      "verification", f"{where}.verifications[{verification.get('id')}]")
+        for point in step.get("human_points") or []:
+            if isinstance(point, dict):
+                check(f"{where}.human_points[{point.get('id')}]", point, "human_point",
+                      f"{where}.human_points[{point.get('id')}]")
+    for name, declaration in (doc.get("inputs") or {}).items():
+        if isinstance(declaration, dict):
+            check(f"inputs[{name}]", declaration, "input", f"inputs[{name}]")
     return problems
 
 
@@ -641,6 +731,7 @@ def _completion_problems(doc):
 def validate_definition(doc, root=None, workflow_id=None):
     """静态校验（机制稿 §7.2 的固定顺序）：返回按阶段排序的问题清单。"""
     problems = list(_schema_problems(doc))
+    problems.extend(_unknown_key_problems(doc))   # 未登记键：字段表是闭集（机制稿 §7.1）
     problems.extend(_local_id_problems(doc))
     problems.extend(_reference_problems(doc))
     problems.extend(_path_problems(doc, root))
@@ -1240,16 +1331,95 @@ def _next_step(doc, creation, step_id):
     return ordered[start] if start < len(ordered) else None
 
 
-def _previous_task_step(doc, step_id):
-    """上一个未略过的 task 步骤（顺序前置只直接引用它，human 步骤不生成任务边）。"""
+def _previous_task_step(doc, step_id, applicability=None, step_results=None):
+    """上一个**未略过**的 task 步骤（机制稿 §7.3：顺序前置只直接引用它；human 步骤不生成任务边）。
+
+    「未略过」有两个来源：创建时声明 `skipped`、以及实例里已记 `skipped` 的结果。
+    漏掉这层过滤会让"前一任务步骤被略过"变成致命错误（`WF_DEPENDENCY_UNMET` 找不到任务），
+    而机制要求的是**跳过它、直接引用更前面那个未略过的任务步骤**。
+    """
     ordered = _ordered_steps(doc)
     previous = None
     for step in ordered:
         if step.get("id") == step_id:
             return previous
-        if step.get("type") == "task":
-            previous = step
+        if step.get("type") != "task":
+            continue
+        declared = (applicability or {}).get(step["id"], "applicable")
+        recorded = ((step_results or {}).get(step["id"]) or {}).get("kind")
+        if declared == "skipped" or recorded == "skipped":
+            continue
+        previous = step
     return previous
+
+
+def _return_from_rework(ctx, run, sequence, cursor, task_map):
+    """游标停在受控返工 R 上时的处置（机制稿 §6.2、§7.3）。
+
+    规则：R 未归档 → 报告等待（推进不动）；R 已归档但 T 仍挂起 → 报告等待复评；
+    R 已归档且 T 已复评（挂起已清）→ 把游标按 `resume_task` 返回 T 并报告，之后正常推进。
+    返回 None 表示游标不在 R 上，调用方继续常规推进。
+    """
+    from . import actions as actions_mod, cli, lock, tasks as tasks_mod, writer as writer_mod
+
+    task_id = (cursor or {}).get("task_id")
+    if not task_id:
+        return None
+    entry = next((item for item in sequence or []
+                  if isinstance(item, dict) and item.get("task_id") == task_id), None)
+    if entry is None:
+        return None                      # 不是受控返工作务，按平常任务处理
+    run_id = run.get("id")
+    step_id = entry.get("step_id") or (cursor or {}).get("step_id")
+    resume_task = entry.get("resume_task")
+    rework = tasks_mod.load_task(ctx.root, task_id)
+    if not isinstance(rework, dict):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "controlled rework record missing", "task": task_id})
+    if rework.get("status") != "archived":
+        return codes.result(
+            "WF_OK", object={"id": run_id},
+            position_=codes.position(scope="run", step_id=step_id),
+            next_="游标在受控返工 R 上：先完成 R（独立批准/开工/检查/归档）并 task-reassess，再回来推进",
+            facts={"run": run_id, "controlled_rework": task_id, "resume_task": resume_task,
+                   "step": step_id, "rework_status": rework.get("status"),
+                   "note": "R 的归档不算原定义步骤完成（机制稿 §7.3）"})
+    target = tasks_mod.load_task(ctx.root, resume_task) if resume_task else None
+    if not isinstance(target, dict):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "resume target missing", "task": resume_task})
+    if target.get("suspended"):
+        return codes.result(
+            "WF_OK", object={"id": run_id},
+            position_=codes.position(scope="run", step_id=step_id),
+            next_="R 已归档但 T 仍挂起：先 task-reassess 清挂起，游标随后按登记返回 T",
+            facts={"run": run_id, "controlled_rework": task_id, "resume_task": resume_task,
+                   "rework_status": "archived", "resume_suspended": True, "step": step_id})
+    # 返回定位：写回 run.advance 动作（游标是状态，须在动作里留痕）
+    key = ctx.key()
+    holder = ctx.require_held(run=run_id)[1]
+    action = actions_mod.new_action(
+        "run.advance", writer_mod.owner_ref("session", key, holder.get("scope")),
+        int(run.get("revision", 0)),
+        {"run": run_id, "restore_cursor": {"from": task_id, "to": resume_task}},
+        steps=["restore_cursor"], head_before=actions_mod.head_of(ctx.root),
+        targets=[{"kind": "run", "id": run_id}, {"kind": "task", "id": resume_task}])
+    restored = dict(run, cursor={"step_id": step_id, "task_id": resume_task},
+                    action=actions_mod.complete(
+                        action, summary="run.advance restore cursor after rework",
+                        control_assertion=cli._control_assertion(
+                            ctx, "run.advance", writer_mod.owner_ref("session", key, holder.get("scope")),
+                            action, [f"run:{run_id}", f"task:{resume_task}"])))
+    records.write_json(run_path(ctx.root, run_id), restored)
+    return codes.result(
+        "WF_OK", object={"id": run_id},
+        position_=codes.position(scope="run", step_id=step_id,
+                                 action_id=restored["action"]["id"],
+                                 action_state=restored["action"]["state"]),
+        next_="已按登记的 resume_task 返回 T；继续推进该步骤（游标不再停在 R 上）",
+        facts={"run": run_id, "controlled_rework": task_id, "resume_task": resume_task,
+               "step": step_id, "cursor": restored["cursor"],
+               "sequence_change": entry})
 
 
 def _human_answer(decisions, step):
@@ -1332,6 +1502,15 @@ def advance(ctx, args):
         task_map = dict(run.get("task_map") or {})
         sequence = list(run.get("sequence_changes") or [])
 
+        # ⓪ 受控返工 R：游标临时定位在 R 时只执行 R 与既定返回定位，
+        #    **不把 R 归档当作原定义步骤完成**（机制稿 §7.3、§6.2「按已登记返回目标恢复 T」）。
+        returned = _return_from_rework(ctx, run, sequence, cursor, task_map)
+        if returned is not None:
+            return returned
+        run = load_run(ctx.root, run_id) or run
+        cursor = run.get("cursor") or {}
+        step_results = dict(run.get("step_results") or {})
+
         # ① 先把「已完成的步骤」结掉：前一个任务正常归档且持久化可核 → satisfied 并推进游标
         current = cursor.get("step_id")
         settled = None
@@ -1394,7 +1573,9 @@ def advance(ctx, args):
                                       next_="用 --decision 记录略过决定（subject 含该步骤 id）")
             step_results[step_id] = {"kind": "skipped", "at": records.now_str(),
                                      "decision": decided.get("choice"),
-                                     "decision_detail": decided}
+                                     "decision_detail": decided,
+                                     # 机制稿 §7.1：答复保存实际决定**及适用快照哈希**
+                                     "definition_digest": (run.get("definition") or {}).get("digest")}
             run = dict(run, step_results=step_results,
                        cursor={"step_id": step_id, "task_id": None})
             records.write_json(run_path(ctx.root, run_id), run)
@@ -1417,7 +1598,8 @@ def advance(ctx, args):
                                        "step": step_id, "got": decided.get("choice"),
                                        "choices": step.get("choices")})
             step_results[step_id] = {"kind": "satisfied", "at": records.now_str(),
-                                     "decision": decided.get("choice")}
+                                     "decision": decided.get("choice"),
+                                     "definition_digest": (run.get("definition") or {}).get("digest")}
             run = dict(run, step_results=step_results,
                        cursor={"step_id": step_id, "task_id": None})
             records.write_json(run_path(ctx.root, run_id), run)
@@ -1441,7 +1623,7 @@ def advance(ctx, args):
                                 next_="该步骤的任务已生成：在其上完成四阶段后重入 advance 记 satisfied",
                                 facts={"run": run_id, "step": step_id, "task": task_id,
                                        "reused": True, "cursor": cursor})
-        previous = _previous_task_step(doc, step_id)
+        previous = _previous_task_step(doc, step_id, applicability, step_results)
         predecessors = []
         if previous is not None:
             prior_task = (task_map.get(previous["id"]) or {}).get("task_id")
@@ -1839,6 +2021,26 @@ def _terminate_decisions(entries):
     return found
 
 
+def _record_stop_request(ctx, run_id, plan_path, holder):
+    """把停止请求记进**本会话侧车**（机制稿 §7.4 的只读接收 + §4.4 的侧车窄例外）。
+
+    侧车按会话隔离、可丢弃、不参与任何门禁；因此这里记的是"某人请求过停止"，
+    **不是**终止事实。写失败只降级为可见提示（侧车不是判定字段）。
+    """
+    from . import session as session_mod
+
+    key = ctx.key()
+    runtime = session_mod.load_runtime(ctx.root, key) or {}
+    request = {"run": run_id, "at": records.now_str(), "plan": plan_path,
+               "session_key": key, "blocked_by": holder,
+               "note": "只读接收：未执行任何项目写入；恢复写权后重入 run terminate 执行"}
+    merged = dict(runtime, stop_request=request)
+    written = session_mod.write_runtime(ctx.root, key, merged)
+    return dict(request, sidecar_written=bool(written),
+                sidecar=os.path.relpath(session_mod.runtime_path(ctx.root, key),
+                                        str(ctx.root)).replace(os.sep, "/"))
+
+
 def _terminate_preview(ctx, run_id):
     """异常终止的只读预览（机制稿 §7.4：逐个列出已生成任务、返工/继任者、未生成步骤、已有改动、外部依赖）。
 
@@ -1872,6 +2074,9 @@ def _terminate_preview(ctx, run_id):
                       "unfinished_rework": preview.get("unfinished_rework") or []})
     generated = set(task_map)
     not_executed = [step["id"] for step in _ordered_steps(doc or {}) if step["id"] not in generated]
+    from . import session as session_mod
+
+    runtime = session_mod.load_runtime(ctx.root, ctx.key()) or {}
     return codes.result(
         "WF_OK",
         object={"id": run_id},
@@ -1883,7 +2088,9 @@ def _terminate_preview(ctx, run_id):
                "sequence_changes": run.get("sequence_changes") or [],
                "cursor": run.get("cursor"), "task_map": task_map,
                "external_dependencies": [{"step": step, "task": (mapping or {}).get("task_id")}
-                                         for step, mapping in sorted(task_map.items())]})
+                                         for step, mapping in sorted(task_map.items())],
+               # 上次写权不可核时记在本会话侧车的停止请求（机制稿 §7.4）；不是终止事实
+               "pending_stop_request": runtime.get("stop_request")})
 
 
 def terminate(ctx, args):
@@ -1919,8 +2126,15 @@ def terminate(ctx, args):
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
-            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
-                               next_="由绑定该实例的会话终止；他人持有写权时先走交接/恢复出口")
+            # 机制稿 §7.4：**写权无法核实时只读接收停止请求**，待恢复后再写。
+            # 落点是 §4.4 允许的窄例外——本会话侧车（不进项目记录、不写判定字段、可丢弃）。
+            receipt = _record_stop_request(ctx, run_id, plan_path, holder)
+            raise cli.CliError(
+                "WF_WRITER_BUSY",
+                {"holder": holder, "stop_request": receipt,
+                 "reason": "stop request received; no project write was performed"},
+                next_=("停止请求已记在本会话侧车（**未执行任何项目写入**）：先恢复写权"
+                       "（repair / 交接），再重入 run terminate；预览会把该请求带出来"))
         scope = (holder.get("scope") or {}).get("object") or {}
         if scope.get("kind") != "run" or scope.get("id") != run_id:
             raise DefinitionError("WF_BINDING_MISMATCH",
