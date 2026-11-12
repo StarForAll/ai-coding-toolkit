@@ -636,6 +636,32 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
         if not new_paths or not isinstance(change.get("content"), str):
             raise SpecError("WF_SEMANTIC_DECISION", {"reason": f"{operation} requires new_paths and content"})
 
+    # 首跑也要核前像（实现稿 §2.3.11「spec-update 的 update 首跑不核前像」）：
+    # 批准与写入之间文件被改过，`_apply_change` 会静默覆盖；续做分支的三态判定只在 resume=True 生效，
+    # 因此这里对**登记过前像**的条目做同一比对。零写入（整批校验段）。
+    if not resume:
+        for change in changes:
+            before = change.get("before_digests") or []
+            if not before:
+                continue
+            operation = change.get("operation")
+            targets = _path_list(change, "old_paths") if operation in ("delete", "disable") else _path_list(change, "new_paths")
+            for index, relative in enumerate(targets):
+                expected = before[index] if index < len(before) else None
+                if expected is None:
+                    continue
+                absolute = join(root, paths_mod.normalize(relative))
+                current = records.file_digest(absolute) if os.path.exists(absolute) else None
+                if current == expected:
+                    continue
+                raise SpecError(
+                    "WF_SEMANTIC_DECISION",
+                    {"reason": "target changed after approval (before-image mismatch)",
+                     "path": relative, "expected_before": expected, "current": current,
+                     "exits": ["按当前内容重新取前像并重新批准",
+                               "先处置批准之后的改动，再用原前像重试"]},
+                )
+
     # R19：整批候选冲突（源唯一、目标唯一、目标不得是另一变更的源）
     sources, targets = [], []
     for index, change in enumerate(changes):     # change 已在入口归一为数组

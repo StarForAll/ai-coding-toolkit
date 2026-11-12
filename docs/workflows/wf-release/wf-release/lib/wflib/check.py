@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import uuid
 
-from . import config as config_mod, fingerprint, records, scope
+from . import config as config_mod, decisions as decisions_mod, fingerprint, records, scope
 from .paths import join
 
 
@@ -355,7 +355,7 @@ def validate_check_result(task, check):
                 problems.append({"field": f"commands[{vid}].decision",
                                  "reason": "manual verification without a decision"})
             else:
-                if decision.get("choice") != "passed":
+                if decisions_mod.canonical("acceptance_conclusion", decision.get("choice")) != "passed":
                     problems.append({"field": f"commands[{vid}].decision",
                                      "reason": "manual decision is not 'passed'",
                                      "choice": decision.get("choice")})
@@ -500,7 +500,8 @@ def _manual_command(verification, decisions, anchor, plan, plan_version):
     return entry
 
 
-EXTERNAL_CHECKED_CHOICES = ("已核对无影响", "核对无影响", "checked", "no-impact")
+# 取值域只在 `wflib/decisions.py` 登记（实现稿 §2.3.11 ①）
+EXTERNAL_CHECKED_CHOICES = decisions_mod.domain("external_checked")
 
 
 def _external_touches_task(item, task):
@@ -568,7 +569,7 @@ def _acceptance_results(ctx, task, commands, decisions, anchor):
             decision
             for decision in decisions or []
             if _decision_covers(decision, str(item.get("id")), plan, plan_version)
-            and decision.get("choice") in ("passed", "failed", "pending")
+            and decisions_mod.accepts("acceptance_conclusion", decision.get("choice"))
         ]
         if matches:
             decision = matches[-1]
@@ -686,10 +687,12 @@ def _spec_coverage(ctx, task, decisions):
     version = plan.get("version")
     unresolved = [item for item in needs
                   if not any(_decision_covers(decision, item["path"], plan, version)
-                             and decision.get("choice") == "passed" for decision in decisions or [])]
+                             and decisions_mod.canonical("acceptance_conclusion", decision.get("choice")) == "passed"
+                             for decision in decisions or [])]
     decisions_used = [decision for decision in decisions or []
                       if any(_decision_covers(decision, item["path"], plan, version)
-                             and decision.get("choice") == "passed" for item in needs)]
+                             and decisions_mod.canonical("acceptance_conclusion", decision.get("choice")) == "passed"
+                             for item in needs)]
     path_problems = [item for item in unparsed if item.get("kind") == "path"]
     return {"matched": matched_paths, "curated": sorted(set(curated)),
             "period_days": days, "period_problems": period_problems,
@@ -788,12 +791,12 @@ def run_check(ctx, task, decisions, review_notes_path):
                                      "确认属本任务改动则用 task-attribute 裁决归属",
                                      "影响验收则回 Plan，影响检查则重检"]))
     if buckets.get("d"):
-        # 归属语义存疑：交人裁决，不当通过（机制稿 §3.5）
-        raise CheckError("WF_SCOPE_UNRESOLVED", dict(scope_facts, ambiguous_ownership=buckets["d"]))
-    conflicts = scope.cross_task_conflicts(ctx.root, task)
-    if conflicts:
-        # 同一路径被另一个任务显式归属：双重认领，不能由脚本判定归谁
-        raise CheckError("WF_SCOPE_UNRESOLVED", dict(scope_facts, cross_task_claims=conflicts))
+        # 归属语义存疑：交人裁决，不当通过（机制稿 §3.5 d 档）。
+        # 争抢判定由 `scope.classify_candidates` 单次给出（它自己调 `cross_task_conflicts`），
+        # 这里不再重复计算——两处各算一次就会漂移。
+        raise CheckError("WF_SCOPE_UNRESOLVED",
+                         dict(scope_facts, ambiguous_ownership=buckets["d"],
+                              cross_task_claims=classified.get("conflicts") or []))
     governance_violations, governance_state = scope.declaration_violations(
         buckets["e"], classified["touch_paths"], ctx.root
     )
