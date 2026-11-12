@@ -253,7 +253,9 @@ def sorted_paths(paths):
 
 # 允许经「基线/配置/spec」通道写入的路径白名单；控制记录一律不在其中（设计稿 §7.3）
 WRITE_TARGET_CLASSES = (".wf/baseline.md", ".wf/project-config.json")
-WRITE_TARGET_PREFIXES = (".wf/spec/",)
+# 可写目标类别（`baseline-apply` 与 `spec-update` 共用）：知识拒绝项与 spec 同级，
+# 由知识处置入口（spec-update）写入（机制稿 §8.4）。
+WRITE_TARGET_PREFIXES = (".wf/spec/", ".wf/out-of-scope/")
 
 
 def write_target_allowed(normalized):

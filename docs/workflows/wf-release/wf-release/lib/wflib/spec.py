@@ -28,9 +28,15 @@ def parse_frontmatter(path):
     """受限 frontmatter：每行 `key: <JSON值>`；返回 (metadata, problems)。"""
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            lines = handle.read().splitlines()
+            text = handle.read()
     except OSError as exc:
         return {}, [f"unreadable: {exc}"]
+    return parse_frontmatter_text(text)
+
+
+def parse_frontmatter_text(text):
+    """同上，但作用在**文本**上（写入前校验用，避免为校验先落盘）。"""
+    lines = (text or "").splitlines()
     if not lines or lines[0].strip() != "---":
         return {}, ["frontmatter missing"]
     metadata = {}
@@ -524,6 +530,84 @@ def _check_reference_conflicts(root, old_paths, current_task_id=None):
 
 
 
+OUT_OF_SCOPE_PREFIX = ".wf/out-of-scope/"
+OUT_OF_SCOPE_FIELDS = ("concept", "reason", "reconsider_when")
+HISTORY_HEADING = "## 既往请求"
+
+
+def _history_lines(text):
+    """取 `## 既往请求` 段内的行（不含标题本身）；没有该段返回 None。"""
+    lines = (text or "").splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != HISTORY_HEADING:
+            continue
+        collected = []
+        for item in lines[index + 1:]:
+            if item.startswith("## "):
+                break
+            collected.append(item)
+        return collected
+    return None
+
+
+def out_of_scope_problems(root, change):
+    """`.wf/out-of-scope/` 拒绝项的结构与「只增不改」核对（机制稿 §8.4）。
+
+    只做**可机械判定**的部分：字段齐全、文件名与 concept 一致、`## 既往请求` 段存在、
+    重提只追加不重写。**「什么算已拒绝、何时可重议」是人的判断**，不在这里。
+    """
+    operation = change.get("operation")
+    problems = []
+    if operation not in ("add", "update"):
+        return [{"reason": f"{operation} is not a legal operation for a rejection item",
+                 "exit": "新建用 add；重提用 update 追加 `## 既往请求` 一行"}]
+    content = change.get("content")
+    if not isinstance(content, str):
+        return [{"reason": "rejection item requires content"}]
+    metadata, fm_problems = parse_frontmatter_text(content)
+    problems.extend([{"reason": f"frontmatter: {item}"} for item in fm_problems])
+    for field in OUT_OF_SCOPE_FIELDS:
+        value = metadata.get(field)
+        if not isinstance(value, str) or not value.strip():
+            problems.append({"reason": f"`{field}` 必须是非空字符串"})
+    history = _history_lines(content)
+    if history is None:
+        problems.append({"reason": f"缺少 `{HISTORY_HEADING}` 段"})
+    for relative in _path_list(change, "new_paths"):
+        concept = metadata.get("concept")
+        stem = os.path.basename(relative)[:-3] if relative.endswith(".md") else os.path.basename(relative)
+        if isinstance(concept, str) and concept and stem != concept:
+            problems.append({"reason": "文件名必须与 concept 一致", "path": relative,
+                             "concept": concept, "filename": stem})
+        absolute = join(root, paths_mod.normalize(relative))
+        exists = os.path.exists(absolute)
+        if operation == "add" and exists:
+            problems.append({"reason": "同 concept 的拒绝项已存在：按重提追加处理，不新建文件",
+                             "path": relative})
+        if operation == "update":
+            if not exists:
+                problems.append({"reason": "update 的目标不存在；首次登记用 add", "path": relative})
+                continue
+            try:
+                with open(absolute, "r", encoding="utf-8") as handle:
+                    previous = handle.read()
+            except OSError as exc:
+                problems.append({"reason": f"unreadable: {exc}", "path": relative})
+                continue
+            old_lines, new_lines = previous.splitlines(), content.splitlines()
+            if new_lines[:len(old_lines)] != old_lines:
+                problems.append({"reason": "既往内容被改写：拒绝项只增不改", "path": relative})
+                continue
+            appended = new_lines[len(old_lines):]
+            for line in appended:
+                if not line.strip():
+                    continue
+                if not line.startswith("- ") or line.count("｜") < 2:
+                    problems.append({"reason": "追加行必须形如 `- <YYYY-MM-DD> ｜ <摘要> ｜ <裁决引用>`",
+                                     "path": relative, "line": line})
+    return problems
+
+
 def normalize_changes(changes):
     """把每条变更的路径字段归一成数组，作为**唯一事实**往下传。
 
@@ -635,6 +719,17 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
             continue
         if not new_paths or not isinstance(change.get("content"), str):
             raise SpecError("WF_SEMANTIC_DECISION", {"reason": f"{operation} requires new_paths and content"})
+
+    # 知识拒绝项（机制稿 §8.4）：结构与「只增不改」在写入前一次核完
+    for change in changes:
+        targets = _path_list(change, "old_paths") + _path_list(change, "new_paths")
+        if not any(paths_mod.normalize(path).startswith(OUT_OF_SCOPE_PREFIX)
+                   for path in targets if isinstance(path, str)):
+            continue
+        problems = out_of_scope_problems(root, change)
+        if problems:
+            raise SpecError("WF_SEMANTIC_DECISION",
+                            {"reason": "rejection item rejected by schema", "problems": problems})
 
     # 首跑也要核前像（实现稿 §2.3.11「spec-update 的 update 首跑不核前像」）：
     # 批准与写入之间文件被改过，`_apply_change` 会静默覆盖；续做分支的三态判定只在 resume=True 生效，

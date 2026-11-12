@@ -45,13 +45,13 @@
 
 | # | 项 | 改哪些文件的哪一段 | 用例 | 验证 | 状态 |
 |---|---|---|---|---|---|
-| B2-1 | P2-3 `ready` 分实例 | `lib/wflib/cli.py::cmd_ready`：增 `runs[]` 归组与 `run_in_flight` blocker（**不做子仓库归组**：charter T3 B2 硬边界） | `scripts/tests/wf_runtime/test_ready_runs.py`（新） | 单测 | [ ] |
-| B2-2 | P2-4 自检解析 SKILL frontmatter | `payload/install.py::self_check`：投放后逐 `SKILL.md` 解析 frontmatter，问题入 `problems` | `repro/skill-frontmatter-selfcheck.py`（新，双模） | `bash scripts/tests/wf_runtime/full/repro/run.sh` 含该条 | [ ] |
-| B2-3 | P2-8 键值语义解析 | `payload/bin/wf.py::project_key_approved`：逐行解析键值成对；`wflib/config.py::project_python_key` 只登记为无调用方 | 追加断言到 `repro/executor-approval-chain.py` 或新单测 | 单测 + repro | [ ] |
-| B2-4 | P2-10 start 期验证证据入 action | `lib/wflib/tasks.py::cmd_task_start`（`_run_start_verifications` 调用点）与 `_finish_task_action` 的后置核验 | `scripts/tests/wf_runtime/test_start_verification_action.py`（新） | 单测 | [ ] |
-| B2-5 | P2-11 D08 依赖/实例目标碰撞 | `lib/wflib/tasks.py::cmd_dep`、`lib/wflib/runs.py::create/advance` 的 `new_action(targets=…)` | `scripts/tests/wf_runtime/test_targets_dependency_run.py`（新） | 单测 | [ ] |
-| B2-6 | P2-12 R93 注入式双模反例 | 新增 `scripts/tests/wf_runtime/full/repro/identity-platform-fact.py` | 双模 | `WF_REPRO_INJECT=0/1` 分别绿/红 | [ ] |
-| B2-7 | P2-6 `task-check` 执行移出锁（**结构改动，单独一批**） | `lib/wflib/check.py::run_check` 拆三段 + `lib/wflib/tasks.py::cmd_task_check` 的锁段重排 | `scripts/tests/wf_runtime/test_check_lock_window.py`（新） | 单测 + 既有 `test_changes_persisted` 等全绿 | [ ] |
+| B2-1 | P2-3 `ready` 分实例 | `runs.py` 新增 `iter_runs`/`binding_state`（判定本体），`cli._eligible_task_bind` 改用它；`cmd_ready` 增 `runs[]` 归组、`run_in_flight` 细分阻断、悬空 run_id 标 unknown（**不做子仓库归组**：charter T3 B2 硬边界） | `test_ready_runs.py`（新，4 例） | 单测 4/4 + `ready-view` 双模仍绿 | [x] |
+| B2-2 | P2-4 自检解析 SKILL frontmatter | `install.py` 新增自含的 `skill_frontmatter_problems()`（起止 `---`、`name`/`description` 非空、重复键），`self_check` 对 `kind=skill` 逐份核 | `repro/skill-frontmatter-selfcheck.py`（新，双模；把清单摘要改成与新内容一致，只留 frontmatter 检查能抓到） | green/red 均 PASS | [x] |
+| B2-3 | P2-8 键值语义解析 | `bin/wf.py` 新增 `declared_values(text, key)`（行内键值成对，键前须为分隔符/行首），`project_key_approved` 改用它；`config.project_python_key` 零调用方 → 登记进 §2.3.11「运行时死代码」（不删） | `test_project_key_semantic.py`（新，5 例） | 单测 5/5 + `executor-approval-chain`、`project-key-archived-evidence` 双模均绿 | [x] |
+| B2-4 | P2-10 start 期验证证据入 action | `tasks.py` 新增 `_start_verification_ids`/`_start_verification_evidence`/`_missing_start_verification_evidence`；结果并入 `action.inputs["start_verifications"]`，动作启动后与结案前各核一次真实后置 | `test_start_verification_action.py`（新，5 例） | 单测 5/5 + `task-start-surface` 双模绿 | [x] |
+| B2-5 | P2-11 D08 依赖/实例目标碰撞 | **依赖 B3-1（`cmd_dep`）与 B4/B5（`run create/advance`）——本轮尚无这两个处理器，targets 无处可挂** | `test_targets_dependency_run.py`（待 B3-1 后补） | — | [!] 顺延到 B3-1/B5，同批做 |
+| B2-6 | P2-12 R93 注入式双模反例 | 新增 `repro/identity-platform-fact.py`：未安装宿主写操作被拒（facts 带 `installed_platforms` 与登记出口）+ 只读不受限；注入=去掉平台成员判定 | 双模 | `--expect green`/`--expect red` 均 PASS | [x] |
+| B2-7 | P2-6 `task-check` 执行移出锁（**结构改动，单独一批**） | `lib/wflib/check.py::run_check` 拆三段 + `lib/wflib/tasks.py::cmd_task_check` 的锁段重排 | `test_check_lock_window.py`（新） | 单测 + 既有套件全绿 | [!] 顺延到独立批次（`run_check` 重组要连带锚点重核与检查点语义，不与本批混做） |
 
 **批末门禁**：同 B1 + `run_all.sh`（本轮首次全量）。
 **回滚点**：按文件回滚本批改动；P2-6 单独提交，失败只回滚该提交。
@@ -62,10 +62,10 @@
 
 | # | 能力 | 改哪里 | 用例 | 验证 | 状态 |
 |---|---|---|---|---|---|
-| B3-1 | `dep add\|rm` | `lib/wflib/tasks.py::cmd_dep`（新）、`cli.COMMANDS["dep"]` 换真实处理器 | `scripts/tests/wf_runtime/test_dep_edges.py`（新） | 单测 + repro | [ ] |
-| B3-2 | `task-reassess` 完整路径 | `lib/wflib/tasks.py::cmd_task_reassess` + `_reassess_empty_set` 改造为条件核验 | `scripts/tests/wf_runtime/test_task_reassess.py`（新） | 单测 | [ ] |
-| B3-3 | `inspect` 两项治理输出 | `lib/wflib/tasks.py::_governance_summary` 增 `manual_compare`（§8.5 三步）与 `author_order`；`inspect()` 的 `governance_omitted` 删两条 | `scripts/tests/wf_runtime/test_inspect_governance.py`（新，含「未声明未输出」断言） | 单测 + `inspect-declares-omitted.py` 更新 | [ ] |
-| B3-4 | `.wf/out-of-scope/` 四项前置 | `paths.WRITE_TARGET_PREFIXES`、`protocol/project_data.json`、`lib/wflib/spec.py`（`modify-append` 与 schema 校验）、`tasks.py::_governance_summary`（重复登记） | `scripts/tests/wf_runtime/test_out_of_scope.py`（新，正反 5 例：建文件/重提追加/空 reason 拒/concept 与文件名不符拒/多文件报重复） | 单测 | [ ] |
+| B3-1 | `dep add\|rm` | `lib/wflib/tasks.py::cmd_dep`（新）、`cli.COMMANDS["dep"]` 换真实处理器 | `scripts/tests/wf_runtime/test_dep_edges.py`（新） | 单测 + repro | [ ] 未开工（下一批；与 B2-5 的 targets 同批） |
+| B3-2 | `task-reassess` 完整路径 | `lib/wflib/tasks.py::cmd_task_reassess` + `_reassess_empty_set` 改造为条件核验 | `test_task_reassess.py`（新） | 单测 | [ ] 未开工（返工集合要有 `rework_of` 生产者才有意义 → 与 B5-4 同批） |
+| B3-3 | `inspect` 两项治理输出 | `tasks.py` 增 `_scan_repo_paths`/`_manual_compare`/`_author_order`；`inspect()` 的 `governance_omitted` 清空（空列表＝断言） | `test_inspect_governance.py`（新，6 例）+ `inspect-declares-omitted.py` 断言改强（双模） | 单测 6/6 + repro 双模绿 | [x] |
+| B3-4 | `.wf/out-of-scope/` 四项前置 | `paths.WRITE_TARGET_PREFIXES` += 该目录；`protocol/project_data.json` 前缀 += 该目录；`spec.py` 增 `parse_frontmatter_text`（与 `parse_frontmatter` 同源）+ `out_of_scope_problems`（schema、文件名一致、只增不改、追加行形态），在 `validate_changes` 整批校验段调用；`tasks.py` 增 `_out_of_scope_duplicates` 并接进 `governance`，`governance_omitted` 清空 | `test_out_of_scope.py`（新，10 例，覆盖 PRD 五项验收 + 「改写既往内容被拒」「未知不当零」「声明清空」） | 单测 10/10 | [x] |
 
 **前置依赖**：B3-1 与 B2-5 共用 targets 判定；B3-3 与 B3-4 的重复登记核对同批（同一遍历）。
 
@@ -192,3 +192,13 @@ bash scripts/tests/wf_runtime/full/run_all.sh            → 运行 132 项，�
 start 期验证入 action、D08 目标碰撞、R93 注入式双模反例、`task-check` 执行移出锁）、
 B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原因分类：**会话预算**，不是阻塞；
 下一会话从 B2 的第一项续做，`implement.md` 的批次表已是可执行清单。
+
+### B3（部分）——P1 两项自治能力（2026-11-12）
+
+同批交付的两项（PRD §2.1 第 7 项与 §2.2 要求同批）：
+
+1. **`inspect` 两项治理输出**：`manual_compare`（§8.5 三步：见证 → 前缀不可证不相交 → potential，含 `unverified` 与扫描范围）与 `author_order`（`extracted` 前置、`author=ai` 优先）。
+2. **`.wf/out-of-scope/` 四项启用前置**：写入者（`spec-update` 的 add/update + schema 与只增不改校验）、重提追加（不新建文件）、路径放行（`paths`/`protocol` 两处唯一声明）、消费者（巡检重复登记）。
+3. **同批声明变更**：`governance_omitted` 清空；机制稿两处**状态表述**事实订正（§8.4 末句与 D24 轮次列），只改状态、不改判据。
+
+门禁（本批跑完后）：见 §9 的 `run_all` 结果与 `--verify`。
