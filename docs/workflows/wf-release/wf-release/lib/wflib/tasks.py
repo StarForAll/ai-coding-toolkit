@@ -5313,6 +5313,73 @@ def _governance_summary(root, tasks, archived):
             "due": due,
             "problem": every_problem,
         },
+        # 机制稿 §8.5：**四类各自 passed/failed/unknown 及未覆盖对象**，不能只给知识统计就称巡检通过。
+        # 三类结论的判定口径（脚本只核结构）：结构探针跑通且未发现处置项 = passed；
+        # 发现需处置/待核对项 = failed；样本不足、条目不可解析、声明缺失 = unknown（不当作 0）。
+        "four_class_verdicts": _four_class_verdicts(
+            tasks,
+            archive_terminals=_archive_terminal_problems(root, tasks),
+            archive_references=_archive_reference_summary(root, tasks),
+            spec_usage={"unknown": unknown, "problem": window_problem,
+                        "statistic_complete": not unknown},
+            incomplete=incomplete,
+            every_problem=every_problem,
+            manual_compare=_manual_compare(root),
+            author_order=_author_order(root),
+            out_of_scope_duplicates=_out_of_scope_duplicates(root),
+        ),
+    }
+
+
+def _four_class_verdicts(tasks, *, archive_terminals, archive_references, spec_usage,
+                         incomplete, every_problem, manual_compare, author_order,
+                         out_of_scope_duplicates):
+    """四类断言各自的三态结论（机制稿 §8.5）与「未覆盖对象」清单。
+
+    四类＝归档引用 / 归档终态 / 归档 id / 知识（设计稿 §5.4）。每条结论**必须带事实**，
+    `unknown` 不等于通过——只要有一类是 unknown，整体就不能称"巡检通过"。
+    """
+    def verdict(kind, failed, unknown_items):
+        if unknown_items:
+            status = "unknown"
+        elif failed:
+            status = "failed"
+        else:
+            status = "passed"
+        return {"class": kind, "status": status, "failed": failed, "unknown": unknown_items}
+
+    # `_archive_terminal_problems` 直接返回条目列表
+    terminal_failed = list(archive_terminals or [])
+    terminal_unknown = [item for item in incomplete
+                        if item.get("reason", "").startswith("archived record lacks")]
+    id_failed = [item for item in incomplete if item.get("reason") == "archived record is not status=archived"]
+    stamp_unknown = [item for item in incomplete
+                     if item in terminal_unknown or item.get("reason") == "archived_at missing or unparsable"]
+    reference_failed = list(archive_references.get("dangling") or [])
+    reference_unknown = list(archive_references.get("unknown") or [])
+    # 三个治理输出直接以条目列表返回（`unverified`/重复项各在其内），这里只按事实分类：
+    # 有「未核实/重复/非法」条目即 failed，不把它们降级成通过。
+    knowledge_failed = ([] if spec_usage.get("statistic_complete")
+                        else list(spec_usage.get("unknown") or []))
+    knowledge_failed = knowledge_failed + list(manual_compare or []) \
+        + list(author_order or []) + list(out_of_scope_duplicates or [])
+    knowledge_unknown = []
+    if spec_usage.get("problem") or every_problem:
+        knowledge_unknown = [spec_usage.get("problem") or every_problem]
+    verdicts = [
+        verdict("archive_references", reference_failed, reference_unknown),
+        verdict("archive_terminals", terminal_failed, stamp_unknown),
+        verdict("archive_ids", id_failed, []),
+        verdict("knowledge", knowledge_failed, knowledge_unknown),
+    ]
+    uncovered = [item for entry in verdicts for item in entry["failed"] + entry["unknown"]]
+    return {
+        "verdicts": verdicts,
+        "uncovered": uncovered,
+        "overall": ("failed" if any(entry["status"] == "failed" for entry in verdicts)
+                    else "unknown" if any(entry["status"] == "unknown" for entry in verdicts)
+                    else "passed"),
+        "note": "unknown 不等于通过；本结论只核结构，语义矛盾交人对照正文",
     }
 
 
