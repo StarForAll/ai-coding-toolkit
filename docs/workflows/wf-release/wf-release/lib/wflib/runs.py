@@ -1000,7 +1000,9 @@ def create(ctx, args):
                 raise cli.CliError("WF_TARGET_COLLISION", {"path": _rel(ctx.root, candidate)})
         instance_id = session.get("instance_id") or session_mod.new_instance_id()
         inputs = {"run": run_id, "definition": definition_rel, "digest": digest,
-                  "inputs_digest": records.plain_digest(creation.get("inputs") or {})}
+                  "inputs_digest": records.plain_digest(creation.get("inputs") or {}),
+                  # 意图里固定完整创建输入：续做时不必再读 creation 文件（它可能已被移走/删除）
+                  "creation": creation}
         owner_scope = {"object": {"kind": "run", "id": run_id},
                        "preparation": {"id": workflow_id, "scope_paths": [definition_rel]}}
         updated = writer_mod.acquire(record, kind="session", ident=key, scope=owner_scope,
@@ -1133,15 +1135,49 @@ def _resume_run_create(ctx, key, session, record, action, text):
                                "intent": digest, "current": current,
                                "exits": ["把定义改回原版本后重入", "放弃该意图后重新 create"]})
     workflow_id = targets.get("definition")
-    creation = records.load_json(join(ctx.root, f"{RUNS_REL}/{targets.get('run')}.creation.json"), {}) or {}
-    if not creation:
-        # 意图里的输入摘要与步骤适用性取自本次动作固定值；不再要求 creation 文件仍在
-        creation = {"inputs": {}, "steps": {}, "definition_id": workflow_id}
+    creation = (action.get("inputs") or {}).get("creation")
+    if not isinstance(creation, dict):
+        # 旧动作（本批之前落盘的意图）没有固定 creation 本体：只能按最小事实续做，
+        # 并把这一点如实报告（不假装恢复到了完整输入）
+        creation = {"inputs": {}, "steps": {}, "definition_id": workflow_id,
+                    "degraded": True}
     return _advance_run_create(ctx, key, session, record, action, text, creation,
                                workflow_id, digest, targets.get("instance"))
 
 
 ADVANCE_STEPS = ("resolve_step", "create_or_reuse_task", "record_cursor")
+
+
+def _step_outputs(doc, step_id, instance_inputs):
+    """步骤产物的引用（机制稿 §7.3：`step_results` 保存本次消费摘要）。
+
+    字面路径直接用；`{input: name}` 按实例输入解析；解不出的保留声明并标 `resolved: false`
+    ——**不猜路径**（猜出来的路径会让后续"复用"判断建立在假事实上）。
+    """
+    for step in _ordered_steps(doc):
+        if step.get("id") != step_id:
+            continue
+        found = []
+        for output in step.get("outputs") or []:
+            if not isinstance(output, dict):
+                continue
+            declared = output.get("path")
+            entry = {"id": output.get("id"), "kind": output.get("kind")}
+            if isinstance(declared, str):
+                entry.update({"path": declared, "resolved": True})
+            elif isinstance(declared, dict) and declared.get("input"):
+                value = instance_inputs.get(declared["input"])
+                if isinstance(value, str):
+                    entry.update({"path": value, "resolved": True,
+                                  "from_input": declared["input"]})
+                else:
+                    entry.update({"path": declared, "resolved": False,
+                                  "from_input": declared["input"]})
+            else:
+                entry.update({"path": None, "resolved": False})
+            found.append(entry)
+        return found
+    return []
 
 
 def _applicability(creation, doc):
@@ -1279,7 +1315,9 @@ def advance(ctx, args):
                 settled = current
                 step_results[current] = {"kind": "satisfied", "task_id": task_id,
                                          "at": records.now_str(),
-                                         "terminal": task.get("terminal")}
+                                         "terminal": task.get("terminal"),
+                                         "outputs": _step_outputs(doc, current,
+                                                                   run.get("inputs") or {})}
             elif task.get("terminal"):
                 raise DefinitionError("WF_SEMANTIC_DECISION",
                                       {"reason": "task ended abnormally; step is not satisfied",
