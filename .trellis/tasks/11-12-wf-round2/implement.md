@@ -80,7 +80,8 @@
 | B5-1 | `run create` / `run locate` | `runs.py`：`creation_problems`/`input_value_problems`（纯判定）、`create`（writer 主记录 + 8 步 + 续做）、`locate`（只读）；`cli.COMMANDS["run"]` 换 `_runs_command`，`SUBACTIONS` 表登记子动作，`definition` 纳入 `ACTIVATION_REQUIRED` | `test_run_create.py`（10 例）、`test_run_locate.py`（4 例）、`repro/run-create-once.py`（双模） | 单测 14/14 + repro 双模绿 + run_all 全绿 | [x]（`pause` 未做，见 B5-3） |
 | B5-2 | `run advance`（含人判/略过/自动建任务与顺序边） | `runs.py::advance` | 同上 + `scripts/tests/wf_runtime/test_run_advance.py` | [ ] |
 | B5-3a | `run pause` | `runs.py::pause`（受控字段写入 + 暂停当前任务；不动 cursor） | `test_run_pause.py`（契约 2 例）、`repro/run-pause-and-advance.py`（双模） | 单测 + repro 双模 + run_all 全绿 | [x] |
-| B5-3b | `run terminate` + `finish` | `runs.py::terminate/finish` | `repro/run-terminate.py` | — | [ ] **待裁前置**：实例的解除暂停无出处（见 §12） |
+| B5-3b | `run resume`（方案 B，2026-11-12 人裁批准） | `runs.py::resume`（`run.resume` 动作：`clear_paused` → `record_resume`）；机制稿 §2.2 补「实例暂停/恢复」一行、实现稿 §2.3 登记 | `repro/run-resume.py`（双模，5 组断言） | repro 双模绿 + run_all 全绿 | [x]（`--decision` 按人裁定为**可选**） |
+| B5-3c | `run terminate` + `finish` | `runs.py::terminate/finish` | `repro/run-terminate.py` | — | [ ] 剩余最大件 |
 | B5-4 | `task-rework` | `tasks.py::cmd_task_rework`（新；机制稿 §6.2 全段） | `repro/task-rework.py`（双模：图非法/未完成动作/批准不继承） | [ ] |
 | B5-5 | `task-replace` | `tasks.py::cmd_task_replace` | `repro/task-replace.py`（双模） | [ ] |
 
@@ -305,23 +306,34 @@ B3–B5（P1 七项能力）、B6 的发行树提交与其余文档同步。原�
 
 ---
 
-## 12. 待裁：实例的「解除暂停」没有出处
+## 12. 已裁：实例的「解除暂停」按方案 B 落地（2026-11-12）
 
-| 事实 | 出处 |
-|---|---|
-| 机制稿 §2.2 的「暂停/恢复」行只写给**任务**（未归档任务） | 机制稿 §2.2 |
-| 实例记录有 `paused` 字段（布尔） | 机制稿 §1.5 |
-| 机制稿 §7.3 只要求「实例暂停须保存…原因及当前步骤」，未说如何解除 | 机制稿 §7.3 |
-| 实现稿 §2.3 的 `run` 子动作是 `create/advance/pause/locate/terminate`，**没有 resume** | 实现稿 §2.3 |
+**裁定**：批准方案 B（新增 `run resume`，只清实例 `paused` + 记录依据；不恢复任务、不动 cursor、不推进），
+`--decision` 定为**可选**；并**先补指引层**再做 `terminate`。
 
-现状：`paused` 实例的唯一出口是 `run terminate`（不是死路，但**不能再继续推进**）。
-三条可选路径（都需要在实现稿的命令面同批登记，故不能自行决定）：
+依据（按「机制 vs 指引」判据）：
 
-| 方案 | 内容 | 代价 |
+| 原子动作 | 句式 | 归属 |
 |---|---|---|
-| A | `run advance` 在人判决定成立时清 `paused` 并继续 | 不新增入口；但要给 `choice` 登记取值（`resume`），属改取值域 |
-| B | 新增 `run resume --run <id>` 子动作 | 新入口（约束 2 明令不得新增入口，需人裁） |
-| C | `run pause --clear` | 新开关（同上） |
-| D | 维持现状：暂停只能终止 | 不新增任何东西；实例暂停后无法继续，能力上留一个缺口 |
+| 记录"暂停了/为什么/停在哪步"、暂停期间阻止推进、当前任务联动标 paused | 记录 / 阻止 / 跨记录一致 | 机制 |
+| 清 `paused`、保留 `paused_reason` 作历史、记录 who/when/basis | 失效 / 审计留痕 | 机制 |
+| 「是否该恢复、恢复后先做什么、要不要顺带恢复任务」 | 判断 / 排序 / 取舍 | **指引**（`wf-continue`「实例暂停之后」） |
 
-**倾向**：A 最贴合「不新增入口」的约束，且「人恢复暂停实例」本身就是一次人的决定，用既有 `--decision` 通道承载比新开关更一致；但取值域是机制稿/实现稿登记的事实，**等你裁**。
+`--decision` 不强制的原因：恢复不属机制稿 §2 授权边界的五类不可逆动作，且 attestation 不防伪——
+强制只是仪式；机制提供通道即可，给了则核 `subject` 绑定**本次**暂停时点。
+
+原 §12 的四选项与取舍记录保留在提交历史（`19aee32b` 的说明与本节上一版）中，不再重复。
+
+### B5-3b + 指引层（2026-11-12，同一批）
+
+- **指引层**（按人裁「先补指引层」）：
+  - `wf-judging` 新增 **§0「机制管什么、我管什么」**：机制只做五类事（不可观察事实 / 不可逆动作 / 跨会话一致 /
+    可伪造声明 / 审计留痕），已经判过的事不要重论证或绕路；机制不判的十件事必须自己判并留依据；判不了交人。
+    这是「指导而非限制」这条总要求在 skill 层的落点。
+  - `wf-start` 新增 **「定义与实例」**：定义里机制会拒什么、机制不替人判什么（purpose/completion/skip.condition）、
+    prepare 的准备范围归属、`run create` 的输入与"只取得规划权限"；并订正 `--run` 的陈旧表述。
+  - `wf-continue` 新增 **「实例推进怎么读」**（advance 六种返回各自该做什么）与 **「实例暂停之后」**
+    （解除实例暂停 ≠ 恢复任务；`--decision` 可选；恢复后从 cursor 走）。
+  - `wf-spec-update` 新增 **「知识拒绝项」**：什么该写持久拒绝、什么该写 `task.handoff.pending`、机制会拒什么。
+- **`run resume`**：见实现稿 §2.3.11 的新条。用例 `repro/run-resume.py`（5 组断言：清 paused / 记录 lifted_paused_at /
+  历史不被抹 / 任务仍暂停 / 游标不变且 advance 能继续 / 旧决定被拒 + 新决定被接受）。
