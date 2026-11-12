@@ -1,0 +1,9 @@
+{"scenario": "bash", "l1_key": "a78cac38b8577f1d", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "zsh", "l1_key": "a78cac38b8577f1d", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "nested", "l1_key": "a78cac38b8577f1d", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "setsid", "l1_key": "b125f03324b56533", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "setsid2", "l1_key": "a8d80a73db05e438", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "systemd-run", "l1_key": "a78cac38b8577f1d", "l2_key": "d14cb12e798d5d1c", "l1_stable": true, "l2_stable": true, "l2_pid": 5538, "l2_exe": "node", "tty_nr": 0, "chain": ["python3.13", "timeout", "bash", "bash", "timeout", "bash"]}
+{"scenario": "docker-run", "l1_key": null, "l2_key": null, "l1_stable": true, "l2_stable": true, "l2_pid": null, "l2_exe": null, "tty_nr": 0, "chain": []}
+{"scenario": "docker-exec", "l1_key": "3fdba35f04dc8c46", "l2_key": null, "l1_stable": true, "l2_stable": true, "l2_pid": null, "l2_exe": null, "tty_nr": 34817, "chain": []}
+{"scenario": "leader-dead", "l1_key": null, "l2_key": null, "sid_alive": false, "l2_pid": null, "chain": ["python3.13", "systemd"]}

@@ -1,0 +1,214 @@
+# 验收分母（设计稿 §8.2 场景行 → 证据 → 覆盖判定）
+
+> 来源：第 27 次独立审查（快照 `2d79aeee…`）逐行建表；2026-11-06 人裁、W4 批次、第 28 轮记录修复、W3 批 A 与 629 拆行后入库。
+> 口径：`x/N` 分母只含**首轮适用**行；按 `docs/workflows/wf-framework-design.md` §8.2 门禁①，延至后续轮次的行登记为「等该轮交付」，状态不可达的格登记为「不适用」——两者都**移出**首轮分母。
+> 覆盖四档：`已断言` / `仅有原因码` / `只有登记` / `无`。
+
+## 计数
+
+| 口径 | 数值 |
+|---|---|
+| 场景行总数（含拆分子行） | 147 |
+| 首轮适用（正式分母 N） | **100** |
+| 已断言（x，断言口径） | **66** |
+| 仅有原因码 | 8 |
+| 只有登记 | 6 |
+| 无证据 | 0 |
+| x/N（仅断言口径） | **66/99 ≈ 66.7%**（断言分母 80 行内：66/80 = 82.5%） |
+| 其中以人判为验收出口（成立 15 / 不成立 1 / 宣告不审 1 / 待 2） | **19** |
+| 等第二轮 / 等第三轮 / 不适用 | 24 / 3 / 20 |
+
+## 拆行规则（2026-11-06 人裁）
+
+粗行（义务在 `validation` §96 里是矩阵的）必须**拆成子行**再计分母；一条用例只能填一格，不得冒充整行。
+
+- 设计行 **629（机读触碰面）** = §96 ① 的 4 状态 × 11 消费点 = **44 格**，已拆为 `629.s1..s4.c1..c11`；原单行不再计入。
+- 状态：`s1` 未开工+合法 plan／`s2` 已开工+空数组／`s3` 已开工+快照缺键／`s4` 已开工+损坏类型。
+- 消费点：`c1` stop-keep／`c2` stop-transfer 源／`c3` transfer 目标／`c4` scope 分类／`c5` 外部变更／`c6` 维护重叠／`c7` 维护处置承接／`c8` work_satisfied_fact／`c9` cross_task_conflicts／`c10` check 外部变更再判定／`c11` baseline/spec 写入口。
+
+## s1 可达性判定（2026-11-06，读代码得出，非推测）
+
+| 格 | 入口 | 判定 | 依据 |
+|---|---|---|---|
+| s1.c1 stop-keep | `stop` → `tasks.stop_work` | 可达 | 只要求会话绑定 + 持有写权，无「已开工」前置（`tasks.py:3512-3530`） |
+| s1.c2 stop-transfer 源 | 同上 transfer 分支 | 可达 | 待承接路径取自决定 subject（`tasks.py:3527`） |
+| s1.c3 transfer 目标 | 同上 + 目标批准面核验 | 可达 | `tasks.py:3623` `target_approved` |
+| s1.c4 scope 分类 | `task-start`（`tasks.py:1826`）、`stop`（`:3545`） | 可达 | 开工期即调用分类器 |
+| s1.c5 外部变更 | 仅 Check（`check.py:690/782`） | **不可达** | Check 需已开工 |
+| s1.c6 维护重叠 | `task-start`（`tasks.py:1653/1660`） | 可达（**已断言** r60/r61） | 开工门禁 |
+| s1.c7 维护处置承接 | `task_receipts`（`tasks.py:800-805`）← `stop` 等 | 可达 | 回执核对在收工路径上 |
+| s1.c8 work_satisfied_fact | 仅 finish 门禁（`gates.py:621` ← `tasks.py:894`） | **不可达** | 需 Check 通过后 |
+| s1.c9 cross_task_conflicts | 仅 Check（`check.py:722`） | **不可达** | 开工期无调用点 |
+| s1.c10 check 外部变更再判定 | 仅 Check（`check.py:462`） | **不可达** | 同上 |
+| s1.c11 baseline/spec 写入口 | `baseline-apply`（`:3175`）、`spec-update`（`:3402`） | 可达 | 只需批准面，不需已开工 |
+
+结论：s1 的 11 格最终判定——**已断言** `c1`（收工归属边界）、`c4`（开工期分类器）、`c6`（维护重叠）；**已断言** `c7`（收工回执核对，2026-11-06 批 D）——s1 全部 11 格已定论；**等第二轮** `c2/c3`（需第二个任务承接，首轮 task-new 只产出一个任务）；**不适用** `c5/c8/c9/c10`（只在 Check 或 finish 期消费）、`c11`（baseline-apply/spec-update 要求 phase∈execute/check/finish）。拆行使 N 从 84 → 127，可达性判定再降到 **123**；比例下降是计价结果，不是退步。
+
+## 逐行
+
+| 设计行/场景 | 轮次 | 现有证据 | 覆盖判定 |
+|---|---|---|---|
+| 586 扩展与取舍（charter T2、charter T5） | 首轮适用（M:1008；1044） | 人判 2026-11-07：新增项对应实际缺口 | 人判（成立） |
+| 587 边界与边界外出口（charter T3） | 首轮适用（M:1008；1044） | 人判 2026-11-07：边界外请求按三出口登记（13 条 DEFER） | 人判（成立） |
+| 588 多分支与嵌套仓库（charter T3） | 首轮适用（M:978；1046） | 人判 2026-11-07：越界有可见报告（r49/r50） | 人判（成立） |
+| 589 分支来源核对 | 首轮适用（M:1010；1046） | 人判 2026-11-07：不要求覆盖子仓库；repro/branch-source-preview.py 已断言点名分支与零写入 | 人判（成立） |
+| 590 减法与停止（charter T6） | 首轮适用（M:1008；1044） | 人判 2026-11-07：逐轮均有新事实；第 15 次复审明确拒绝重复；原拟不成立撤回 | 人判（成立） |
+| 591 效力与冲突（charter T1） | 首轮适用（M:1008；1045） | 人判 2026-11-07：冲突均交人裁并同批修订 | 人判（成立） |
+| 592 使用负担与缺口（charter T5） | 首轮适用（M:1008；1044） | 人判 2026-11-07：本轮把判断权交回人 | 人判（成立） |
+| 593 演进判断顺序（charter T5） | 首轮适用（M:1008；1044） | 人判 2026-11-07：619/639 先定口径再改代码 | 人判（成立） |
+| 594 保留机制必答（charter T6） | 首轮适用（M:1008；1044） | 人判 2026-11-07：每批记录仍未做的破坏面 | 人判（成立） |
+| 595 修订同批义务（charter T7） | 首轮适用（M:1008；1045） | 人判 2026-11-07：同批义务未完成（命令表缺 ready/stop --preview；机制稿缺 plan 新字段与 checklist 段登记）→ 本批已补正，待下一轮复核 | 人判（不成立） |
+| 596 用户定义零框架改造 | 等第二轮（M:984；1047） | 无 | 无 |
+| 597 定义有界校验 | 等第二轮（M:984；1047） | 无 | 无 |
+| 598 定义与实例固定 | 等第二轮（M:984；1047） | 无 | 无 |
+| 599 工作流兼容与迁移 | 等第二轮（M:984；1047） | 无 | 无 |
+| 600 单任务与多任务流程 | 等第二轮（M:985；1048） | 无 | 无 |
+| 601 准备定义与自举 | 等第二轮（M:976；1048） | 无 | 无 |
+| 602 验证分时解析 | 等第二轮（M:976；1048） | 无 | 无 |
+| 603 接续与任务归属 | 等第二轮（M:986；1048） | 无 | 无 |
+| 604 顺序依赖授权 | 等第二轮（M:985；1048） | 无 | 无 |
+| 605 人判与略过 | 等第二轮（M:985；1048） | 无 | 无 |
+| 606 实例正常与异常终态 | 等第二轮（M:986；1049） | 无 | 无 |
+| 607 规划实例直接终止 | 等第二轮（M:986；1049） | 无 | 无 |
+| 608 实例放弃与保留 | 等第二轮（M:986；1049） | 无 | 无 |
+| 609 终止中断与历史校验 | 等第二轮（M:986；1049） | 无 | 无 |
+| 610 实例与产物隔离 | 等第二轮（M:986；1049） | 无 | 无 |
+| 611 会话固定绑定 | 首轮适用（M:987；1050） | p5_v1.py:44；repro/bind-instance-mismatch.py:14；V§3/95 | 已断言 |
+| 612 压缩与新会话 | 首轮适用（M:987；1050） | 人判 2026-11-07：须按 d1-compaction-checkpoint §1 重做增量核验，不引用 V§85；新会话半轴待 dogfood | 人判（待补） |
+| 613 无稳定会话身份 | 首轮适用（M:987；1050） | p5_v1.py:20；V§3 | 已断言 |
+| 614 单工作区串行写入 | 首轮适用（M:988；1051） | repro/bind-resume-under-lock.py:18 覆盖恢复路径；2026-11-06 人裁（方案 A）：绑定即需写权，「已绑定但无写权」的会话形态**不存在**，故本行覆盖锁定为「他人持有时 bind 被 WF_WRITER_BUSY 拒绝 + 只读视图放行」，不再追「已绑定无写权」形态 | 仅有原因码 |
+| 615 释放与显式交接 | 首轮适用（M:988；1051） | r71_tests.py:293；repro/handover-two-stage.py:14；V§94 | 已断言 |
+| 616 日常收工 | 首轮适用（M:989；1051） | repro/stop-preview-readonly.py（`stop --preview` 给出逐路径 buckets 与只读声明，任务记录与写权记录逐字节不变；预览后正式收工仍可执行；注入=预览落到执行分支则记录被改写，判红） | 已断言 |
+| 617 入口与基线子路由 | 首轮适用（M:975；1054） | r67_tests.py:96；I:473 | 仅有原因码 |
+| 618 所有权中断恢复 | 首轮适用（M:982；1051） | V§4；I:477（非 writer 接管的全覆盖） | 只有登记 |
+| 619 维护写者 | 首轮适用（M:1000；1052） | repro/uninstall-records-maintenance.py（卸载登记维护持有、代次 +2、释放为 idle，并留 kind=uninstall 的可核回执 → 派生 disposed；注入=把 kind 写成 commit 则落 applied_pending_commit，判红） | 已断言 |
+| 620 无 hook 强度 | 首轮适用（M:988；1051） | I:490（过程边界，无成对场景证据） | 只有登记 |
+| 621 普通任务持久恢复 | 首轮适用（M:982；1053） | p5_v2v3.py:83；cp5_b345.py:167；repro/bind-resume-under-lock.py:18 | 已断言 |
+| 622 绑定历史按需读取 | 首轮适用（M:987；1050） | repro/ready-view.py（只读子命令 `ready` 列出候选并给出最早就绪建议；已批准未开工判 ready 且被建议、整体记录逐字节不变；开工后（进行中未暂停）不再 ready、也不再被建议；注入=忽略阻断项则后者失真，判红） | 已断言 |
+| 623 历史锚点不可达 | 首轮适用（M:982；1053） | repro/history-anchor-unreachable.py（负例 WF_HISTORY_UNRESOLVED 带三出口；正例 reset --soft 后重检通过；双模可证伪） | 已断言 |
+| 624 未提交记录存在性 | 首轮适用（M:979；1052） | repro/record-missing-in-worktree.py（task-check WF_RECORD_INVALID 带出口、inspect 列 broken_task_dirs；恢复后正常；双模可证伪） | 已断言 |
+| 625 规划授权 | 首轮适用（M:977；1054） | cp2_tests.py:86；r55_tests.py:81 | 已断言 |
+| 626 初始化自举 | 首轮适用（M:977；1054） | p5_f0.py:56；f1_init.py:100；V§1 | 已断言 |
+| 627 Git 就绪 | 首轮适用（M:1010；1054） | repro/git-readiness-no-head.py（删掉 HEAD 后 task-start 必须 WF_CAPABILITY_UNAVAILABLE；注入=无 HEAD 也放行则返回 WF_WORKSPACE_UNRESOLVED，判红） | 已断言 |
+| 628 extracted 生命周期 | 首轮适用（M:997；1058） | p5_spec.py:72；r7r15_tests.py:318 | 已断言 |
+| 629.s1.c1 机读触碰面／未开工+合法 plan×stop-keep | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/stop-unstarted-surface.py（漏列拒绝 / 越界项只点名 notes.txt / 批准面内 keep 成立；双模可证伪） | 已断言 |
+| 629.s1.c2 机读触碰面／未开工+合法 plan×stop-transfer 源 | 等第二轮（多任务未交付）（M:977；1055（§96 ① 矩阵拆分）） | 拒绝分支已由 repro/transfer-target-task-field.py 覆盖（不存在/自承接 → WF_SEMANTIC_DECISION）；正例需第二个任务承接，而首轮 task-new 对同一项目只产出一个任务（重复调用返回同一 id，实测 WF_WRITER_BUSY），与 denominator 行 600「单任务与多任务流程＝等第二轮」一致 | 等该轮交付 |
+| 629.s1.c3 机读触碰面／未开工+合法 plan×transfer 目标 | 等第二轮（多任务未交付）（M:977；1055（§96 ① 矩阵拆分）） | 拒绝分支已由 repro/transfer-target-task-field.py 覆盖（不存在/自承接 → WF_SEMANTIC_DECISION）；正例需第二个任务承接，而首轮 task-new 对同一项目只产出一个任务（重复调用返回同一 id，实测 WF_WRITER_BUSY），与 denominator 行 600「单任务与多任务流程＝等第二轮」一致 | 等该轮交付 |
+| 629.s1.c4 机读触碰面／未开工+合法 plan×scope 分类 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/task-start-surface.py（面外未归属改动 → WF_WORKSPACE_UNRESOLVED 且只点名 notes.txt；面内未提交改动可开工；双模可证伪） | 已断言 |
+| 629.s1.c5 机读触碰面／未开工+合法 plan×外部变更 | 不适用（s1 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：外部变更只在 Check 期消费（check.py:690/782） | 不适用 |
+| 629.s1.c6 机读触碰面／未开工+合法 plan×维护重叠 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | r60_tests.py:86 / r61_tests.py:100（未开工 plan 的重叠门禁） | 已断言 |
+| 629.s1.c7 机读触碰面／未开工+合法 plan×维护处置承接 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/maintenance-disposition-s1.py（未结维护组 → WF_WIP_UNRESOLVED 且点名 pkg/b.py；处置字段齐但事实对不上 → WF_HISTORY_UNRESOLVED；真正提交后派生 persisted 且开工成立；双模可证伪） | 已断言 |
+| 629.s1.c8 机读触碰面／未开工+合法 plan×work_satisfied_fact | 不适用（s1 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：work_satisfied_fact 只在 finish 门禁（gates.py:621 ← tasks.py:894） | 不适用 |
+| 629.s1.c9 机读触碰面／未开工+合法 plan×cross_task_conflicts | 不适用（s1 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：cross_task_conflicts 仅 Check 调用（check.py:722），无开工期调用点 | 不适用 |
+| 629.s1.c10 机读触碰面／未开工+合法 plan×check 外部变更再判定 | 不适用（s1 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：check 的外部变更再判定只在 Check 期（check.py:462） | 不适用 |
+| 629.s1.c11 机读触碰面／未开工+合法 plan×baseline/spec 写入口 | 不适用（s1 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：baseline-apply / spec-update 均要求 phase ∈ execute/check/finish（tasks.py:3170、3378），未开工时不存在该写入口 | 不适用 |
+| 629.s2.c1 机读触碰面／已开工+空数组×stop-keep | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-empty-stop.py（空面下 keep 任意路径 → WF_WORKSPACE_UNRESOLVED 且 out_of_scope 点名；注入=空数组回退 plan 时变 WF_OK，判红） | 已断言 |
+| 629.s2.c2 机读触碰面／已开工+空数组×stop-transfer 源 | 等第二轮（多任务未交付）（M:977；1055（§96 ① 矩阵拆分）） | 需第二任务承接（多任务＝第二轮）；拒绝分支由 repro/transfer-target-task-field.py 覆盖；2026-11-06 经 67 行分类确认：正例需第二个任务承接，属第二轮交付 | 等该轮交付 |
+| 629.s2.c3 机读触碰面／已开工+空数组×transfer 目标 | 等第二轮（多任务未交付）（M:977；1055（§96 ① 矩阵拆分）） | 需第二任务承接（多任务＝第二轮）；拒绝分支由 repro/transfer-target-task-field.py 覆盖；2026-11-06 经 67 行分类确认：正例需第二个任务承接，属第二轮交付 | 等该轮交付 |
+| 629.s2.c4 机读触碰面／已开工+空数组×scope 分类 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-empty-check.py（空面下 Check 把本任务文件归 c 桶并阻断，e 桶必须为空——回退 plan 会让它变 e，判红） | 已断言 |
+| 629.s2.c5 机读触碰面／已开工+空数组×外部变更 | 不适用（s2 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：空批准面下无外部触碰面可判；该状态的行为已由 s2.c4 的入口级断言覆盖 | 不适用 |
+| 629.s2.c6 机读触碰面／已开工+空数组×维护重叠 | 不适用（s2 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：开工期门禁；s2 已开工 | 不适用 |
+| 629.s2.c7 机读触碰面／已开工+空数组×维护处置承接 | 不适用（s2 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：请求批准面为空，回执路径不可能与之重叠，该消费点无义务对象 | 不适用 |
+| 629.s2.c8 机读触碰面／已开工+空数组×work_satisfied_fact | 不适用（s2 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：finish 门禁需 Check 通过，链式不可达 | 不适用 |
+| 629.s2.c9 机读触碰面／已开工+空数组×cross_task_conflicts | 等第二轮（多任务未交付）（M:977；1055（§96 ① 矩阵拆分）） | 跨任务冲突需另一个任务的 WIP（多任务＝第二轮）；2026-11-06 经 67 行分类确认：正例需第二个任务承接，属第二轮交付 | 等该轮交付 |
+| 629.s2.c10 机读触碰面／已开工+空数组×check 外部变更再判定 | 不适用（s2 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：空批准面下无外部触碰面可判；该状态的行为已由 s2.c4 的入口级断言覆盖 | 不适用 |
+| 629.s2.c11 机读触碰面／已开工+空数组×baseline/spec 写入口 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-empty-write.py（空面下 spec-update → WF_SCOPE_UNRESOLVED 且 facts.touch_paths==[]，证明用的是快照而非 plan） | 已断言 |
+| 629.s3.c1 机读触碰面／已开工+快照缺键×stop-keep | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-stop.py（keep 在快照缺键时 WF_RECORD_INVALID） | 已断言 |
+| 629.s3.c2 机读触碰面／已开工+快照缺键×stop-transfer 源 | 不适用（s3 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s3 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s3.c3 机读触碰面／已开工+快照缺键×transfer 目标 | 不适用（s3 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s3 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s3.c4 机读触碰面／已开工+快照缺键×scope 分类 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-check.py（Check 期范围核对在缺键时 WF_RECORD_INVALID） | 已断言 |
+| 629.s3.c5 机读触碰面／已开工+快照缺键×外部变更 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-check.py（外部变更核对的输入面不可得即拒） | 已断言 |
+| 629.s3.c6 机读触碰面／已开工+快照缺键×维护重叠 | 不适用（s3 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：开工期门禁；s3 已开工，该消费点不再运行 | 不适用 |
+| 629.s3.c7 机读触碰面／已开工+快照缺键×维护处置承接 | 不适用（s3 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s3 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s3.c8 机读触碰面／已开工+快照缺键×work_satisfied_fact | 不适用（s3 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：finish 门禁需 Check 通过；s3 下 Check 已 fail-closed，链式不可达 | 不适用 |
+| 629.s3.c9 机读触碰面／已开工+快照缺键×cross_task_conflicts | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-check.py（跨任务冲突核对同判） | 已断言 |
+| 629.s3.c10 机读触碰面／已开工+快照缺键×check 外部变更再判定 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-check.py（外部变更再判定同判） | 已断言 |
+| 629.s3.c11 机读触碰面／已开工+快照缺键×baseline/spec 写入口 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-missing-write.py（spec-update 缺键即拒；baseline-apply 共用同一批准面判定） | 已断言 |
+| 629.s4.c1 机读触碰面／已开工+损坏类型×stop-keep | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 629.s4.c2 机读触碰面／已开工+损坏类型×stop-transfer 源 | 不适用（s4 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s4 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s4.c3 机读触碰面／已开工+损坏类型×transfer 目标 | 不适用（s4 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s4 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s4.c4 机读触碰面／已开工+损坏类型×scope 分类 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 629.s4.c5 机读触碰面／已开工+损坏类型×外部变更 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 629.s4.c6 机读触碰面／已开工+损坏类型×维护重叠 | 不适用（s4 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：开工期门禁；s4 已开工 | 不适用 |
+| 629.s4.c7 机读触碰面／已开工+损坏类型×维护处置承接 | 不适用（s4 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：s4 下批准面守卫先行拒绝，消费点无可观察义务（同批复核：守卫在同一入口更早触发） | 不适用 |
+| 629.s4.c8 机读触碰面／已开工+损坏类型×work_satisfied_fact | 不适用（s4 状态下不可达）（M:977；1055（§96 ① 矩阵拆分）） | 不可达：finish 需 Check 通过，链式不可达 | 不适用 |
+| 629.s4.c9 机读触碰面／已开工+损坏类型×cross_task_conflicts | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 629.s4.c10 机读触碰面／已开工+损坏类型×check 外部变更再判定 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 629.s4.c11 机读触碰面／已开工+损坏类型×baseline/spec 写入口 | 首轮适用（M:977；1055（§96 ① 矩阵拆分）） | repro/snapshot-broken-type.py（快照 touch_paths 为字符串时，收工 / Check / spec-update 均 WF_RECORD_INVALID；注入=类型不符当单条路径收下，收工变 WF_OK 判红）；该状态义务为 fail-closed，三入口共用同一批准面判定 | 已断言 |
+| 630 共存与重装 | 首轮适用（M:979；1056） | repro/reinstall-preserves-data.py（写权被持有时重装被拒且任务记录不变；写权空闲后重装幂等「无任何变化」且任务记录逐字节保留；注入=写者持有时也允许重装，判红）；夹具 `_release.py` 提供带 tag 的发行源副本并同步清单摘要与 rules_digest | 已断言 |
+| 631 Trellis 互斥 | 首轮适用（M:975；1056） | repro/enable-disabled-branch.py（适用配置存在时默认 WF_SEMANTIC_DECISION；`trellis_disabled_confirmed` 后放行并留下 warnings 与 facts 留痕；注入=停用分支不可达则声明后仍被拒，判红） | 已断言 |
+| 632 紧急变更边界 | 首轮适用（M:979；1056） | repro/external-change-boundary.py（面外外部提交不阻断；面内外部提交 → WF_SEMANTIC_DECISION；补「已核对无影响 <OID>」后放行；注入=触及判定恒假则面内被静默放行） | 已断言 |
+| 633 同路径交替 | 首轮适用（M:978；1055） | V§16；r43r45_tests.py:84（非完整 A/B 交替） | 仅有原因码 |
+| 634 指纹内容源 | 首轮适用（M:978；1055） | cp1_tests.py:166；r43r45_tests.py:84 | 已断言 |
+| 635 暂停插单恢复 | 等第二轮（多任务未交付）（M:989；1051） | p5_v2v3.py:56；I:489（不是完整 A→B→A）；2026-11-06 经 67 行分类确认：正例需第二个任务承接，属第二轮交付 | 等该轮交付 |
+| 636 返工接续 | 等第二轮（M:980；1057） | 无 | 无 |
+| 637 异常归档边界 | 首轮适用（M:980；1057） | repro/abandon-boundary.py（无 disposition 只回预览且零写入；去向缺项 → WF_WORKSPACE_UNRESOLVED 且 uncovered 点名；覆盖+提交授权后成立，terminal=abnormal；注入=不核去向覆盖则缺项不再点名，判红） | 已断言 |
+| 638 放弃改动处置 | 首轮适用（M:980；1057） | cp1_tests.py:279；repro/transfer-target-task-field.py:20 | 已断言 |
+| 639 spec 正向积累 | 首轮适用（M:997；1058） | repro/spec-three-part-index.py（spec-update 的 add/rename/delete 同批同步 index.md 与两份 checklist 的 `## spec 指针` 段；注入=只同步索引表，则 checklist 缺条目/旧条目残留，判红） | 已断言 |
+| 640 spec 跨任务复用 | 等第二轮（多任务未交付）（M:997；1058） | F:24；p5_spec.py:76（未构成跨任务业务消费）；2026-11-06 经 67 行分类确认：正例需第二个任务承接，属第二轮交付 | 等该轮交付 |
+| 641 知识删除与依赖解除 | 首轮适用（M:997；1058） | p5_spec.py:103；r77_tests.py:109；V§2.1 | 已断言 |
+| 642 策展引用统计 | 首轮适用（M:997；1058） | r76_tests.py:57/82；r77_tests.py:56（含恒真格） | 只有登记 |
+| 643 读取留痕完整性 | 等第三轮（2026-11-06 人裁延期，见 pending-decisions.md 第 6 节）（M:996；1058） | F:66；I:496 | 只有登记 |
+| 644 无 MCP 全流程 | 首轮适用（M:997；1058） | repro/spec-three-part-index.py（spec-update 的 add/rename/delete 同批同步 index.md 与两份 checklist 的 `## spec 指针` 段；注入=只同步索引表，则 checklist 缺条目/旧条目残留，判红） | 已断言 |
+| 645 最终知识变更 | 首轮适用（M:978；1055） | p5_spec.py:189；r43r45_tests.py:103 | 已断言 |
+| 646 升级三方判断 | 等第三轮（M:1010；1059） | 无 | 无 |
+| 647 流程与配置 | 首轮适用（M:990；1059） | r57_tests.py:40；I:749（配置子面） | 只有登记 |
+| 648 Python 执行器 | 首轮适用（M:993；1060） | repro/executor-project-key-unusable.py（项目键指向不存在的解释器时，解析仍是 project 作用域 + 该键值，CLI 返 WF_EXECUTOR_UNCONFIRMED 且报错对象是该键；注入=不可用即降级到全局，判红） | 已断言 |
+| 649 本地命令引导 | 首轮适用（M:992；1060） | repro/wf-repair-handoff.py:14；r67_tests.py:70 | 已断言 |
+| 650 spec 预算 | 等第三轮（2026-11-06 人裁延期，见 pending-decisions.md 第 6 节）（M:991；1061） | F:65；I:467/479 | 只有登记 |
+| 651 固定流转程序化 | 首轮适用（M:1009；1061） | repro/startup-checks-anchor-assets.py（启动校验含 ③候选唯一性/⑧写者标记锚点/⑨资产可用性；标记行未知 → WF_HISTORY_UNRESOLVED，删必需资产 → WF_CAPABILITY_UNAVAILABLE 并点名；注入=不核资产则 ⑨ 仍 ok，判红） | 已断言 |
+| 652 发行身份 | 首轮适用（M:995；1059） | repro/release-identity-commit.py（篡改工作树资产并把清单摘要同步成自洽 → 仍必须 WF_RELEASE_CONFLICT，证明按 tag 提交树核内容；注入=退回工作树核摘要则放行，判红） | 已断言 |
+| 653 数据与恢复 | 首轮适用（M:983；1053） | V§4/96；I:477（混合恢复面） | 只有登记 |
+| 654 受控修复 | 首轮适用（M:982；1053） | repro/repair-controlled-apply.py（旧写者仍存活时 repair --apply 被拒且零写入；旧写者停止后应用成功并留下代次+1 与维护回执；注入=人工确认替代存活事实则存活时也应用，判红） | 已断言 |
+| 655 等效替换（charter T4） | 首轮适用（M:1007；1045） | 人判 2026-11-07（采用 A 档：charter T4 字面「有最近正反例」）：方案 A 57 条双模 repro、652 tag 核内容（release-identity-commit.py）、R1-1 适配源→自有副本（§19 两异种 reviewer 验收 + R1-12 正反例）、A1/A2 重写（install-lock-*/r4-1）均有正反例；**R93 身份入口替换只有 r90 套件 9/9，缺注入式双模反例 → 登记为第二轮缺口**；scope d 档不可达属已声明边界 | 人判（成立） |
+| 656 闭环四条件（charter T4） | 首轮适用（M:1007；1045） | 需 dogfood 闭环后判定 | 人判（待补） |
+| 657 审查与正常完成（charter T4） | 首轮适用（M:998；1062） | r71_tests.py:241；repro/review-count-reject.py:20；V§6/19/94 | 已断言 |
+| 658 审查 CLI 身份确认 | 首轮适用（M:998；1062） | r71_tests.py:261/282；repro/review-count-reject.py:20 | 已断言 |
+| 659 审查材料外发 | 首轮适用（M:999；1063） | 人判 2026-11-07：不做外发审计，该行不以审计为交付 | 人判（宣告不审） |
+| 660 判定物与原因码 | 首轮适用（M:1001；1061） | repro/reason-code-table.py（35 枚码逐枚核：档位只取三档、出口非空、阻断/待决档必须带「禁止的错误修复」；注入=把一枚码的档位改成非法值，判红） | 已断言 |
+| 661 会话实例标识 | 首轮适用（M:987；1050） | p5_v1.py:61；repro/bind-instance-mismatch.py:14 | 已断言 |
+| 662 审查适配副本 | 首轮适用（M:1004；1062） | repro/review-copies-installed.py（两副本随发行投放、进安装清单 installation.assets，卸载后随资产移除；注入=发行清单与树都不含副本（未交付），判红） | 已断言 |
+| 663 资产落点 | 首轮适用（M:1006；1064） | r89_tests.py:38/49/65；V§84 | 已断言 |
+| 664 互斥与锁生命周期 | 首轮适用（M:1005；1064） | r35_tests.py:50；repro/install-lock-realpath.py:14；V§95 | 已断言 |
+| 665 审查读取范围 | 首轮适用（M:999；1063） | 人判 2026-11-07（审计）：机制已保证 read-scope/excluded-scope 非空、scope-exceptions 非空即拒、source-cli/锚点核对；**审计发现缺口**：excluded-scope 只核非空，写 `["node_modules/**"]` 即可通过——已补覆盖检查（凭据/私密配置/项目外/其他任务目录）并给拒绝出口；repro/review-excluded-scope-covers.py；**无法核**：reviewer 实际阅读行为（无遥测），如实登记 | 人判（成立） |
+| 666 审查报告写权 | 首轮适用（M:999；1063） | repro/review-report-boundary.py（launch 给出的暂存目录必须在项目树之外；报告从该槽位暂存目录导入成功，且导入期间写权不转移；注入=暂存根改到 `.wf/review` 则暂存落入项目树，判红） | 已断言 |
+| 667 审查回执锚定 | 首轮适用（M:998；1063） | r69_tests.py:110；r75_tests.py:120；V§6 | 已断言 |
+| 668 执行器配置可信 | 首轮适用（M:994；1060） | repro/executor-tuple-mismatch.py（确认元组绑定 size/mtime；同路径替换后 ready=False 且 CLI 返 WF_EXECUTOR_UNCONFIRMED；双模可证伪）；残余缺口已关闭：`python_version` 已纳入比对（repro/executor-version-change.py） | 已断言 |
+| 669 复杂度分级一致性 | 首轮适用（M:977；1065） | repro/complexity-human-carrier.py（②命中 `.wf/lib/**` 即按复杂且要求产物，条件入库 condition=contract；决定文件 `plan.complexity` 才记 confirmed_source=decision；无理由降级被拒、有理由降级留痕；未登记人判项 review_depth 原值留痕进 human_inputs/unconfirmed_keys 且不阻断；注入=不核契约面则 ② 恒 false，判红） | 已断言 |
+| 670 锁删除与人工清理 | 等第三轮（M:1005；1064） | repro/r35 已覆盖锁删除与人工清理的当前形态；完整 uninstall/purge 矩阵含 purge（第三轮桩，uninstall.py:320）→ 2026-11-06 按证据改判「等第三轮」 | 等该轮交付 |
+| 671 执行器确认绑定 | 首轮适用（M:994；1060） | repro/d21-executor-set-multi-clone.py、d21-executor-set-move.py（集合语义与失效传播；双模可证伪） | 已断言 |
+| 672 TDD 开关 | 首轮适用（M:977；1065） | repro/complexity-human-carrier.py（②命中 `.wf/lib/**` 即按复杂且要求产物，条件入库 condition=contract；决定文件 `plan.complexity` 才记 confirmed_source=decision；无理由降级被拒、有理由降级留痕；未登记人判项 review_depth 原值留痕进 human_inputs/unconfirmed_keys 且不阻断；注入=不核契约面则 ② 恒 false，判红） | 已断言 |
+| 673 执行器首次写入 | 首轮适用（M:994；1054） | repro/executor-approval-chain.py（未批准键 → WF_APPROVAL_MISSING 且零写入；补基线后确认成立；双模可证伪）；残余缺口已关闭：批准证据扩展到归档区（repro/project-key-archived-evidence.py），语义级键值解析仍留第二轮 | 已断言 |
+| 674 确认记录身份 | 首轮适用（M:994；1060） | repro/d21-executor-set-multi-clone.py、d21-executor-set-venv-rebuild.py、d21-executor-set-purge-reconfirm.py（确认记录身份与失效；双模可证伪） | 已断言 |
+| 675 项目标识生命周期 | 首轮适用（M:994；1060） | V§96③；I:477 | 只有登记 |
+| 676 锁文件归属 | 首轮适用（M:1005；1064） | repro/install-lock-foreign-object.py:14；V§95 | 已断言 |
+| 682 设计稿与 charter 冲突 | 首轮适用（M:1008；1073） | 人判 2026-11-07：无未决冲突（三处历史张力已按 T1 人裁同批修订） | 人判（成立） |
+| 683 需求是否属边界外 | 首轮适用（M:1008；1074） | 人判 2026-11-07：本轮无待裁的边界外请求，均有出口留痕 | 人判（成立） |
+| 684 承诺或证据是否成立 | 首轮适用（M:1008；1075） | 人判 2026-11-07：三项待裁已于 2026-11-06 落地 | 人判（成立） |
+| 685 删除会破坏什么承诺 | 首轮适用（M:1008；1076） | 人判 2026-11-07：每处删除可回答承载承诺 | 人判（成立） |
+| 686 语义分叉识别 | 首轮适用（M:1009；1077） | cp3_tests.py:188（结构分派，非人裁） | 仅有原因码 |
+| 687 分支来源未确认 | 首轮适用（M:1010；1078） | repro/branch-source-preview.py（目标资产在当前分支缺失、其他分支存在时，预览报 WF_ASSET_DECISION、点名 feature 分支且零写入；注入=跳过分支来源核对则继续投放并写入，判红） | 已断言 |
+| 688 历史锚点或旧写者事实待核对 | 首轮适用（M:982；1079） | repro/stale-writer-facts.py（写权仍 held、锁持有者 pid 不存在时，收工与写入口均 WF_WRITER_BUSY 且理由为「他人持有」、出口指向交接/恢复；注入=不再核他人持有则收工变 WF_OK，判红） | 已断言 |
+| 689 WIP 去向或维护范围未明 | 首轮适用（M:989；1080） | cp1_tests.py:240；p5_v2v3.py:101（局部） | 仅有原因码 |
+| 690 Trellis 线索与指令状态未明 | 首轮适用（M:975；1081） | cp2_tests.py:181（仅档位/原因码） | 仅有原因码 |
+| 691 glob 命中但范围语义存疑 | 首轮适用（M:977；1082） | V§96①；I:466 | 仅有原因码 |
+| 692 审查不可用 | 首轮适用（M:998；1083） | repro/review-unavailable.py（`--unavailable` 无 evidence → WF_SEMANTIC_DECISION；带 evidence → WF_REVIEW_UNAVAILABLE 且 reviews.result.verdict 与尝试级 outcome 均为 unavailable；复杂任务随后 archive 被拒且状态未变；注入=不可用当 pass，判红） | 已断言 |
+| 693 知识准入冲突 | 首轮适用（M:997；1084） | p5_spec.py:89（未断言真实冲突人裁） | 仅有原因码 |
+| 694 工作流动作/验证语义存疑 | 等第二轮（M:985；1085） | 无 | 无 |
+
+## 2026-11-06 人裁：C 类以人判为验收出口
+
+19 行（586–595、612、655、656、659、665、682–685）性质上是判断/环境项，**不可能有断言**。人裁结论：以**人判结果为验收出口**，登记人判结果后视该行达到预期；它们继续留在首轮分母里（不延期、不排除），但不计入「断言分子」。
+
+因此门禁①的判据拆成两段：**① 断言口径的 81 行全绿；② 人判口径的 19 行有人判登记**。两段都满足才算「三夹具适用项达到预期结果」——这样 100% 是可达的，且不靠挪分母。
+
+## 2026-11-06 DEFER 落盘（13 行）
+
+按 67 行分类表确认：`629.s2.c2/c3/c9`、`635`、`640` 移入「等第二轮（多任务未交付）」；`629.s2.c5/c10` 与 `629.s3/s4` 的 `c2/c3/c7` 标「不适用」（守卫先行，消费点无可观察义务）。**N 113→100、x 仍 46（46.0%）**——这是口径修正，不是进度。
+
+## 维护规则
+
+1. 只增不删；新增行必须同时给出轮次与依据。
+2. 升到「已断言」必须配 `repro/` 用例（单点注入 + green/red 双 0 退出）。
+3. 延期写进 `pending-decisions.md` 并同批改本表轮次。
+4. 矩阵型义务先拆子行再计分母；拆完必须逐格判可达性，不可达格标「不适用」并移出分母。
