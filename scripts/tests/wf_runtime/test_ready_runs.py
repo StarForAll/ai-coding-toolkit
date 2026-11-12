@@ -124,3 +124,73 @@ class ReadyRunsTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReadyRunCandidatesTest(unittest.TestCase):
+    """`ready` 把实例作为**可绑定候选**（机制稿 §6.1；`bind --run` 交付后的一半）。
+
+    与任务侧同一判据：资格由 `_eligible_run_bind` 决定，暂停/终态进 blockers。
+    """
+
+    def _project(self, records):
+        import json
+        import tempfile
+
+        root = tempfile.mkdtemp(prefix="wf-ready-run-")
+        os.makedirs(os.path.join(root, ".wf/workflow-runs"), exist_ok=True)
+        for record in records:
+            with open(os.path.join(root, ".wf/workflow-runs", f"{record['id']}.json"), "w",
+                      encoding="utf-8") as handle:
+                json.dump(record, handle, ensure_ascii=False)
+
+        class _Ctx:
+            def __init__(self, root):
+                self.root = Path(root)
+
+            def key(self, **_kwargs):
+                return "sess-x"
+
+            def writer(self):
+                return {"state": "idle", "generation": 1}
+
+            def inputs(self):
+                return {"generation": 1}
+
+        return _Ctx(root)
+
+    def test_in_flight_run_is_ready_candidate(self):
+        from wflib import cli
+
+        run = {"id": "2026-" + "a" * 32, "workflow_id": "demo", "terminal": None,
+               "paused": False, "creation_decision": {"at": "2026-11-12T00:00:00Z"},
+               "step_results": {"one": {"kind": "satisfied"}}, "task_map": {},
+               "cursor": {"step_id": "two", "task_id": None}}
+        ctx = self._project([run])
+        payload = cli.cmd_ready(ctx, _Args())
+        facts = payload["facts"]
+        candidates = facts["run_candidates"]
+        self.assertEqual([item["id"] for item in candidates], [run["id"]])
+        self.assertTrue(candidates[0]["ready"])
+        self.assertEqual(candidates[0]["steps_settled"], ["one"])
+        self.assertEqual(facts["suggested_run"], run["id"])
+
+    def test_paused_and_terminal_runs_are_blocked(self):
+        from wflib import cli
+
+        paused = {"id": "2026-" + "b" * 32, "workflow_id": "demo", "terminal": None,
+                  "paused": True, "creation_decision": {"at": "2026-11-12T00:00:00Z"},
+                  "step_results": {}, "task_map": {}, "cursor": None}
+        ended = {"id": "2026-" + "c" * 32, "workflow_id": "demo", "terminal": "abnormal",
+                 "paused": False, "creation_decision": {"at": "2026-11-12T00:00:01Z"},
+                 "step_results": {}, "task_map": {}, "cursor": None}
+        ctx = self._project([paused, ended])
+        facts = cli.cmd_ready(ctx, _Args())["facts"]
+        by_id = {item["id"]: item for item in facts["run_candidates"]}
+        self.assertIn("paused", by_id[paused["id"]]["blockers"])
+        self.assertIn("WF_BINDING_MISMATCH", by_id[ended["id"]]["blockers"])
+        self.assertIsNone(facts["suggested_run"])
+
+
+class _Args:
+    def value(self, _name):
+        return None

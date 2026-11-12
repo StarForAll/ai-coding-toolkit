@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import os
+
 from . import actions, codes, fingerprint, records, scope
 from .paths import join
 
@@ -876,6 +878,110 @@ def evaluate(ctx, task, due, *, rule_version=None):
     return findings
 
 
+def evaluate_instance(ctx, run):
+    """实例门禁（只读）：当前步骤、各步骤结果，以及 `run advance` 会等什么（机制稿 §7.3、§11.2）。
+
+    只读断言：不写游标、不写 `step_results`、不建任务。判定的每一条都来自记录事实；
+    「这一步该不该算完成」仍按任务侧 Check/finish 与人的判断。
+    """
+    from . import runs as runs_mod
+
+    text = None
+    snapshot = (run.get("definition") or {}).get("snapshot_path")
+    path = join(ctx.root, snapshot) if snapshot else None
+    if path is not None and os.path.exists(path):
+        with open(path, "rb") as handle:
+            text = handle.read().decode("utf-8")
+    doc, problems = runs_mod.parse_definition(text) if text else (None, [])
+    cursor = run.get("cursor") or {}
+    step_results = run.get("step_results") or {}
+    task_map = run.get("task_map") or {}
+    applicability = runs_mod._applicability(run.get("creation_decision") or {}, doc or {})
+    steps = []
+    for step in runs_mod._ordered_steps(doc or {}):
+        step_id = step["id"]
+        result = step_results.get(step_id) or {}
+        mapping = task_map.get(step_id) or {}
+        steps.append({"id": step_id, "type": step.get("type"), "required": step.get("required"),
+                      "applicability": applicability.get(step_id, "applicable"),
+                      "result": result.get("kind"),
+                      "task": mapping.get("task_id"),
+                      "current": step_id == cursor.get("step_id")})
+    blocking = []
+    if run.get("terminal"):
+        blocking.append({"code": None, "reason": "实例已结束", "terminal": run.get("terminal")})
+    elif run.get("paused"):
+        blocking.append({"code": None, "reason": "实例已暂停",
+                         "exit": "run resume 后继续"})
+    action = run.get("action") or {}
+    if action.get("state") not in (None, "done"):
+        blocking.append({"code": "WF_ACTION_INCOMPLETE",
+                         "reason": "实例上有未完成动作",
+                         "action": {"id": action.get("id"), "kind": action.get("kind"),
+                                    "state": action.get("state"),
+                                    "next_step": action.get("next_step")}})
+    if problems:
+        blocking.append({"code": "WF_HISTORY_UNRESOLVED",
+                         "reason": "固定快照不可静态解析", "problems": problems})
+    current_id = cursor.get("step_id")
+    if current_id:
+        current = step_results.get(current_id) or {}
+        mapping = task_map.get(current_id) or {}
+        if current.get("kind") in ("satisfied", "skipped"):
+            blocking.append({"code": None, "reason": "当前步骤已结算，下一步待 advance 推进",
+                             "step": current_id, "result": current.get("kind")})
+        elif mapping.get("task_id"):
+            from . import tasks as tasks_mod
+
+            task = tasks_mod.load_task(ctx.root, mapping["task_id"]) or {}
+            blocking.append({"code": None, "reason": "等待任务完成（advance 只认正常归档+持久化）",
+                             "step": current_id, "task": mapping["task_id"],
+                             "task_status": task.get("status"), "task_phase": task.get("phase"),
+                             "task_terminal": task.get("terminal")})
+        else:
+            step = next((item for item in steps if item["id"] == current_id), None)
+            blocking.append({"code": "WF_SEMANTIC_DECISION" if (step or {}).get("type") == "human" else None,
+                             "reason": ("人判步骤待答" if (step or {}).get("type") == "human"
+                                        else "步骤尚无结果"),
+                             "step": current_id})
+    return {"run": run.get("id"), "cursor": cursor, "steps": steps,
+            "blocking": blocking, "closure": run.get("closing"),
+            "terminal": run.get("terminal")}
+
+
+def evaluate_instance_cli(ctx, run_id, due):
+    """`gate` 的实例分支：只读断言 + 三档输出（与任务分支同一套输出形状）。"""
+    from . import runs as runs_mod
+
+    run = runs_mod.load_run(ctx.root, run_id)
+    if not isinstance(run, dict):
+        raise _cli_error("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+    report = evaluate_instance(ctx, run)
+    position = codes.position(scope="run", step_id=(run.get("cursor") or {}).get("step_id"),
+                              action_id=(run.get("action") or {}).get("id"),
+                              action_state=(run.get("action") or {}).get("state"))
+    blocking = [item for item in report["blocking"] if item.get("code")]
+    if blocking:
+        first = blocking[0]
+        return codes.result(
+            first["code"],
+            object={"id": run_id},
+            position_=position,
+            next_="按 blocking 的第一条处理后重试（只读断言：本次未写入任何记录）",
+            facts={"due": due, "blocking": report["blocking"], "steps": report["steps"],
+                   "cursor": report["cursor"], "note": "只读断言，不写游标与 step_results"},
+        )
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=position,
+        next_=("实例已结束，无可推进项" if report["terminal"] else "按 advance 推进当前步骤"),
+        facts={"due": due, "blocking": report["blocking"], "steps": report["steps"],
+               "cursor": report["cursor"], "terminal": report["terminal"],
+               "note": "只读断言，不写游标与 step_results"},
+    )
+
+
 def evaluate_cli(ctx, due):
     """gate 命令：只读断言，取当前绑定任务。"""
     from . import session as session_mod
@@ -892,12 +998,11 @@ def evaluate_cli(ctx, due):
     if not binding:
         return codes.result("WF_OK", facts={"bound": False, "due": due}, next_="wf-start 选择对象")
     object_ref = binding.get("object") or {}
+    if object_ref.get("kind") == "run":
+        return evaluate_instance_cli(ctx, object_ref.get("id"), due)
     if object_ref.get("kind") != "task":
-        from . import cli as cli_mod
-
-        raise cli_mod.CliError("WF_CAPABILITY_UNAVAILABLE",
-                               {"reason": "run gate requires instance capability", "tier": "round 2"},
-                               next_="run 对象不经 gate 查询；按实例能力交付后可查")
+        raise _cli_error("WF_BINDING_MISMATCH",
+                         {"reason": "bound object is neither task nor run", "object": object_ref})
     task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
     if task is None:
         raise _cli_error("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
