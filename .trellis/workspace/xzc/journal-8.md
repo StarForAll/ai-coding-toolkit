@@ -871,3 +871,27 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 400: 11-05 审计任务结项：R1-11 停止条件 + 16 项重核 + 建第二轮任务
+<!-- trellis-session: v=2 fp=3cd94d62d7a268c1 -->
+
+**Date**: 2026-11-12
+**Task**: 11-05 审计任务结项：R1-11 停止条件 + 16 项重核 + 建第二轮任务
+**Branch**: `main`
+
+### Summary
+
+按人裁收尾 11-05：① R1-11 落地——wf-review 的 SKILL 增「报告已存在时先看 status 行（in-progress 续写 / done 停止回报不覆盖）」，同步重建发行树（74 assets，rules_digest 更新），全量回归 132 项 0 失败、repro 68/68、机检输入摘要 4/4、check-doc-refs 0 problem、validate-skills 25 项通过；② 落 closeout-inventory.md：gap-inventory 16 项对现状重核（12 已闭环 / R1-5 登记第二轮 / R1-3 收敛为边界 / R1-4 改判第二轮同批 / R1-11 已补），并诚实披露旧清单 4 处判断已被当天人裁取代；③ 记录 OD-10（out-of-scope 保留并与第二轮 inspect 治理输出同批，因消费者在同一函数 _governance_summary）、OD-11（--request 保留）、OD-12（⑥/backlog 单开任务）；④ 订正 PRD §3/§6 的「只审不修、不得收尾」约束为已被后续裁定取代；⑤ 新建 11-12-wf-round2（planning，PRD 已含第二轮能力 + inspect 治理输出 + out-of-scope 四项前置 + governance_omitted 第三条 + dogfood 复跑 + 文档漂移与 denominator 记录债），并把 624K 未跟踪的 11-05 目录与 11-12 目录一并入库。11-05 已归档，当前仅剩 11-12-wf-round2（planning）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d336ca68` | fix(wf): wf-review 报告已存在时先看状态行——R1-11 的停止条件（含发行树重建） |
+| `1e33c242` | docs(task): 记录 11-05 审计全过程并收口核对（16 项重核 + OD-10/11/12 + PRD 状态订正） |
+| `41e71a88` | docs(task): 建 wf 第二轮任务（inspect 治理输出 + out-of-scope 同批） |
+
+### Status
+
+[OK] **Completed**
