@@ -895,3 +895,27 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 401: wf 文档债清理：D14 自签发订正 + denominator 覆盖率账复核
+<!-- trellis-session: v=2 fp=7e194f0039b96f61 -->
+
+**Date**: 2026-11-12
+**Task**: wf 文档债清理：D14 自签发订正 + denominator 覆盖率账复核
+**Branch**: `main`
+
+### Summary
+
+按人裁完成 11-12 的两件开工前待办。① D14：核实 wf 自签发身份已随 2026-11-08 自动身份模式交付（_establish_auto_session 执行边界派生 + 自动签发 issued_id，显式 wf 信封按设计拒绝），订正机制稿 §1.4 两句失实表述与 §0.1 摘要、实现稿 §6.4 第二轮单列/D14 行/§9.2，纠正「机制稿正文说第二轮、D14 行说已提前首轮」的自相矛盾；顺带登记 cli.py 无锚点时出口提示「显式信封」但对 provider=wf 无效的实现级文案缺陷（进第二轮 P2）。② denominator：走「冻结 + 局部重判」——修 2 处算术（首轮 N 100→98、等第三轮 3→4）与 1 处轮次归属（691 glob 语义存疑 → 等第二轮，依据实现稿「d 档首轮不可达、不得据此宣称已覆盖」），逐行复核首轮 14 行（13 保持、1 改判），现为 66/98（断言口径 66/79 = 83.5%），并把门禁①口径写明为三夹具+五条最小验证（当前证据 = run_all 132 项）。验证：validate-wf-design 输入摘要 4/4 七项通过（过程中自检抓到 1 处机制稿缺所有者前缀）、check-doc-refs 三稿 0 problem。产物：11-12-wf-round2/prework.md + PRD 更新。11-12 仍是 planning，未 start。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `89b14be1` | docs(wf): D14 事实订正——wf 自签发身份已随自动模式交付（机制稿 §1.4 + 实现稿 §6.4/D14/§9.2） |
+| `87c0bb16` | docs(task): denominator 覆盖率账复核——计数修正与 691 改判（首轮 98 行 / 66 断言 / 66-79） |
+| `ff623b69` | docs(task): 11-12 开工前文档债落证（D14 订正 + 覆盖率账复核） |
+
+### Status
+
+[OK] **Completed**

@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 400
+- **Total Sessions**: 401
 - **Last Active**: 2026-11-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~897 | Active |
+| `journal-8.md` | ~921 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 401 | 2026-11-12 | wf 文档债清理：D14 自签发订正 + denominator 覆盖率账复核 | `89b14be1`, `87c0bb16`, `ff623b69` | `main` |
 | 400 | 2026-11-12 | 11-05 审计任务结项：R1-11 停止条件 + 16 项重核 + 建第二轮任务 | `d336ca68`, `1e33c242`, `41e71a88` | `main` |
 | 399 | 2026-11-12 | wf 首轮实现收口（口径 B：记录 + 实现稿事实订正） | `d15beb16`, `a7e6fd39`, `02c994fd`, `2acdc05e`, `922efd66` | `main` |
 | 398 | 2026-11-10 | wf v42 控制流修复收口：四轮评审 + 全量测试转绿 | `3e94f2a`, `fbf18cc`, `941881a`, `d9ee872`, `f559eac`, `b40ad0c`, `12110a5`, `6a1c50c`, `c272a56`, `54a3e76`, `7c628a5`, `cd8c875` | `main` |
