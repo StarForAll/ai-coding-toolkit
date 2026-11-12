@@ -1,6 +1,6 @@
 ---
 name: wf-start
-description: 人显式调用：在当前会话启用 wf 框架，并选择或恢复本次受控对象（普通任务；实例属第二轮）。
+description: 人显式调用：在当前会话启用 wf 框架，并选择或恢复本次受控对象（普通任务，或准备/创建工作流实例）。
 disable-model-invocation: true
 user-invoked: true
 ---
@@ -20,7 +20,10 @@ user-invoked: true
 2. 已绑定：只恢复原对象，不换对象。
 3. 未绑定：由人选择
    - 新普通任务：`task-new --kind ordinary|initialize|bootstrap --title <t> --template <项目根>/.wf/templates/task`；
-   - 既有就绪对象：`bind --task <id>`。**`--run` 首轮不可用**（命令面接受参数但返回 `WF_CAPABILITY_UNAVAILABLE`，实例绑定属第二轮）。
+   - 既有就绪任务：`bind --task <id>`；
+   - **工作流实例**：`definition validate --id <id>` → `definition prepare --id <id>` → `run create --creation <path>`
+     （准备与创建都在本入口，见下节）。**`bind --run <id>` 尚未交付**（命令面接受参数但返回
+     `WF_CAPABILITY_UNAVAILABLE`）：实例的首次绑定由 `run create` 完成；已有实例换到新会话接续的入口还没开。
 4. 需要重新取得已被释放的写权时：`writer acquire`。
 5. **自动模式下不需要手写信封**（2026-11-08 起）：直接 `wf.py enable --json`，身份由执行边界派生
    （会话 leader + 进程链），`activation`/`instance_id` 由入口写进运行态附件并由后续命令自动读取。
@@ -36,9 +39,31 @@ user-invoked: true
    **不携带 activation 会被 `WF_NOT_ENABLED` 拒（`bind`/`task-new`/`task-approve` 等都在核验集里）；不携带或携带不一致的
    `instance_id` 会被 `WF_IDENTITY_UNRESOLVED`/`WF_BINDING_MISMATCH` 拒**。这两项由适配层按每次请求重放，不靠模型记忆。
 
+## 定义与实例（2026-11-12）
+
+人要把一件事做成多步流程时，走「定义 → 准备 → 创建实例」。三步都在本入口，但它们**不是三次确认仪式**：
+机制只核可观察的事实，其余交给你判断。
+
+1. **写定义** `.wf/user-workflows/<workflow-id>.md`：唯一 `<!-- wf-definition:v1 -->` 标记 + 紧邻 `json` 块。
+   机制会拒的（`WF_DEFINITION_INVALID`，按 `problems[].stage` 顺序修）：结构/schema、id 重复与保留前缀
+   （人判点 id 不得以 `plan-q-`/`debug-ruling-` 开头）、引用来源与顺序（`from` 只能取 input/project/secret_ref/step/action，
+   `step` 必须指向更早步骤且引用它已声明的产物）、产物路径（`delivery` 相对项目根、`step_artifact` 落在实例产物根）、
+   必需与可略的冲突、`skip.downstream.consumer` 必须真实存在、每条任务步骤都要承载验证。
+   **机制不会替你判**：`purpose`/`applicability` 写得够不够清楚、`completion` 的条件是否真的覆盖目标、
+   某个 `skip.condition` 该不该被认可 —— 这些写不清，定义即使过了校验也没有意义。
+2. `definition prepare --id <id>`：落准备记录（`.wf/preparations/<id>.json`），记住**准备范围归发起它的会话**。
+   校验不过时准备记录**照常保留**（草稿），`validation.ok=false` 留痕；修完重跑即可。
+3. `run create --creation <path>`：creation 文件给 `{definition_id, definition_digest, inputs, steps, expansion?}`。
+   机制会拒的：`definition_digest` 与当前文件字节不符（定义在确认后改过）、必填输入缺失或类型不符、
+   `secret_ref` 输入写成明文、未声明的输入、没有本会话的有效准备记录、目标路径已存在。
+   **实例创建只取得"规划权限"**：它不批准任何业务、不建任务、不推进游标。
+
+创建后 `run locate --run <id>` 可以随时只读回读（`cursor`/`step_results`/`task_map`/各步骤任务的状态）。
+推进、暂停、以及"实例暂停怎么恢复"的判读口径见 `wf-continue`。
+
 ## 不做
 
-- 不创建实例（第二轮）、不批准规划、不 Check、不归档。
+- 不批准规划、不 Check、不归档；`run create` 只建实例，不建任务（任务由 `run advance` 在首达步骤时建）。
 - 不因“只有一个活动任务”推断当前对象。
 
 ## 工作习惯（2026-11-08 起）
