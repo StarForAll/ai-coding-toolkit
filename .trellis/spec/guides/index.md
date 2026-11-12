@@ -12,7 +12,8 @@ repository but do not belong in a deeper implementation spec.
 The focus here is repo maintenance:
 
 - `diagnosis-and-fixture-hygiene.md` — 取证顺序（先取事实再假设）、复现必须与 harness 同序、
-  正向步骤与负路径断言的区别、批量修改逐个验证、测量失败与失败分开、静默失败必须出声
+  正向步骤与负路径断言的区别、批量修改逐个验证、测量失败与失败分开、静默失败必须出声、
+  **收尾验证会隐式重建产物目录（先证字节复现，再跑全量回归，跑完核对 `git status`）**
 
 - `review-phase-discipline.md` — **方案审查阶段只改文档、只跑只读校验**；评审报出的实现缺陷
   只登记进方案不改代码；回退的判据是 `git diff` 为空而不是测试绿
