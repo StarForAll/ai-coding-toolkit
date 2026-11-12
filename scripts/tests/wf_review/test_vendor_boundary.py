@@ -37,13 +37,18 @@ class VendorBoundaryTest(unittest.TestCase):
         self.assertIn("vendor_dirty", source)
 
     def test_check_objects_exclude_vendor(self):
-        import inspect
+        """检查对象来自 `delivery_set()`，vendor 在那一层就被排除（断言行为，不锚源码形状）。"""
+        import os
+        import tempfile
 
-        from wflib import check
-
-        source = inspect.getsource(check.object_paths)
-        self.assertIn("is_vendor", source,
-                      "检查对象必须显式排除 vendor：否则改框架会污染业务交付的指纹")
+        root = tempfile.mkdtemp(prefix="wf-vendor-")
+        os.makedirs(os.path.join(root, ".wf", "tasks"), exist_ok=True)
+        task = {"id": "2026-x", "phase": "execute",
+                "entry_snapshot": {"touch_paths": [".wf/lib/**", "src/**"]},
+                "curation": [{"path": ".wf/protocol/codes.json"}]}
+        delivery = scope.delivery_set(root, task)
+        self.assertEqual([path for path in delivery["paths"] if scope.is_vendor(path)], [],
+                         "检查对象必须排除 vendor：否则改框架会污染业务交付的指纹")
 
 
 if __name__ == "__main__":

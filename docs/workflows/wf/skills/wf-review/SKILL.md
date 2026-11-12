@@ -13,11 +13,15 @@ user-invoked: true
 
 **适用面**：只在**复杂任务**的 Check pass 之后、人判之前使用（设计稿 §4.3、§6.5）。轻量任务不发起审查；任务仍属复杂而审查环境不足时，按设计稿 §6.5 暂停或异常归档。
 
-## 输入（只有两项）
+## 输入（任务 id 与轮次）
 
-**任务 id** 与 **轮次**。其余信息由入口给出，不需要人再准备。
+**任务 id** 与 **轮次**，其余信息由入口给出。身份按你的会话模式补一项：
 
 ```bash
+# 自动身份模式（身份由执行边界派生，没有宿主 host_id）：署名必须自报
+<python> <项目根>/.wf/bin/wf.py review-context --task <任务 id> --round <轮次> --as <你的 CLI> --json
+
+# 显式信封模式：信封携带 session.identity.host_id 时 --as 可省
 <python> <项目根>/.wf/bin/wf.py review-context --task <任务 id> --round <轮次> \
   --envelope <本会话信封> --json
 ```
@@ -33,8 +37,10 @@ user-invoked: true
 3. 报告写到 `report_path`（文件名 `review-<agent>.md` **就是身份**，正文不必再写 `reviewer-id`/`source-cli`）。写完后把文件头部的 `status=in-progress` 改成 `status=done`——`review-import` 只认 `done`。
    **报告已存在时先看状态行**：`status=in-progress` 是你自己这次的占位（`review-context` 写的骨架），正常续写；**已是 `status=done`** 说明该槽位本轮已完成一份报告、只是还没导入——**停止并回报给人，不要覆盖**。
 4. 按固定检查轴逐项检查：范围、验收、契约/spec、跨层回归、可测性。
-5. 材料不足以覆盖某个轴时**停止并回报**，不自行扩大读取范围；越界与缺材料写进 `scope-exceptions`。
-6. 报告 = 头部状态行 + Markdown 正文 + 唯一协议块：
+5. 材料不足以覆盖某个轴时**停止并回报**，不自行扩大读取范围；缺什么写进 `excluded-scope` 与报告正文
+   （该轴按 `uncovered` 记），不另造字段。
+6. 报告 = 头部状态行 + Markdown 正文 + 唯一协议块（`review-context` 已把整套骨架写到
+   `report_path`，含预填的 `task-id`/`round`/`check-anchor`；照它填，不自己另写字段）：
 
 ```
 <!-- wf-review-agent:v1 status=done -->
@@ -42,7 +48,7 @@ user-invoked: true
 ```json
 {"protocol":"wf-review-v1","task-id":"…","round":1,
  "review-time":"…","review-focus":"…","check-anchor":{"check_id":"…","check_anchor":"sha256:…"},
- "read-scope":[…],"excluded-scope":[…],"scope-exceptions":[],
+ "read-scope":[…],"excluded-scope":[…],
  "axes":{"range":"…","acceptance":"…","contract":"…","regression":"…","testability":"…"},
  "findings":[{"id":"f1","location":"…","evidence":"…","impact":"…","severity":"blocking|suggestion"}],
  "verdict":"pass|fail|unavailable"}
@@ -50,7 +56,10 @@ user-invoked: true
 ```
 
 7. `verdict` 只写本报告的事实结论；不得声称“已通过项目门禁”。
-8. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
+8. **保存前先把首行改成 `status=done`，再跑一次
+   `<python> <项目根>/.wf/bin/wf.py lint report --file <report_path> --task <任务 id> --json`**，
+   按 `problems` 一次改全（lint 不是门禁，但能省掉导入/判定才暴露的格式返工）。
+9. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
 
 ## 不做
 

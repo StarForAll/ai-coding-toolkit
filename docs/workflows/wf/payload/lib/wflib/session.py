@@ -102,6 +102,17 @@ def load_runtime(root, key: str):
         return None
 
 
+def update_runtime(root, key: str, **fields):
+    """**合并写**本会话侧车：游标与写权代次共用同一条记录，写者不得互相覆盖。
+
+    写失败按机制稿只降级可见（返回 None），不阻断读取或写入判定。
+    """
+    current = load_runtime(root, key)
+    payload = dict(current) if isinstance(current, dict) else {}
+    payload.update(fields)
+    return payload if write_runtime(root, key, payload) else None
+
+
 def new_instance_id() -> str:
     return uuid.uuid4().hex
 

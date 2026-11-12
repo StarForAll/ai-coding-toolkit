@@ -24,6 +24,19 @@ EXPLICIT_ENVELOPE_EXIT = (
 )
 
 
+def resolve_generation(ctx, key):
+    """写权代次的来源解析（唯一实现）：显式请求 → 本会话运行态 → `(None, None)`。
+
+    代次属于**会话运行态**：取得写权时由 `writer.save` 记进该会话侧车（机制稿 §1.4）。
+    这里的侧车值是"本会话取得写权时拿到的代次"，不是 writer 的当前值——侧车陈旧仍会被拦。
+    """
+    generation = ctx.inputs().get("generation")
+    if generation is not None:
+        return generation, "request"
+    runtime = session_mod.load_runtime(ctx.root, key) or {}
+    return runtime.get("writer_generation"), "session-runtime"
+
+
 class CliError(Exception):
     def __init__(self, code, facts=None, next_=None, position=None):
         super().__init__(code)
@@ -490,11 +503,16 @@ class Context:
         target = task or run
         if target and scope and scope.get("object") and scope["object"].get("id") != target:
             raise CliError("WF_BINDING_MISMATCH", {"writer_scope": scope, "requested": target})
-        generation = self.inputs().get("generation")
+        generation, source = resolve_generation(self, key)
         if generation is None:
             raise CliError(
                 "WF_GENERATION_STALE",
-                {"reason": "generation not carried", "current_generation": holder.get("generation")},
+                {"reason": "generation not carried (neither request nor session runtime)",
+                 "current_generation": holder.get("generation"),
+                 "exits": ["显式携带一次 inputs.generation（值取 writer 记录 holder.generation）后重试；"
+                           "成功后本会话侧车自动建立",
+                           "或 `wf writer release` 后重新 `wf writer acquire`，让侧车记录新代次"]},
+                next_="按 exits 补齐代次来源后重试",
             )
         if int(generation) != int(holder.get("generation")):
             raise CliError(
@@ -502,9 +520,13 @@ class Context:
                 {
                     "reason": "generation mismatch",
                     "carried": generation,
+                    "generation_source": source,
                     "current_generation": holder.get("generation"),
                 },
             )
+        if source == "request":
+            # 升级前已持权的会话没有侧车：一次显式携带成功后幂等补齐（不改变判定）。
+            writer_mod.sync_session_generation(self.root, record)
         return record, holder
 
 
@@ -2056,6 +2078,11 @@ def cmd_confirm_executor(ctx, args):
     )
 
 
+# 帮助里的取值域由 `decisions.DOMAINS` 生成（唯一登记处）：dogfood 里 `approve-light`/
+# `mechanical` 的残留就是帮助与登记域各写一份造成的。
+PLAN_APPROVAL_CHOICES = "|".join(decisions_mod.DOMAINS["plan_approval"])
+MECHANICAL_REVISION_CHOICES = "|".join(decisions_mod.DOMAINS["mechanical_revision"])
+
 COMMAND_HELP = {
     "task-new": {
         "purpose": "建任务（ordinary/initialize/bootstrap）并取得写权与绑定",
@@ -2069,9 +2096,10 @@ COMMAND_HELP = {
         "inputs": {"decision[]": {"source": "人答复来源（必填）", "at": "时间（必填）",
                                   "subject": "必须含任务 id 或对象摘要（必填）",
                                   "object_digest": "当前 PRD 的 sha256（必填）",
-                                  "choice": "approve|approve-light|approve-complex|mechanical（必填）",
-                                  "生成代次": "inputs.generation 必填（从上条命令回显 facts.generation 取；"
-                                            "过期会报 WF_GENERATION_STALE 并在 facts 给 current_generation）",
+                                  "choice": f"批准：{PLAN_APPROVAL_CHOICES}；"
+                                            f"机械修订：{MECHANICAL_REVISION_CHOICES}（必填）",
+                                  "生成代次": "inputs.generation 可显式覆盖；缺省取本会话运行态记录的代次"
+                                            "（取得写权时写入）。过期会报 WF_GENERATION_STALE 并给 current_generation",
                                   "plan-q 答复": "PRD 里每个 plan-q-<n> 要一条 choice=\"plan-q\" 且 subject 含该编号的答复"
                                                "（旧夹具的 choice=\"是\" 已不再接受）",
                                   "reason": "理由（必填）",

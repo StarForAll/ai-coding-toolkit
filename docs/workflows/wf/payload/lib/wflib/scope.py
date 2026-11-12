@@ -491,6 +491,57 @@ def classify_candidates(root, task, receipts=None):
     }
 
 
+def delivery_set(root, task, receipts=None, classified=None):
+    """本任务**交付集合**的唯一实现：内容域（指纹、审查材料、待提交面共用）。
+
+    构成（机制稿 §3.5 的真实触碰路径口径）：
+    - `e` 桶：归属本任务且命中批准触碰面；
+    - 已由 `expand` 确认覆盖的 `f` 桶路径（先确认后改，K6 第 4 类）；
+    - 未释放的策展路径（任务声明要读/改的 spec）；
+    - `.wf/baseline.md` / `.wf/project-config.json`（存在即入锚点输入）。
+
+    `uncovered_f` 原样返回，由 Check 继续按 `WF_SCOPE_VIOLATION` 阻断；本函数不改判定，
+    只保证"哪些路径算本任务交付"只有一处口径（此前 object_paths 取 e、材料取 e∪f，
+    扩面路径因此可能进材料却不进内容指纹）。
+    """
+    from . import authorize as authorize_mod
+    from . import tasks as tasks_mod
+
+    if classified is None:
+        if receipts is None:
+            receipts = tasks_mod.task_receipts(root)
+        classified = classify_candidates(root, task, receipts=receipts)
+    buckets = classified["buckets"]
+    in_scope = sorted(path for path in (buckets.get("e") or []) if not is_vendor(path))
+    out_of_scope = sorted(path for path in (buckets.get("f") or []) if not is_vendor(path))
+    covered, uncovered = [], list(out_of_scope)
+    if out_of_scope:
+        directory = tasks_mod.task_dir(root, task.get("id"))
+        if directory:
+            _ok, uncovered = authorize_mod.covers(directory, "expand", out_of_scope, root=root)
+            covered = sorted(set(out_of_scope) - set(uncovered))
+    paths = set(in_scope) | set(covered)
+    for entry in task.get("curation") or []:
+        if entry.get("released") or not entry.get("path"):
+            continue
+        if not is_vendor(entry["path"]):
+            paths.add(entry["path"])
+    for fixed in (".wf/baseline.md", ".wf/project-config.json"):
+        if os.path.exists(join(root, fixed)):
+            paths.add(fixed)
+    return {
+        "paths": sorted(paths),
+        "buckets": {
+            "e": in_scope,
+            "f": out_of_scope,
+            "covered_f": covered,
+            "uncovered_f": sorted(uncovered),
+            "v": list(buckets.get("v") or []),
+        },
+        "candidates": classified.get("candidates") or [],
+    }
+
+
 def _wip_path_strings(items):
     """把 `handoff.wip.paths` 的指纹对象/字符串统一成路径字符串。"""
     paths = []

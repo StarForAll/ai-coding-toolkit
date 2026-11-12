@@ -26,23 +26,8 @@ class CheckError(Exception):
 
 
 def object_paths(ctx, task):
-    """本次 Check 对象的实际触碰路径集合（e 类）∪ 规则输入。"""
-    from . import tasks as tasks_mod
-
-    receipts = tasks_mod.task_receipts(ctx.root)
-    classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
-    paths = set(classified["buckets"]["e"])
-    # K5：vendor 不进检查对象（它的变动由 vendor_dirty 记录，不参与指纹与结论）
-    paths = {path for path in paths if not scope.is_vendor(path)}
-    for entry in task.get("curation") or []:
-        if entry.get("released"):
-            continue
-        if entry.get("path"):
-            paths.add(entry["path"])
-    for fixed in (".wf/baseline.md", ".wf/project-config.json"):
-        if os.path.exists(join(ctx.root, fixed)):
-            paths.add(fixed)
-    return sorted(paths)
+    """本次 Check 对象的内容域：`scope.delivery_set()` 的路径集合（唯一口径）。"""
+    return list(scope.delivery_set(ctx.root, task)["paths"])
 
 
 def spec_versions(ctx, task):
@@ -764,25 +749,23 @@ def run_check_scope(ctx, task, decisions, review_notes_path):
                               exits=["按设计稿 §5.4 只读核对记录锚点后由人裁决",
                                      "确认基线被重写后重做本任务的锚点/检查",
                                      "如属历史迁移，先 repair 核旧写者与记录来源"]))
-    if buckets["f"]:
-        # K6 第 4 类：越出批准面的修改必须**先确认后改**；已入库的 expand 确认覆盖这些路径时
-        # 视为已批准扩面（仍留事实，供预览与判断清单使用），否则阻断。
-        from . import authorize as authorize_mod
-        from . import tasks as tasks_mod
-
-        task_dir = tasks_mod.task_dir(ctx.root, task.get("id"))
-        covered, uncovered = authorize_mod.covers(task_dir, "expand", buckets["f"], root=ctx.root)
-        if covered:
-            scope_facts = dict(scope_facts,
-                               approved_expansion=buckets["f"],
-                               buckets=dict(scope_facts["buckets"], e=sorted(set(scope_facts["buckets"]["e"]) | set(buckets["f"])),
-                                            f=[]))
-        else:
-            raise CheckError("WF_SCOPE_VIOLATION",
-                             dict(scope_facts, out_of_scope=uncovered,
-                                  covered_by_authorization=sorted(set(buckets["f"]) - set(uncovered)),
-                                  exits=["回 Plan 扩范围并重新批准",
-                                         "先取得该路径的扩面确认（K6 第 4 类）后再改"]))
+    delivery = scope.delivery_set(ctx.root, task, receipts=receipts, classified=classified)
+    covered_expansion = delivery["buckets"]["covered_f"]
+    uncovered_expansion = delivery["buckets"]["uncovered_f"]
+    if uncovered_expansion:
+        # K6 第 4 类：越出批准面的修改必须**先确认后改**；`expand` 确认只覆盖它登记的路径。
+        raise CheckError("WF_SCOPE_VIOLATION",
+                         dict(scope_facts, out_of_scope=uncovered_expansion,
+                              covered_by_authorization=covered_expansion,
+                              exits=["回 Plan 扩范围并重新批准",
+                                     "先取得未覆盖路径的扩面确认（K6 第 4 类）后再改"]))
+    if covered_expansion:
+        # 已批准扩面：仍留事实（供预览与判断清单使用），并并入 e 供展示/指纹使用。
+        scope_facts = dict(scope_facts,
+                           approved_expansion=covered_expansion,
+                           buckets=dict(scope_facts["buckets"],
+                                        e=sorted(set(scope_facts["buckets"]["e"]) | set(covered_expansion)),
+                                        f=[]))
     if buckets["c"]:
         raise CheckError("WF_WORKSPACE_UNRESOLVED", dict(scope_facts, other_tasks=buckets["c"]))
     pending_external = [item for item in (external_findings or [])

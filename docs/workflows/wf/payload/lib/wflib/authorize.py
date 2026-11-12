@@ -108,7 +108,10 @@ def _pattern_hits(pattern, root):
 
     listed = None
     try:
-        _code, listed = scope_mod.git(root, "-c", "core.quotePath=false", "ls-files", "-z")
+        # 已跟踪 + 未跟踪（`.wf/out-of-scope` 语义：新文件也是真实存在的区域）。
+        # 只查已跟踪时，对"本任务即将新增的文件"登记的扩面永远匹配不到，等于不可用。
+        _code, listed = scope_mod.git(root, "-c", "core.quotePath=false",
+                                      "ls-files", "-z", "--cached", "--others", "--exclude-standard")
         files = [item for item in (listed or "").split("\x00") if item] if listed else []
     except Exception:
         files = []

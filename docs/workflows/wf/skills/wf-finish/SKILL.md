@@ -50,7 +50,8 @@ user-invoked: true
 - **同一终端同时只推进一个任务**；并行请另开终端/窗口。
   同一终端里的第二个 agent 会被 `WF_IDENTITY_UNRESOLVED(concurrent_unregistered_caller)` 阻断，
   须人显式 `wf.py enable` 登记后才放行，且此后与前者共享同一执行会话。
-- **自动模式下不需要手写信封**：直接跑 `wf.py <子命令>`；身份由执行边界派生。
+- **自动模式下不手写 session 信封**：直接跑 `wf.py <子命令>`；身份由执行边界派生，
+  写权代次由本会话运行态携带（显式 `inputs.generation` 可覆盖，不填不报错）。
 
 ## 纪律
 

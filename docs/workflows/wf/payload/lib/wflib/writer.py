@@ -96,10 +96,30 @@ def load(root, default=None):
     return records.load_json(path_of(root), default)
 
 
+def sync_session_generation(root, record):
+    """把**本会话取得的写权代次**记进该会话运行态（`require_held` 的缺省来源）。
+
+    只记 holder 为会话时的事实；维护写者不建立会话侧车。代次来源是"该会话取得写权时的值"，
+    不是 writer 的当前值——侧车陈旧仍会被 `WF_GENERATION_STALE` 拦下。
+    """
+    holder = (record or {}).get("holder") or {}
+    if (record or {}).get("state") != "held" or holder.get("kind") != "session":
+        return None
+    key, generation = holder.get("id"), holder.get("generation")
+    if not key or not isinstance(generation, int) or isinstance(generation, bool):
+        return None
+    from . import session as session_mod
+
+    return session_mod.update_runtime(root, key, writer_generation=generation,
+                                      writer_synced_at=records.now_str())
+
+
 def save(root, record):
     record = dict(record)
     record["updated_at"] = records.now_str()
     records.write_json(path_of(root), record)
+    # 单一出口同步会话侧车：18 个调用点都经这里，不在各入口各写一遍。
+    sync_session_generation(root, record)
     return record
 
 

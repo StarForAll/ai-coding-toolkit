@@ -122,3 +122,47 @@ bash scripts/tests/wf_runtime/full/run_all.sh          # 独占，勿并发
 ```
 
 任一失败先归因（实现缺陷 → 修实现；实现正确但事实不足 → 才回修机制稿），不改判据迁就绿灯。
+
+---
+
+## 9. 审查材料与交付集合（2026-11-12 第二轮 dogfood）
+
+**Trigger**：改动 `review.context` 的材料生成、`check.object_paths`、`pending_delivery_paths`、
+写权代次读取、或 `task-approve` 帮助文本时。
+
+**Contract**：
+
+| 判据 | 唯一实现 | 调用点只消费 | 断言锚点（`scripts/tests/wf_runtime/`） |
+|---|---|---|---|
+| 本任务交付集合 | `scope.delivery_set()` | `check.object_paths`、`review.context`、`tasks.pending_delivery_paths` | `test_delivery_set.py` |
+| 材料片段生成 | `review.materialize_delivery()` | `review.context` | `test_material_diff.py` |
+| 写权代次来源 | `cli.resolve_generation()` + `writer.sync_session_generation()` | `Context.require_held` | `test_generation_carry.py` |
+| Check 下一跳 | `tasks.check_next_hint()` | `cmd_task_check` | `test_check_next_route.py` |
+| 帮助取值域 | `decisions.DOMAINS` | `cli.COMMAND_HELP` | `test_help_domains.py` |
+
+**反例（真实发生，dogfood F13/A#4）**：`_material_diff` 注释写着"必须含未跟踪新文件"，
+实现却只跑 `git diff [HEAD] -- path`——未跟踪文件两种调用都是 0 字节，异常还被吞成
+`owned=[]`，最后写成 `# 无工作树差异`。注释引用了历史反例、实现复现了历史反例。
+
+**Wrong**：
+```python
+diff = _material_diff(ctx, record)
+records.atomic_write(..., diff or "# 无工作树差异\n")
+```
+
+**Correct**：
+```python
+delivery = scope.delivery_set(ctx.root, record)          # 唯一交付集合
+material = review.materialize_delivery(ctx.root, delivery["paths"])
+# 未跟踪 → git diff --no-index /dev/null <path>；失败 → problems + [wf-material-missing]
+```
+
+**Rule**：
+- "无差异"只能由**交付集合为空**推出；生成失败必须写进 `materials/status.json.problems`
+  并在正文留 `[wf-material-missing]`，不得与"无差异"共用一句文案。
+- 写权代次取"本会话取得写权时的值"（会话运行态侧车），**不得**改读 writer 当前代次；
+  侧车陈旧必须仍被 `WF_GENERATION_STALE` 拦下。
+- 帮助/示例里的取值域从登记表生成，不在第二处手写（`approve-light` 残留就是这么来的）。
+- 文档与实现的忽略集合冲突时，以发行清单 `gitignore_managed` 为唯一枚举，安装器缺该字段即拒绝。
+- 新增断言必须做过回退注入验证：临时改回旧实现时用例变红，恢复后字节一致
+  （本轮对 R1/R2/R3/R5 各做了一次，见任务 `implement.md` 的收口自检）。

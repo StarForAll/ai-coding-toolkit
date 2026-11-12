@@ -1,7 +1,7 @@
 # wf 模块源树（authoring）
 
 本目录是 wf 独立框架的**作者侧模块源**，不是可运行应用、不随安装投放。
-它由三部分组成：`payload/`（投放目标项目的运行时内容）、`skills/`（11 个宿主 skill 副本）、
+它由三部分组成：`payload/`（投放目标项目的运行时内容）、`skills/`（13 个宿主 skill 副本）、
 `dev-manifest.json`（首轮开发态部署与打包共用的资产登记）。
 
 判据来源（冻结）：[charter](../wf-framework-charter.md)、[设计稿](../wf-framework-design.md)、
@@ -75,7 +75,7 @@ payload/install.py                             # 发行根安装入口（不投�
 payload/lib/wflib/*.py                         # 运行时包（23 个 .py 文件，含 `__init__.py`；仅标准库）
 payload/workflows/*.md                         # 6 份流程文档（每个 required 步骤带 enforcement 行）
 payload/templates/**                           # 配置/spec/任务/基线/用户定义模板
-skills/<11 个>/SKILL.md                        # 宿主 skill 副本
+skills/<13 个>/SKILL.md                        # 宿主 skill 副本
 dev-manifest.json                              # 资产登记（打包与开发态部署的输入）
 ```
 
@@ -83,7 +83,7 @@ dev-manifest.json                              # 资产登记（打包与开发�
 
 ## 7. 原语与审查副本的来源登记
 
-`skills/` 下 11 个副本中，6 个是改编件（`wf-grilling`、`wf-tdd`、`wf-diagnosing-bugs`、`wf-code-review`、`wf-review`、`wf-review-action`），
+`skills/` 下 13 个副本中，6 个是改编件（`wf-grilling`、`wf-tdd`、`wf-diagnosing-bugs`、`wf-code-review`、`wf-review`、`wf-review-action`），
 其余（`wf-start`、`wf-continue`、`wf-finish`、`wf-bootstrap`、`wf-spec-update`）为本项目原创。
 每个改编件在自己 `SKILL.md` 末尾带「来源与差异」段，登记来源、许可、基线、差异与最近正反例（设计稿 §7.4）。
 

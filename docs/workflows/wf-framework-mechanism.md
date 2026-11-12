@@ -22,7 +22,7 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | 0b282bb1dee0d340766a5d7986d849464280a0c55e5c04e5927c40eb72bd7e20 |
+| wf-framework-design.md | ff5be14999a57d55278a40d67576d6ac8a7bd2a61dfd63a956579b65092d6075 |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
 | wf-framework-design.index.md | cb641c689ae67cf1df8c53d5ff49d680d7fd9293ae376f3ac92f5a17d1f91d28 |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |
@@ -809,7 +809,8 @@ task.archive 在本节前置中消费本文 §2.3 的 verification.resolve(finis
 | 框架流程 | `.wf/workflows/` | 发行资产；本地修改作为偏离保护 |
 | 配置/spec/任务模板 | 发行资产区，具体子路径由实现方案定 | 模板随发行升级，已生成实例属项目数据 |
 | 任务、准备、基线、spec/index、拒绝项 | `.wf/` 内项目数据区；拒绝项 `.wf/out-of-scope/`（字段 schema 见本文 §8.4） | 任务/相应入口写；升级/默认卸载保留 |
-| 用户定义、实例、快照、绑定、writer、项目配置 | 设计稿明确的 `.wf/` 路径 | 项目数据，升级不 O/L/N 替换；writer 只经维护协调修改 |
+| 用户定义、实例、快照、项目配置 | 设计稿明确的 `.wf/` 路径 | 项目数据，升级不 O/L/N 替换 |
+| 会话绑定、项目写入权记录 | `.wf/session-bindings/`、`.wf/writer.json` | 运行态（gitignore，忽略集合由本文 §10.2 的托管段枚举）：可丢弃重建，写入权以记录内容为事实、不以提交状态为准；克隆/换检出后由安装初始化重建；writer 只经维护协调修改 |
 | 安装清单、偏离/删除裁决、恢复说明 | `.wf/` 的独立安装恢复数据区 | 本机投放事实，默认卸载保留；purge 单独确认 |
 | 活动缓存与读取侧车 | `.wf/.runtime/`，按会话隔离 | 可丢弃运行态，忽略后不进任务提交 |
 | 最小互斥文件 | 项目根 `.wf-lock` | 运行态、只创建不删除，卸载/purge 保留忽略行 |

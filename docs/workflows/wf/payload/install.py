@@ -393,10 +393,16 @@ def write_bytes(path, content):
 
 
 def managed_segment(manifest):
+    """托管段正文**只来自清单** `gitignore_managed`：这是忽略集合的唯一枚举。
+
+    此前这里留了一份两行回退，与发行清单的五条不同源；回退值会静默写出半个托管段，
+    因此改为缺登记即抛错，由安装主流程转成 `WF_ASSET_DECISION`。
+    """
     managed = manifest.get("gitignore_managed") or {}
-    lines = [managed.get("begin_marker", "# wf-managed-v1")]
-    lines += list(managed.get("lines") or ["/.wf/.runtime/", "/.wf-lock"])
-    lines.append(managed.get("end_marker", "# wf-managed-end"))
+    lines = [managed.get("begin_marker"), *list(managed.get("lines") or []),
+             managed.get("end_marker")]
+    if not all(isinstance(item, str) and item.strip() for item in lines):
+        raise ValueError("gitignore_managed incomplete (begin_marker/lines/end_marker required)")
     return "\n".join(lines)
 
 
@@ -953,6 +959,11 @@ def main(argv=None):
     problems = verify_assets(source, manifest, commit=commit)
     if problems:
         return blocked("WF_RELEASE_CONFLICT", "发行资产校验失败", {"problems": problems[:20]}, args.json)
+    managed = manifest.get("gitignore_managed") or {}
+    if not managed.get("lines") or not managed.get("begin_marker") or not managed.get("end_marker"):
+        # 托管段是发行规则的一部分（计入 rules_digest）：缺登记就拒绝，不猜忽略行
+        return blocked("WF_ASSET_DECISION", "发行清单缺 gitignore_managed（托管段唯一来源）",
+                       {"manifest": manifest_path}, args.json)
 
     skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
     if unknown_platforms:

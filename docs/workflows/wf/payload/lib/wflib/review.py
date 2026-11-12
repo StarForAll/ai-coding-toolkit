@@ -7,7 +7,7 @@ import os
 import re
 import tempfile
 
-from . import check as check_mod, config, records, writer as writer_mod
+from . import check as check_mod, config, records, scope as scope_mod, writer as writer_mod
 from .paths import join
 
 REPORT_MARKER = "<!-- wf-review-report:v1 -->"
@@ -65,6 +65,38 @@ def slot_dir(ctx, task_id, round_no, slot):
 AGENT_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": "copilot"}
 AGENT_REPORT = re.compile(r"^review-([a-z0-9._-]+)\.md$")
 AGENT_HEADER = "<!-- wf-review-agent:v1 status={status} -->"
+
+
+def report_skeleton(task_id, round_no, check, anchor):
+    """reviewer 手边的完整骨架：状态行 + 协议块 + 字段占位。
+
+    骨架只铺路，不是门禁：未填的轴/verdict 仍会被 `wf lint report` 与导入端报出来。
+    """
+    payload = {
+        "protocol": PROTOCOL,
+        "task-id": task_id,
+        "round": int(round_no),
+        "review-time": records.now_str(),
+        "review-focus": REVIEW_FOCUS,
+        "check-anchor": {"check_id": (check or {}).get("id"), "check_anchor": anchor},
+        "read-scope": [],
+        "excluded-scope": [],
+        "axes": {axis: "" for axis in REVIEW_AXES},
+        "findings": [],
+        "verdict": "",
+    }
+    return chr(10).join([
+        AGENT_HEADER.format(status="in-progress"),
+        "<!-- 正文写在这里；保存前把首行 status=in-progress 改成 status=done，"
+        "并先跑 `wf lint report --file <本文件>` 一次列全问题 -->",
+        "",
+        REPORT_MARKER,
+        "<!-- axes/verdict/findings 是占位：按材料逐轴填；verdict 取 pass|fail|unavailable -->",
+        "```json",
+        json.dumps(payload, ensure_ascii=False, indent=1),
+        "```",
+        "",
+    ])
 
 
 CLI_TOKEN_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
@@ -1109,44 +1141,92 @@ def _task_dir(ctx, task):
 
 
 
-def _material_diff(ctx, task):
-    """审查材料用的 diff：任务交付面内、含未跟踪文件（审查者不该自己再算一遍）。"""
-    from . import scope as scope_mod
-    from . import tasks as tasks_mod
-
-    try:
-        classified = scope_mod.classify_candidates(ctx.root, task,
-                                                   receipts=tasks_mod.task_receipts(ctx.root))
-        owned = sorted(set(classified["buckets"].get("e") or []) | set(classified["buckets"].get("f") or []))
-    except Exception:
-        owned = []
-    if not owned:
-        return ""
-    chunks = []
-    for path in owned:
-        if os.path.exists(join(ctx.root, path)):
-            piece = _git_diff_one(ctx.root, path)
-            if piece:
-                chunks.append(piece)
-                continue
-        # 已删除的文件：取反向 diff，审查者仍能看到删除了什么
-        piece = _git_diff_one(ctx.root, path, rev="HEAD")
-        if piece:
-            chunks.append(piece)
-    return "\n".join(chunks)
+MATERIAL_MISSING = "# [wf-material-missing]"
+MATERIAL_EMPTY = "# 本任务交付面为空（无已归属路径）"
 
 
-def _git_diff_one(root, path, rev=None):
+def _git_capture(root, args):
+    """跑一次只读取片段：退出码 0/1 都算成功（`--no-index` 用 1 表示有差异）。"""
     import subprocess
 
-    args = ["git", "-c", "safe.directory=*", "diff", "--no-color"]
-    if rev:
-        args.append(rev)
-    args += ["--", path]
     try:
-        return subprocess.run(args, cwd=root, capture_output=True, text=True, check=False).stdout
-    except OSError:
-        return ""
+        proc = subprocess.run(["git", "-c", "safe.directory=*", *args], cwd=str(root),
+                              capture_output=True, text=True, check=False)
+    except OSError as exc:
+        return None, f"git unavailable: {exc}"
+    if proc.returncode not in (0, 1):
+        return None, f"git exited {proc.returncode}: {(proc.stderr or '').strip()[:200]}"
+    return proc.stdout or "", None
+
+
+def _path_status(root, path):
+    text, problem = _git_capture(root, ["status", "--porcelain=v1", "-z",
+                                       "--untracked-files=all", "--", path])
+    if problem:
+        return None, problem
+    for entry in text.split("\0"):
+        if len(entry) > 3 and entry[3:] == path:
+            return entry[:2], None
+    return "  ", None
+
+
+def materialize_delivery(root, paths):
+    """按 git 状态逐路径生成材料片段（审查材料与人工复核共用的唯一实现）。
+
+    - 未跟踪新文件：`git diff --no-index /dev/null <path>`（普通 `diff HEAD` 对未跟踪文件
+      输出 0 字节——这是 dogfood 第 1–4 轮 reviewer「看不到新文件」的原题）；
+    - 已跟踪（含已暂存 + 未暂存）：`git diff HEAD -- <path>`；
+    - 删除：同一个 HEAD 对比给出删除 hunk；已随提交删除的路径没有未提交片段，单独标注；
+    - 二进制：只给可见标记（路径 + 字节 + 摘要），不内联；
+    - 取片段失败：进 `problems` 并在正文留下 `[wf-material-missing]`，绝不静默成"无差异"。
+    """
+    files, problems, chunks = [], [], []
+    for path in list(paths or []):
+        absolute = join(root, path)
+        exists = os.path.exists(absolute)
+        status, problem = _path_status(root, path)
+        entry = {"path": path, "status": status, "generated": False}
+        if problem:
+            problems.append({"path": path, "reason": problem})
+            chunks.append(f"{MATERIAL_MISSING} {path}: {problem}")
+            files.append(entry)
+            continue
+        untracked = str(status or "").strip() == "??"
+        if untracked and exists:
+            kind = "new (untracked)"
+            text, problem = _git_capture(root, ["diff", "--no-color", "--no-index", "--",
+                                               "/dev/null", path])
+        else:
+            kind = "deleted" if not exists else "modified"
+            text, problem = _git_capture(root, ["diff", "--no-color", "HEAD", "--", path])
+        if problem:
+            problems.append({"path": path, "reason": problem})
+            chunks.append(f"{MATERIAL_MISSING} {path}: {problem}")
+            files.append(entry)
+            continue
+        body = (text or "").strip()
+        note = None
+        if body and any(line.startswith("Binary files") for line in body.splitlines()):
+            digest, cause, _reason = records.file_digest_state(absolute) if exists else (None, None, None)
+            size = os.path.getsize(absolute) if exists else None
+            note = f"binary: bytes={size} digest={digest or ('unreadable:' + str(cause))}"
+        elif not body:
+            if untracked and exists:
+                note = "new empty file (0 bytes of content)"
+            elif not exists:
+                note = "deleted in a commit (no uncommitted fragment)"
+            else:
+                note = "no textual change (metadata-only?)"
+        chunks.append(f"# ==== {kind} {path} ====")
+        if body:
+            chunks.append(body)
+        if note:
+            chunks.append(f"# ({note})")
+        entry.update(generated=bool(body), kind=kind, bytes=len(body), note=note)
+        files.append(entry)
+    return {"text": "\n".join(chunks).strip(), "files": files,
+            "problems": problems, "empty": not list(paths or [])}
+
 
 
 
@@ -1179,11 +1259,22 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     directory = round_dir(ctx, task_id, round_no)
     materials = os.path.join(directory, "materials")
     os.makedirs(materials, exist_ok=True)
-    # 材料物化：只给**本任务交付面**的内容，且必须含未跟踪新文件
-    # （裸 `git diff HEAD` 漏未跟踪文件——这正是 v42 §4.8 点名的历史反例——还会把 `.wf/**`
-    #   这类框架资产/控制记录塞进审查材料）
-    diff = _material_diff(ctx, record)
-    records.atomic_write(os.path.join(materials, "diff.patch"), diff or "# 无工作树差异" + chr(10))
+    # 材料物化：只给**本任务交付面**（`scope.delivery_set` 的唯一口径），且必须含未跟踪新文件。
+    delivery = scope_mod.delivery_set(ctx.root, record)
+    material = materialize_delivery(ctx.root, delivery["paths"])
+    if material["empty"]:
+        diff_text = MATERIAL_EMPTY
+    elif material["text"]:
+        diff_text = material["text"]
+    else:
+        diff_text = (f"# 交付面有 {len(delivery['paths'])} 条路径，但未生成任何内容片段；"
+                     "见同目录 status.json 的 problems")
+    records.atomic_write(os.path.join(materials, "diff.patch"), diff_text + chr(10))
+    records.write_json(os.path.join(materials, "status.json"),
+                       {"paths": delivery["paths"], "files": material["files"],
+                        "problems": material["problems"], "empty": material["empty"],
+                        "buckets": {key: delivery["buckets"][key]
+                                    for key in ("e", "f", "covered_f", "uncovered_f")}})
     prd_text = tasks_mod.read_prd(ctx.root, record) if hasattr(tasks_mod, "read_prd") else ""
     records.atomic_write(os.path.join(materials, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
     records.write_json(os.path.join(materials, "check.json"),
@@ -1210,20 +1301,25 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                            "agent": agent, "round": round_no, "status": status, "path": target,
                            "exits": ["换一个审查 agent（须与实施 CLI 及其它审查 CLI 不同）",
                                      "由人清除本轮该 agent 的记录后重试（review-context --reset）"]})
-    records.atomic_write(target, (AGENT_HEADER.format(status="in-progress") + chr(10)
-                                  + "<!-- 写完正文后把 status=in-progress 改成 status=done -->" + chr(10)))
+    records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor))
     from . import codes
 
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": record.get("title")},
         position_=codes.position(scope="task", phase=record.get("phase"), task_id=task_id),
-        next_="按 materials 写报告到 report_path，保存时把头部 status 改为 done",
+        next_="按 materials 写报告到 report_path；导入前先跑 `wf lint report --file <report_path>`，"
+              "保存时把头部 status 改为 done",
         facts={"round": round_no, "agent": agent, "report_path": target,
                "materials": {"diff": os.path.join(materials, "diff.patch"),
                              "prd": os.path.join(materials, "prd.md"),
                              "check": os.path.join(materials, "check.json"),
-                             "tests": os.path.join(materials, "tests.json")},
+                             "tests": os.path.join(materials, "tests.json"),
+                             "status": os.path.join(materials, "status.json")},
+               "material_paths": len(delivery["paths"]),
+               "material_problems": material["problems"][:5],
+               "material_problem_count": len(material["problems"]),
+               "skeleton_fields": list(REPORT_FIELDS),
                "anchor": {"check_anchor": anchor}},
     )
 

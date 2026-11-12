@@ -54,8 +54,8 @@ normative: 本文件只定义文件布局、脚本接口、命令形态与发行
     ├── workflow-runs/<run-id>.json               # 项目数据：实例记录
     ├── workflow-runs/<run-id>/definition.md      # 项目数据：固定快照
     ├── workflow-runs/<run-id>/artifacts/<step-id>/ # 项目数据：步骤专属产物根（step_artifact 落点）
-    ├── session-bindings/<session-key>.json       # 项目数据：会话绑定
-    ├── writer.json                               # 项目数据：写入权记录（含维护回执）
+    ├── session-bindings/<session-key>.json       # 运行态（gitignore）：会话绑定，可丢弃重建
+    ├── writer.json                               # 运行态（gitignore）：写入权记录（含维护回执）
     ├── project-config.json                       # 项目数据：项目配置
     ├── baseline.md                               # 项目数据：项目基线（含治理面机读块）
     ├── spec/{index.md, pre-dev-checklist.md, quality-checklist.md, rules/*.md}
