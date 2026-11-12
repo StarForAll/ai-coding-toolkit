@@ -117,3 +117,46 @@ class MaterialDiffTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WriteMaterialsTest(unittest.TestCase):
+    """`review.write_materials` 是落盘接线（此前只有生成函数被断言，接线无断言）。"""
+
+    def _ctx(self, root):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(root=root)
+
+    def test_writes_diff_and_status_with_untracked_content(self):
+        import json
+
+        root = _repo()
+        os.makedirs(os.path.join(root, ".wf", "tasks"), exist_ok=True)
+        with open(os.path.join(root, "notify.py"), "w", encoding="utf-8") as handle:
+            handle.write("def notify():\n    return 'sent'\n")
+        task = {"id": "2026-01-01-abc", "phase": "execute",
+                "entry_snapshot": {"touch_paths": ["notify.py"]},
+                "plan": {"touch_paths": ["notify.py"]}, "baseline_head": None}
+        materials = tempfile.mkdtemp(prefix="wf-materials-")
+        facts = review.write_materials(self._ctx(root), task, 1, "check-anchor:9", materials)
+        with open(os.path.join(materials, "diff.patch"), encoding="utf-8") as handle:
+            diff_text = handle.read()
+        with open(os.path.join(materials, "status.json"), encoding="utf-8") as handle:
+            status = json.load(handle)
+        self.assertIn("def notify", diff_text)
+        self.assertNotIn("无工作树差异", diff_text)
+        self.assertEqual(status["problems"], [])
+        self.assertFalse(status["empty"])
+        self.assertEqual(status["paths"], ["notify.py"])
+        self.assertEqual(facts["material_problem_count"], 0)
+
+    def test_empty_delivery_set_writes_explicit_reason(self):
+        root = _repo()
+        os.makedirs(os.path.join(root, ".wf", "tasks"), exist_ok=True)
+        task = {"id": "2026-01-01-abc", "phase": "execute",
+                "entry_snapshot": {"touch_paths": []}, "plan": {"touch_paths": []},
+                "baseline_head": None}
+        materials = tempfile.mkdtemp(prefix="wf-materials-")
+        review.write_materials(self._ctx(root), task, 1, "check-anchor:9", materials)
+        with open(os.path.join(materials, "diff.patch"), encoding="utf-8") as handle:
+            self.assertIn(review.MATERIAL_EMPTY, handle.read())

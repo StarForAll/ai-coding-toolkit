@@ -1230,6 +1230,41 @@ def materialize_delivery(root, paths):
 
 
 
+def write_materials(ctx, task, round_no, anchor, materials_dir):
+    """把本轮审查材料落盘（唯一实现）：diff.patch + status.json + prd/check/tests。
+
+    交付面来自 `scope.delivery_set`；未跟踪新文件必须出现在 diff.patch；生成失败写进
+    status.json 的 problems，正文留 `[wf-material-missing]`，不把失败伪装成"无差异"。
+    返回可并入入口 facts 的材料事实。
+    """
+    from . import tasks as tasks_mod
+
+    delivery = scope_mod.delivery_set(ctx.root, task)
+    material = materialize_delivery(ctx.root, delivery["paths"])
+    if material["empty"]:
+        diff_text = MATERIAL_EMPTY
+    elif material["text"]:
+        diff_text = material["text"]
+    else:
+        diff_text = (f"# 交付面有 {len(delivery['paths'])} 条路径，但未生成任何内容片段；"
+                     "见同目录 status.json 的 problems")
+    records.atomic_write(os.path.join(materials_dir, "diff.patch"), diff_text + chr(10))
+    records.write_json(os.path.join(materials_dir, "status.json"),
+                       {"paths": delivery["paths"], "files": material["files"],
+                        "problems": material["problems"], "empty": material["empty"],
+                        "buckets": {key: delivery["buckets"][key]
+                                    for key in ("e", "f", "covered_f", "uncovered_f")}})
+    prd_text = tasks_mod.read_prd(ctx.root, task) if hasattr(tasks_mod, "read_prd") else ""
+    records.atomic_write(os.path.join(materials_dir, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
+    records.write_json(os.path.join(materials_dir, "check.json"),
+                       {"check": task.get("check") or {}, "anchor": {"check_anchor": anchor}})
+    commands = (task.get("check") or {}).get("commands") or []
+    records.write_json(os.path.join(materials_dir, "tests.json"), {"commands": commands})
+    return {"material_paths": len(delivery["paths"]),
+            "material_problems": material["problems"][:5],
+            "material_problem_count": len(material["problems"])}
+
+
 def context(ctx, task, round_no=None, reset=False, as_value=None):
     """reviewer 侧入口（2026-11-07）：只给 task id（+ 轮次），其余由本命令提供。
 
@@ -1259,28 +1294,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     directory = round_dir(ctx, task_id, round_no)
     materials = os.path.join(directory, "materials")
     os.makedirs(materials, exist_ok=True)
-    # 材料物化：只给**本任务交付面**（`scope.delivery_set` 的唯一口径），且必须含未跟踪新文件。
-    delivery = scope_mod.delivery_set(ctx.root, record)
-    material = materialize_delivery(ctx.root, delivery["paths"])
-    if material["empty"]:
-        diff_text = MATERIAL_EMPTY
-    elif material["text"]:
-        diff_text = material["text"]
-    else:
-        diff_text = (f"# 交付面有 {len(delivery['paths'])} 条路径，但未生成任何内容片段；"
-                     "见同目录 status.json 的 problems")
-    records.atomic_write(os.path.join(materials, "diff.patch"), diff_text + chr(10))
-    records.write_json(os.path.join(materials, "status.json"),
-                       {"paths": delivery["paths"], "files": material["files"],
-                        "problems": material["problems"], "empty": material["empty"],
-                        "buckets": {key: delivery["buckets"][key]
-                                    for key in ("e", "f", "covered_f", "uncovered_f")}})
-    prd_text = tasks_mod.read_prd(ctx.root, record) if hasattr(tasks_mod, "read_prd") else ""
-    records.atomic_write(os.path.join(materials, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
-    records.write_json(os.path.join(materials, "check.json"),
-                       {"check": record.get("check") or {}, "anchor": {"check_anchor": anchor}})
-    commands = (record.get("check") or {}).get("commands") or []
-    records.write_json(os.path.join(materials, "tests.json"), {"commands": commands})
+    material_facts = write_materials(ctx, record, round_no, anchor, materials)
     target = agent_report_path(ctx, task_id, round_no, agent)
     status = read_agent_status(target)
     if reset:
@@ -1316,9 +1330,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                              "check": os.path.join(materials, "check.json"),
                              "tests": os.path.join(materials, "tests.json"),
                              "status": os.path.join(materials, "status.json")},
-               "material_paths": len(delivery["paths"]),
-               "material_problems": material["problems"][:5],
-               "material_problem_count": len(material["problems"]),
+               **material_facts,
                "skeleton_fields": list(REPORT_FIELDS),
                "anchor": {"check_anchor": anchor}},
     )
