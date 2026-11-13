@@ -111,8 +111,22 @@
 
 | 层 | 开关 | 默认 | 说明 |
 |---|---|---|---|
-| 套件层 | `--parallel` / `WF_JOBS` | 串行（1） | `unshare` + bind mount，默认不开（确定性优先） |
-| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json` |
+| 套件层 | `--serial` / `WF_JOBS` | 并行（4） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
+| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 并行（4） | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
+
+**运行中不要编辑 runner 文件**：`bash` 按偏移增量读取脚本，运行期间改 `run_all.sh`/`run_one.sh`/
+`repro/run.sh`/`plan.py` 会让运行中的实例读到错位内容，结果不可信（2026-11-13 实测：
+一次全量因此作废重跑）。要改就先停掉运行，改完按下面的顺序重验。
+
+**验证顺序（省墙钟，别一上来就全量）**：
+
+```bash
+python3 -m unittest discover -s scripts/tests -t .            # T0  ~4s
+WF_SLOW_TESTS=1 python3 -m unittest scripts.tests.wf_runtime.test_run_all_contract  # 契约 ~25s
+WF_SUITES="r67_tests r70_tests" bash .../run_all.sh           # 冒烟 ~20s（r67 是唯一复制 run_all 的套件）
+bash .../run_all.sh --representative --repro green            # 预收口 ~3min
+bash .../run_all.sh --full --repro green                      # T2 收口，一次
+```
 
 ---
 

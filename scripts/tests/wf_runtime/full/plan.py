@@ -22,6 +22,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SUITES_JSON = os.path.join(HERE, "suites.json")
 GROUPS_JSON = os.path.join(HERE, "repro", "groups.json")
 DEFAULT_FIX = "/tmp/wf-fixtures/rerun"
+DEFAULT_JOBS = 4          # 套件层默认并行数（实测 8 套件 68s → 29s）
+DEFAULT_REPRO_JOBS = 4    # repro 用例层默认并行数（实测结果与 jobs=1 逐项一致）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
 TEST_RELEASE_FALLBACK = "0.1.0"
 REPRO_MODES = ("green", "red", "both", "none", "auto")
@@ -86,7 +88,8 @@ def parse_args(argv):
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--subset", action="store_true")
     parser.add_argument("--representative", action="store_true")
-    parser.add_argument("--parallel", action="store_true")
+    parser.add_argument("--parallel", action="store_true", help="显式并行（现在是默认）")
+    parser.add_argument("--serial", action="store_true", help="套件层串行（确定性/排障）")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-build", action="store_true")
@@ -262,11 +265,12 @@ def plan(argv=None, env=None):
             repro_groups = []      # full/subset 默认跑全部用例（不给组过滤）
 
     # ---- 并行 -------------------------------------------------------------
-    if args.parallel:
-        jobs = int(env.get("WF_JOBS") or 4)
+    # 默认并行（省墙钟）；`--serial` 或 `WF_JOBS=1` 退回串行（确定性/排障）。
+    if args.serial:
+        jobs = 1
     else:
-        jobs = int(env.get("WF_JOBS") or 1)
-    repro_jobs = int(env.get("WF_REPRO_JOBS") or 1)
+        jobs = int(env.get("WF_JOBS") or DEFAULT_JOBS)
+    repro_jobs = int(env.get("WF_REPRO_JOBS") or DEFAULT_REPRO_JOBS)
     if jobs < 1 or repro_jobs < 1:
         raise PlanError("WF_JOBS / WF_REPRO_JOBS 必须是正整数")
 
@@ -368,7 +372,8 @@ USAGE = """run_all.sh 执行计划（plan.py）
   --fixture-deploy dev|candidate         candidate 需同时给 --release-root/--release-ref/--release-version
   --list | --dry-run                     只输出计划，不执行
   --no-build                             不重建测试发行（必须已有新鲜 meta）
-  --parallel                             套件层并行（默认串行，WF_JOBS 可覆盖）
+  --parallel | --serial                  套件层并行（默认 4）/ 串行（确定性、排障）
+                                         WF_JOBS 覆盖并发数；WF_REPRO_JOBS 覆盖 repro 并发数
   --format sh|json
 """
 

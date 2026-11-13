@@ -156,6 +156,30 @@ class FixtureDeployTest(unittest.TestCase):
             plan.plan(["--full"] + self.candidate_args(), make())
 
 
+class ParallelismTest(unittest.TestCase):
+    """默认并行（省墙钟），`--serial`/`WF_JOBS=1` 是确定性退路。"""
+
+    def test_default_is_parallel(self):
+        result = plan.plan([], make())
+        self.assertEqual(result["jobs"], plan.DEFAULT_JOBS)
+        self.assertEqual(result["repro_jobs"], plan.DEFAULT_REPRO_JOBS)
+        self.assertEqual(result["parallel"], 1)
+
+    def test_serial_flag_forces_one_worker(self):
+        result = plan.plan(["--serial"], make(WF_JOBS="8"))
+        self.assertEqual(result["jobs"], 1)
+        self.assertEqual(result["parallel"], 0)
+
+    def test_wf_jobs_overrides_default(self):
+        result = plan.plan([], make(WF_JOBS="2", WF_REPRO_JOBS="3"))
+        self.assertEqual(result["jobs"], 2)
+        self.assertEqual(result["repro_jobs"], 3)
+
+    def test_non_positive_jobs_is_refused(self):
+        with self.assertRaises(plan.PlanError):
+            plan.plan([], make(WF_JOBS="0"))
+
+
 class PlanShellOutputTest(unittest.TestCase):
     def test_sh_output_is_evalable_and_matches_json(self):
         import json

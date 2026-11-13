@@ -16,9 +16,11 @@
 #   bash run_all.sh --representative --fixture-deploy candidate \
 #     --release-root ~/.cache/wf-candidate-repo/0.1.2 \
 #     --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2
+#   bash run_all.sh --serial                                # 套件层串行（确定性/排障）
 #   bash run_all.sh --list | --dry-run                      # 只输出计划
 #
-# 环境：WF_JOBS（套件层并行，默认 1）、WF_REPRO_JOBS（用例层并行，默认 1）、
+# 环境：WF_JOBS（套件层并行，默认 4；--serial 或 WF_JOBS=1 退回串行）、
+#       WF_REPRO_JOBS（repro 用例层并行，默认 4）、
 #       WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_FIX、WF_NO_RUN=1（计划后即退出）
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -466,6 +468,7 @@ WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
 WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
 WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
 WF_SUMMARY_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
+WF_SUMMARY_JOBS="$PLAN_JOBS" WF_SUMMARY_REPRO_JOBS="$PLAN_REPRO_JOBS" \
 "$PY" - <<'PY'
 import json, os
 groups = (os.environ.get("WF_SUMMARY_REPRO_GROUPS") or "").split()
@@ -480,6 +483,10 @@ payload = {
     "units_total": int(os.environ.get("WF_SUMMARY_UNITS") or 0),
     "repro_mode": os.environ.get("WF_SUMMARY_REPRO_MODE"),
     "repro_groups": groups,
+    "jobs": int(os.environ.get("WF_SUMMARY_JOBS") or 0),
+    "repro_jobs": int(os.environ.get("WF_SUMMARY_REPRO_JOBS") or 0),
+    # init/suite 是各套件累计（并行下总和可大于 total_seconds），totals 才是墙钟
+    "timing_note": "init_seconds/suite_seconds 为跨套件累计；total_seconds 为墙钟",
     "fail": int(os.environ.get("WF_SUMMARY_FAIL") or 0),
     "legacy_debt": int(os.environ.get("WF_SUMMARY_DEBT") or 0),
     "build_seconds": int(os.environ.get("WF_SUMMARY_BUILD") or 0),
