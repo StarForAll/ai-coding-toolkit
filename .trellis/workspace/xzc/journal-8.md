@@ -1071,3 +1071,40 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 407: wf 测试运行器可靠性与性能优化收尾
+<!-- trellis-session: v=2 fp=ee3e96fe46a7f80f -->
+
+**Date**: 2026-11-13
+**Task**: wf 测试运行器可靠性与性能优化收尾
+**Branch**: `main`
+
+### Summary
+
+统一执行、证据和夹具边界；r68/r71中位耗时减少52%，full减少14%；全部验收通过，任务归档。
+
+### Main Changes
+
+完成 wf 测试运行器可靠性与耗时优化，并经用户确认完成工作提交、归档和会话记录。
+
+- 公共执行器统一超时、中断、子孙进程清理、日志和结果解释；夹具所有权与全局/worker 租约统一控制重建与隔离。
+- repro schema 2 分别绑定 green/red 的输入摘要；完整源树变化、helper 变化或旧状态不能误用 red 证据。
+- r68/r71 原 36 条断言逐项映射：27 条保留集成，9 条字段变体迁入单元；修复会话 ID 碰撞、p5_v1 假绿和全局 Git 忽略规则依赖。
+- 三轮合计中位耗时从 48s 降至 22.94s（约 -52%）；最终 full green 149 项、174.99s，相对历史 204s 约 -14%；串行 149 项、272.71s，逐项对拍一致。
+- 最终验证：843 单元（10 项慢测显式跳过）、19 慢契约、review both 12/12、candidate 0.1.2 代表闭环 6/6；发行字节复现、设计/文档/技能检查通过。
+- 产品发行树和产品源码未变；提交仅含本任务 35 个文件。未推送、未开 PR。
+- 工作提交：6b64dfd52d35b759af09911b3168429c6d0d8363；归档提交：da8cd278。
+- 归档：.trellis/tasks/archive/2026-11/11-13-wf-test-runner-reliability-performance/；完整证据见 validation.md，覆盖迁移见 assertion-map.md。
+- 归档命令已完成状态与目录迁移；其自动提交因原目录从未跟踪而遇到 pathspec 错误。核对仅 8 个归档文件后按已批准批次精确提交，工作区恢复干净，未修改 Trellis 运行时。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6b64dfd52d35b759af09911b3168429c6d0d8363` | fix(test): 统一 wf 运行器执行边界并压缩慢套件回归 |
+
+### Status
+
+[OK] **Completed**

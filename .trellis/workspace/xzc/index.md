@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 406
+- **Total Sessions**: 407
 - **Last Active**: 2026-11-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1073 | Active |
+| `journal-8.md` | ~1110 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 407 | 2026-11-13 | wf 测试运行器可靠性与性能优化收尾 | `6b64dfd52d35b759af09911b3168429c6d0d8363` | `main` |
 | 406 | 2026-11-13 | wf 测试体系 Phase 1：运行器与候选发行闭环 | `fc7598d8` | `main` |
 | 405 | 2026-11-13 | wf 审查判定：主会话复核与旧口径清理 | `da1d9605` | `main` |
 | 404 | 2026-11-13 | wf 控制流两份分析报告核验与结构性修正 | `965a7439`, `32ae4866`, `258e772d` | `main` |
