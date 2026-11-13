@@ -6,7 +6,7 @@ disable-model-invocation: false
 
 # wf-review-action
 
-主会话（持有写权者）在 `review-import` 之后使用。它汇总报告、准备处置，不改源码。
+主会话（持有写权者）在 `review-import` 之后使用。它汇总报告、准备处置；本轮之后的**范围内修复仍由本会话完成**——reviewer 不修代码，写处置记录也不等于修好。
 
 ## 步骤（**不需要任何路径或轮次参数**）
 
@@ -65,6 +65,21 @@ disable-model-invocation: false
 | 随**修好 + 重查之后的新一轮** `review-decide` 捎带 | 「已修复」 | 内容必然已变，必须在新锚点下判 |
 
 > 人数与异种由**报告文件名**判定（`review-<agent>.md`）；两个报告同名即视为同一 CLI，会被拒。
+
+## fail 之后：谁修、怎么算收敛
+
+`review-decide` 判 fail 不是终点，也不是"把建议登记完"就结束。收敛由本会话按下面三步完成：
+
+1. 在**当前批准触碰面内**修（要碰面外路径就先回 Plan 扩范围）；
+2. 重跑 `task-check`（旧 Check 与旧锚点一律失效，不能沿用旧 pass）；
+3. 用 `review-launch` 发下一轮，在新锚点上重新判。
+
+- 轮次不设上限；"这轮算过"的唯一依据是 `review-decide` 的 pass 加上既有 disposition 关闭事实，
+  不是"报告读完了"或"建议都登记了"。
+- 本轮有**未覆盖轴**时 `review-decide` 输出需人裁决（`WF_SEMANTIC_DECISION`）：补齐后重发一轮，
+  或由人写接受文件（`by/at/quote/source` + `round` + `axes`）后用 `--gap-acceptance` 重判；
+  缺口既不判 fail，也不等于审查通过。
+- 关闭证据与处置类型见 `wf-repair-loop`「这条 blocking 真的修了吗」；定位与写权事实见 `wf-continue`。
 
 ## 判定边界
 

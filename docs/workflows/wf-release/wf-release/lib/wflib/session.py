@@ -85,8 +85,13 @@ def runtime_path(root, key: str):
     return join(root, f".wf/.runtime/sessions/{key}.json")
 
 
-def write_runtime(root, key: str, payload: dict):
-    """可丢弃定位缓存；写失败只降级可见。"""
+def _replace_runtime(root, key: str, payload: dict):
+    """整份写侧车（**只由 `update_runtime` 调用**，不对外）。
+
+    侧车同时承载"对象定位/游标"与"本次取得写权时的代次"两个生产者；任何调用点直接整份写
+    都会把另一个生产者的字段抹掉（dogfood 实录：`run advance` 之后代次消失，下一步写操作被
+    要求人工补协议）。因此对外只暴露合并写入口，整份替换下沉为内部实现。
+    """
     try:
         records.write_json(runtime_path(root, key), payload)
         return True
@@ -105,12 +110,13 @@ def load_runtime(root, key: str):
 def update_runtime(root, key: str, **fields):
     """**合并写**本会话侧车：游标与写权代次共用同一条记录，写者不得互相覆盖。
 
+    这是侧车的唯一公开写入 API；调用点只提交自己要更新的字段，不构造整份记录。
     写失败按机制稿只降级可见（返回 None），不阻断读取或写入判定。
     """
     current = load_runtime(root, key)
     payload = dict(current) if isinstance(current, dict) else {}
     payload.update(fields)
-    return payload if write_runtime(root, key, payload) else None
+    return payload if _replace_runtime(root, key, payload) else None
 
 
 def new_instance_id() -> str:

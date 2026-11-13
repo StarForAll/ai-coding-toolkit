@@ -19,6 +19,7 @@ disable-model-invocation: false
 | 已批准，未开工 | `task-start --task <id>` |
 | in_progress/execute | 在批准触碰面内实施；读规则用 `spec --file <path>`；需要时 `task-curate` |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
+| 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：属本任务用 `task-attribute` 裁决归属；人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。排除按记录时的内容摘要绑定，内容一变就失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），再请人核对结果后由人调用 `wf-finish` |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
@@ -88,7 +89,7 @@ disable-model-invocation: false
 
 ## 复杂任务审查
 
-Check pass 后：`review-launch --task <id> --launch-request <path>` → 人按回显文本在 reviewer CLI 里调用 `wf-review`
+Check pass 后：`review-launch --task <id> --implementation-cli <cli>`（请求文件可选，入口按当前对象生成） → 人按回显文本在 reviewer CLI 里调用 `wf-review`
 → `review-import`（每个槽位一次） → `review-decide`。
 
 

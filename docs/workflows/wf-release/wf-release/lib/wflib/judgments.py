@@ -33,7 +33,9 @@ def skeleton(ctx, task):
         classified = scope_mod.classify_candidates(
             ctx.root, task, receipts=tasks_mod.task_receipts(ctx.root))
         owned = list(classified["buckets"]["e"])
-        excluded = list(classified["buckets"]["c"]) + list(classified["buckets"]["d"])
+        # x：人已确认"不属于本任务、保持原样"的外来改动（摘要绑定，内容变化即回 c）
+        excluded = (list(classified["buckets"]["c"]) + list(classified["buckets"]["d"])
+                    + list(classified["buckets"].get("x") or []))
     except Exception:  # 分类失败不放大为阻断：骨架如实标"不可用"，不猜
         owned, excluded = [], []
         classified = {"unavailable": True}

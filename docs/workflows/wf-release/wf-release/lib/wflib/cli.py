@@ -1213,16 +1213,14 @@ def _resume_bind(ctx, key, session, object_ref, target, kind, record):
         }
         session_mod.save_binding(ctx.root, key, binding)
         _sync_attachment_instance(ctx, key, instance_id)   # §3.6：首次绑定写回附件
-    session_mod.write_runtime(
+    session_mod.update_runtime(
         ctx.root,
         key,
-        {
-            "binding_digest": records.plain_digest(binding),
-            "instance_id": binding.get("instance_id"),
-            "object": object_ref,
-            "current_task": _runtime_current_task(ctx, kind, target),
-            "cursor": None,
-        },
+        binding_digest=records.plain_digest(binding),
+        instance_id=binding.get("instance_id"),
+        object=object_ref,
+        current_task=_runtime_current_task(ctx, kind, target),
+        cursor=None,
     )
     assertion = _control_assertion(ctx, "session.bind", _owner_ref(holder), action,
                                    [f".wf/session-bindings/{key}.json"])
@@ -1346,16 +1344,14 @@ def cmd_bind(ctx, args, kind="task"):
         def _write_binding(_current):
             # 意图（session.bind 动作）已先写进 writer 主记录，这里才做跨记录写入
             session_mod.save_binding(ctx.root, key, binding)
-            session_mod.write_runtime(
+            session_mod.update_runtime(
                 ctx.root,
                 key,
-                {
-                    "binding_digest": records.plain_digest(binding),
-                    "instance_id": instance_id,
-                    "object": object_ref,
-                    "current_task": _runtime_current_task(ctx, kind, target),
-                    "cursor": None,
-                },
+                binding_digest=records.plain_digest(binding),
+                instance_id=instance_id,
+                object=object_ref,
+                current_task=_runtime_current_task(ctx, kind, target),
+                cursor=None,
             )
             return f".wf/session-bindings/{key}.json"
 
@@ -2034,11 +2030,10 @@ def _review_command(kind):
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
         if kind == "launch":
-            request = args.value("--launch-request")
-            if not request:
-                raise CliError("WF_PATH_INVALID", {"reason": "review-launch requires --launch-request <path>"})
+            # `--launch-request` 可选：三类材料/只读范围/排除面由入口按当前对象生成；
+            # 给了就作为覆盖/补充（例如人工缩小材料面）。
             try:
-                return review_mod.launch(ctx, task, request,
+                return review_mod.launch(ctx, task, args.value("--launch-request"),
                                          implementation_cli=args.value("--implementation-cli"))
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
@@ -2063,7 +2058,8 @@ def _review_command(kind):
         try:
             return review_mod.decide(ctx, task, int(round_no) if round_no else None,
                                      args.value("--plan"), args.value("--unavailable"),
-                                     register_only=args.flag("--register-only"))
+                                     register_only=args.flag("--register-only"),
+                                     gap_acceptance_path=args.value("--gap-acceptance"))
         except review_mod.ReviewError as exc:
             raise CliError(exc.code, exc.facts)
 
@@ -2112,12 +2108,14 @@ COMMAND_HELP = {
                           "plan": {"complexity": "complex", "tdd": False}}],
     },
     "task-start": {"purpose": "开工（需要已批准规划与写权）",
-                   "args": {"--task": "任务 id（必填）"},
+                   "args": {"--task": "任务 id（必填）",
+                            "--workspace-exclusion": "可选：人确认的外来改动排除声明（paths + by/at/quote/source）"},
                    "example": "wf.py task-start --task <id> --json"},
     "task-check": {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
         "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论（复杂任务必填）",
-                 "--decision": "可选：人工验收决定"},
+                 "--decision": "可选：人工验收决定",
+                 "--workspace-exclusion": "可选：外来改动排除声明（摘要变化即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
                                       "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}}},
         "example": "wf.py task-check --task <id> --review-notes notes.json --json",
@@ -2154,13 +2152,14 @@ COMMAND_HELP = {
                                                "content": "add/update 时的完整正文（含 frontmatter）"}},
                     "example": "wf.py spec-update --task <id> --changes changes.json --json"},
     "review-launch": {"purpose": "发起一轮审查（默认要两份；实施 CLI 由 --implementation-cli 声明）",
-                      "args": {"--task": "任务 id（必填）", "--launch-request": "请求 JSON（必填）",
-                               "--implementation-cli": "本次实施所用 CLI（必填，异种审查的判定输入）"},
-                      "inputs": {"--launch-request": {"export_decision": "外发授权决定（必填）",
-                                                      "submitted_scope": "{diff,requirement,test_results} 三个布尔（必填）",
-                                                      "reviewers": "可选：要几份审查（默认 2）"}},
-                      "example": "wf.py review-launch --task <id> --launch-request launch.json "
-                                 "--implementation-cli codex --json"},
+                      "args": {"--task": "任务 id（必填）",
+                               "--implementation-cli": "本次实施所用 CLI（必填，异种审查的判定输入）",
+                               "--launch-request": "可选：覆盖/补充入口自动生成的请求"},
+                      "inputs": {"--launch-request": {
+                          "export_decision": "可选：留痕标签；权威是已入库的外发确认（task + materials）",
+                          "submitted_scope": "可选：入口默认生成 {diff,requirement,test_results}",
+                          "reviewers": "可选：要几份审查（默认 2）"}},
+                      "example": "wf.py review-launch --task <id> --implementation-cli codex --json"},
     "review-context": {"purpose": "reviewer 侧唯一入口：占位 + 物化材料 + 给出报告路径",
                        "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省＝当前轮）",
                                 "--reset": "清掉本 agent 本轮的占位/报告"},
@@ -2217,8 +2216,10 @@ COMMAND_HELP = {
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
                                "--plan": "逐条 finding 处置", "--unavailable": "不可用声明（与 --plan 互斥）",
                                "--register-only": "只登记复核关闭：不产生结论、不校验人数/异种"
-                                                  "（仍需 --plan；关闭的硬条件照旧）"},
-                      "example": "wf.py review-decide --task <id> --json"},
+                                                  "（仍需 --plan；关闭的硬条件照旧）",
+                               "--gap-acceptance": "人接受覆盖缺口的确认文件"
+                                                   "（by/at/quote/source + round + axes）"},
+                      "example": "wf.py review-decide --task <id> --gap-acceptance gap.json --json"},
 }
 
 
@@ -2351,6 +2352,20 @@ def cmd_authorize(ctx, args):
                                 "action": action, "problems": _problems,
                                 "exits": ["在决定文件里补 by: human:<来源> 与 source: user-declared",
                                           "由人重写该决定文件（AI 不得代写）"]})
+            if action == "export":
+                # 外发授权必须绑定"本次范围"：任务 + 材料类集合。任务缺省取本次记录所在任务，
+                # 材料类必须显式——否则旧授权会被复用给新增材料。
+                entry = dict(entry)
+                entry.setdefault("task", task_id)
+                _scope_problems = authorize_mod.export_decision_problems(entry)
+                if _scope_problems:
+                    raise CliError("WF_SEMANTIC_DECISION",
+                                   {"reason": "外发确认必须写明任务与材料类集合",
+                                    "action": action, "problems": _scope_problems,
+                                    "known_materials": list(authorize_mod.EXPORT_MATERIALS),
+                                    "exits": ["在决定文件里补 task 与 materials"
+                                              "（例如 [\"diff\",\"requirement\",\"test_results\"]）后重跑",
+                                              "由人重写该决定文件（AI 不得代写）"]})
             info = authorize_mod.record_authorization(
                 directory, action, entry,
                 raw_copy_dir=join(ctx.root, ".wf/.runtime/decisions"))
@@ -2752,12 +2767,19 @@ def cmd_review_status(ctx, args):
     # A9：无法归属到精确身份的历史处置**不关闭**任何 finding，在这里单列待人裁
     facts["pending_dispositions"] = review_mod.open_findings(ctx, task)["ambiguous"]
     # B1：status 只报材料与资格，不承诺判定资格（结论只能由 review-decide 产生）
+    coverage = facts.get("coverage") or {}
+    uncovered = list(coverage.get("uncovered") or [])
+    accepted = set(coverage.get("accepted") or [])
     if not facts["material_ready"]:
         next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
                  "等 reviewer 产出后 review-import")
     elif facts["eligibility"]["problems"]:
         next_ = ("材料已齐，但判定资格不足："
                  + "；".join(item["reason"] for item in facts["eligibility"]["problems"]))
+    elif uncovered and not set(uncovered) <= accepted:
+        missing = sorted(set(uncovered) - accepted)
+        next_ = (f"材料已齐，但本轮有未覆盖轴（{', '.join(missing)}）："
+                 "补齐后重发一轮，或由人确认接受缺口后用 review-decide --gap-acceptance 重判")
     else:
         next_ = "材料已齐、资格检查通过：下一步 review-decide（结论以判定为准）"
     return codes.result(
