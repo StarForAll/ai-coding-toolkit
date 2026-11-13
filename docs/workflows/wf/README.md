@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | 首发候选 `0.1.0`；正式发布前保持 `0.x.y` |
+| 目标版本 | 首发候选 `0.1.1`（`0.1.0` 已由 tag 固定，本轮按 §7.2 递增）；正式发布前保持 `0.x.y` |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与

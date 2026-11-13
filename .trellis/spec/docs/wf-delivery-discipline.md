@@ -166,3 +166,39 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 - 文档与实现的忽略集合冲突时，以发行清单 `gitignore_managed` 为唯一枚举，安装器缺该字段即拒绝。
 - 新增断言必须做过回退注入验证：临时改回旧实现时用例变红，恢复后字节一致
   （本轮对 R1/R2/R3/R5 各做了一次，见任务 `implement.md` 的收口自检）。
+
+---
+
+## 10. 审查输入面、外发授权与夹具的联动（2026-11-13）
+
+**Trigger**：改动 `review.report_input_problems` / `drop`-allowlist 脱敏 / `review-launch` 的
+材料与范围校验 / `check.anchor_parts` / 验证日志落盘 / 任何"新增判定字段或决策域"时。
+
+**Contract**：
+
+| 判据 | 唯一实现 | 同批必须核 |
+|---|---|---|
+| 报告输入面（状态头/必需字段/读取与排除范围/轴与 verdict） | `review.report_input_problems` | `lint`、导入、判定三处调用同一实现；`test_report_input_single_source.py` 断言同名 check 三处一致 |
+| 未覆盖轴与缺口接受 | `review.coverage_state` + `review.gap_acceptance` | 全未覆盖=输入不成立；部分未覆盖须人接受（`--gap-acceptance`）；`test_review_coverage.py` |
+| 外发确认范围 | `authorize.export_scope`（`scope_digest` = task + materials） | 旧确认无 `scope_digest` 一律要求补录；夹具里的 export 决定必须带 `task` + `materials` |
+| 脱敏入库 | `authorize.redact`（保留白名单） | 未知字段/嵌套结构一律丢弃；`quote` 只留遮罩摘要 |
+| 材料差异源 | `review.materialize_delivery(base=task.baseline_head)` | 已提交的中途改动必须出现在 `diff.patch`；基线不可达要如实报 |
+| 验证日志 | `check._log_payload`（头 64 KiB + 尾 192 KiB） | 截断必须可见；记录只留 summary+digest |
+| 实例定义快照 | `check.workflow_snapshot_digest` | 实例任务缺快照报 `WF_RECORD_INVALID`，不折 null |
+
+**夹具联动（本次实测）**：把外发确认加成"task + materials"、把报告加首行 `status=done` 之后，
+`full/run_all.sh` 从 12 项失败回到 149 项全过。原因是 **12 个失败全部来自夹具没有跟上接口**，
+不是实现回归。**Rule**：改输入面/外发守卫的同一批，先跑
+`WF_SUITES="<受影响的套件>" bash scripts/tests/wf_runtime/full/run_all.sh` 与
+`bash scripts/tests/wf_runtime/full/repro/run.sh --no-build`，再跑全量；
+`run_all.sh` 会用 `--version 0.1.0` 重建发行树，收尾必须再按当前版本重建一次（否则发行树版本回退）。
+
+**新增字段/域的登记实例（照此四件套）**：`workspace_exclusion` 决策域 →
+`execution.workspace_exclusions` 字段 → 机制稿 §1.1/§1.3/§3.5 登记 + 实现稿 §2.3 域表 →
+`test_workspace_exclusion.py`（含幂等与失效两负例）。
+
+**复审补充（2026-11-13）**：改入口参数或新增判定事实时，同批核四件**自述面**，缺一件即算遗留——
+`COMMAND_HELP`（`wf help` 是唯一自述来源，必填/可选必须与实现一致）、`status`/`review-status` 的事实投影
+（新事实必须在状态页可见，否则 AI 拿到需人裁决档却不知道怎么走）、任务记录模板（机制稿写"初值空数组"
+就必须在 `new_task_record` 里真的建这个键）、脱敏规则（中文凭据词 `口令/密码/密钥/令牌/私钥` 也属遮罩范围；
+人写的 quote 只入遮罩摘要 + digest，不入原文）。

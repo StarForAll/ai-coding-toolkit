@@ -2,6 +2,8 @@
 
 # 新项目开发工作流 · 流程变体（wf）
 
+> **状态：历史。** 本文件描述已退役的 Trellis 内嵌 wf 模块，只作历史证据保留：不投放、不维护，其内部「唯一权威」声明不延伸到独立框架。独立框架的正文见 `docs/workflows/wf-framework-design.md`。
+
 > 本文件是**流程变体的正文**，投放位置为 `.trellis/workflows/wf.md`。
 > 当前落点是位置交接（实现方案 §2.1）之前的暂存点：交接完成后由 `wf render` 渲染到模块源的
 > `templates/wf.md.tmpl`，再由 `wf install` 投放到目标项目。

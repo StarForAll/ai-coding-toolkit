@@ -248,11 +248,11 @@ docs/workflows/wf/
 | `stop` | `--decision <path> [--preview]`（`--preview` 只读预览逐路径归属，不写任何记录；2026-11-07 增补）（数组：收工选择一条 commit/keep/reverse/transfer + 提交/反向修正授权若干条；subject 列覆盖路径或承接对象）（信封） | `session.stop` + `task.pause` | 日常收工（设计稿 §4.4） | 机制稿 §4.3（同对象 WIP）、机制稿 §4.4 | 1 |
 | `task-new` | `--kind ordinary\|initialize\|bootstrap --title <t> --template <path>`（信封） | `writer.acquire` + `session.bind` + `task.create`（**单一父 action**，主记录 writer） | 创建规划 + 首次绑定 | 机制稿 §3.1、机制稿 §5.2 目录防撞 | 1 |
 | `task-approve` | `--task <id> --decision <path>` | `task.transition` | 批准规划（含复杂度/TDD/plan-q 答复） | 机制稿 §2.3 提取、机制稿 §3.4 条件① | 1 |
-| `task-start` | `--task <id>` | `task.transition` | 首次开工 / 再入 Execute（写 `entry_snapshot`） | 机制稿 §3.1、§3.3 | 1 |
+| `task-start` | `--task <id> [--workspace-exclusion <path>]` | `task.transition` | 首次开工 / 再入 Execute（写 `entry_snapshot`） | 机制稿 §3.1、§3.3 | 1 |
 | `task-replan` | `--task <id> --decision <文件>` | `task.transition` | 实质规划变更（回 Plan；原批准/检查留历史但当前无效，`status` 不回未开工） | — | 1 |
 | `task-pause` / `task-resume` | `--task <id> [--reason]` | `task.pause` / `task.transition` | 暂停 / 恢复 | 机制稿 §4.4 | 1 |
 | `task-curate` | `--task <id> --spec <path> --purpose <text>` | `task.curate` | 策展写入 | 机制稿 §3.1 | 1 |
-| `task-check` | `--task <id> [--decision <path>] [--review-notes <path>]` | `task.check` | Check（固定五步，机制稿 §3.2）；并写 `task.work-satisfied` 的 completed 回执 | 机制稿 §3.5 范围核对 | 1 |
+| `task-check` | `--task <id> [--decision <path>] [--review-notes <path>] [--workspace-exclusion <path>]` | `task.check` | Check（固定五步，机制稿 §3.2）；并写 `task.work-satisfied` 的 completed 回执 | 机制稿 §3.5 范围核对 | 1 |
 | `task-knowledge` | `--task <id> --decision no-update\|updated`（`updated` 的具体操作由 `changes` 按机制稿 §8.4 的 `{operation, …}` 记录） | `task.knowledge-dispose` | 知识处置留痕 | 机制稿 §3.1 | 1 |
 | `task-retrospect` | `--task <id> --evidence <path> [--decision <path>]` | `task.retrospect` | 复盘记录（人要求或触发后执行） | — | 1 |
 | `task-attribute` | `--task <id> --commit <oid>` | `task.attribute` | 归属裁决 | 机制稿 §3.3 | 1 |
@@ -260,10 +260,10 @@ docs/workflows/wf/
 | `task-rework` / `task-replace` | `--task <id> --decision <path>` | `task.rework` / `task.replace` | 返工/替换 | 机制稿 §6.2、§6.3 | 2（2026-11-12 已交付） |
 | `task-abandon` | `--task <id> --decision <path> [--disposition <path>]`（承载与记录映射见本节「结构化人工输入」） | `task.abandon` | 单任务放弃（异常归档） | 机制稿 §6.4 | 1 |
 | `task-reassess` | `--task <id>` | `task.reassess` | 挂起复评 | 机制稿 §6.2 | 2（2026-11-12 已交付） |
-| `review-launch` | `--task <id> --launch-request <path>`（结构化声明，骨架见本节末） | `review.launch` | 审查发起；round/attempt/anchor/temp_paths 由入口生成并回显 | 机制稿 §3.5 前置 | 1 |
+| `review-launch` | `--task <id> --implementation-cli <cli> [--launch-request <path>]`（请求缺省由入口生成，给了就按它校验） | `review.launch` | 审查发起；round/attempt/anchor/temp_paths 由入口生成并回显 | 机制稿 §3.5 前置 | 1 |
 | `review-context` | `--task <id> [--round <n>] [--reset]`（reviewer 侧唯一入口；身份取本会话宿主，占位即闸门） | 无（只写暂存目录与材料） | 取材料/锚点/报告路径并占位 | 机制稿 §9.2（2026-11-07 修订） | 1 |
 | `review-import` | `--task <id> [--round <n>] [--slot <agent>] [--report <绝对路径>]`（后三项可省：按文件名发现） | `review.import` | 导入与锚点核对（机制稿 §9.2） | 机制稿 §3.2 锚点 | 1 |
-| `review-decide` | `--task <id> [--round <n>] [--plan <path>] [--unavailable <path>]`（轮次缺省＝当前轮）（`--plan` 为逐条 finding 处置，元素 `{finding, decision_ref, reason}`；`--unavailable` 为人声明的审查环境不足及证据） | `review.decide` | 审查判定（**由入口按机制稿 §9.2 的事实推导**，不是人选）与逐条处置 | — | 1 |
+| `review-decide` | `--task <id> [--round <n>] [--plan <path>] [--unavailable <path>] [--gap-acceptance <path>]`（轮次缺省＝当前轮；`--gap-acceptance` 为覆盖缺口的人接受文件）（`--plan` 为逐条 finding 处置，元素 `{finding, decision_ref, reason}`；`--unavailable` 为人声明的审查环境不足及证据） | `review.decide` | 审查判定（**由入口按机制稿 §9.2 的事实推导**，不是人选）与逐条处置 | — | 1 |
 | `archive` | `--task <id> --decision <path>`（人调用 finish 的证据 + 提交授权 `commit_grants`） | `task.archive` | 正常归档（由 `wf-finish` 调用） | 机制稿 §3.5、机制稿 §9.3 门禁 | 1 |
 | `baseline-apply` | `--task <id> --proposal <path>` | `baseline.apply` | 基线/配置成组应用 | 机制稿 §3.4 | 1 |
 | `spec-update` | `--task <id> --changes <path>` | `spec.update` | 知识变更成组应用 | 机制稿 §3.1、§8.4 | 1 |
@@ -306,7 +306,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 **参数骨架（审查发起与实例）**
 
-- `review-launch --launch-request <path>` 的文件内容是机制稿 §9.1 的 `launches` 声明中**由人给出**的那部分；`round`（= `last_round+1`）/`attempt`/`anchor`/`temp_paths` 由入口生成并回显，命令不接受人传轮次：
+- `review-launch --task <id> --implementation-cli <cli>` 可省略请求文件：材料三类、只读范围与排除面由 `review.default_launch_request` 按当前对象生成。给了 `--launch-request <path>` 时，其文件内容是机制稿 §9.1 的 `launches` 声明中**由人给出**的那部分（覆盖/补充）；`round`（= `last_round+1`）/`attempt`/`anchor`/`temp_paths` 由入口生成并回显，命令不接受人传轮次：
 
 ```json
 {
@@ -461,6 +461,8 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **锁的存活探测**（已实现，含边界）（设计稿 §4.4 的三要素）：`lock.py` 在固定标记行之后追加 `holder pid=<pid> start=<进程启动时刻>`；`verify_holder(root)` 只读判定该进程是否仍在且启动时刻一致（pid 复用会被识破），不获取锁、不改文件。获取时刷新持锁者事实、释放时清除，避免陈旧 pid 被当成存活。**运行时与 `repair`/`uninstall` 都在锁内消费该判定**：登记的持有者仍存活即 `WF_WRITER_BUSY`，不因人在预览里点了确认就清空写权；人确认是补充出口而非替代。`repair`/`uninstall` 的锁与运行时同契约（见本文 §2.3.10）。
 - **`task-new` 的主记录与意图归属**（第七至十一轮；人裁 A 已落地并修完 4 条复审缺陷）：首次创建是 writer 上的单一 `task.create` 父动作——意图与写权同一次写入；`targets` 一次固定 writer/task/binding/runtime **以及 instance/template/title/task-kind**（不可变目标，重入只按这些值重建，不从当前请求取）；四个步骤由 `_run_creation_steps()` **逐步推进**，每步先核真实后置、缺什么补什么，再置 done；`_finish_writer_action` 结案前**重核每步真实后置**，手工标 done 不能代替产物；实例不符由 `_require_instance_match` 与意图内固定值双重拒绝。旧版本留在 `task.action` 的 `task.create` 遗留形态给 `WF_RECORD_INVALID` + repair 出口，不再输出无法执行的恢复指引。`bind`（绑定既有对象）仍用独立 `session.bind` 动作，因为那不是首次创建。
 - **外部变更的阻断**（P1-1 / D-01，已接线）：`scope.external_changes` 的结果进 `check.scope_facts`，**触及本任务批准触碰面的未归属提交**在 Check 时必须有「已核对无影响」的人判（按提交 OID 精确匹配，或用 subject 含 `external-changes` 的整体声明）才放行，否则 `WF_SEMANTIC_DECISION` 并给四条出口（逐条核对、用 `task-attribute` 裁决归属、回 Plan、重检）。未触及触碰面的外部提交只记事实、不阻断。登记时的顾虑——夹具/人手提交无 trailer 会被一律判死——用「人判承载」解决，而不是放弃判定。
+- **外来未提交改动的排除与审查覆盖判定（2026-11-12，dogfood 报告 A4/B1、A3）**：外部变更核对的既有出口只覆盖**已提交**变更；未提交外来改动现在可经 `--workspace-exclusion` 声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`）落成 `task.execution.workspace_exclusions`（路径 + exists + 内容摘要），分类时摘要仍匹配者进 x 档（不进交付/指纹/材料/提交面），内容一变即回 c 档。审查侧：`review.report_input_problems` 是状态头/字段/读取与排除范围/轴与 verdict 的唯一校验实现，`lint`/导入/判定共用；`uncovered` 轴不再推导 pass——全部轴未覆盖按输入不成立拒绝，部分未覆盖须人接受（`review-decide --gap-acceptance`，带 round + axes + 乙口径确认）后才产生判定。用例：`test_workspace_exclusion.py`、`test_report_input_single_source.py`、`test_review_coverage.py`。
+- **材料、日志、锚点与发起（2026-11-12）**：`materialize_delivery` 的差异源改为任务基线（`baseline_head`），基线不可用如实退 HEAD；验证日志保存完整遮罩输出（头 64 KiB + 尾 192 KiB，截断可见），记录增 `log_digest`/`log_bytes`/`log_truncated`；`workflow_snapshot_digest` 对实例任务取 `H("wf-workflow-snapshot-v1", C({run, definition_digest, snapshot_digest}))`，缺快照报 `WF_RECORD_INVALID`；`review-launch` 在无 `--launch-request` 时由 `default_launch_request` 生成三类材料/只读范围/排除面；外发确认按 `scope_digest`（task + materials）绑定，脱敏改保留白名单（未知字段与嵌套结构一律丢弃）。用例：`test_material_baseline.py`、`test_verification_log.py`、`test_anchor_workflow_snapshot.py`、`test_launch_mechanized.py`、`test_export_scope.py`、`test_redaction_allowlist.py`、`test_runtime_merge.py`。
 - **Finish 期的规范变更通路**（P1-2 / N52-02，已交付受控迁移）：`spec-update` 与 `baseline-apply` 都允许 `execute/check/finish`；在 finish 期应用后，`_reenter_check_from_finish()` 作为**父动作内部的一步**把 phase 置回 `check`，旧检查结果保留并追加 `invalidated={at, by, action_id, reason}`，门禁侧见到该失效事实即 `WF_CHECK_STALE`；不伪造新的 Check 成功回执。
 - **`.wf/out-of-scope/` 知识拒绝项（2026-11-12 已交付，人裁 A 由第三轮提前到第二轮）**：机制稿 §8.4 定 schema，四项启用前置同批打勾——
   ① **写入者**：`spec-update --changes` 的 `add`（首建）与 `update`（重提追加）经 `spec.out_of_scope_problems()` 校验：frontmatter 三字段（`concept`/`reason`/`reconsider_when`）非空、文件名与 `concept` 一致、`## 既往请求` 段存在；`update` 还要求**既往内容逐行不变**（只增不改）且追加行形如 `- <YYYY-MM-DD> ｜ <摘要> ｜ <裁决引用>`。全部在整批校验段完成，任一不过即 `WF_SEMANTIC_DECISION` 且**零写入**。
@@ -599,7 +601,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **`stop` 的只读预览已交付（2026-11-06 关闭 第八轮复审条目）**：`stop --decision <f> --preview` 返回`facts.buckets`（逐路径归属分类）、`facts.uncommitted` 与「预览只读；本次未写入任何记录」，**不写任何记录**；人看过预览后再去掉 `--preview` 执行。用例：`repro/stop-preview-readonly.py`（注入=预览落到执行分支 → 记录被改写，判红）。仍未做：预览不预估「提交后会剩下什么」（需要 commit 预演），以及不覆盖 `task-abandon` 的预览（后者已有 `--disposition` 预览形态）。
 - **其余低优先观察（2026-11-05 第八轮复审，仅记录）**：①Check 锚点无条件纳入 baseline/project-config，失效面比契约宽（方向保守，表现为偶发 `CHECK_STALE`）；②`cmd_enable` 的托管块落点不分宿主，一律走 `WF_SEMANTIC_DECISION`，比设计稿 §3 的分级弱一档；③纯工作树删除的交付需先 `stop --choice commit` 才能过 Check（可达但绕）；④手动 `writer release` 对 paused+keep 任务要求先处置，比设计稿 §4.4 的字面更严（实际正确，未写明理由）；⑤`writer.blocking_receipts` 是运行期死代码（仅测试引用）；⑥`staging_root` 缺项目配置时退化为 `unknown-project` 前缀；⑦`_sync_index` 用子串匹配删除索引行，极端文件名可能误删相邻条目。
 - **若干一致性偏差（低，逐项给处置与出口）**：
-  ①**Decision 取值域统一登记（2026-11-12 已交付）**：原先 `Approval`/finish/external-checked/收工四值/提交授权/`debug-ruling`/验收结论七处各写字面量。现在唯一登记处是 `wflib/decisions.py::DOMAINS`（9 个操作：`plan_approval`/`mechanical_revision`/`replan`/`archive_finish`/`stop_choice`/`commit_grant`/`external_checked`/`debug_ruling`/`acceptance_conclusion`），调用点一律 `decisions.accepts/canonical`；**未登记的同义词被拒**（`WF_SEMANTIC_DECISION`），新增写法须回本节同批登记，不得在调用点就地放宽。机制稿 §1.1 仍只定 `Decision` 结构，取值域语义归本节。用例：`scripts/tests/wf_runtime/test_decision_domains.py`。
+  ①**Decision 取值域统一登记（2026-11-12 已交付）**：原先 `Approval`/finish/external-checked/收工四值/提交授权/`debug-ruling`/验收结论七处各写字面量。现在唯一登记处是 `wflib/decisions.py::DOMAINS`（10 个操作：`plan_approval`/`mechanical_revision`/`replan`/`archive_finish`/`stop_choice`/`commit_grant`/`external_checked`/`debug_ruling`/`acceptance_conclusion`/`workspace_exclusion`；后者只用于人对外来未提交改动的「保持原样」排除声明，路径 + 记录时内容摘要绑定，`task-start`/`task-check` 的 `--workspace-exclusion` 是唯一消费入口），调用点一律 `decisions.accepts/canonical`；**未登记的同义词被拒**（`WF_SEMANTIC_DECISION`），新增写法须回本节同批登记，不得在调用点就地放宽。机制稿 §1.1 仍只定 `Decision` 结构，取值域语义归本节。用例：`scripts/tests/wf_runtime/test_decision_domains.py`。
   ②**执行器确认元组比对 `python_version`（2026-11-06 已关闭）**：`executor_ready` 现在同时比对登记版本与探测版本，版本不符即 `WF_EXECUTOR_UNCONFIRMED`；用例 `repro/executor-version-change.py`（双模可证伪）。原出口「人工重跑 confirm-executor」保留为处置方式。
   ③**`project_key_approved` 覆盖归档区（2026-11-06 关闭；2026-11-12 语义级键值解析已交付）**：扫描范围扩为活动任务 + `.wf/tasks/archive/**`，归档任务的 PRD 只要其摘要仍等于批准摘要即作为证据；用例 `repro/project-key-archived-evidence.py`（双模可证伪）。**语义级解析**由 `bin/wf.py::declared_values(text, key)` 承担：逐行要求「键 + 分隔符 + 值」成对（`key = v` / `key: v` / `"key": "v"`），键前必须是分隔符或行首（避免 `my_python_executable` 误命中），值精确比对；不再用「键与取值各自出现」的文本包含。用例：`scripts/tests/wf_runtime/test_project_key_semantic.py`（含「键值分处两行」的缺陷形态）+ 既有两条 repro 双模仍绿。
   ④**`_apply_debug_inputs` 幂等键（2026-11-12 已交付）**：原先同一决定文件重入会重复累计 `counted`。现在 `_debug_idempotency_key()` 以结构化字段作键（声明＝`verification_id`+`counted`+排序后的 `evidence_refs`+`dedupe_refs`；裁定＝`subject`+`choice`+`evidence_refs`），同键即跳过，**不新增任何字段**；把同一事实换一句话重写仍会新增一条（那是第二次声明，须由 `dedupe_refs`/裁定处置）。用例：`scripts/tests/wf_runtime/test_debug_declaration_idempotent.py`。

@@ -20,7 +20,7 @@
 - `docs/workflows/workflow-design.md`：该模块的整体设计（判定与流转权威，仅限该模块）
 - `docs/workflows/依赖机制设计说明.md`：该模块的依赖机制细节
 - `docs/workflows/workflow-implementation.md`：该模块的实现方案（模块源、写入面与工程契约）
-- `docs/workflows/wf-variant.md`：流程变体正文（待迁入模块源模板）
+- `docs/workflows/wf-variant.md`：已退役内嵌模块的流程变体正文（历史证据，不投放、不维护）
 
 **模块源路径**
 
