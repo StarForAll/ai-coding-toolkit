@@ -194,11 +194,9 @@ json.dump(results, open("/tmp/r69_results.json", "w"), ensure_ascii=False, inden
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 
 # ---- 4. 卸载：确认期间内容变化必须使预览失效 ----
-import shutil
-
-UN = "/tmp/wf-fixtures/r69-uninstall"
-shutil.rmtree(UN, ignore_errors=True)
-os.makedirs(UN)
+UN = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "r69-uninstall")
+subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
+                "reset", UN], check=True)
 subprocess.run(["git", "init", "-q"], cwd=UN, capture_output=True)
 subprocess.run(["/softwares/python/bin/python3",
                 "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",

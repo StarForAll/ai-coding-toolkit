@@ -30,7 +30,7 @@ REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 GROUPS_JSON = os.path.join(HERE, "groups.json")
 HELPERS = ("_harness.py", "_release.py", "_review_flow.py", "_review_launch.py",
            "_snapshot.py", "_executor_set.py")
-STATE_SCHEMA = 1
+STATE_SCHEMA = 2
 
 
 class SelectError(Exception):
@@ -84,15 +84,41 @@ def script_digest(case):
     return file_digest(os.path.join(HERE, case + ".py"))
 
 
+def source_digest():
+    sys.path.insert(0, os.path.join(REPO, 'scripts'))
+    import wf_release_common
+    return wf_release_common.source_tree_digest()
+
+
 def targets_digest(case, meta):
     targets = (meta or {}).get("targets") or []
     if not targets:
         return None            # 未知目标：auto 按“需要 both”处理（安全默认）
     digest = hashlib.sha256()
     for relative in targets:
+        base = os.path.join(REPO, "docs", "workflows", "wf") if relative.startswith(("payload/", "skills/")) else REPO
+        value = file_digest(os.path.join(base, *relative.split("/")))
+        if value is None:
+            return None
         digest.update(relative.encode("utf-8"))
-        digest.update(str(file_digest(os.path.join(REPO, *relative.split("/")))).encode("ascii"))
+        digest.update(value.encode("ascii"))
     return "sha256:" + digest.hexdigest()
+
+
+def input_fingerprint(case, groups_doc=None):
+    """Bind phase evidence to the inputs that actually ran, independently per case."""
+    groups_doc = groups_doc or load_groups()
+    meta = (groups_doc.get("cases") or {}).get(case) or {}
+    script, targets = script_digest(case), targets_digest(case, meta)
+    if not script:
+        return None
+    inputs = {"schema": STATE_SCHEMA, "script": script, "targets": targets,
+              "source": source_digest(),
+              "helpers": helpers_digest(), "case_meta": meta,
+              "runner": {name: file_digest(os.path.join(HERE, name))
+                         for name in ("repro_select.py", "_worker.py", "run.sh")},
+              "executor": file_digest(os.path.join(HERE, "..", "execution.py"))}
+    return "sha256:" + hashlib.sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
 
 
 def candidate_clean(meta):
@@ -166,6 +192,7 @@ def select(group_names=(), only="", fixture_deploy="dev", mode="both", groups_do
         raise SelectError(f"未知模式：{mode}")
     return {
         "cases": chosen,
+        "fingerprints": {case: input_fingerprint(case, groups_doc) for case in chosen},
         "modes": modes,
         "skipped_non_candidate": skipped_non_candidate,
         "groups": list(group_names),
@@ -186,11 +213,18 @@ def read_state():
     try:
         with open(path, encoding="utf-8") as handle:
             state = json.load(handle)
-    except (OSError, ValueError):
-        return {"schema_version": STATE_SCHEMA, "helpers_digest": None, "cases": {}}
-    if not isinstance(state, dict) or state.get("schema_version") != STATE_SCHEMA:
-        return {"schema_version": STATE_SCHEMA, "helpers_digest": None, "cases": {}}
-    state.setdefault("cases", {})
+    except FileNotFoundError:
+        return {"schema_version": STATE_SCHEMA, "cases": {}}
+    except (OSError, ValueError) as exc:
+        raise SelectError(f"repro state is unreadable; refusing to replace it: {path}") from exc
+    if not isinstance(state, dict) or not isinstance(state.get("cases"), dict):
+        raise SelectError(f"repro state has an invalid shape; refusing to replace it: {path}")
+    if state.get("schema_version") == 1:
+        # Preserve the legacy cache for diagnosis, but it contains no reusable phase proof.
+        state = {"schema_version": STATE_SCHEMA,
+                 "cases": {name: {"legacy": record} for name, record in state["cases"].items()}}
+    elif state.get("schema_version") != STATE_SCHEMA:
+        raise SelectError(f"unsupported repro state schema; refusing to replace it: {path}")
     return state
 
 
@@ -213,25 +247,14 @@ def write_state(state):
 def auto_modes(cases, groups_doc):
     """首次运行 / 新用例 / helper 或脚本或被测目标变化 → both；未变化 → green。"""
     state = read_state()
-    current_helpers = helpers_digest()
-    stale_helpers = state.get("helpers_digest") != current_helpers
     modes = {}
     for case in cases:
-        meta = (groups_doc.get("cases") or {}).get(case) or {}
         record = (state.get("cases") or {}).get(case) or {}
-        if stale_helpers:
-            modes[case] = "both"
-            continue
-        if record.get("script_digest") != script_digest(case):
-            modes[case] = "both"
-            continue
-        if record.get("targets_digest") != targets_digest(case, meta):
-            modes[case] = "both"
-            continue
-        if not record.get("verified_both_at"):
-            modes[case] = "both"
-            continue
-        modes[case] = "green"
+        fingerprint = input_fingerprint(case, groups_doc)
+        red = record.get("red") or {}
+        meta = (groups_doc.get('cases') or {}).get(case) or {}
+        reusable = fingerprint and targets_digest(case, meta) is not None
+        modes[case] = "green" if reusable and red.get("fingerprint") == fingerprint else "both"
     return modes
 
 
@@ -239,28 +262,30 @@ def commit_state(results_dir, groups_doc=None):
     """父进程唯一写者：只把 `verified=true` 的用例合并进状态，其余保持原样。"""
     groups_doc = groups_doc or load_groups()
     state = read_state()
-    state["helpers_digest"] = helpers_digest()
     updated, kept = [], []
     for path in sorted(glob.glob(os.path.join(results_dir, "*.json"))):
         try:
             with open(path, encoding="utf-8") as handle:
                 record = json.load(handle)
-        except (OSError, ValueError):
-            continue
+        except (OSError, ValueError) as exc:
+            raise SelectError(f"invalid repro result file: {path}") from exc
+        if not isinstance(record, dict):
+            raise SelectError(f"invalid repro result shape: {path}")
         case = record.get("case")
-        if not case or not record.get("verified"):
+        if not case or record.get("verified") is not True:
             continue
-        meta = (groups_doc.get("cases") or {}).get(case) or {}
-        entry = {
-            "script_digest": script_digest(case),
-            "targets_digest": targets_digest(case, meta),
-            "mode": record.get("mode"),
-            "verified_at": now(),
-        }
-        if record.get("mode") == "both" or (state["cases"].get(case) or {}).get("verified_both_at"):
-            entry["verified_both_at"] = now()
-        else:
-            entry["verified_both_at"] = (state["cases"].get(case) or {}).get("verified_both_at")
+        fingerprint = input_fingerprint(case, groups_doc)
+        if record.get("fingerprint") != fingerprint:
+            raise SelectError(f"{case}: inputs changed or proof fingerprint missing; rerun verification")
+        mode = record.get("mode")
+        phases = {"green": ("green",), "red": ("red",), "both": ("green", "red")}.get(mode)
+        if not phases or any(record.get(phase) != "pass" for phase in phases):
+            raise SelectError(f"{case}: verified result contradicts phase outcomes")
+        if targets_digest(case, (groups_doc.get('cases') or {}).get(case)) is None:
+            continue  # Unknown targets run with frozen source inputs, never reusable red proof.
+        entry = dict(state["cases"].get(case) or {})
+        for phase in phases:
+            entry[phase] = {"fingerprint": fingerprint, "verified_at": now()}
         state["cases"][case] = entry
         updated.append(case)
     for case in state["cases"]:
@@ -279,6 +304,7 @@ def emit(result, fmt):
         return
     tsv = "".join(f"{case}\t{result['modes'][case]}\n" for case in result["cases"])
     print("REPRO_CASES_TSV=" + shell_quote(tsv))
+    print("REPRO_INPUTS_JSON=" + shell_quote(json.dumps(result["fingerprints"], sort_keys=True)))
     print("REPRO_SKIPPED_LIST=" + shell_quote(" ".join(result["skipped_non_candidate"])))
     print("REPRO_CASE_COUNT=" + str(len(result["cases"])))
     print("REPRO_STATE_FILE=" + shell_quote(state_path()))
@@ -323,7 +349,7 @@ def main(argv=None):
                 flag = "candidate" if case in clean else "dev-only"
                 print(f"  - {case} [{flag}]")
         return 0
-    except SelectError as exc:
+    except (SelectError, OSError, ValueError) as exc:
         print(f"SELECT-ERROR: {exc}", file=sys.stderr)
         return 2
 

@@ -53,6 +53,8 @@ def build_task(title, sid, complexity="complex"):
                          "--template", f"{F}/.wf/templates/task", "--json"], None, sid)
     facts = (payload or {}).get("facts", {})
     task_id, genv = facts.get("task_id"), facts.get("generation")
+    if rc != 0 or "directory" not in facts:
+        raise RuntimeError(f"task-new precondition failed: {payload}")
     directory = os.path.join(F, facts["directory"])
     block = {"schema_version": 1, "touch_paths": ["pkg/**"],
              "acceptance": [{"id": "a1", "statement": "x", "verification_ids": ["v1"]}],
@@ -186,7 +188,7 @@ def reset_writer():
 
 def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot_specs=None):
     reset_writer()
-    task_id, directory, sid = build_task(f"R71 轴 {name}", f"sess-Y{abs(hash(name)) % 1000}")
+    task_id, directory, sid = build_task(f"R71 轴 {name}", f"sess-Y-{name}")
     rc_c, payload_c, _ = wf(["task-check", "--task", task_id, "--review-notes", NOTES,
                     "--decision", EXTERNAL_ACK, "--json"],
                             {"generation": gen()}, sid)
@@ -262,22 +264,7 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
 all_pass = {axis: {"conclusion": "pass", "basis": "b"} for axis in AXES}
 code, verdict, facts, record = review_case("all", all_pass, "WF_OK", "pass")
 rec("3 五轴齐全且通过 → pass", "WF_OK/pass", f"{code}/{verdict}", code == "WF_OK" and verdict == "pass")
-code, verdict, facts, record = review_case("empty", {}, "WF_REVIEW_INVALID")
-rec("3b axes 为空被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code, verdict, facts, record = review_case("only", {"range": {"conclusion": "pass", "basis": "b"}}, "WF_REVIEW_INVALID")
-rec("3c 只报一轴被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-partial = dict(all_pass)
-partial.pop("testability")
-code, verdict, facts, record = review_case("missing", partial, "WF_REVIEW_INVALID")
-rec("3d 缺可测性轴被拒", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-unknown_axis = dict(all_pass)
-unknown_axis["extra"] = {"conclusion": "pass", "basis": "b"}
-extra_code, extra_verdict, extra_facts, extra_record = review_case("extra", unknown_axis, "WF_REVIEW_INVALID")
-rec("3e 未知轴被拒且不写判定", "WF_REVIEW_INVALID + result 为空 + 无 fail 历史",
-    f"{extra_code} result={((extra_record.get('reviews') or {}).get('result'))}",
-    extra_code == "WF_REVIEW_INVALID"
-    and ((extra_record.get("reviews") or {}).get("result")) is None
-    and not any((a.get("outcome") == "fail") for a in ((extra_record.get("reviews") or {}).get("attempts") or [])))
+# Invalid axes 3b–3e live in wf_review/test_report_variants.py.
 
 single_code, single_verdict, single_facts, single_record = review_case("single", all_pass, "WF_REVIEW_INVALID", None, single=True)
 rec("3f 单 reviewer 不产生判定结论", "WF_REVIEW_INVALID + degraded + 两个出口",

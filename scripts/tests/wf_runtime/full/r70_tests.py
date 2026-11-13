@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """第三十四轮 R70：卸载既有偏离与确认期变化之分、真实审查失败必须落盘。"""
-import hashlib, json, os, re, shutil, subprocess, sys
+import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
@@ -58,9 +58,9 @@ def _release_source():
 
 
 def make_project(name):
-    target = f"/tmp/wf-fixtures/r70-{name}"
-    shutil.rmtree(target, ignore_errors=True)
-    os.makedirs(target)
+    target = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), f"r70-{name}")
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
+                    "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
     proc = subprocess.run(["/softwares/python/bin/python3",
                            "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",

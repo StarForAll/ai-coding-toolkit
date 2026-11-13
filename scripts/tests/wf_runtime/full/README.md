@@ -1,15 +1,15 @@
 # wf 运行期全流程用例（手动运行）
 
 这些脚本是 2026-11-03 各轮复核期间的三夹具验证资产，已固化进仓库以免随会话丢失。
-它们**不在** `unittest discover` 的默认范围内：会写 `~/.wf/`（解释器确认集合）与 `/tmp/wf-fixtures/`，
-需要显式运行。
+它们**不在** `unittest discover` 的默认范围内，需要显式运行。运行器会写测试发行缓存、
+结果目录和临时夹具；`cp3/r1r2` 的用户配置写入使用独立测试目录，结束后清理。
 
 ## 前置
 
 1. 解释器：`/softwares/python/bin/python3`（authoring 侧）。
 2. 夹具：`bash wf_fixture.sh [夹具目录] [nocap]` 会从 `docs/workflows/wf/payload`
-   部署开发态运行时（调用 `scripts/wf-dev-deploy.py --confirm --verify-capability`，会写 `~/.wf/`）。
-3. 环境变量 `WF_FIX`：夹具根（默认 `/tmp/wf-fixtures/f1`）。
+   部署开发态运行时（调用 `scripts/wf-dev-deploy.py --confirm`）。夹具必须是新目录或带本工具所有权标记的目录；拒绝非空无主目录和符号链接。
+3. `run_all.sh` 自动分配临时夹具；`WF_FIX` 可指定安全临时路径。直接使用 `wf_fixture.sh` 时默认 `/tmp/wf-fixtures/f1`。
 
 ## 用例
 
@@ -69,23 +69,21 @@
 | `r71_tests.py` | 第三十五轮 R71（交接实例核验、dispose 锁内重核、审查固定五轴） |
 | `r70_tests.py` | 第三十四轮 R70（卸载预览指纹 vs 发行摘要、审查判否必须落盘） |
 | `r69_tests.py` | 第三十三轮 R69（前像结构、整批预检、导入冲突与门禁引用、卸载内容重核） |
-| `r68_tests.py` | 第三十一/三十二轮 R68（审查判定六核、repair 锁内重核与随机令牌、基线批准绑定与前像、续做三分类） |
+| `r68_tests.py` | 第三十一/三十二轮 R68（审查判定六核、repair 锁内重核与预览指纹、基线批准绑定与前像、续做三分类） |
 
-全量复现：`bash run_all.sh`——**每个套件前重建夹具**，因此与跑序无关；不需要中间手工 pause/release。
+全量复现：`bash run_all.sh`——**每个套件使用独立夹具副本**，因此与跑序无关；不需要中间手工 pause/release。
 脚本会校验夹具建成、初始化退出码、套件退出码、`[FAIL]` 行数与汇总通过数，任一不符即计失败并以 `exit 1` 结束。
 | `p5_v1.py` / `p5_v2v3.py` / `p5_v5.py` / `p5_spec.py` / `p5_f0.py` | V1–V5 与 F0 |
 
 ## 用法示例
 
 ```bash
-cd scripts/tests/wf_runtime/full
-bash wf_fixture.sh                                   # 建 F1
-WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 f1_init.py
-WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 f1_ordinary.py
-WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 r7r15_tests.py
+WF_SUITES="r68_tests r71_tests" bash scripts/tests/wf_runtime/full/run_all.sh
+WF_TAGS=review bash scripts/tests/wf_runtime/full/run_all.sh
+bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jobs 4
 ```
 
-注意：这些脚本假定 `/tmp/wf-fixtures/` 下的夹具可重建。
+使用运行器单跑，确保夹具部署、初始化和模板复制顺序一致。旧夹具没有所有权标记时，换一个新临时路径；不要让运行器接管已有内容。
 
 **套件自带夹具（2026-11-06 W1）**：`cp4_a8` / `cp5_b12` / `r35_tests` 曾因写死 `/tmp/wf-fixtures/{fu,f5,f3,f2}`
 且无人创建而脱离 `run_all.sh`（cp5_b12 当时已红 4 条而无人知晓）。现在它们在脚本内自己调用
@@ -96,8 +94,14 @@ WF_FIX=/tmp/wf-fixtures/f1 /softwares/python/bin/python3 r7r15_tests.py
 
 - 默认 4 并发（`WF_JOBS`）：每个 worker 用 user namespace 私有 `/tmp`，只读挂共享发行仓库；`unshare` 不可用时自动退回串行。
 - 迭代期只跑相关套件：`WF_SUITES="r88_tests r89_tests" bash run_all.sh`（约 4.5s，跳过 f0/p5 流程）。
-- 8 个套件固定串行（权限失败注入、写全局配置、依赖宿主 `/tmp` 状态）：见 `run_all.sh` 的 `PARALLEL_SERIAL`。
-- 复用发行仓库：`WF_REBUILD_RELEASE=0`。
+- 13 个套件固定串行（权限失败注入、用户配置、历史共享状态）：见 `plan.py` 的 `PARALLEL_SERIAL`。
+- 复用发行缓存：`--no-build`；会核对源摘要，过期即拒绝。
+- `summary.json` 分开记录 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason`，累计耗时与墙钟分开。
+- `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
+- 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
+- 运行结束清理夹具和模板，保留结果/日志。结果目录也要求为空或由本工具创建。
+
+`r68/r71` 的 9 个字段变体在 `scripts/tests/wf_review/test_report_variants.py` 测试；两个历史 suite 名称保留集成和恢复场景。完整覆盖由单元层与全流程层一起证明。
 
 ## 性能
 

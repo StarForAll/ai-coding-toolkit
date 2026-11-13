@@ -74,13 +74,16 @@ rec("新会话按就绪对象 bind 接续", "pass 并回显新代次",
     f"{(payload or {}).get('code')} gen={(payload or {}).get('facts', {}).get('generation')}",
     rc == 0)
 
+before_tasks = sorted(os.listdir(os.path.join(F, ".wf/tasks")))
 rc, payload, _ = wf(["task-new", "--kind", "ordinary", "--title", "不应成功", "--template",
                      f"{F}/.wf/templates/task", "--json"], sid="sess-B")
-# 已绑定会话不会产出第二个对象：要么回原结果（already_completed），要么绑绑冲突；两者都不新建
-created = (payload or {}).get("facts", {}).get("task_id")
-rec("已绑定会话不能再建对象", "不产生第二个任务（原结果重试或绑定冲突）",
-    f"{(payload or {}).get('code')} created={created} same={created == task_id}",
-    (payload or {}).get("code") in ("WF_BINDING_MISMATCH", "WF_OK") and created == task_id)
+# The existing binding is returned as facts.object, never as a successful new task.
+bound = (payload or {}).get("facts", {}).get("object") or {}
+rec("已绑定会话不能再建对象", "绑定冲突、原对象不变、未创建新目录",
+    f"{(payload or {}).get('code')} bound={bound}",
+    rc != 0 and (payload or {}).get("code") == "WF_BINDING_MISMATCH"
+    and bound == {"kind": "task", "id": task_id}
+    and sorted(os.listdir(os.path.join(F, ".wf/tasks"))) == before_tasks)
 
 json.dump(results, open("/tmp/p5_v1_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases")

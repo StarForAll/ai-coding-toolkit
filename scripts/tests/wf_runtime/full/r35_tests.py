@@ -2,8 +2,8 @@
 """R5（install.py 记录形态下的卸载）与 R3（锁部分标记的人工出口）。"""
 import json, os, re, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
-F5 = "/tmp/wf-fixtures/f5"
-F3 = "/tmp/wf-fixtures/f3"
+F5 = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f5")
+F3 = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f3")
 REPO = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
 # 孤儿套件回接（2026-11-06 W1）：两个夹具都自带，不依赖兄弟套件或固定 /tmp 路径
 for _target in (F5, F3):

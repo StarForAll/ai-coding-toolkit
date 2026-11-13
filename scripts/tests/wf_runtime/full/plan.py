@@ -21,7 +21,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SUITES_JSON = os.path.join(HERE, "suites.json")
 GROUPS_JSON = os.path.join(HERE, "repro", "groups.json")
-DEFAULT_FIX = "/tmp/wf-fixtures/rerun"
+DEFAULT_FIX = f"/tmp/wf-fixtures/run-{os.getpid()}"
 DEFAULT_JOBS = 4          # 套件层默认并行数（实测 8 套件 68s → 29s）
 DEFAULT_REPRO_JOBS = 4    # repro 用例层默认并行数（实测结果与 jobs=1 逐项一致）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"

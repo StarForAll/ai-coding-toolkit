@@ -209,22 +209,7 @@ def rerun_check(task_id, sid):
 
 code = scenario("R68 旧锚点", "sess-T2", {"__after__": rerun_check})
 rec("2 导入后锚点失效 → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code = scenario("R68 阻塞发现", "sess-T3",
-                {"slot-a": {"findings": [{"id": "F1", "severity": "blocker", "summary": "阻塞"}]}})
-rec("3 带阻塞发现 → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code = scenario("R68 未声明 CLI", "sess-T4", {"slot-b": {"source-cli": "gemini"}})
-rec("4 未声明的审查 CLI → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code = scenario("R68 缺材料", "sess-T5", {"slot-a": {"read-scope": []}})
-rec("5 缺读取范围声明 → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code = scenario("R68 轴失败", "sess-T6",
-                {"slot-a": {"axes": {**{axis: {"conclusion": "pass", "basis": "b"}
-                                        for axis in ("range", "acceptance", "contract", "regression")},
-                                     "testability": {"conclusion": "fail", "basis": "缺可测性"}}}})
-rec("6 审查轴 fail → 判定拒绝", "WF_REVIEW_INVALID", code, code == "WF_REVIEW_INVALID")
-code = scenario("R68 未覆盖例外", "sess-T7", {"slot-b": {"scope-exceptions": ["验收用例缺失"]}})
-# v42 B1 改变了这条：报告声明的"未覆盖项"不再一义三用（既不判 fail，也不再阻断），
-# 统一按**缺口**呈现并由三态结论承载（见 review.py 对应注释）。故此处应放行且留痕。
-rec("7 声明未覆盖例外 → 按缺口留痕（不阻断）", "WF_OK", code, code == "WF_OK")
+# Field variants 3–7 live in wf_review/test_report_variants.py.
 
 # ---- 8. repair：确认等待窗口内写者变化 ----
 def bump(path):

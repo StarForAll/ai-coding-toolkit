@@ -21,6 +21,13 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FULL="$(dirname "$HERE")"
 REPO="$(cd "$FULL/../../../.." && pwd)"
 PY="${PY:-/softwares/python/bin/python3}"
+SCOPE="$FULL/fixture_scope.py"
+case "${1:-}" in -h|--help) sed -n '2,18p' "$0"; exit 0 ;; esac
+if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
+  || ! "$PY" "$SCOPE" check-lease >/dev/null 2>&1; then
+  export WF_RUNNER_ENTRY_PID=$$
+  exec "$PY" "$SCOPE" lease -- bash "$0" "$@"
+fi
 
 MODE="both"
 GROUP_NAMES=()
@@ -138,21 +145,23 @@ eval "$selection" || { echo "SELECT-EVAL-FAILED"; exit 2; }
 if [ -z "$RESULTS" ]; then
   RESULTS="${WF_REPRO_RESULTS_DIR:-$HOME/.cache/wf-test-run/repro-$MODE-$$}"
 fi
-mkdir -p "$RESULTS/logs"
-rm -f "$RESULTS"/*.json
-rm -rf "$RESULTS/logs"
+"$PY" "$SCOPE" prepare-results "$RESULTS" || exit 1
 mkdir -p "$RESULTS/logs"
 export WF_REPRO_RESULTS="$RESULTS"
-export PY
+export PY REPRO_INPUTS_JSON
+trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 143' TERM
+trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 130' INT
 
 printf '%s' "$REPRO_CASES_TSV" > "$RESULTS/selection.tsv"
+printf '%s' "$REPRO_INPUTS_JSON" > "$RESULTS/inputs.json"
 echo "repro: mode=$MODE deploy=$DEPLOY cases=$REPRO_CASE_COUNT jobs=$JOBS"
 if [ -n "${REPRO_SKIPPED_LIST:-}" ]; then
   echo "repro: skipped_non_candidate: $REPRO_SKIPPED_LIST"
 fi
 
 # ---- 执行（worker 只写自己的结果与日志）--------------------------------------
-started=$SECONDS
+read -r started_uptime _ < /proc/uptime
+started_ms=$((10#${started_uptime/./} * 10))
 if [ "$JOBS" -le 1 ]; then
   while IFS=$'\t' read -r case mode; do
     [ -n "$case" ] || continue
@@ -162,63 +171,13 @@ else
   awk -F'\t' 'NF>=2 {print $1" "$2}' "$RESULTS/selection.tsv" \
     | xargs -P "$JOBS" -n 2 "$PY" "$HERE/_worker.py"
 fi
-elapsed=$((SECONDS - started))
+read -r ended_uptime _ < /proc/uptime
+elapsed_ms=$((10#${ended_uptime/./} * 10 - started_ms))
+elapsed=$(awk -v ms="$elapsed_ms" 'BEGIN { printf "%.2f", ms / 1000 }')
 
 # ---- 汇总（父进程唯一写者；缺结果/重复/数字不一致都算失败）-------------------
-summary=$("$PY" - "$RESULTS" "$HERE/repro_select.py" <<'PY'
-import json
-import os
-import subprocess
-import sys
-
-results, select_py = sys.argv[1:3]
-expected = []
-with open(os.path.join(results, "selection.tsv"), encoding="utf-8") as handle:
-    for line in handle:
-        parts = line.rstrip("\n").split("\t")
-        if len(parts) >= 2 and parts[0]:
-            expected.append(parts[0])
-records = {}
-malformed = 0
-for name in sorted(os.listdir(results)):
-    if not name.endswith(".json"):
-        continue
-    path = os.path.join(results, name)
-    try:
-        with open(path, encoding="utf-8") as handle:
-            record = json.load(handle)
-    except (OSError, ValueError):
-        malformed += 1
-        continue
-    if not isinstance(record, dict) or not record.get("case"):
-        malformed += 1
-        continue
-    records[record["case"]] = record
-missing = [case for case in expected if case not in records]
-extra = [case for case in records if case not in expected]
-passed = [case for case in expected if case in records and records[case].get("verified")]
-failed = [case for case in expected if case not in passed]
-green_seconds = round(sum(float((records.get(c) or {}).get("green_seconds") or 0) for c in expected), 2)
-red_seconds = round(sum(float((records.get(c) or {}).get("red_seconds") or 0) for c in expected), 2)
-verified_only = [case for case in expected if case in passed]
-if verified_only and not malformed and not missing and not extra:
-    subprocess.run([sys.executable, select_py, "commit-state", "--results", results],
-                   check=False, capture_output=True)
-print(f"REPRO_TOTAL={len(expected)}")
-print(f"REPRO_PASSED={len(passed)}")
-print(f"REPRO_FAILED={len(failed) + malformed + len(missing) + len(extra)}")
-print(f"REPRO_GREEN_SECONDS={int(green_seconds)}")
-print(f"REPRO_RED_SECONDS={int(red_seconds)}")
-if malformed:
-    print(f"REPRO_MALFORMED={malformed}")
-if missing:
-    print("REPRO_MISSING=" + " ".join(missing))
-if extra:
-    print("REPRO_UNEXPECTED=" + " ".join(extra))
-if failed:
-    print("REPRO_FAILING:" + " ".join(failed))
-PY
-)
+summary=$("$PY" "$FULL/results_gate.py" --repro-results "$RESULTS")
+summary_rc=$?
 printf '%s\n' "$summary"
 failed_count=$(printf '%s\n' "$summary" | sed -n 's/^REPRO_FAILED=//p')
 skipped_count=0
@@ -231,4 +190,4 @@ echo "repro 用例：$(printf '%s\n' "$summary" | sed -n 's/^REPRO_PASSED=//p')/
 if ! [[ "${failed_count:-}" =~ ^[0-9]+$ ]]; then
   echo "repro: 汇总缺失（父进程统计失败）"; exit 1
 fi
-[ "$failed_count" -eq 0 ]
+[ "$failed_count" -eq 0 ] && [ "$summary_rc" -eq 0 ]

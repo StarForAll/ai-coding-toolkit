@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """第三十轮 R67：写权入口实例/能力核验、baseline 状态与提案、清单声明、聚合脚本退出码。"""
-import hashlib, json, os, shutil, subprocess, sys
+import atexit, hashlib, json, os, shutil, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
@@ -208,13 +208,13 @@ rec("3d 恢复后可用", "有义务", bool(wf_gates.declared_step_specs(wf_cli.
 # ---- 4. 聚合脚本：失败必须传播 ----
 # 假环境按**真实 run_all 的契约**搭建：run_all 现在把选择交给 plan.py，
 # 所以 plan.py / suites.json / results_gate.py 必须在同一棵假树里，REPO_ROOT 也指向它。
-fake_root = "/tmp/r67_fake_repo"
-shutil.rmtree(fake_root, ignore_errors=True)
+fake_root = tempfile.mkdtemp(prefix="wf-r67-fake-repo-")
+atexit.register(shutil.rmtree, fake_root, ignore_errors=True)
 fake = os.path.join(fake_root, "scripts/tests/wf_runtime/full")
 os.makedirs(fake)
 real = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/tests/wf_runtime/full"
 shutil.copy(os.path.join(real, "run_all.sh"), fake)
-for _name in ("plan.py", "suites.json", "results_gate.py"):
+for _name in ("plan.py", "suites.json", "results_gate.py", "execution.py", "fixture_scope.py"):
     shutil.copy(os.path.join(real, _name), fake)
 os.makedirs(os.path.join(fake, "repro"), exist_ok=True)
 shutil.copy(os.path.join(real, "repro", "groups.json"), os.path.join(fake, "repro", "groups.json"))
@@ -272,29 +272,34 @@ open(os.path.join(fake, "repro", "run.sh"), "w").write(
     'exit 0\n')
 os.chmod(os.path.join(fake, "repro", "run.sh"), 0o755)
 # 测试发行副本桩：run_f0 会调用 $RELEASE_REPO/install.py
-release_cache = "/tmp/r67_fake_release_cache"
-shutil.rmtree(release_cache, ignore_errors=True)
+release_cache = os.path.join(fake_root, "release-cache")
 os.makedirs(os.path.join(release_cache, "0.1.0"))
 open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys; sys.exit(0)\n")
 # 外层可能以 `WF_SUITES=... bash run_all.sh` 启动（命令前缀会导出到子进程），
 # 假环境必须显式清空，否则内层 run_all 会被当成子集模式
 # 假环境不跑夹具模板（模板会调用 template_check.py，而这里只验证门禁逻辑）；
 # 复制 run_all.sh 的套件必须显式关掉模板，否则会因缺少 template_check.py 而整段失败。
-_fake_env = {**os.environ, "WF_FIX": "/tmp/r67_fake_fix",
+_fake_fix = tempfile.mkdtemp(prefix="wf-r67-fake-fixture-")
+_fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+_fake_results2 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+for _path in (_fake_fix, _fake_results1, _fake_results2):
+    atexit.register(shutil.rmtree, _path, ignore_errors=True)
+_fake_env = {**os.environ, "WF_FIX": _fake_fix,
              "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
-             "WF_SUITES": "", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
+             "WF_SUITES": "cp1_tests", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                      env={**_fake_env, "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
+                      env={**_fake_env, "WF_RESULTS_DIR": _fake_results1})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
-    f"exit={proc.returncode} summary={_summary[-1] if _summary else None}",
+    f"exit={proc.returncode} summary={_summary[-1] if _summary else None} stderr={(proc.stderr or '')[-180:]}",
     proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
 open(os.path.join(fake, "cp1_tests.py"), "w").write("print('saved 1 cases; 1 passed')\n")
 proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                       env={**_fake_env, "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
+                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results2})
 if proc2.returncode != 0:
-    print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500])
-rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode}", proc2.returncode == 0)
+    print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500],
+          "stderr:", (proc2.stderr or "")[-500:])
+rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode} stderr={(proc2.stderr or '')[-180:]}", proc2.returncode == 0)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

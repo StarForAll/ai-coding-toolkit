@@ -7,8 +7,10 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
+import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -18,12 +20,63 @@ SLOW = os.environ.get("WF_SLOW_TESTS") == "1"
 
 def run(args, env=None, timeout=900):
     merged = {**os.environ, **(env or {})}
+    if not merged.get("WF_RESULTS_DIR"):
+        with tempfile.TemporaryDirectory(prefix="wf-run-all-args-") as results:
+            merged["WF_RESULTS_DIR"] = results
+            return subprocess.run(["bash", str(RUN_ALL), *args], capture_output=True, text=True,
+                                  env=merged, timeout=timeout, cwd=str(REPO))
     return subprocess.run(["bash", str(RUN_ALL), *args], capture_output=True, text=True,
                           env=merged, timeout=timeout, cwd=str(REPO))
 
 
 @unittest.skipUnless(SLOW, "WF_SLOW_TESTS=1 才跑 run_all 端到端（独占夹具）")
 class RunAllContractTest(unittest.TestCase):
+    def test_candidate_representative_from_empty_state_has_owned_flow_fixtures(self):
+        with tempfile.TemporaryDirectory(prefix='wf-candidate-contract-') as root:
+            manifest = json.loads((REPO / 'docs/workflows/wf-release/wf-release.json').read_text())
+            version = manifest['version']
+            candidate = Path(root) / 'candidate'
+            prepare = subprocess.run([
+                sys.executable, str(RUN_ALL.parent / 'prepare_candidate_repo.py'),
+                '--tree', str(REPO / 'docs/workflows/wf-release'), '--version', version,
+                '--out', str(candidate)], capture_output=True, text=True)
+            self.assertEqual(prepare.returncode, 0, prepare.stdout + prepare.stderr)
+            result = run(['--representative', '--fixture-deploy', 'candidate',
+                          '--release-root', str(candidate), '--release-version', version,
+                          '--release-ref', f'refs/tags/wf-v{version}', '--repro', 'green',
+                          '--repro-group', 'install'],
+                         {'WF_RESULTS_DIR': str(Path(root) / 'results')})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            summary = json.loads((Path(root) / 'results/summary.json').read_text())
+            self.assertEqual(summary['flow_ran'], 2)
+            self.assertEqual(summary['fail'], 0)
+
+    def test_interrupting_root_runner_cleans_its_command_and_fixtures(self):
+        with tempfile.TemporaryDirectory(prefix='wf-root-cancel-') as results:
+            env = {**os.environ, 'WF_RESULTS_DIR': results, 'WF_SUITES': 'r68_tests', 'WF_JOBS': '1'}
+            proc = subprocess.Popen(['bash', str(RUN_ALL)], cwd=str(REPO), env=env,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                deadline = time.monotonic() + 15
+                while not (Path(results) / 'r68_tests.test.log').exists() and time.monotonic() < deadline:
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(0.05)
+                self.assertIsNone(proc.poll(), 'runner failed before cancellation probe')
+                self.assertTrue((Path(results) / 'r68_tests.test.log').exists())
+                proc.terminate()
+                stdout, stderr = proc.communicate(timeout=5)
+                self.assertNotEqual(proc.returncode, 0, stdout + stderr)
+                control = json.loads((Path(results) / '.runner.json').read_text())
+                self.assertEqual(control['status'], 'cancelled')
+                plan = json.loads((Path(results) / 'plan.json').read_text())
+                self.assertFalse(Path(plan['fix']).exists())
+                self.assertFalse((Path(results) / 'template').exists())
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                proc.communicate(timeout=5)
+
     def test_conflicting_modes_exit_nonzero(self):
         result = run(["--full", "--subset"])
         self.assertNotEqual(result.returncode, 0)
@@ -90,8 +143,8 @@ class RunAllContractTest(unittest.TestCase):
     def test_candidate_mode_requires_a_valid_candidate_repo(self):
         results = tempfile.mkdtemp(prefix="wf-run-all-candidate-")
         self.addCleanup(lambda: __import__("shutil").rmtree(results, ignore_errors=True))
-        bogus = os.path.join(results, "candidate")
-        os.makedirs(bogus)
+        bogus = tempfile.mkdtemp(prefix="wf-invalid-candidate-")
+        self.addCleanup(lambda: __import__("shutil").rmtree(bogus, ignore_errors=True))
         result = run(["--representative", "--fixture-deploy", "candidate",
                       "--release-root", bogus, "--release-ref", "refs/tags/wf-v9.9.9",
                       "--release-version", "9.9.9"],

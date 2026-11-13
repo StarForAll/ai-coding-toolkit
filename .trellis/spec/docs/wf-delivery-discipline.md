@@ -102,9 +102,9 @@
 ## 7. 并行纪律：`run_all.sh` 独占夹具
 
 `run_all.sh` 使用 `/tmp/wf-fixtures/*` 与**测试发行副本**（默认 `~/.cache/wf-test-release/<version>`，
-不再重建或借用产品树 `docs/workflows/wf-release`），**同时跑两份会让双方挂起**
-（本任务实际遇到一次 SIGTERM，另一次 `r71_tests` 报 `KeyError: 'directory'` 属夹具竞态）。
-跑全量前先确认没有并发实例；单跑某套件用 `WF_SUITES="<name>" bash scripts/tests/wf_runtime/full/run_all.sh`
+不重建产品树 `docs/workflows/wf-release`）。入口持全局 `flock`：第二个根运行器在写夹具前拒绝；
+嵌套运行器校验祖先进程仍持有内核锁。worker 在私有 `/tmp` 持局部锁，只共享结果和只读输入。
+单跑某套件用 `WF_SUITES="<name>" bash scripts/tests/wf_runtime/full/run_all.sh`
 （它会自己重建夹具），不要直接 `python3 rXX_tests.py`。
 
 两层并行是**分开**的开关，互不继承：
@@ -112,7 +112,7 @@
 | 层 | 开关 | 默认 | 说明 |
 |---|---|---|---|
 | 套件层 | `--serial` / `WF_JOBS` | 并行（4） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
-| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 并行（4） | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
+| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | run_all 为 4，独立入口为 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
 
 并行/串行的等价性要**定期对拍**（改 runner 后至少一次）：跑一次 `--full --repro green` 和一次
 `--full --repro green --serial`，比对两份 `RESULTS_DIR/lines`（套件名/rc/status）、`repro/*.json`
@@ -125,8 +125,7 @@
 必须配合 `--list`，不自动执行。
 
 **夹具模板（run 内复用，不跨 run 缓存）**：`run_all` 在一个 run 内构建一次
-`wf_fixture.sh + f1_init.py` 的产物当**只读模板**（实测 175ms + 1770ms），每个套件 `cp -a`
-（约 5ms）到自己目录。复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须通过
+`wf_fixture.sh + f1_init.py` 的产物当**只读模板**，每个套件通过 `fixture_scope.clone` 复制到独立目录。复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须通过
 `template_check.py`：`.wf/bin/wf.py` 与安装记录都在、candidate 模式下 version/ref 仍等于本次候选。
 **安装记录会按安装时的绝对路径登记技能根（`installation.json` 的 `assets[].root_ref`）**，
 `recovery.md` 里也有 `python3 <项目>/.wf/bin/wf.py` 的绝对路径——所以复制后必须
@@ -178,7 +177,7 @@ bash .../run_all.sh --full --repro green                      # T2 收口，一�
    拒绝运行，不静默使用旧副本。
 6. **candidate 只认 candidate-clean**：repro 用例须同时满足 `assertion_target=installed` 与
    `stage_role=scaffold`；其余列入 `skipped_non_candidate`，**不算通过**；套件侧 `candidate_clean=false`
-   的不得用于候选证明（当前 53 个套件仍硬编码源码 `payload/lib`）。
+   的不得用于候选证明（大量历史套件仍硬编码源码 `payload/lib`）。
 7. **red 的语义**：前置失败不算 red 成功；注入后仍绿必须失败并输出目标断言。
 8. **失败传播不降级**：套件退出码、夹具/`f1_init` 失败、结果行缺失/重复/畸形、子进程崩溃/超时、
    repro 前置失败、分组零匹配、汇总数字不一致——任一都让 `run_all` 非零退出。
@@ -253,7 +252,7 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 不是实现回归。**Rule**：改输入面/外发守卫的同一批，先跑
 `WF_SUITES="<受影响的套件>" bash scripts/tests/wf_runtime/full/run_all.sh` 与
 `bash scripts/tests/wf_runtime/full/repro/run.sh --no-build`，再跑全量；
-`run_all.sh` 会用 `--version 0.1.0` 重建发行树，收尾必须再按当前版本重建一次（否则发行树版本回退）。
+`run_all.sh` 只构建/校验测试发行缓存；收尾核对产品树摘要不变，不再用历史版本覆盖产品树。
 
 **新增字段/域的登记实例（照此四件套）**：`workspace_exclusion` 决策域 →
 `execution.workspace_exclusions` 字段 → 机制稿 §1.1/§1.3/§3.5 登记 + 实现稿 §2.3 域表 →
@@ -300,3 +299,60 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 **Wrong vs Correct**：
 - Wrong：`review-decide` 只按两份报告算覆盖，A 全 pass、B 全 uncovered 仍 pass。
 - Correct：先 `--main-review-draft` 生成五轴复核，主会话填自己的结论与逐报告/逐 finding 复核，再用 `--main-review` 判定；报告未覆盖的轴由主会话补足，两者都未覆盖才交人。
+
+
+## 12. wf 测试运行器的执行与证据契约
+
+### 1. Scope / Trigger
+
+修改 `scripts/tests/wf_runtime/full` 的执行、选择、夹具、计量与缓存时遵守本节。完整验证是单元层加集成层；字段变体迁移必须逐条映射旧断言，不能只比较 suite 数量。
+
+### 2. Signatures
+
+- `execution.run(argv, log_path, *, timeout, cwd=None, env=None)`：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
+- `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。
+- `fixture_scope reset|clone|remove|claim-results|prepare-results|lease|check-lease`：临时目录归属与运行互斥。
+- `repro_select.input_fingerprint(case)`、`auto_modes(cases, groups_doc)`、`commit_state(results_dir)`：repro 新鲜度与唯一状态写者。
+
+### 3. Contracts
+
+`WF_COMMAND_TIMEOUT` 默认 180 秒，`WF_REPRO_TIMEOUT` 默认 120 秒，根运行器的 `WF_RUN_TIMEOUT` 默认 1800 秒。超时、中断、非零退出和断言不成立分别记原因，均不能成功。所有阶段保留日志与结果；初始化失败不继续构造半成品套件。缺 worker 结果直接失败，禁止自动串行重跑覆盖原尝试。
+
+夹具只能是安全临时路径或专用测试缓存内目录。非空目录须有匹配其规范路径的所有权标记；符号链接、与项目/发行/结果重叠的夹具拒绝。结束清理自身夹具和模板，保留日志；不自动接管历史目录。`cp3/r1r2` 使用合成执行器确认集合和临时 HOME，不复制真人确认记录；夹具 Git 忽略测试生成的 check-logs，不依赖全局 Git 配置。
+
+`summary` 的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际。`init_seconds/suite_seconds` 是累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令用 `time.monotonic`；不要以伪毫秒整数宣称测量精度。
+
+repro schema 2 每个用例分别记录 green/red 的 `fingerprint/verified_at`。输入包含完整源树、脚本、helper、目标、清单和执行协议摘要。green 不能更新 red；局部执行不能刷新其他 case。旧 schema 1 只作 legacy 留存并要求 both；损坏或未知 schema 明确拒绝覆盖。未知/不存在目标不得生成可复用的 red 证据。运行前冻结、运行后与状态提交前重核摘要。
+
+### 4. Validation & Error Matrix
+
+| 输入/故障 | 结果 |
+|---|---|
+| rc 非零却 status=ok；缺失/重复/畸形/计划外结果 | 非零，保留原始结果 |
+| 字段级失败/零断言/不完整 suite 汇总 | 非零；步骤型输出需全部 WF_OK 和终态 TASK_ID |
+| 用例模式/身份/阶段与计划矛盾 | repro 汇总失败，不写可信状态 |
+| 测试输入运行中变化；旧 red 摘要不符 | 拒绝证据；auto 要求 both |
+| 无主非空目录/符号链接/保护路径 | FIXTURE-REFUSED，哨兵字节不变 |
+| 第二个根运行器重叠 | 租约拒绝，不删除对方夹具 |
+| unshare 不可用 | 整次按计划回到串行，记录原因；worker 已启动后挂载失败则计失败 |
+| 超时/取消/状态写入失败 | 明确非零，保存日志和原因 |
+
+### 5. Good / Base / Bad Cases
+
+Good：同一输入完成 both 后 auto 仅 green；目标变化后先 green 再 auto，仍要 both。
+Base：无旧缓存时 both；无主旧夹具时选择新临时路径。
+Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录挂回 worker `/tmp`；自动重跑后覆盖失败证据。
+
+### 6. Tests Required
+
+- `test_repro_selection`：green 不续签 red、helper 子集不刷新旁例、旧状态失效、损坏不覆盖。
+- `test_execution`：非零退出和双流日志、阻塞读取/子孙进程超时、真实只读挂载与结果回传、文本适配拒绝假绿。
+- `test_fixture_scope`：哨兵不变、符号链接/重叠拒绝、根运行互斥、归属后重建及结果清理。
+- `test_results_gate`：矛盾 rc/status、无效时间、缺行/重行、shell 列表引用和 repro 模式一致性。
+- `WF_SLOW_TESTS=1` 的运行器/模板契约；候选代表闭环；full green 并行和串行逐项对拍。
+- `/proc` 会话 leader 不可见时，用 `setsid --wait /softwares/python/bin/python3 -B -m unittest discover -s scripts/tests -t .` 建立可验证会话，不改产品锚点规则。
+
+### 7. Wrong vs Correct
+
+Wrong：`green` 成功时刷新旧 `verified_both_at`，随后 auto 跳过新代码的 red。
+Correct：只写本次成功面的输入指纹；auto 比较当前指纹和 red 证据，缺失/不符即 both。

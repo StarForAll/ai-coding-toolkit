@@ -28,15 +28,31 @@
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=/softwares/python/bin/python3
-# 不在源码树里生成 __pycache__（第四轮复审：源树残留 pyc）
-export PYTHONDONTWRITEBYTECODE=1
-REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
-
 usage() { sed -n '2,26p' "$0"; }
 
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
 esac
+
+# 不在源码树里生成 __pycache__（第四轮复审：源树残留 pyc）
+export PYTHONDONTWRITEBYTECODE=1
+REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
+WF_RESULTS_DIR=${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}
+export WF_RESULTS_DIR
+
+if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
+  || ! "$PY" "$HERE/fixture_scope.py" check-lease >/dev/null 2>&1; then
+  export WF_RUNNER_ENTRY_PID=$$
+  exec "$PY" "$HERE/fixture_scope.py" lease -- bash "$0" "$@"
+fi
+"$PY" "$HERE/fixture_scope.py" claim-results "$WF_RESULTS_DIR" || exit 1
+if [ -z "${WF_RUNNER_CONTROL_PID:-}" ]; then
+  export WF_RUNNER_CONTROL_PID=$$
+  exec "$PY" "$HERE/execution.py" --runner-control --name wf-runner \
+    --timeout "${WF_RUN_TIMEOUT:-1800}" --log "$WF_RESULTS_DIR/.runner.log" \
+    --result "$WF_RESULTS_DIR/.runner.json" -- bash "$0" "$@"
+fi
+"$PY" "$HERE/fixture_scope.py" prepare-results "$WF_RESULTS_DIR" || exit 1
 
 # ---- 计划（唯一权威）--------------------------------------------------------
 plan_out=$("$PY" "$HERE/plan.py" --format sh -- "$@")
@@ -55,12 +71,49 @@ if [ "${WF_NO_RUN:-0}" = "1" ]; then
   exit 0
 fi
 
+now_ms() {
+  local uptime rest
+  read -r uptime rest < /proc/uptime || return 1
+  uptime=${uptime/./}
+  printf '%s\n' "$((10#$uptime * 10))"
+}
+run_command() {
+  local phase=$1 log=$2 kind=$3 expected=""; shift 3
+  local expected_args=()
+  local user_args=()
+  case "$phase" in cp3_tests|r1r2_tests) user_args=(--isolated-user) ;; esac
+  if [ "${1:-}" = "--expected" ]; then expected=$2; shift 2; expected_args=(--expected "$expected"); fi
+  "$PY" "$HERE/execution.py" --name "$phase" --kind "$kind" --log "$log" --result "$log.json" \
+    "${expected_args[@]}" "${user_args[@]}" -- "$@"
+}
 FIX="$PLAN_FIX"
 RESULTS_DIR="$PLAN_RESULTS_DIR"
+export WF_RESULTS_DIR="$RESULTS_DIR" WF_FIX="$FIX"
+LEGACY_FIXTURE_ROOT="$FIX.legacy"
+WF_LEGACY_FIXTURE_ROOT="$LEGACY_FIXTURE_ROOT"
+export WF_LEGACY_FIXTURE_ROOT
+"$PY" "$HERE/fixture_scope.py" validate "$FIX" --forbid "$RESULTS_DIR" \
+  --forbid "$PLAN_TEST_RELEASE_ROOT" --forbid "$PLAN_RELEASE_ROOT" || exit 1
 mkdir -p "$RESULTS_DIR"
-"$PY" "$HERE/plan.py" --format json -- "$@" > "$RESULTS_DIR/plan.json" 2>/dev/null || true
+"$PY" "$HERE/fixture_scope.py" reset "$LEGACY_FIXTURE_ROOT" --forbid "$RESULTS_DIR" \
+  --forbid "$PLAN_TEST_RELEASE_ROOT" --forbid "$PLAN_RELEASE_ROOT" || exit 1
+WF_TEMPLATE=""
+WF_TEMPLATE_READY=0
+cleanup_fixtures() {
+  for fixture_path in "$FIX" "$LEGACY_FIXTURE_ROOT" "$WF_TEMPLATE"; do
+    [ -n "$fixture_path" ] || continue
+    "$PY" "$HERE/fixture_scope.py" remove "$fixture_path" >/dev/null 2>&1 || true
+  done
+}
+trap cleanup_fixtures EXIT
+trap 'trap "" INT TERM; "$PY" "$HERE/execution.py" --cancel-parent-children; exit 143' TERM
+trap 'trap "" INT TERM; "$PY" "$HERE/execution.py" --cancel-parent-children; exit 130' INT
+"$PY" "$HERE/plan.py" --format json -- "$@" > "$RESULTS_DIR/plan.json" 2>"$RESULTS_DIR/plan.err" || {
+  cat "$RESULTS_DIR/plan.err" >&2
+  exit 2
+}
 
-TOTAL_STARTED=$SECONDS
+TOTAL_STARTED=$(now_ms)
 build_seconds=0
 init_millis=0
 suite_millis=0
@@ -86,7 +139,7 @@ PY
 
 PRODUCT_BEFORE=$(product_digest)
 
-build_started=$SECONDS
+build_started=$(now_ms)
 BUILD_OK=1
 if [ "$PLAN_FIXTURE_DEPLOY" = "dev" ]; then
   if [ "$PLAN_NO_BUILD" = "1" ]; then
@@ -116,7 +169,7 @@ else
   RELEASE_REF="$PLAN_RELEASE_REF"
   RELEASE_VERSION="$PLAN_RELEASE_VERSION"
 fi
-build_seconds=$((SECONDS - build_started))
+build_seconds=$(( ($(now_ms) - build_started) / 1000 ))
 
 export WF_FIXTURE_DEPLOY="$PLAN_FIXTURE_DEPLOY"
 export WF_RELEASE_REPO="$RELEASE_REPO"
@@ -137,10 +190,6 @@ else
   export WF_RELEASE_TREE="$RELEASE_REPO"
 fi
 SHARED_RELEASE="$RELEASE_REPO"
-
-# 串行模式没有 run_one 的 bind mount；用软链把共享发行仓库放到套件硬编码的 /tmp 路径下
-link_release() { mkdir -p /tmp/wf-fixtures && ln -sfn "$RELEASE_REPO" /tmp/wf-fixtures/release-repo; }
-link_release
 
 fixture_args() {
   FIXTURE_ARGS=(--deploy "$PLAN_FIXTURE_DEPLOY")
@@ -172,11 +221,11 @@ WF_TEMPLATE_READY=0
 WF_TEMPLATE=""
 if [ "${WF_NO_TEMPLATE:-0}" != "1" ]; then
   WF_TEMPLATE="$RESULTS_DIR/template"
-  template_started=$SECONDS
-  rm -rf "$WF_TEMPLATE"
+  template_started=$(now_ms)
+  "$PY" "$HERE/fixture_scope.py" reset "$WF_TEMPLATE" || exit 1
   fixture_args
-  if ! bash "$HERE/wf_fixture.sh" "$WF_TEMPLATE" "${FIXTURE_ARGS[@]}" >"$RESULTS_DIR/template.out" 2>&1 \
-      || ! WF_FIX="$WF_TEMPLATE" "$PY" "$HERE/f1_init.py" >>"$RESULTS_DIR/template.out" 2>&1; then
+  if ! run_command template-fixture "$RESULTS_DIR/template-fixture.log" raw bash "$HERE/wf_fixture.sh" "$WF_TEMPLATE" "${FIXTURE_ARGS[@]}" >"$RESULTS_DIR/template.out" 2>&1 \
+      || ! WF_FIX="$WF_TEMPLATE" run_command template-init "$RESULTS_DIR/template-init.log" raw "$PY" "$HERE/f1_init.py" >>"$RESULTS_DIR/template.out" 2>&1; then
     echo "TEMPLATE-BUILD-FAILED（见 $RESULTS_DIR/template.out）"
     tail -5 "$RESULTS_DIR/template.out" || true
     exit 1
@@ -186,7 +235,7 @@ if [ "${WF_NO_TEMPLATE:-0}" != "1" ]; then
     exit 1
   fi
   WF_TEMPLATE_READY=1
-  TEMPLATE_SECONDS=$((SECONDS - template_started))
+  TEMPLATE_SECONDS=$(( ($(now_ms) - template_started) / 1000 ))
   echo "（夹具模板已构建：${WF_TEMPLATE}，${TEMPLATE_SECONDS}s；逐套件 cp -a 复用）"
 else
   echo "（WF_NO_TEMPLATE=1：逐套件重建夹具）"
@@ -198,8 +247,7 @@ export WF_TEMPLATE WF_TEMPLATE_READY
 prepare_fixture() {
   local log=$1
   if [ "$WF_TEMPLATE_READY" = "1" ]; then
-    rm -rf "$FIX"
-    if ! cp -a "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
+    if ! "$PY" "$HERE/fixture_scope.py" clone "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
       return 3
     fi
     if ! template_check "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
@@ -208,10 +256,11 @@ prepare_fixture() {
     return 0
   fi
   fixture_args
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >>"$log" 2>&1; then
+  "$PY" "$HERE/fixture_scope.py" reset "$FIX" >>"$log" 2>&1 || return 1
+  if ! run_command fixture "$log.fixture.log" raw bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >>"$log" 2>&1; then
     return 1
   fi
-  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
+  if ! WF_FIX="$FIX" run_command init "$log.init.log" raw "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
     return 2
   fi
   return 0
@@ -228,6 +277,8 @@ fixture_failure_label() {
 }
 
 JOBS=$PLAN_JOBS
+EXECUTION_MODE=serial
+FALLBACK_REASON=""
 RESULTS_MARK="$RESULTS_DIR/lines"
 
 can_unshare() {
@@ -256,18 +307,8 @@ run_suites_parallel() {
   export FIX HERE PY SHARED_RELEASE RESULTS_DIR SOURCE_HOME
   local xargs_rc=0
   printf '%s\n' $list | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {} || xargs_rc=$?
-  # 并行下 unshare 偶发失败会让某个套件「跑了但没有结果行」：先串行重跑一次拿确定结果
-  local pre_missing="" suite0
-  for suite0 in $list; do
-    awk -F'\t' -v s="$suite0" 'NF==5 && $1==s && $2 ~ /^-?[0-9]+$/ && $4 ~ /^(ok|bad)$/ {found=1} END{exit !found}' \
-      "$RESULTS_MARK" || pre_missing="$pre_missing $suite0"
-  done
-  if [ -n "$pre_missing" ]; then
-    echo "RETRY-SERIAL:$pre_missing（并行下未产出结果行，串行重跑）"
-    for suite0 in $pre_missing; do
-      link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite0"
-    done
-  fi
+  # Missing worker results are infrastructure failures, not permission to rerun
+  # a partly executed test against different state. Preserve logs and fail closed.
   sort -t$'\t' -k1 "$RESULTS_MARK" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
   for suite0 in $list; do add_init_millis "$suite0"; done
   # 完整性判定只有一处实现（results_gate.py）：缺行/重行/畸形/计划外/坏结果都必须计失败，
@@ -342,7 +383,7 @@ run_suite() {
   local suite=$1
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$suite.out"
-  local init_started=$SECONDS
+  local init_started=$(now_ms)
   : > "$log"
   local prep_rc=0
   prepare_fixture "$log" || prep_rc=$?
@@ -353,25 +394,21 @@ run_suite() {
   if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
     printf '%-18s FIXTURE-INCOMPLETE\n' "$suite"; fail=$((fail+1)); return
   fi
-  local init_millis_local=$(( (SECONDS - init_started) * 1000 ))
+  local init_millis_local=$(( $(now_ms) - init_started ))
   init_millis=$((init_millis + init_millis_local))
-  local out rc line started elapsed
-  started=$SECONDS
-  out=$(WF_FIX="$FIX" "$PY" "$HERE/$suite.py" 2>&1); rc=$?
+  local out rc line started elapsed elapsed_ms
+  started=$(now_ms)
+  out=$(WF_FIX="$FIX" run_command "$suite" "$RESULTS_DIR/$suite.test.log" suite "$PY" "$HERE/$suite.py" 2>&1); rc=$?
   printf '%s\n' "$out" >> "$log"
-  elapsed=$((SECONDS - started))
-  suite_millis=$((suite_millis + elapsed * 1000))
-  printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis_local" "$((elapsed * 1000))" > "$RESULTS_DIR/$suite.timing"
+  elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
+  suite_millis=$((suite_millis + elapsed_ms))
+  printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis_local" "$((elapsed_ms))" > "$RESULTS_DIR/$suite.timing"
   line=$(printf '%s\n' "$out" | tail -1)
   printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
   suite_ran=$((suite_ran+1))
   # 判定：退出码、汇总行里的失败数、输出中的 FAIL 都算失败
-  local bad status
-  bad=$(printf '%s\n' "$out" | grep -c '\[FAIL\]')
-  status=ok
-  if [ "$rc" -ne 0 ] || [ "$bad" -ne 0 ] || printf '%s' "$line" | grep -qE 'FAIL|(saved|total) 0'; then
-    fail=$((fail+1)); status=bad
-  fi
+  local status=ok
+  if [ "$rc" -ne 0 ]; then fail=$((fail+1)); status=bad; fi
   mkdir -p "$RESULTS_DIR"
   printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$rc" "$elapsed" "$status" "$line" >> "$RESULTS_MARK"
 }
@@ -391,18 +428,28 @@ PARALLEL_LIST="$PLAN_SUITES_PARALLEL"
 # 仓库副本位于 /tmp 时，unshare 里挂的 tmpfs 会把 /tmp 遮住，子进程看不到套件与结果文件。
 if [ "$JOBS" -gt 1 ]; then
   case "$HERE" in
-    /tmp/*) echo "（套件目录在 /tmp 下：unshare 的 tmpfs 会遮住路径，改用串行）"; JOBS=1 ;;
+    /tmp/*) echo "（套件目录在 /tmp 下：unshare 会遮住输入路径，改用串行）"; JOBS=1; FALLBACK_REASON="repository-under-tmp" ;;
   esac
 fi
 if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; then
   if [ "$JOBS" -gt 1 ] && [ -n "$PARALLEL_LIST" ] && can_unshare; then
     echo "（并行：$JOBS worker（unshare 隔离）；串行段 $(printf '%s' "$PARALLEL_SERIAL_LIST" | wc -w) 个套件）"
+    EXECUTION_MODE=unshare
     run_suites_parallel "$PARALLEL_LIST"
     for suite in $PARALLEL_SERIAL_LIST; do run_suite "$suite"; done
   else
-    if [ "$JOBS" -gt 1 ]; then echo "（unshare 不可用：退回串行）"; else echo "（串行：逐套件执行）"; fi
+    if [ "$JOBS" -gt 1 ] && [ -z "$FALLBACK_REASON" ]; then
+      if ! can_unshare; then FALLBACK_REASON="unshare-unavailable"
+      elif [ -z "$PARALLEL_LIST" ]; then FALLBACK_REASON="all-suites-require-serial"
+      else FALLBACK_REASON="parallel-worker-capability-unavailable"
+      fi
+      echo "（$FALLBACK_REASON：退回串行）"
+    else
+      echo "（串行：逐套件执行）"
+    fi
+    JOBS=1
     # 串行模式共享 /tmp：某些套件会伪造 release-repo 软链，逐套件重建以隔离这种干扰
-    for suite in $PLAN_SUITES_ALL; do link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
+    for suite in $PLAN_SUITES_ALL; do WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
   fi
 fi
 if [ "$BUILD_OK" = 0 ]; then
@@ -412,10 +459,9 @@ fi
 # ---- 流程（仅 full/representative）----------------------------------------
 run_flow() {
   local name=$1 script=$2 expect=$3
-  link_release
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$name.out"
-  local init_started=$SECONDS
+  local init_started=$(now_ms)
   : > "$log"
   local prep_rc=0
   prepare_fixture "$log" || prep_rc=$?
@@ -423,13 +469,14 @@ run_flow() {
     printf '%-18s %s\n' "$name" "$(fixture_failure_label "$prep_rc")"
     fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
-  init_millis=$((init_millis + (SECONDS - init_started) * 1000))
-  local out rc got started elapsed
-  started=$SECONDS
-  out=$(WF_FIX="$FIX" "$PY" "$HERE/$script.py" 2>&1); rc=$?
-  elapsed=$((SECONDS - started))
-  suite_millis=$((suite_millis + elapsed * 1000))
-  got=$(printf '%s\n' "$out" | grep -c 'PASS')
+  init_millis=$((init_millis + ($(now_ms) - init_started)))
+  local out rc got started elapsed elapsed_ms
+  started=$(now_ms)
+  out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script.py" 2>&1); rc=$?
+  elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
+  suite_millis=$((suite_millis + elapsed_ms))
+  printf '%s\n' "$out" >> "$log"
+  got=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -ne "$expect" ]; then fail=$((fail+1)); fi
@@ -437,16 +484,17 @@ run_flow() {
 
 # F0：从发行安装器装到一个空目录，再跑自举闭环（candidate 模式下用候选安装器）
 run_f0() {
-  local target=/tmp/wf-fixtures/f0
-  rm -rf "$target"; mkdir -p "$target"
-  if ! "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref "$RELEASE_REF" \
+  local target="$LEGACY_FIXTURE_ROOT/f0"
+  "$PY" "$HERE/fixture_scope.py" reset "$target" --forbid "$RESULTS_DIR" \
+    --forbid "$RELEASE_REPO" || { fail=$((fail+1)); return; }
+  if ! run_command f0-install "$RESULTS_DIR/f0-install.log" raw "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref "$RELEASE_REF" \
       --source "$RELEASE_REPO" --platform dsh \
-      --confirm      >/dev/null 2>&1; then
+      --confirm >"$RESULTS_DIR/f0-install.out" 2>&1; then
     printf '%-18s INSTALL-FAILED\n' f0; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
   local out got passed
-  out=$(WF_FIX="$target" "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
-  passed=$(printf '%s\n' "$out" | grep -c 'PASS')
+  out=$(WF_FIX="$target" run_command f0 "$RESULTS_DIR/f0.test.log" flow --expected 9 "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
+  passed=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
   printf '%-18s rc=%s PASS=%s\n' f0 "$got" "$passed"
   flow_ran=$((flow_ran+1))
   if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
@@ -454,9 +502,10 @@ run_f0() {
 
 run_extra() {
   # 直接调用的专项脚本体：计入 flow_ran，判据为退出码与 PASS 计数
-  local name=$1 script=$2 expect=$3 out rc got
-  out=$(WF_FIX="${WF_FIX:-/tmp/wf-fixtures/f1}" "$PY" "$HERE/$script" 2>&1); rc=$?
-  got=$(printf '%s\n' "$out" | grep -c 'PASS')
+  local name=$1 script=$2 expect=$3 out rc got log="$RESULTS_DIR/$1.out"
+  out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script" 2>&1); rc=$?
+  printf '%s\n' "$out" >> "$log"
+  got=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -lt "$expect" ]; then fail=$((fail+1)); fi
@@ -526,7 +575,7 @@ fi
 debt=$(printf '%s' "$legacy_failed" | wc -w)
 stale=$(( $(printf '%s' "$legacy_fixed" | wc -w) + $(printf '%s' "$legacy_missing" | wc -w) ))
 unknown_fail=$(( fail - debt ))
-total_seconds=$((SECONDS - TOTAL_STARTED))
+total_millis=$(( $(now_ms) - TOTAL_STARTED )); total_seconds=$((total_millis / 1000))
 units_total=$((suite_ran + flow_ran + repro_ran))
 
 # ---- 产品发行树必须没被测试改写 ---------------------------------------------
@@ -547,7 +596,7 @@ WF_SUMMARY_REPRO_RAN="$repro_ran" WF_SUMMARY_FAIL="$unknown_fail" \
 WF_SUMMARY_DEBT="$debt" WF_SUMMARY_BUILD="$build_seconds" WF_SUMMARY_TEMPLATE="$TEMPLATE_SECONDS" \
 WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
 WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
-WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
+WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_TOTAL_MS="$total_millis" WF_SUMMARY_EFFECTIVE_JOBS="$JOBS" WF_SUMMARY_EXECUTION_MODE="$EXECUTION_MODE" WF_SUMMARY_FALLBACK="$FALLBACK_REASON" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
 WF_SUMMARY_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
 WF_SUMMARY_JOBS="$PLAN_JOBS" WF_SUMMARY_REPRO_JOBS="$PLAN_REPRO_JOBS" \
 "$PY" - <<'PY'
@@ -564,7 +613,11 @@ payload = {
     "units_total": int(os.environ.get("WF_SUMMARY_UNITS") or 0),
     "repro_mode": os.environ.get("WF_SUMMARY_REPRO_MODE"),
     "repro_groups": groups,
-    "jobs": int(os.environ.get("WF_SUMMARY_JOBS") or 0),
+    "jobs": int(os.environ.get("WF_SUMMARY_EFFECTIVE_JOBS") or 0),
+    "requested_jobs": int(os.environ.get("WF_SUMMARY_JOBS") or 0),
+    "effective_jobs": int(os.environ.get("WF_SUMMARY_EFFECTIVE_JOBS") or 0),
+    "execution_mode": os.environ.get("WF_SUMMARY_EXECUTION_MODE"),
+    "fallback_reason": os.environ.get("WF_SUMMARY_FALLBACK"),
     "repro_jobs": int(os.environ.get("WF_SUMMARY_REPRO_JOBS") or 0),
     # init/suite 是各套件累计（并行下总和可大于 total_seconds），totals 才是墙钟
     "timing_note": "init_seconds/suite_seconds 为跨套件累计；total_seconds 为墙钟",
@@ -577,7 +630,7 @@ payload = {
     "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),
     "green_seconds": int(os.environ.get("WF_SUMMARY_GREEN") or 0),
     "red_seconds": int(os.environ.get("WF_SUMMARY_RED") or 0),
-    "total_seconds": int(os.environ.get("WF_SUMMARY_TOTAL") or 0),
+    "total_seconds": round(int(os.environ["WF_SUMMARY_TOTAL_MS"]) / 1000, 3),
 }
 path = os.environ["WF_SUMMARY_JSON"]
 with open(path, "w", encoding="utf-8") as handle:

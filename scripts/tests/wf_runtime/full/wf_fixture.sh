@@ -13,6 +13,12 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../../.." && pwd)
 PY=/softwares/python/bin/python3
+case "${1:-}" in -h|--help) sed -n '2,14p' "$0"; exit 0 ;; esac
+if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
+  || ! "$PY" "$HERE/fixture_scope.py" check-lease >/dev/null 2>&1; then
+  export WF_RUNNER_ENTRY_PID=$$
+  exec "$PY" "$HERE/fixture_scope.py" lease -- bash "$0" "$@"
+fi
 
 F=""
 MODE="verified"
@@ -44,9 +50,14 @@ if [ "$PROFILE" != "install" ]; then
   exit 2
 fi
 
-rm -rf "$F"; mkdir -p "$F/src" "$F/tests"
+"$PY" "$HERE/fixture_scope.py" reset "$F"
+mkdir -p "$F/src" "$F/tests"
+DEPLOY_LOG=$(mktemp "$F/.deploy.XXXXXX")
+trap 'rm -f "$DEPLOY_LOG"' EXIT
 cd "$F"
 git init -q
+mkdir -p .git/info
+printf '/.wf/tasks/**/check-logs/\n' >> .git/info/exclude
 git config user.email test@example.com; git config user.name tester
 printf '# demo project\n' > README.md
 printf 'def add(a, b):\n    return a + b\n' > src/calc.py
@@ -60,7 +71,7 @@ case "$DEPLOY" in
       echo "wf_fixture: dev 模式不接受 --release-root/--release-ref/--release-version" >&2
       exit 2
     fi
-    "$PY" "$REPO/scripts/wf-dev-deploy.py" --target "$F" --platform dsh --confirm >/tmp/deploy.log 2>&1
+    "$PY" "$REPO/scripts/wf-dev-deploy.py" --target "$F" --platform dsh --confirm >"$DEPLOY_LOG" 2>&1
     ;;
   candidate)
     if [ -z "$RELEASE_ROOT" ] || [ -z "$RELEASE_REF" ] || [ -z "$RELEASE_VERSION" ]; then
@@ -72,8 +83,8 @@ case "$DEPLOY" in
       exit 2
     fi
     "$PY" "$RELEASE_ROOT/install.py" --target "$F" --release-ref "$RELEASE_REF" \
-      --source "$RELEASE_ROOT" --platform dsh --confirm >/tmp/deploy.log 2>&1 || {
-      echo "wf_fixture: 候选安装失败（见 /tmp/deploy.log）" >&2; tail -5 /tmp/deploy.log >&2; exit 1; }
+      --source "$RELEASE_ROOT" --platform dsh --confirm >"$DEPLOY_LOG" 2>&1 || {
+      echo "wf_fixture: 候选安装失败（见 $DEPLOY_LOG）" >&2; tail -5 "$DEPLOY_LOG" >&2; exit 1; }
     "$PY" - "$F" "$RELEASE_ROOT" "$RELEASE_REF" "$RELEASE_VERSION" <<'PY'
 import json, os, sys
 
@@ -104,4 +115,4 @@ PY
   *)
     echo "wf_fixture: --deploy 只接受 dev|candidate（收到 '$DEPLOY'）" >&2; exit 2 ;;
 esac
-tail -2 /tmp/deploy.log
+tail -2 "$DEPLOY_LOG"

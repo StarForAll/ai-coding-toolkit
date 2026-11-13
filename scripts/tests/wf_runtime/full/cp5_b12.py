@@ -2,7 +2,7 @@
 """CP5 / B1+B2：F2 上的 Trellis 两分支与「共存 + 外部提交处置」。"""
 import hashlib, json, os, subprocess, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
-F = "/tmp/wf-fixtures/f2"
+F = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f2")
 # 孤儿套件回接（2026-11-06 W1）：自带 F2 夹具（含 .trellis 残留言据与无交集外部提交）
 subprocess.run(["bash", os.path.join(HERE, "f2_setup.sh")], check=True, capture_output=True)
 # F2 初始态还包含一个已归档的初始化任务（与历史 V2/V3 用例同构），否则 F 无基线/无确认

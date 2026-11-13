@@ -3,7 +3,7 @@
 import json, os, re, subprocess, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-F = "/tmp/wf-fixtures/fu"
+F = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "fu")
 # 孤儿套件回接（2026-11-06 W1）：自带夹具，不依赖兄弟套件或 run_one 的 FIX
 subprocess.run(["bash", os.path.join(HERE, "wf_fixture.sh"), F], check=True, capture_output=True)
 SKILLS = os.path.join(F, ".agents/skills")

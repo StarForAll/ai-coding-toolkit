@@ -13,6 +13,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[0]
@@ -83,6 +84,35 @@ class CandidateFilterTest(unittest.TestCase):
 
 
 class AutoModeTest(unittest.TestCase):
+    def _record_result(self, case, mode):
+        root = os.path.join(self.cache, "results")
+        os.makedirs(root, exist_ok=True)
+        with open(os.path.join(root, case + ".json"), "w", encoding="utf-8") as handle:
+            json.dump({"case": case, "mode": mode, "verified": True,
+                       "green": "pass" if mode in ("green", "both") else "skip",
+                       "red": "pass" if mode in ("red", "both") else "skip",
+                       "fingerprint": select.input_fingerprint(case)}, handle)
+        select.commit_state(root)
+        os.unlink(os.path.join(root, case + ".json"))
+
+    def test_green_does_not_certify_red_for_changed_target(self):
+        case = "review-count-reject"
+        with mock.patch.object(select, "targets_digest", return_value="target-v1"):
+            self._record_result(case, "both")
+        with mock.patch.object(select, "targets_digest", return_value="target-v2"):
+            self.assertEqual(select.auto_modes([case], select.load_groups())[case], "both")
+            self._record_result(case, "green")
+            self.assertEqual(select.auto_modes([case], select.load_groups())[case], "both")
+
+    def test_partial_verification_does_not_refresh_other_helper_evidence(self):
+        first, second = "review-count-reject", "install-receipt-relative"
+        with mock.patch.object(select, "helpers_digest", return_value="helpers-v1"):
+            self._record_result(first, "both")
+            self._record_result(second, "both")
+        with mock.patch.object(select, "helpers_digest", return_value="helpers-v2"):
+            self._record_result(first, "both")
+            self.assertEqual(select.auto_modes([second], select.load_groups())[second], "both")
+
     def setUp(self):
         self.cache = tempfile.mkdtemp(prefix="wf-repro-state-")
         self.addCleanup(lambda: shutil.rmtree(self.cache, ignore_errors=True))
@@ -101,18 +131,43 @@ class AutoModeTest(unittest.TestCase):
                                mode="auto")
         self.assertEqual(result["modes"], {"review-count-reject": "both"})
 
+    def test_legacy_evidence_is_preserved_but_never_reused(self):
+        case = "review-count-reject"
+        legacy = {"schema_version": 1, "helpers_digest": "old-helper", "cases": {
+            case: {"script_digest": "old-script", "verified_both_at": "old-proof"}}}
+        Path(select.state_path()).write_text(json.dumps(legacy))
+        self.assertEqual(select.auto_modes([case], select.load_groups())[case], "both")
+        self._record_result(case, "green")
+        saved = select.read_state()["cases"][case]
+        self.assertEqual(saved["legacy"], legacy["cases"][case])
+        self.assertEqual(select.auto_modes([case], select.load_groups())[case], "both")
+
+    def test_corrupt_state_is_not_silently_replaced(self):
+        state = Path(select.state_path())
+        state.write_text('{broken')
+        before = state.read_bytes()
+        with self.assertRaises(select.SelectError):
+            select.read_state()
+        self.assertEqual(state.read_bytes(), before)
+
+    def test_red_only_proves_current_red_but_unknown_targets_never_reuse_it(self):
+        case = 'review-count-reject'
+        self._record_result(case, 'red')
+        self.assertEqual(select.auto_modes([case], select.load_groups())[case], 'green')
+        with mock.patch.object(select, 'targets_digest', return_value=None):
+            self._record_result(case, 'both')
+            self.assertEqual(select.auto_modes([case], select.load_groups())[case], 'both')
+
+    def test_dependency_changes_invalidate_reusable_red_evidence(self):
+        case = 'review-count-reject'
+        self.assertTrue(hasattr(select, 'source_digest'), 'source inputs are not fingerprinted')
+        with mock.patch.object(select, 'source_digest', return_value='source-v1'):
+            self._record_result(case, 'both')
+        with mock.patch.object(select, 'source_digest', return_value='source-v2'):
+            self.assertEqual(select.auto_modes([case], select.load_groups())[case], 'both')
+
     def test_unchanged_case_runs_green_only(self):
-        select.auto_modes(["review-count-reject"], select.load_groups())
-        state = select.read_state()
-        state["helpers_digest"] = select.helpers_digest()
-        state["cases"]["review-count-reject"] = {
-            "script_digest": select.script_digest("review-count-reject"),
-            "targets_digest": select.targets_digest(
-                "review-count-reject", (select.load_groups().get("cases") or {}).get("review-count-reject")),
-            "verified_both_at": "2026-11-13T00:00:00Z",
-            "mode": "both",
-        }
-        select.write_state(state)
+        self._record_result("review-count-reject", "both")
         result = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                mode="auto")
         self.assertEqual(result["modes"], {"review-count-reject": "green"})
@@ -150,7 +205,9 @@ class AutoModeTest(unittest.TestCase):
         results = tempfile.mkdtemp(prefix="wf-repro-results-")
         self.addCleanup(lambda: shutil.rmtree(results, ignore_errors=True))
         with open(os.path.join(results, "review-count-reject.json"), "w", encoding="utf-8") as handle:
-            json.dump({"case": "review-count-reject", "mode": "both", "verified": True}, handle)
+            json.dump({"case": "review-count-reject", "mode": "both", "verified": True,
+                       "green": "pass", "red": "pass",
+                       "fingerprint": select.input_fingerprint("review-count-reject")}, handle)
         with open(os.path.join(results, "review-unavailable.json"), "w", encoding="utf-8") as handle:
             json.dump({"case": "review-unavailable", "mode": "both", "verified": False}, handle)
         path, updated, kept = select.commit_state(results)

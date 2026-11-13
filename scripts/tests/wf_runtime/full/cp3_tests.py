@@ -74,6 +74,8 @@ wf(["task-start", "--task", task1, "--json"], {"generation": gen1}, "sess-Q1")
 check_rc, check_payload, _ = wf(["task-check", "--task", task1, "--review-notes", NOTES, "--json"],
                                 {"generation": gen1}, "sess-Q1")
 rec("A6 准备：Check 通过", "pass", (check_payload or {}).get("code"), check_rc == 0)
+if check_rc != 0:
+    raise RuntimeError(f"A6 Check precondition failed: {check_payload}")
 wf(["task-knowledge", "--task", task1, "--decision", "no-update", "--json"], {"generation": gen1}, "sess-Q1")
 open(os.path.join(F, "notes.txt"), "w").write("unrelated\n")
 subprocess.run(["git", "add", "notes.txt"], cwd=F, capture_output=True)

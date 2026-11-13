@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """第三十六轮 R72：卸载入口的清单一致性与资产边界。"""
-import json, os, re, shutil, subprocess, sys
-F_BASE = "/tmp/wf-fixtures/r72"
+import json, os, re, subprocess, sys
+F_BASE = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "r72")
 results = []
 
 
@@ -12,8 +12,8 @@ def rec(name, expected, actual, ok):
 
 def make_project(name):
     target = os.path.join(F_BASE, name)
-    shutil.rmtree(target, ignore_errors=True)
-    os.makedirs(target)
+    subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
+                    "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
     subprocess.run(["/softwares/python/bin/python3",
                     "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",

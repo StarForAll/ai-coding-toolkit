@@ -6,8 +6,11 @@
 
 import importlib.util
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[0]
@@ -37,6 +40,56 @@ class GateTest(unittest.TestCase):
     def write(self, *lines):
         with open(self.path, "w", encoding="utf-8") as handle:
             handle.writelines(lines)
+
+    def test_nonzero_exit_cannot_be_reported_as_ok(self):
+        self.write(line("a", rc=1, status="ok"))
+        self.assertFalse(gate_mod.gate(self.path, "a")["ok"])
+
+    def test_invalid_duration_cannot_be_reported_as_ok(self):
+        self.write(line("a", seconds="nan"))
+        self.assertFalse(gate_mod.gate(self.path, "a")["ok"])
+
+    def test_empty_assertion_summary_cannot_be_reported_as_ok(self):
+        self.write(line("a", tail=""))
+        self.assertFalse(gate_mod.gate(self.path, "a")["ok"])
+
+    def test_multiple_missing_names_survive_shell_transport(self):
+        self.write(line("a"))
+        result = subprocess.run([sys.executable, str(FULL / "results_gate.py"),
+                                 "--lines", self.path, "--expected", "a missing_one missing_two"],
+                                capture_output=True, text=True)
+        shell = subprocess.run(["bash", "-euc", 'eval "$1"; printf "%s" "$GATE_MISSING"',
+                                "gate-test", result.stdout], capture_output=True, text=True)
+        self.assertEqual(shell.returncode, 0, shell.stderr)
+        self.assertEqual(shell.stdout, "missing_one missing_two")
+
+    def test_repro_gate_requires_frozen_inputs_and_consistent_phases(self):
+        repro = Path(self.dir) / "repro"
+        repro.mkdir()
+        (repro / "selection.tsv").write_text("case-a\tboth\n")
+        (repro / "inputs.json").write_text('{"case-a":"fingerprint-a"}')
+        (repro / ".wf-results-owner.json").write_text('{"owner":"wf-test-fixture-v1"}')
+        (repro / 'logs').mkdir()
+        for phase in ('green', 'red'):
+            (repro / 'logs' / f'case-a.{phase}.log').write_text(f'PASS {phase}: target verified\n')
+        result = repro / "case-a.json"
+        result.write_text(
+            '{"case":"case-a","mode":"both","green":"pass","red":"pass",'
+            '"verified":true,"fingerprint":"fingerprint-a","green_seconds":0.1,"red_seconds":0.2,'
+            '"phases":{"green":{"rc":0,"status":"passed"},"red":{"rc":0,"status":"passed"}}}')
+        import importlib.util
+        sys.path.insert(0, str(FULL / "repro"))
+        import repro_select
+        spec = importlib.util.spec_from_file_location("wf_results_gate_repro", FULL / "results_gate.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with mock.patch.object(repro_select, "commit_state", return_value=("state", [], [])):
+            self.assertEqual(module.repro_gate(repro), 0)
+        result.write_text(
+            '{"case":"case-a","mode":"both","green":"pass","red":"fail",'
+            '"verified":true,"fingerprint":"fingerprint-a","green_seconds":0.1,"red_seconds":0.2}')
+        with mock.patch.object(repro_select, "commit_state", return_value=("state", [], [])):
+            self.assertEqual(module.repro_gate(repro), 1)
 
     def test_complete_result_set_is_ok(self):
         self.write(line("a"), line("b"))
