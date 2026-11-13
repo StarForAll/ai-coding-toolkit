@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _harness as H
+import _review_flow as F
 import _review_launch as L
 
 SID = "sess-665"
@@ -84,7 +85,10 @@ def check():
         rc, payload = write_and_import(slot, path, COVERED, "covered")
         if rc != 0:
             raise H.Precondition(f"覆盖声明未被接受：{payload}")
-    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", str(round_no), "--json"],
+    main_path = os.path.join(root, "main-review.json")
+    json.dump(F.main_review(task_id, ["s1", "s2"]), open(main_path, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", str(round_no),
+                                  "--main-review", main_path, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc != 0:
         raise H.Precondition(f"覆盖声明下的判定未成立：{payload}")

@@ -33,6 +33,11 @@ REPORT_FIELDS = (
 
 BLOCKING_SEVERITIES = ("blocker", "blocking", "critical", "high")
 
+# 主会话复核（2026-11-13）：reviewer 报告是辅助证据；主会话必须给出自己的五轴结论。
+MAIN_REVIEW_FIELDS = ("task", "round", "axes", "report_review", "finding_review")
+MAIN_REVIEW_RELIANCE = ("primary", "partial", "none")
+MAIN_REVIEW_CHECKS = ("verified", "disputed", "unable")
+
 # 外部审查的固定五轴（机制稿 §9.2、skill wf-review）；内部两轴属 Check 自审，不在此列
 REVIEW_AXES = ("range", "acceptance", "contract", "regression", "testability")
 AXIS_CONCLUSIONS = ("pass", "fail", "uncovered")
@@ -347,6 +352,8 @@ def report_input_problems(payload, *, task=None, text=None):
         add("excluded-scope", ([] if excluded else [{"reason": "report excluded-scope is empty"}])
             + ([{"reason": "excluded-scope does not cover sensitive surfaces", "missing": gaps}]
                if excluded and gaps else []))
+    if "read-scope" in payload and "excluded-scope" in payload:
+        add("read-scope-excluded", read_scope_problems(payload))
 
     axes_value = payload.get("axes")
     if isinstance(axes_value, dict):
@@ -651,10 +658,12 @@ def derive_verdict(axes, findings):
     """报告三态判定（S3 判定句，v42 B1）：`fail` 仅当存在 blocking finding。
 
     返回 `(conclusion, problems, gaps, blocking)`：
-    - `conclusion` 取 `pass` / `fail`，只对**已覆盖**的轴成立；
+    - `conclusion` 取 `pass` / `fail` / `unavailable`，只对**已覆盖**的轴成立；
     - `problems` 为"输入不成立"的事实（轴缺失/非法、`fail` 轴没有对应 blocking finding）；
     - `gaps` 为 `uncovered` 轴——它**不是** fail，也不构成审查通过；缺口处置见
-      `coverage_state` / `coverage_acceptance`（判定入口）与机制稿 §9.2。
+      `merged_coverage` / `gap_acceptance`（判定入口）与机制稿 §9.2；
+    - 五轴全 `uncovered` 且没有 blocking finding 时，报告自身结论是 `unavailable`：
+      "没有发现缺陷"不等于"完成了一次审查"。
     """
     conclusions = {}
     problems = []
@@ -683,29 +692,279 @@ def derive_verdict(axes, findings):
                          "axes": fail_axes,
                          "exits": ["把该轴的问题写成 severity=blocking 的 finding（附 assertion_ref）",
                                    "或把该轴改成 uncovered 并按缺口处置"]})
-    return ("fail" if (blocking or fail_axes) else "pass"), problems, gaps, blocking
+    if blocking or fail_axes:
+        return "fail", problems, gaps, blocking
+    if not problems and len(gaps) == len(REVIEW_AXES):
+        return "unavailable", problems, gaps, blocking
+    return "pass", problems, gaps, blocking
 
 
-def coverage_state(axis_reports):
-    """本轮覆盖状态：轴是否被**任一份**报告真正覆盖。
+def merged_coverage(main_axes, axis_reports):
+    """本轮覆盖：主会话复核 + 报告意见两源合并，**两者都未覆盖的轴才是缺口**。
 
+    `main_axes` 是主会话复核的五轴；`axis_reports` 是 `{slot: axes}`。
     `pass`/`fail` 都算覆盖（`fail` 是"看过并判不通过"）；`uncovered` 不算。
-    返回 `{covered, uncovered, all_uncovered}`：`all_uncovered` 表示这一轮没有任何轴被
-    真正审查过——那是输入不成立，不是"没发现缺陷"。
+    返回 `{covered, uncovered, all_uncovered, sources}`：
+    - `sources[axis]` 列出覆盖该轴的来源（`main` 与/或槽位）；
+    - `all_uncovered` 表示两个来源都没有真正覆盖任何轴——那是输入不成立，
+      不是"没发现缺陷"。
     """
     covered = set()
-    for axes in axis_reports:
-        if not isinstance(axes, dict):
-            # 形状不成立的报告由输入面校验拒绝；投影侧要能承受它，不能因 status/判定前置而抛栈
-            continue
-        for axis, result in axes.items():
-            if axis not in REVIEW_AXES:
+    sources = {}
+    for axis in REVIEW_AXES:
+        found = []
+        main_result = (main_axes or {}).get(axis)
+        if _axis_conclusion(main_result) in ("pass", "fail"):
+            found.append("main")
+        for slot, axes in (axis_reports or {}).items():
+            if not isinstance(axes, dict):
+                # 形状不成立的报告由输入面校验拒绝；投影侧要能承受它，不能因 status/判定前置而抛栈
                 continue
-            if _axis_conclusion(result) in ("pass", "fail"):
-                covered.add(axis)
+            if _axis_conclusion(axes.get(axis)) in ("pass", "fail"):
+                found.append(slot)
+        if found:
+            covered.add(axis)
+        sources[axis] = found
     uncovered = [axis for axis in REVIEW_AXES if axis not in covered]
     return {"covered": sorted(covered), "uncovered": uncovered,
-            "all_uncovered": not covered}
+            "all_uncovered": not covered, "sources": sources}
+
+
+def _main_review_ref_key(ref, round_no, known_keys):
+    """`finding_refs` 的一项 → 精确身份 `(round, slot, finding_id)`；无法唯一解析时返回 None。"""
+    if isinstance(ref, dict):
+        slot = ref.get("slot")
+        finding_id = ref.get("finding_id")
+        if slot is None or finding_id is None:
+            return None
+        return (int(round_no), str(slot), str(finding_id))
+    matches = [key for key in known_keys if key[2] == str(ref)]
+    return matches[0] if len(matches) == 1 else None
+
+
+def validate_main_review(payload, *, task_id, round_no, imported, findings, open_blocking,
+                         axis_reports, by, file_digest=None):
+    """主会话复核的结构校验（不是语义判决）。
+
+    返回 `(record, problems, semantic)`：
+    - `problems` 是输入不成立（缺字段/轴/覆盖/引用不存在）→ `WF_REVIEW_INVALID`；
+    - `semantic` 是"判 fail 但没有可指回的未关闭 finding"这类需要先修复/登记再判的事实 →
+      `WF_SEMANTIC_DECISION`；
+    - `record` 是入库形态（含 `coverage`），不保存复核文件正文。
+    """
+    problems, semantic = [], []
+    if not isinstance(payload, dict):
+        return None, [{"reason": "main review must be a JSON object"}], []
+    missing = [field for field in MAIN_REVIEW_FIELDS if field not in payload]
+    if missing:
+        problems.append({"reason": "main review missing fields", "missing": missing})
+    if str(payload.get("task") or "") != str(task_id):
+        problems.append({"reason": "main review task does not match", "declared": payload.get("task"),
+                         "expected": str(task_id)})
+    try:
+        declared_round = int(payload.get("round"))
+    except (TypeError, ValueError):
+        declared_round = None
+    if declared_round != int(round_no):
+        problems.append({"reason": "main review round does not match", "declared": payload.get("round"),
+                         "expected": int(round_no)})
+
+    slots = [str(entry.get("slot")) for entry in imported if entry.get("slot")]
+    slot_set = set(slots)
+    known_keys = {(int(item.get("round") or 0), str(item.get("slot")),
+                   str(item.get("finding_id") or item.get("id")))
+                  for item in findings if (item.get("finding_id") or item.get("id"))}
+    open_keys = {(int(item.get("round") or 0), str(item.get("slot")), str(item.get("finding_id")))
+                 for item in open_blocking if item.get("finding_id")}
+
+    axes = payload.get("axes")
+    if not isinstance(axes, dict):
+        problems.append({"reason": "main review axes must be an object"})
+        axes = {}
+    else:
+        extra = sorted(set(axes) - set(REVIEW_AXES))
+        missing_axes = [axis for axis in REVIEW_AXES if axis not in axes]
+        if extra:
+            problems.append({"reason": "main review has unknown axes", "axes": extra})
+        if missing_axes:
+            problems.append({"reason": "main review does not cover all axes", "missing": missing_axes})
+        for axis in REVIEW_AXES:
+            entry = axes.get(axis)
+            if not isinstance(entry, dict):
+                problems.append({"reason": "main review axis must be an object", "axis": axis})
+                continue
+            conclusion = entry.get("conclusion")
+            basis = str(entry.get("basis") or "").strip()
+            sources = entry.get("sources")
+            refs = entry.get("finding_refs") or []
+            if not isinstance(refs, list):
+                problems.append({"reason": "main review finding_refs must be a list", "axis": axis})
+                refs = []
+            if conclusion not in AXIS_CONCLUSIONS:
+                problems.append({"reason": "main review axis conclusion invalid", "axis": axis,
+                                 "conclusion": conclusion, "known": list(AXIS_CONCLUSIONS)})
+                continue
+            if conclusion in ("pass", "fail") and not basis:
+                problems.append({"reason": "main review pass/fail requires a basis", "axis": axis})
+            if not isinstance(sources, list):
+                problems.append({"reason": "main review sources must be a list", "axis": axis})
+                sources = []
+            unknown = sorted(set(str(item) for item in sources) - (slot_set | {"main"}))
+            if unknown:
+                problems.append({"reason": "main review sources must be main or imported slots",
+                                 "axis": axis, "unknown": unknown})
+            if conclusion in ("pass", "fail") and not sources:
+                problems.append({"reason": "main review pass/fail requires at least one source",
+                                 "axis": axis})
+            if conclusion == "uncovered" and refs:
+                problems.append({"reason": "main review uncovered axis must not cite finding_refs",
+                                 "axis": axis})
+            if conclusion == "fail":
+                if not refs:
+                    semantic.append({"reason": "主会话判 fail 必须指回具体 finding；先修复重查或登记问题",
+                                     "axis": axis, "exits": [
+                                         "修复后重跑 task-check，再 review-decide",
+                                         "把问题登记为判断（judgments add）后重新复核",
+                                         "无法覆盖就改判 uncovered，交人接受缺口"]})
+                for ref in refs:
+                    key = _main_review_ref_key(ref, round_no, known_keys)
+                    if key is None:
+                        problems.append({"reason": "main review finding_ref is ambiguous or unknown",
+                                         "axis": axis, "ref": ref,
+                                         "known": [{"round": k[0], "slot": k[1], "finding_id": k[2]}
+                                                   for k in sorted(known_keys)][:12]})
+                    elif key in open_keys:
+                        continue
+                    elif key in known_keys:
+                        semantic.append({"reason": "主会话判 fail 引用的 finding 已关闭或不是 blocking",
+                                         "axis": axis, "ref": ref,
+                                         "exits": ["如仍有问题，开新一轮审查或登记新 finding",
+                                                   "如已修复，把该轴改判 pass 并写依据"]})
+                    else:
+                        problems.append({"reason": "main review finding_ref is not from this round",
+                                         "axis": axis, "ref": ref})
+
+    report_review = payload.get("report_review")
+    if not isinstance(report_review, list):
+        problems.append({"reason": "main review report_review must be a list"})
+        report_review = []
+    seen_slots = set()
+    for item in report_review:
+        if not isinstance(item, dict):
+            problems.append({"reason": "main review report_review entry must be an object"})
+            continue
+        slot = str(item.get("slot") or "")
+        if slot not in slot_set:
+            problems.append({"reason": "main review report_review slot was not imported", "slot": slot})
+            continue
+        if slot in seen_slots:
+            problems.append({"reason": "main review report_review has duplicate slot", "slot": slot})
+            continue
+        seen_slots.add(slot)
+        if item.get("reliance") not in MAIN_REVIEW_RELIANCE:
+            problems.append({"reason": "main review reliance invalid", "slot": slot,
+                             "reliance": item.get("reliance"), "known": list(MAIN_REVIEW_RELIANCE)})
+        if not str(item.get("notes") or "").strip():
+            problems.append({"reason": "main review report_review requires notes", "slot": slot})
+    missing_slots = [slot for slot in slots if slot not in seen_slots]
+    if missing_slots:
+        problems.append({"reason": "main review does not assess every imported report",
+                         "missing": missing_slots})
+
+    finding_review = payload.get("finding_review")
+    if not isinstance(finding_review, list):
+        problems.append({"reason": "main review finding_review must be a list"})
+        finding_review = []
+    seen_keys = set()
+    for item in finding_review:
+        if not isinstance(item, dict):
+            problems.append({"reason": "main review finding_review entry must be an object"})
+            continue
+        finding_id = item.get("finding_id")
+        if not finding_id:
+            problems.append({"reason": "main review finding_review requires finding_id"})
+            continue
+        slot = item.get("slot")
+        if slot is None:
+            matches = [key for key in known_keys if key[2] == str(finding_id)]
+            if len(matches) != 1:
+                problems.append({"reason": "main review finding_id is ambiguous; add slot",
+                                 "finding_id": finding_id,
+                                 "candidates": [{"slot": k[1]} for k in matches][:12]})
+                continue
+            key = matches[0]
+        else:
+            key = (int(round_no), str(slot), str(finding_id))
+        if key not in known_keys:
+            problems.append({"reason": "main review finding_review references an unknown finding",
+                             "finding_id": finding_id, "slot": slot})
+            continue
+        if key in seen_keys:
+            problems.append({"reason": "main review finding_review has duplicate finding",
+                             "finding_id": finding_id, "slot": slot})
+            continue
+        seen_keys.add(key)
+        if item.get("check") not in MAIN_REVIEW_CHECKS:
+            problems.append({"reason": "main review finding check invalid", "finding_id": finding_id,
+                             "check": item.get("check"), "known": list(MAIN_REVIEW_CHECKS)})
+        if not str(item.get("basis") or "").strip():
+            problems.append({"reason": "main review finding_review requires basis",
+                             "finding_id": finding_id})
+    missing_findings = sorted(known_keys - seen_keys)
+    if missing_findings:
+        problems.append({"reason": "main review does not assess every finding",
+                         "missing": [{"round": key[0], "slot": key[1], "finding_id": key[2]}
+                                     for key in missing_findings]})
+
+    if problems or semantic:
+        return None, problems, semantic
+    record = {"round": int(round_no), "at": records.now_str(), "by": by,
+              "file_digest": file_digest, "axes": axes,
+              "report_review": report_review, "finding_review": finding_review,
+              "coverage": merged_coverage(axes, axis_reports)}
+    return record, [], []
+
+
+def main_review_draft(ctx, task, round_no, path):
+    """生成主会话复核的待填骨架：不产生结论，只铺路。"""
+    task = records.load_json(os.path.join(_task_dir(ctx, task), "task.json")) or task
+    reviews = task.get("reviews") or {}
+    if round_no is None:
+        launches = [entry for entry in reviews.get("launches") or [] if isinstance(entry, dict)]
+        if not launches:
+            raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "no review round was launched"})
+        round_no = max(int(entry.get("round") or 0) for entry in launches)
+    imported = [entry for entry in reviews.get("imported") or []
+                if isinstance(entry, dict) and int(entry.get("round") or 0) == int(round_no)]
+    if not imported:
+        raise ReviewError("WF_REVIEW_INVALID",
+                          {"reason": "no imported report for this round; run review-import first",
+                           "round": int(round_no)})
+    slots = [str(entry.get("slot")) for entry in imported if entry.get("slot")]
+    findings = [item for item in all_findings(ctx, task)
+                if int(item.get("round") or 0) == int(round_no)]
+    slot_axes = {}
+    for entry in imported:
+        payload, cause, _reason = read_imported_report(ctx, entry)
+        if cause is None:
+            slot_axes[str(entry.get("slot"))] = (payload or {}).get("axes") or {}
+    axes = {}
+    for axis in REVIEW_AXES:
+        sources = [slot for slot, values in slot_axes.items()
+                   if _axis_conclusion(values.get(axis)) in ("pass", "fail")]
+        axes[axis] = {"conclusion": "", "basis": "", "sources": sources, "finding_refs": []}
+    draft = {
+        "task": task.get("id"),
+        "round": int(round_no),
+        "axes": axes,
+        "report_review": [{"slot": slot, "reliance": "", "notes": ""} for slot in slots],
+        "finding_review": [{"finding_id": item.get("id"), "slot": item.get("slot"),
+                            "check": "", "basis": ""} for item in findings],
+    }
+    target = str(path)
+    records.atomic_write(target, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
+    return {"path": target, "round": int(round_no), "slots": slots,
+            "findings": len(findings)}
 
 
 GAP_ACCEPTANCE_DOMAIN = "wf-gap-acceptance-v1"
@@ -834,12 +1093,22 @@ def status_of_round(ctx, task, round_no=None):
                         for item in imported if item.get("slot")})
     implementation = {review_cli((launch or {}).get("implementation_cli"))} - {None}
     # 覆盖状态与缺口接受（与 review-decide 同一实现）：状态页要能回答"还差哪几轴/谁接受了缺口"
-    axes_reports = []
+    axes_reports = {}
     for entry in imported:
         payload, cause, _reason = read_imported_report(ctx, entry)
         if cause is None:
-            axes_reports.append((payload or {}).get("axes") or {})
-    coverage = coverage_state(axes_reports)
+            axes_reports[str(entry.get("slot"))] = (payload or {}).get("axes") or {}
+    main_entries = [item for item in ((task.get("reviews") or {}).get("main_reviews") or [])
+                    if isinstance(item, dict) and int(item.get("round") or 0) == round_no]
+    main = main_entries[-1] if main_entries else None
+    coverage = merged_coverage((main or {}).get("axes") or {}, axes_reports)
+    coverage["main_review"] = {
+        "present": bool(main),
+        "file_digest": (main or {}).get("file_digest"),
+        "axes": {axis: _axis_conclusion(((main or {}).get("axes") or {}).get(axis))
+                 for axis in REVIEW_AXES} if main else {},
+        "report_review": (main or {}).get("report_review") or [],
+    }
     accepted_axes = sorted({axis
                             for item in ((task.get("reviews") or {}).get("coverage_acceptances") or [])
                             if isinstance(item, dict) and int(item.get("round") or 0) == round_no
@@ -849,6 +1118,7 @@ def status_of_round(ctx, task, round_no=None):
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
             "material_ready": bool(declared) and not missing and not stale and not unreadable,
+            "main_review_ready": bool(main),
             "eligibility": review_eligibility(reviewers, implementation,
                                              imported_count=len(imported),
                                              declared_slots=len(declared)),
@@ -1157,7 +1427,9 @@ def default_launch_request(ctx, task, implementation_cli=None):
             "requirement": prd_path,
             "test_results": {"check": check.get("id"), "commands": commands},
         },
-        "readable_scope": {"business_code": business, "spec": sorted(curation), "prd": prd_path},
+        # 设计稿 §6.5：允许自主读取的是业务代码、spec 与 PRD；触碰面只是审查重点，不是读取上限。
+        "readable_scope": {"business_code": ["**"], "focus_paths": business,
+                           "spec": sorted(curation), "prd": prd_path},
         "exclusions": list(DEFAULT_EXCLUSIONS),
     }
 
@@ -1517,6 +1789,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
         raise ReviewError("WF_SEMANTIC_DECISION",
                           {"reason": "round was not launched", "round": round_no,
                            "launched": sorted(int(e.get("round") or 0) for e in launches)})
+    launch = next((entry for entry in launches if int(entry.get("round") or 0) == round_no), {})
     anchor, _parts = _current_anchor(ctx, record)
     directory = round_dir(ctx, task_id, round_no)
     materials = os.path.join(directory, "materials")
@@ -1559,6 +1832,9 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                              "status": os.path.join(materials, "status.json")},
                **material_facts,
                "skeleton_fields": list(REPORT_FIELDS),
+               "submitted_scope": (launch or {}).get("submitted_scope") or {},
+               "readable_scope": (launch or {}).get("readable_scope") or {},
+               "exclusions": (launch or {}).get("exclusions") or [],
                "anchor": {"check_anchor": anchor}},
     )
 
@@ -1916,6 +2192,38 @@ def exclusion_gaps(payload):
     return gaps
 
 
+def read_scope_problems(payload):
+    """报告不得同时声明「读取」与「排除」同一面。
+
+    只核可比较的路径模式：排除模式命中读声明、读声明完全落在排除面内、或读声明
+    包含排除面，三者任一成立即矛盾。自然语言归类留给主会话复核，不在这里猜。
+    """
+    from . import paths as paths_mod
+
+    reads = [str(item) for item in payload.get("read-scope") or [] if str(item).strip()]
+    excludes = [str(item) for item in payload.get("excluded-scope") or [] if str(item).strip()]
+    problems = []
+    for read in reads:
+        for excluded in excludes:
+            overlap = None
+            try:
+                if paths_mod.match_path(excluded, read):
+                    overlap = "excluded pattern matches the declared read path"
+                elif paths_mod.subsumes(read, excluded):
+                    overlap = "declared read pattern is inside the excluded surface"
+                elif paths_mod.subsumes(excluded, read):
+                    overlap = "declared read pattern includes the excluded surface"
+            except Exception:  # noqa: BLE001 — 无法解释的模式不当作矛盾
+                continue
+            if overlap:
+                problems.append({"reason": "read-scope intersects excluded-scope",
+                                 "read": read, "excluded": excluded, "overlap": overlap,
+                                 "exits": ["把该路径从 read-scope 移除（若确实未读）",
+                                           "或修正 excluded-scope/报告正文；越界读取按审查未通过处理"]})
+                break
+    return problems
+
+
 def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
     """报告与锚点问题（`problems` 通道）：逐份重核摘要、锚点、范围与轴。
 
@@ -1987,19 +2295,11 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
             problems.append(dict(problem, slot=entry.get("slot")))
             blockers.append("report_invalid")
         report_axes[entry.get("slot")] = payload.get("axes") or {}
-        # v42 B1：报告声明过的"未覆盖项"不再一义三用（既不判 fail 也不再是必填字段），
-        # 统一按**缺口**呈现；三态结论由 axes 的 uncovered 承载。
-        for item in payload.get("scope-exceptions") or []:
-            gaps_out.append({"slot": entry.get("slot"),
-                             "reason": "报告声明的未覆盖项（按缺口处置，不判 fail）",
-                             "exception": item})
+        # 缺口只由 `axes: uncovered` 承载。`scope-exceptions` / `material-gaps` 这类自由文本
+        # 不再一义多用：主会话复核补足或人接受缺口，材料不足写进对应轴。
         gaps, blocking = shared["gaps"], shared["blocking"]
         for gap in gaps:
             gaps_out.append(dict(gap, slot=entry.get("slot")))
-        need = payload.get("material-gaps") or payload.get("missing-materials")
-        if need:
-            failures.append({"slot": entry.get("slot"), "reason": "report declares required material gaps",
-                             "gaps": need})
         if blocking:
             failures.append({"slot": entry.get("slot"), "reason": "report carries blocking findings",
                              "findings": blocking})
@@ -2452,7 +2752,7 @@ def _accept_result(task, facts, kept, assertion):
 
 
 def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False,
-           gap_acceptance_path=None):
+           gap_acceptance_path=None, main_review_path=None):
     """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。
 
     `register_only=True`（A8）：**只登记复核关闭**，不产生结论——不推导 verdict、不写
@@ -2461,7 +2761,15 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
 
     `gap_acceptance_path`：人接受覆盖缺口的确认文件（`by/at/quote/source` + `round` + `axes`）。
     未覆盖的轴不构成审查通过，也不构成缺陷；没有这份确认时本命令输出需人裁决档。
+
+    `main_review_path`（2026-11-13）：主会话复核文件。reviewer 报告是辅助证据；产生 verdict
+    前必须提交本轮五轴复核。覆盖由主会话复核与报告两源合并，两者都未覆盖的轴才是缺口。
     """
+    if main_review_path and (register_only or unavailable_path):
+        raise ReviewError("WF_SEMANTIC_DECISION", {
+            "reason": "主会话复核只对产生判定的那次 review-decide 有效",
+            "exits": ["去掉 --main-review 只做登记/不可用声明",
+                      "需要判定时单独跑一次 review-decide（带 --main-review）"]})
     if gap_acceptance_path and (register_only or unavailable_path):
         raise ReviewError("WF_SEMANTIC_DECISION", {
             "reason": "缺口接受文件只对产生判定的那次 review-decide 有效",
@@ -2574,6 +2882,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         # A7：提出者从**全部历史报告重解析**取（导入记录不存 findings），跨轮有效
         proposers = proposers_from_history(ctx, task)   # (round, slot, finding_id) → 提出者
         gaps_out = []       # uncovered 轴形成的缺口（按缺口处置，不进 failures）
+        main_record = None  # 只有产生 verdict 的路径才写主会话复核
         if unavailable:
             verdict = "unavailable"
             facts = {"unavailable": unavailable}
@@ -2655,16 +2964,75 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                 })
             verdict = "pass"
             facts = {"reviewer_clis": distinct}
-            # 覆盖判定（2026-11-12）：`uncovered` 不是缺陷，也不是审查通过。
-            # 全部轴未覆盖 = 输入不成立；部分未覆盖 = 需人接受缺口（`--gap-acceptance`）。
-            coverage = coverage_state(report_facts.get("report_axes", {}).values())
-            coverage_facts = {"covered": coverage["covered"], "uncovered": coverage["uncovered"]}
+            # 主会话复核（2026-11-13）：报告是辅助证据；产生 verdict 前必须有本轮五轴复核。
+            # 覆盖由「主会话复核 + 报告」两源合并：主会话能补足的轴不触发补轮，两者都未覆盖才交人。
+            if not main_review_path:
+                raise ReviewError("WF_SEMANTIC_DECISION", {
+                    "reason": "缺少主会话复核：reviewer 报告是辅助证据，不能只按报告判",
+                    "round": int(round_no),
+                    "exits": ["先 `review-decide --main-review-draft <file>` 生成待填骨架",
+                              "填完五轴结论/依据/逐报告与逐 finding 复核后，用 --main-review <file> 重跑"],
+                })
+            main_payload = records.load_json(main_review_path)
+            if main_payload is None:
+                raise ReviewError("WF_PATH_INVALID",
+                                  {"reason": "main review file missing", "path": main_review_path})
+            main_findings = [item for item in all_findings(ctx, task)
+                             if int(item.get("round") or 0) == int(round_no)]
+            open_items = [item for item in open_findings(ctx, task)["blocking"]
+                          if int(item.get("round") or 0) == int(round_no)]
+            main_digest, main_cause, main_reason = records.file_digest_state(main_review_path)
+            if main_cause:
+                raise ReviewError("WF_PATH_INVALID",
+                                  {"reason": "main review unreadable", "path": main_review_path,
+                                   "cause": main_cause, "detail": main_reason})
+            main_record, main_problems, main_semantic = validate_main_review(
+                main_payload, task_id=task.get("id"), round_no=round_no,
+                imported=imported, findings=main_findings, open_blocking=open_items,
+                axis_reports=report_facts.get("report_axes") or {},
+                by=ctx.key(), file_digest=main_digest)
+            if main_problems:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "problems": main_problems,
+                    "round": int(round_no),
+                    "exits": ["按 problems 补齐五轴/逐报告/逐 finding 复核后重跑",
+                              "用 --main-review-draft 重新生成骨架，避免手写字段"],
+                })
+            if main_semantic:
+                raise ReviewError("WF_SEMANTIC_DECISION", {
+                    "problems": main_semantic,
+                    "round": int(round_no),
+                    "exits": ["修复后重跑 task-check，再 review-decide",
+                              "把问题登记为判断（judgments add）后重新复核",
+                              "无法覆盖就改判 uncovered，交人接受缺口"],
+                })
+            previous_main = [item for item in reviews.get("main_reviews") or []
+                             if isinstance(item, dict) and int(item.get("round") or 0) == int(round_no)]
+            if previous_main and previous_main[-1].get("file_digest") != main_record["file_digest"]:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "本轮已有不同摘要的主会话复核；判定后不可替换",
+                    "recorded": previous_main[-1].get("file_digest"),
+                    "incoming": main_record["file_digest"],
+                    "exits": ["要改结论请开新一轮（review-launch），不覆盖已判轮次的复核",
+                              "同一份复核重入会幂等，不会重复记录"],
+                })
+            if not previous_main:
+                reviews["main_reviews"] = list(reviews.get("main_reviews") or []) + [main_record]
+            # 覆盖判定（2026-11-13）：主会话复核 + 报告两源合并；两者都未覆盖才是缺口。
+            coverage = merged_coverage(main_record.get("axes") or {},
+                                       report_facts.get("report_axes") or {})
+            coverage_facts = {"covered": coverage["covered"], "uncovered": coverage["uncovered"],
+                              "sources": coverage["sources"],
+                              "main_review": {
+                                  "file_digest": main_record["file_digest"],
+                                  "axes": {axis: _axis_conclusion((main_record.get("axes") or {}).get(axis))
+                                           for axis in REVIEW_AXES}}}
             if coverage["all_uncovered"]:
                 raise ReviewError("WF_REVIEW_INVALID", {
-                    "reason": "本轮没有任何审查轴被真正覆盖：这不构成审查结论",
+                    "reason": "本轮主会话复核与 reviewer 报告都没有真正覆盖任何轴：这不构成审查结论",
                     "covered": coverage["covered"], "uncovered": coverage["uncovered"],
                     "report_axes": report_facts.get("report_axes") or {},
-                    "exits": ["补齐各轴结论（pass/fail 附带依据）后重发一轮",
+                    "exits": ["主会话补做五轴复核并写 pass/fail + 依据后重跑",
                               "审查环境确实不足时按设计稿 §6.5 的不可用处置留痕（不得据此判 pass）"],
                 })
             if coverage["uncovered"]:
@@ -2678,9 +3046,10 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     })
                 if acceptance is None:
                     raise ReviewError("WF_SEMANTIC_DECISION", {
-                        "reason": "本轮存在未覆盖的审查轴：缺口不判 fail，但也不能当作审查通过",
+                        "reason": "本轮存在主会话复核与报告都未覆盖的轴：缺口不判 fail，但也不能当作审查通过",
                         "covered": coverage["covered"], "uncovered": coverage["uncovered"],
-                        "exits": ["补齐未覆盖轴后重发一轮（推荐）",
+                        "sources": coverage["sources"],
+                        "exits": ["主会话补做未覆盖轴的复核（推荐；能核实就写 pass/fail + 依据）",
                                   "人确认接受该覆盖缺口：写接受文件（by/at/quote/source + round + axes）"
                                   "后用 --gap-acceptance 重跑 review-decide"],
                     })
@@ -2694,8 +3063,12 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     "exits": ["去掉 --gap-acceptance 重跑", "确认该确认对应的是哪一轮后重新提交"],
                 })
             facts["coverage"] = coverage_facts
-            if gaps_out:
-                facts["gaps"] = gaps_out
+            facts["main_review"] = {
+                "file_digest": main_record["file_digest"],
+                "report_review": main_record.get("report_review") or [],
+                "finding_review": main_record.get("finding_review") or [],
+            }
+
             reasons = []
             if failures:
                 reasons.append({"reason": "审查未通过", "failures": failures})
@@ -2768,7 +3141,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             reviews["attempts"] = attempts
         reviews["dispositions"] = list(reviews.get("dispositions") or []) + dispositions
         task["reviews"] = reviews
-        inputs = {"task": task.get("id"), "round": int(round_no), "verdict": verdict}
+        inputs = {"task": task.get("id"), "round": int(round_no), "verdict": verdict,
+                  "main_review_digest": (main_record or {}).get("file_digest")}
         task, action = tasks_mod._start_task_action(
             ctx, path, task, "review.decide", holder, inputs, ["derive_verdict", "record_dispositions"]
         )

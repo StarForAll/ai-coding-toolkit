@@ -55,6 +55,30 @@ def freeze_sampling(task_id, generation, sid="sess-A", instance_id=None):
                inputs={"generation": generation}, sid=sid, instance_id=instance_id, show=False)
 
 
+AXES = ("range", "acceptance", "contract", "regression", "testability")
+
+
+def main_review(task_id, slots, findings=(), axes=None, round_no=1):
+    """主会话复核夹具：五轴 pass、逐报告 primary、逐 finding verified。"""
+    axes = axes or {axis: "pass" for axis in AXES}
+    return {"task": task_id, "round": int(round_no),
+            "axes": {axis: {"conclusion": axes.get(axis, "pass"), "basis": "b",
+                            "sources": ["main"], "finding_refs": []} for axis in AXES},
+            "report_review": [{"slot": slot, "reliance": "primary",
+                               "notes": "报告覆盖与依据可用"} for slot in slots],
+            "finding_review": [{"finding_id": item.get("id"), "slot": slot,
+                                "check": "verified", "basis": "本地复核"}
+                               for slot in slots for item in findings
+                               if not item.get("slot") or item.get("slot") == slot]}
+
+
+def write_main_review(path, task_id, slots, findings=(), axes=None, round_no=1):
+    import json as _json
+    payload = main_review(task_id, slots, findings=findings, axes=axes, round_no=round_no)
+    _json.dump(payload, open(path, "w"), ensure_ascii=False)
+    return path
+
+
 def run(args, inputs=None, sid="sess-A", activation=True, instance_id=None, show=True):
     args = [str(item) for item in args]
     merged = {}

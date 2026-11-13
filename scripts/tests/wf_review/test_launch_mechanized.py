@@ -124,7 +124,8 @@ class MechanizedLaunchTest(LaunchHarness):
         self.assertTrue(scope["diff"]["paths"])
         self.assertIn("prd.md", scope["requirement"])
         self.assertIn("check", scope["test_results"])
-        self.assertIn("pkg/a.py", request["readable_scope"]["business_code"])
+        self.assertIn("pkg/a.py", request["readable_scope"]["focus_paths"])
+        self.assertEqual(request["readable_scope"]["business_code"], ["**"])
         for required in (".env", "id_rsa", ".npmrc", ".netrc", "secrets.json",
                          ".codex/config.toml", "config.local.json", "../**", ".wf/tasks/**"):
             self.assertIn(required, request["exclusions"])

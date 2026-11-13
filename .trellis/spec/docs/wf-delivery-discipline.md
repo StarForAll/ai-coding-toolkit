@@ -202,3 +202,39 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 （新事实必须在状态页可见，否则 AI 拿到需人裁决档却不知道怎么走）、任务记录模板（机制稿写"初值空数组"
 就必须在 `new_task_record` 里真的建这个键）、脱敏规则（中文凭据词 `口令/密码/密钥/令牌/私钥` 也属遮罩范围；
 人写的 quote 只入遮罩摘要 + digest，不入原文）。
+
+## 11. 审查判定：主会话复核与两源覆盖（2026-11-13）
+
+**Trigger**：改动 `review.decide`、`review.validate_main_review`、`review.merged_coverage`、
+报告输入面、`review-context` facts、归档收尾或 `writer release` 时。
+
+**Contract**：
+
+| 判据 | 唯一实现 | 同批必须核 |
+|---|---|---|
+| 主会话五轴复核 | `review.validate_main_review` | `review-decide --main-review` 产生 verdict 时必填；`--main-review-draft` 只生成骨架、不写记录；`reviews.main_reviews[]` 按 `(round, file_digest)` 幂等，判定后不可替换 |
+| 本轮覆盖 | `review.merged_coverage` | 轴由主会话复核或任一报告 `pass/fail` 覆盖；两者都未覆盖才是缺口；全未覆盖 = 输入不成立；`review-status` 同源投影 `main_review_ready`/`sources` |
+| 报告边界 | `review.report_input_problems` | `read-scope` 与 `excluded-scope` 不得交叠（lint/import/decide 同源）；`scope-exceptions`/`material-gaps` 不再消费；全轴 uncovered 的报告自报 `unavailable` |
+| reviewer 入口范围 | `review.context` | facts 返回 `submitted_scope`/`readable_scope`/`exclusions`；`readable_scope.business_code=["**"]`、`focus_paths` 是审查重点不是读取上限 |
+| 归档收尾 | `tasks._release_after_archive` + `cli._release_writer_locked` | 正常归档持久化成功后锁内释放；释放失败只写 `write_release` facts，不反转归档结果；`writer release` 空闲时幂等成功 |
+| 旧口径 | skill/README/注释 | `bind --run`、`run create/advance/pause/resume/locate/terminate/finish` 已交付；`upgrade --apply` 仍第三轮；自动模式 `generation` 不必填；diff 比任务基线；报告名 `review-<agent>.md` |
+
+**夹具联动**：`wfdrive.write_main_review` / `_review_flow.main_review` 生成夹具复核；
+`r68/r69/r70/r71/r75` 的 `imported` 槽位必须与复核 `report_review` 一致，finding 必须带 `slot`
+（同 id 多槽位时 `finding_refs` 也要带 `slot`）。`f1_init` 直接断言 `archive.facts.write_release.released`，
+不再单独调 `writer release`；`r31` 模拟归档中断时先重新 `writer acquire` 再续做。
+
+**反例（本轮修复的失败）**：`scope-exceptions` 自述越界只进 gaps、`read-scope: [".env"]` 与排除面并存仍 pass；
+A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回 `WF_SEMANTIC_DECISION` 把 fixture 初始化打断；
+`review-decide` 缺主会话复核时直接按报告 pass。
+
+**Tests Required**：
+- `scripts/tests/wf_review/test_review_coverage.py`：无主会话复核 → `WF_SEMANTIC_DECISION`；主会话覆盖 reviewer 缺口 → pass；两源都未覆盖 → 缺口；`fail` 无 finding → 需人裁决；`pass` 不能覆盖未关闭 blocking；复核判定后不可替换。
+- `scripts/tests/wf_review/test_report_boundary.py`：`read-scope` 与 `excluded-scope` 矛盾在 lint/input 同源；`scope-exceptions`/`material-gaps` 不再产生缺口/失败；全 uncovered 报告自报 `unavailable`；`review-context` 返回授权范围。
+- `scripts/tests/wf_runtime/test_archive_writer_release.py`：归档释放成功、失败只报告、空闲幂等。
+- `scripts/tests/wf_runtime/test_envelope_cache.py`：按 `session_id`/`issued_id` 分文件，缺标识不缓存。
+- 全量：`python3 -m unittest discover -s scripts/tests`；`WF_JOBS=1 bash scripts/tests/wf_runtime/full/run_all.sh`。
+
+**Wrong vs Correct**：
+- Wrong：`review-decide` 只按两份报告算覆盖，A 全 pass、B 全 uncovered 仍 pass。
+- Correct：先 `--main-review-draft` 生成五轴复核，主会话填自己的结论与逐报告/逐 finding 复核，再用 `--main-review` 判定；报告未覆盖的轴由主会话补足，两者都未覆盖才交人。

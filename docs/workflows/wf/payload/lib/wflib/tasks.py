@@ -3495,6 +3495,28 @@ def review_acceptance_echo(task):
     return review_mod.acceptance_echo(task)
 
 
+def _release_after_archive(ctx, task_id, holder=None):
+    """正常归档持久化成功后释放写权：对象已终态，释放没有业务语义选择。
+
+    释放失败不把归档报成失败：返回事实并给 `writer release` 恢复出口。
+    """
+    from . import cli
+
+    try:
+        record = ctx.writer()
+        if record.get("state") == "idle":
+            return {"released": True, "already": True}
+        if holder is None:
+            _record, holder = ctx.require_held(task=task_id)
+        updated, assertion = cli._release_writer_locked(ctx, holder)
+        return {"released": True, "generation": updated.get("generation"),
+                "control_assertion": assertion}
+    except Exception as exc:  # noqa: BLE001 — 归档已持久化，释放失败只报告，不反转结果
+        return {"released": False, "code": getattr(exc, "code", type(exc).__name__),
+                "facts": getattr(exc, "facts", {}),
+                "next": "按 status 核对写权后重跑 `wf writer release`"}
+
+
 def cmd_archive(ctx, args):
     persisted = None      # 首归档路径没有续做分支，必须先初始化（否则引用未定义变量）
     from . import cli, gates, lock
@@ -3520,8 +3542,9 @@ def cmd_archive(ctx, args):
             current_dir = task_dir(ctx.root, task_id)
             rel_now = os.path.relpath(current_dir, str(ctx.root)).replace(os.sep, "/") if current_dir else ""
             old_rel = None   # 续做分支：目录可能早已移动过，源路径只在本轮移动时才存在
+            write_holder = None
             if current_dir and not rel_now.startswith(".wf/tasks/archive/"):
-                _record, _holder = ctx.require_held(task=task_id)
+                _record, write_holder = ctx.require_held(task=task_id)
                 destination = _archive_destination(ctx.root, task)
                 if os.path.exists(destination):
                     raise TaskError("WF_TARGET_COLLISION",
@@ -3566,15 +3589,21 @@ def cmd_archive(ctx, args):
                     task = records.load_json(os.path.join(task_dir(ctx.root, task_id), "task.json")) \
                         if task_dir(ctx.root, task_id) else task
             code = "WF_OK" if persisted.get("persisted") else "WF_PERSISTENCE_FAILED"
+            write_release = (_release_after_archive(ctx, task_id, holder=write_holder)
+                             if persisted.get("persisted") else {"released": False,
+                                                                 "reason": "归档尚未持久化"})
             return codes.result(
                 code,
                 object={"id": task_id, "name": task.get("title")},
                 position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id,
                                          action_id=(task.get("action") or {}).get("id"),
                                          action_state=(task.get("action") or {}).get("state")),
-                next_="归档已持久化：无需重复归档或重复提交" if persisted.get("persisted")
-                else "按可达提交查证结果交人核对（不重复归档）",
+                next_=("归档已持久化，写权已释放；下一对象需在新会话选择"
+                       if persisted.get("persisted") and write_release.get("released")
+                       else "归档已持久化：无需重复归档或重复提交" if persisted.get("persisted")
+                       else "按可达提交查证结果交人核对（不重复归档）"),
                 facts={"archive_persisted": persisted, "terminal": task.get("terminal"),
+                       "write_release": write_release,
                        # ⑥：归档强制回显当前生效的放行清单（人裁接受的风险必须跟着终态可见）
                        "unknown_acceptances": review_acceptance_echo(task)},
             )
@@ -3730,13 +3759,18 @@ def cmd_archive(ctx, args):
             task["action"], [record_rel],
         )
         reassessment = _reassess_empty_set(ctx, task_id)
+        # 归档持久化已在锁内完成；写权释放在同一把锁内做，避免与另一个会话的 acquire 竞态。
+        write_release = _release_after_archive(ctx, task_id, holder=holder)
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase="finish", task_id=task_id,
                                  action_id=task["action"]["id"], action_state=task["action"]["state"]),
-        next_="按 §4.4 处理写权释放；下一对象需在新会话选择",
+        next_=("归档已完成，写权已释放；下一对象需在新会话选择"
+               if write_release.get("released")
+               else "归档已完成；写权释放未完成，按 write_release 事实重跑 `wf writer release`"),
         facts={"terminal": "normal", "archived_at": task["archived_at"], "moved_to": record_rel,
+               "write_release": write_release,
                "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,
                # 归档后"是否已持久化"要能被外部核对（续做路径会带 resumed_commit）：
                # 只给 stages 不够，调用方（含独立进程重入）无法判断终态是否落库。

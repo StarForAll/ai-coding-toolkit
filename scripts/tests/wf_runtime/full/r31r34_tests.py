@@ -86,6 +86,10 @@ shutil.move(archived_dir, active_dir)
 rec("R31 准备：目录回到活动位置", "活动目录存在、归档目录不存在",
     f"active={os.path.exists(active_dir)} archived={os.path.exists(archived_dir)}",
     os.path.exists(active_dir) and not os.path.exists(archived_dir))
+# 正常归档成功后入口已自动释放写权；模拟“终态已写、目录未移动”的中断时，
+# 需要重新取得写权，否则重入会因写权空闲被拒（这正是自动释放后的正常出口）。
+rc, payload, _ = wf(["writer", "acquire", "--task", task1, "--json"], {}, "sess-X1")
+gen1 = ((payload or {}).get("facts") or {}).get("generation") or gen1
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
                        {"generation": gen1}, "sess-X1")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task1, "--decision",

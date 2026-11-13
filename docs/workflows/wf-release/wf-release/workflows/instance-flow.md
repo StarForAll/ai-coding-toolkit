@@ -1,21 +1,21 @@
 # 实例流程（instance-flow）
 
-> 用户工作流定义、准备通道与实例编排。第二轮交付；未交付时命令存在并返回
-> `tier=blocked` / `WF_CAPABILITY_UNAVAILABLE`，facts 记所属轮次。
+> 用户工作流定义、准备通道与实例编排。第二轮交付，`definition prepare` 与 `run *`
+> 子命令均已实现；未交付的 `upgrade --apply` 单独在发行说明中标注。
 
 ## required 步骤
 
 ### control.definition.prepare [required · repeatable]
 
 - 时点：准备定义动作结束
-- enforcement: `wflib/runs.py::prepare`（第二轮；未交付返回 `WF_CAPABILITY_UNAVAILABLE`）
+- enforcement: `wflib/runs.py::prepare`
 - 动作：人授权精确保留路径后取得准备范围，起草/校验定义并保存校验结果与待决项。
 - 出口：静态校验失败 → `WF_DEFINITION_INVALID`；准备范围外写入 → `WF_SCOPE_VIOLATION`。
 
 ### control.run.advance [required · repeatable]
 
 - 时点：实例推进动作结束
-- enforcement: `wflib/runs.py::advance`（第二轮）
+- enforcement: `wflib/runs.py::advance`
 - 动作：核固定快照、游标与任务归属后推进步骤，必要时按展开规则创建任务与顺序边。
 - 出口：快照/游标不明 → `WF_HISTORY_UNRESOLVED`；待决人判 → `WF_SEMANTIC_DECISION`。
 

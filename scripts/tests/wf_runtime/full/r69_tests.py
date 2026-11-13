@@ -160,7 +160,9 @@ for slot in ("slot-a", "slot-b"):
     open(os.path.join(staging, slot, "report.md"), "w", encoding="utf-8").write(report_body(slot))
     wf(["review-import", "--task", task_id, "--round", "1", "--slot", slot,
         "--report", os.path.join(staging, slot, "report.md"), "--json"], {"generation": gen()}, "sess-V1")
-rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
+main_path = wfdrive.write_main_review("/tmp/r69_main.json", task_id, ["slot-a", "slot-b"])
+rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
+                     "--main-review", main_path, "--json"],
                     {"generation": gen()}, "sess-V1")
 rec("3 准备：审查 pass", "WF_OK", (payload or {}).get("code"), rc == 0)
 

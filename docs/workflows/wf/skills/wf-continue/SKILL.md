@@ -11,6 +11,8 @@ disable-model-invocation: false
 已启用会话内的推进入口。先确认本会话已 `wf-start` 启用且绑定一致，再按当前状态路由。
 门禁规则在 `.wf/workflows/task-flow.md` 与 `session-flow.md`，本 skill 只做路由。
 
+**持续推进**：在现有授权与批准目标内，持续完成调查、实现、必要修复、验证与下一步准备，直到完成条件满足或出现需要人新增授权/改变承诺/明确人判的事项。不因一个 skill 段落结束、一条命令返回或一份报告读完而停下；也不要为“把所有建议做完”无限加轮。
+
 ## 路由
 
 | 当前状态 | 动作 |
@@ -20,15 +22,15 @@ disable-model-invocation: false
 | in_progress/execute | 在批准触碰面内实施；读规则用 `spec --file <path>`；需要时 `task-curate` |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
 | 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：属本任务用 `task-attribute` 裁决归属；人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。排除按记录时的内容摘要绑定，内容一变就失效，且不构成提交授权 |
-| in_progress/finish | **先读修复态**（见下节），再请人核对结果后由人调用 `wf-finish` |
+| in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止 |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
 | 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance --run <id> [--decision <path>]` 推进；`run pause --run <id> --reason <text>` 受控暂停；只读回读用 `run locate --run <id>` |
 | 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |
 | 收工 | `stop --decision <path>`（一个去向：commit/keep/reverse/transfer） |
 | 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]` |
-| `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | **重入 `archive --task <id> --decision <同一决定>` 续做**；该入口会补做目录移动，不另开恢复命令 |
-| 归档成功后写权仍 held | `writer release`（对象已终态，`ensure_releasable` 放行）；完成后再结束会话 |
+| `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | 若写权已被释放，先 `writer acquire --task <id>`；再**重入 `archive --task <id> --decision <同一决定>` 续做**。该入口会补做目录移动，不另开恢复命令 |
+| 归档成功但回显 `write_release.released=false` | 按回显事实重跑 `writer release`（对象已终态，`ensure_releasable` 放行）；正常归档成功时入口已自动释放 |
 
 ## 修复态先读什么（⑥）
 
@@ -68,7 +70,7 @@ disable-model-invocation: false
 | `answer: <choice>` | human 步骤的答复已记录 | 继续 `advance`；答复内容由人给，不要代答 |
 | `settled: <step>` | 上一任务已正常归档且持久化可核，该步骤记 `satisfied` | 继续 `advance` 推进下一步 |
 | `WF_DEPENDENCY_UNMET` | 顺序前置（上一个未略过 task 步骤的任务）尚未正常归档 | 先把那个任务做完并归档；不要删边绕过，也不要把异常归档当满足 |
-| 所有步骤都有结果 | 实例的业务步骤都记了结果 | 收口走 `run terminate`（尚在交付中）；不要用 `advance` 反复试探 |
+| 所有步骤都有结果 | 实例的业务步骤都记了结果 | 正常结束走 `run finish`，异常终止走 `run terminate`（均已交付）；不要用 `advance` 反复试探 |
 
 **你负责的判断**：某步骤的产物够不够用、能不能记"复用"（机制目前不生成复用事实，需要你自己在任务里核）、
 某个可略步骤此时是否还成立、当前任务的缺口是否该回 Plan。
@@ -90,14 +92,15 @@ disable-model-invocation: false
 ## 复杂任务审查
 
 Check pass 后：`review-launch --task <id> --implementation-cli <cli>`（请求文件可选，入口按当前对象生成） → 人按回显文本在 reviewer CLI 里调用 `wf-review`
-→ `review-import`（每个槽位一次） → `review-decide`。
+→ `review-import`（每个槽位一次） → `review-decide --main-review-draft <file>` → 主会话填写五轴复核 → `review-decide --main-review <file>`。
+报告是辅助证据，主会话必须在判定前完成自己的逐轴复核；报告未覆盖的轴，主会话能核实就自己补，补不了才交人接受缺口。
 
 
 ## 证据文件纪律（2026-11-07 起）
 
 真实 dogfood 发现：把"入口该生成的结构"写成文件，会让任务目录膨胀、并迫使模型读源码猜字段。因此：
 
-- **可以人/模型写的只有四类**：决定文件（批准/收工/知识处置的选择）、`--review-notes`（双轴结论）、`--changes`（spec 变更）、基线提案（**推荐** `baseline-apply --files a,b,c --decision <批准文件>`，由入口生成提案）。
+- **可以人/模型写的只有五类**：决定文件（批准/收工/知识处置的选择）、`--review-notes`（双轴结论）、`--changes`（spec 变更）、基线提案（**推荐** `baseline-apply --files a,b,c --decision <批准文件>`，由入口生成提案）、主会话复核（**先用** `review-decide --main-review-draft <file>` 生成骨架，再填五轴/逐报告/逐 finding）。
 - **不要自建**：验证结果（`task-check` 会记）、门禁预览（`gate --due before_archive`）、提交清单与摘要（`archive` 记录）、`plan-approval`/`finish-commit-manifest` 之类"自述性"文件。
 - 需要知道某命令的输入结构：`<python> <项目根>/.wf/bin/wf.py help <命令>`（有最小示例，不必读源码）。
 
@@ -120,9 +123,4 @@ Check pass 后：`review-launch --task <id> --implementation-cli <cli>`（请求
 - 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
 - **机制已经判过的事不要重新论证，也不要找路绕过**：归属分类、范围核对、锚点失效、写权代次、实例游标、
   输入必填与类型 —— 这些是事实与阻断，不是"建议"。按 `facts` 修正或按 `next` 换路；判不了就交人，不编依据。
-- 命令形如 `<python> <项目根>/.wf/bin/wf.py <子命令>`。`<python>` 按此顺序取，**取到能跑的就整会话固定复用**：
-  ① `.wf/project-config.json` 的 `python_executable`（未设置再读 `~/.wf/config.json` 同名键，可直接读文件取值，不必先执行）；
-  ② 你自身运行时的 Python 可执行文件；
-  ③ 系统 `python3`。
-  若宿主执行策略要求审批或不在白名单（`WF_EXECUTOR_UNCONFIRMED` / 审批拒绝），改用策略允许的已核实 Python 绝对路径并固定下来；
-  **不要每条命令换解释器**，也不要因为被拒就改成手写信封或换路径重试同一效果。不装 PATH、不做 shell shim。
+- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。

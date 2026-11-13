@@ -9,21 +9,21 @@ user-invoked: true
 
 > **判断指引**：交付面（哪些文件算本次任务的交付）是判断不是判决——口径见 `wf-continue`「实施期要自己判的几件事」。
 
-仅由人显式调用生效。它负责“启用 + 选对象 + 取得写权”，不推进业务。
+仅由人显式调用生效。它负责“启用 + 选对象 + 取得写权”；选定后继续该对象的第一步（新任务→PRD/规划；实例→`run advance`），不把“已启用”当终点；不代替人批准、Check 或归档。
 
 ## 步骤
 
 1. 先跑 `wf.py enable`，取得启用核对结果（Trellis 互斥、宿主身份能力、activation）。
    - `WF_FLOW_CONFLICT` / `WF_SEMANTIC_DECISION`：停，按 facts 清理或交人核实后再换新会话。
-   - `WF_IDENTITY_UNRESOLVED`：停，按 facts 核实宿主身份能力。`provider=wf`（wf 签发 `issued_id`）的**显式签发命令尚未交付**
-     （登记为第二轮事项），当前不可作为可用出口；不要引导人走这条路径。
-2. 已绑定：只恢复原对象，不换对象。
+   - `WF_IDENTITY_UNRESOLVED`：停，按 facts 核实宿主身份能力。自动模式会为本会话签发 `issued_id`；
+     显式的“换一个新会话标识”命令尚未交付，不要引导人走这条路径。
+2. `enable` 的 `facts.binding` 给出当前绑定。已绑定：只恢复原对象，不换对象。人想开新任务时，停止并说明需要新的执行边界（宿主提供会话标识时可用新会话；否则开新终端）；**不要用 `task-new` 试探**——它只会报 `WF_BINDING_MISMATCH`。
 3. 未绑定：由人选择
    - 新普通任务：`task-new --kind ordinary|initialize|bootstrap --title <t> --template <项目根>/.wf/templates/task`；
    - 既有就绪任务：`bind --task <id>`；
    - **工作流实例**：`definition validate --id <id>` → `definition prepare --id <id>` → `run create --creation <path>`
-     （准备与创建都在本入口，见下节）。**`bind --run <id>` 尚未交付**（命令面接受参数但返回
-     `WF_CAPABILITY_UNAVAILABLE`）：实例的首次绑定由 `run create` 完成；已有实例换到新会话接续的入口还没开。
+     （准备与创建都在本入口，见下节）；已有实例换到新会话接续用 `bind --run <id>`（已交付）。
+     实例的首次绑定由 `run create` 完成。
 4. 需要重新取得已被释放的写权时：`writer acquire`。
 5. **自动模式下不手写 session 信封**（2026-11-08 起）：直接 `wf.py enable --json`，身份由执行边界派生
    （会话 leader + 进程链），`activation`/`instance_id` 由入口写进运行态附件并由后续命令自动读取。
@@ -93,9 +93,4 @@ user-invoked: true
 - 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
 - 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
 - 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
-- 命令形如 `<python> <项目根>/.wf/bin/wf.py <子命令>`。`<python>` 按此顺序取，**取到能跑的就整会话固定复用**：
-  ① `.wf/project-config.json` 的 `python_executable`（未设置再读 `~/.wf/config.json` 同名键，可直接读文件取值，不必先执行）；
-  ② 你自身运行时的 Python 可执行文件；
-  ③ 系统 `python3`。
-  若宿主执行策略要求审批或不在白名单（`WF_EXECUTOR_UNCONFIRMED` / 审批拒绝），改用策略允许的已核实 Python 绝对路径并固定下来；
-  **不要每条命令换解释器**，也不要因为被拒就改成手写信封或换路径重试同一效果。不装 PATH、不做 shell shim。
+- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。

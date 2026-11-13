@@ -15,6 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _harness as H
+import _review_flow as F
 import _review_launch as L
 
 SID = "sess-main"
@@ -100,7 +101,10 @@ def check():
                         inputs={"generation": H.generation(project)})
     if rc != 0:
         raise H.Precondition(f"review-import 失败：{payload}")
-    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--json"], sid=SID,
+    main_path = os.path.join(root, "main-review.json")
+    json.dump(F.main_review(task_id, ["s1", "s2"]), open(main_path, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["review-decide", "--task", task_id,
+                                  "--main-review", main_path, "--json"], sid=SID,
                         inputs={"generation": H.generation(project)})
     if rc != 0 or (payload or {}).get("code") != "WF_OK":
         problems.append(f"判定失败：{(payload or {}).get('code')}")

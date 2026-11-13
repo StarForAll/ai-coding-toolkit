@@ -167,6 +167,8 @@ json.dump(archive_decisions, open("/tmp/decision_archive_init.json", "w"), ensur
 rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/decision_archive_init.json", "--json"], inputs)
 payload = step("archive", rc, payload)
 print("   archive:", json.dumps(payload["facts"], ensure_ascii=False)[:600])
-rc, payload, out = wf(["writer", "release", "--json"], inputs)
-step("writer-release", rc, payload)
+write_release = (payload.get("facts") or {}).get("write_release") or {}
+if not write_release.get("released"):
+    raise SystemExit(f"archive 未自动释放写权：{write_release}")
+print("   write-release:", json.dumps(write_release, ensure_ascii=False)[:200])
 print("TASK_ID", task_id)

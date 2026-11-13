@@ -875,7 +875,7 @@ def prepare(ctx, args):
                               next_="按 validation.problems 修正后重跑 validate/prepare")
     return codes.result("WF_OK", object={"id": workflow_id},
                         position_=codes.position(scope="maintenance"),
-                        next_="准备代次已固定：下一步 run create（实例创建仍属未交付能力）",
+                        next_="准备代次已固定：下一步 run create",
                         facts=dict(facts, ok=True))
 
 
@@ -1237,7 +1237,7 @@ def _advance_run_create(ctx, key, session, record, action, text, creation,
         object={"id": run_id},
         position_=codes.position(scope="run", step_id=None, action_id=action.get("id"),
                                  action_state=action.get("state")),
-        next_="下一步 run advance 推进首个适用步骤（当前仍是未交付能力）",
+        next_="下一步 run advance 推进首个适用步骤",
         facts={"run": {"id": run_id, "workflow_id": workflow_id, "digest": digest,
                        "snapshot": f"{RUNS_REL}/{run_id}/definition.md"},
                "generation": record.get("generation"),
@@ -1557,7 +1557,7 @@ def advance(ctx, args):
         if step is None:
             return codes.result("WF_OK", object={"id": run_id},
                                 position_=codes.position(scope="run"),
-                                next_="所有步骤已记录结果：run terminate/finish 仍未交付",
+                                next_="所有步骤已记录结果：run finish 正常结束，或 run terminate 异常终止",
                                 facts={"run": run_id, "cursor": cursor,
                                        "step_results": step_results, "settled": settled})
         step_id = step["id"]

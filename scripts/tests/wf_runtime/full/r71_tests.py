@@ -243,7 +243,11 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
         if rc_i != 0:
             print("   import failed:", slot, (payload_i or {}).get("code"),
                   json.dumps((payload_i or {}).get("facts"), ensure_ascii=False)[:200])
-    rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
+    main_path = wfdrive.write_main_review("/tmp/r71_main.json", task_id,
+                                         [slot for slot, _cli in slot_specs],
+                                         findings=_findings)
+    rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
+                         "--main-review", main_path, "--json"],
                         {"generation": gen()}, sid)
     if rc != 0:
         print("   decide facts:", (payload or {}).get("code"),

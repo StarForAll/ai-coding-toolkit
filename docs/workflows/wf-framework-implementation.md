@@ -124,7 +124,7 @@ normative: 本文件只定义文件布局、脚本接口、命令形态与发行
 | 锁对象 | `<项目根>/.wf-lock` | 锁原语 | 只创建不删除；内容固定 `wf-lock-v1\n`（机制稿 §4.1）。首次以**排他创建**（`O_CREAT\|O_EXCL`）新建并写标记；已存在时只有「普通文件、真实落点属于项目根、内容完整等于标记」三条同时满足才复用；空文件或部分标记一律 `WF_CAPABILITY_UNAVAILABLE` 交人核实，普通入口不认领、不覆写 |
 | 用户层全局配置 | `~/.wf/config.json` | 人（或人显式执行的确认动作） | `{schema_version: 1, python_executable?: 绝对路径}`；缺失=未设置（机制稿 §8.2） |
 | 解释器确认集合 | `~/.wf/interpreters.json` | 只由 `confirm-executor` 子命令写 | 独立于 `config.json`；按完整元组集合保存，多条并存互不覆盖（机制稿 §8.2） |
-| 审查暂存目录 | `<临时根>/wf-review/<project_id>/<task-id>/round-<N>/<slot>/` | reviewer 进程 | 项目树外；隔离键为任务/轮次/槽位（本文 §5.2）；槽位 id 与 `--reviewer-id` 是同一标识；卸载清单不覆盖，只列残留位置 |
+| 审查暂存目录 | `<临时根>/wf-review/<project_id>/<task-id>/round-<N>/<slot>/` | reviewer 进程 | 项目树外；隔离键为任务/轮次/槽位（本文 §5.2）；槽位 id 用于暂存目录层名与导入记录，署名由报告文件名 `review-<agent>.md` 承载；卸载清单不覆盖，只列残留位置 |
 
 临时根取 `tempfile.gettempdir()`，不读环境变量拼接；用 `project_id` 而非项目路径分目录，避免把本机路径带进 reviewer 可见范围。
 
@@ -194,7 +194,7 @@ docs/workflows/wf/
 | 信封**无 `session` 对象**（或空 stdin） | **自动模式** | 身份由锚点派生（`/proc` 会话 leader + 进程链，见 `payload/lib/wflib/session.py`）；`instance_id`/`activation`/启用降级从 `attachments/<session_key>.json` 读；不做 `host_id` 校验 |
 
 - **模式由"有没有 `session` 对象"唯一决定**，不做字段级拼接、不回退；
-- 自动模式下 `inputs.generation` **仍然必填**（代次是业务并发参数，不是身份）；
+- 自动模式下 `inputs.generation` **不再手填**：取得写权时入口把代次记进本会话运行态，写命令缺省取它；显式 `inputs.generation` 只作覆盖，过期仍会被 `WF_GENERATION_STALE` 拒；
 - 自动模式的写业务命令会按机制稿的 roots 维护规则改写 `attachments` 的 `roots`，并可能返回
   `WF_IDENTITY_UNRESOLVED(concurrent_unregistered_caller|evidence_unknown)` 或 `WF_NOT_ENABLED(activation_stale)`；
 - 首次 `enable` 在自动模式下**建立执行会话**：签发 `issued_id`、写附件、登记 `anchors.json`（L1 单主、L2 追加）。
@@ -263,7 +263,7 @@ docs/workflows/wf/
 | `review-launch` | `--task <id> --implementation-cli <cli> [--launch-request <path>]`（请求缺省由入口生成，给了就按它校验） | `review.launch` | 审查发起；round/attempt/anchor/temp_paths 由入口生成并回显 | 机制稿 §3.5 前置 | 1 |
 | `review-context` | `--task <id> [--round <n>] [--reset]`（reviewer 侧唯一入口；身份取本会话宿主，占位即闸门） | 无（只写暂存目录与材料） | 取材料/锚点/报告路径并占位 | 机制稿 §9.2（2026-11-07 修订） | 1 |
 | `review-import` | `--task <id> [--round <n>] [--slot <agent>] [--report <绝对路径>]`（后三项可省：按文件名发现） | `review.import` | 导入与锚点核对（机制稿 §9.2） | 机制稿 §3.2 锚点 | 1 |
-| `review-decide` | `--task <id> [--round <n>] [--plan <path>] [--unavailable <path>] [--gap-acceptance <path>]`（轮次缺省＝当前轮；`--gap-acceptance` 为覆盖缺口的人接受文件）（`--plan` 为逐条 finding 处置，元素 `{finding, decision_ref, reason}`；`--unavailable` 为人声明的审查环境不足及证据） | `review.decide` | 审查判定（**由入口按机制稿 §9.2 的事实推导**，不是人选）与逐条处置 | — | 1 |
+| `review-decide` | `--task <id> [--round <n>] [--plan <path>] [--unavailable <path>] [--gap-acceptance <path>] [--main-review <path>] [--main-review-draft <path>]`（轮次缺省＝当前轮；`--gap-acceptance` 为覆盖缺口的人接受文件；`--main-review` 为主会话五轴复核，产生 verdict 时必填；`--main-review-draft` 只生成待填骨架）（`--plan` 为逐条 finding 处置，元素 `{finding, decision_ref, reason}`；`--unavailable` 为人声明的审查环境不足及证据） | `review.decide` | 审查判定（**由入口按机制稿 §9.2 的事实推导**，不是人选）与逐条处置 | — | 1 |
 | `archive` | `--task <id> --decision <path>`（人调用 finish 的证据 + 提交授权 `commit_grants`） | `task.archive` | 正常归档（由 `wf-finish` 调用） | 机制稿 §3.5、机制稿 §9.3 门禁 | 1 |
 | `baseline-apply` | `--task <id> --proposal <path>` | `baseline.apply` | 基线/配置成组应用 | 机制稿 §3.4 | 1 |
 | `spec-update` | `--task <id> --changes <path>` | `spec.update` | 知识变更成组应用 | 机制稿 §3.1、§8.4 | 1 |
@@ -319,7 +319,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 }
 ```
 
-  `slots` 至少一项：两项且每个 `reviewer_cli` 与 `implementation_clis` 全项不同、彼此也不同时满足复杂任务的完成条件；只有一项时**同一命令照常放行**（人声明环境不足，见本文 §5.3），入口只在 `task.reviews.launches` 记 `degraded: single-provider`；判定由 `review-decide` 按机制稿 §9.2 处理（单 reviewer 属「人数不合格」→ **拒绝输入、不产生 verdict**），degraded 事实随 `launches` 条目保留，**不写入 result 字段**（该字段写者与取值见机制稿 §9.2）。**槽位 id 即 `--reviewer-id`**：同一字符串用于暂存目录层名、报告文件名与导入槽位，不设第二套标识。
+  `slots` 至少一项：两项且每个 `reviewer_cli` 与 `implementation_clis` 全项不同、彼此也不同时满足复杂任务的完成条件；只有一项时**同一命令照常放行**（人声明环境不足，见本文 §5.3），入口只在 `task.reviews.launches` 记 `degraded: single-provider`；判定由 `review-decide` 按机制稿 §9.2 处理（单 reviewer 属「人数不合格」→ **拒绝输入、不产生 verdict**），degraded 事实随 `launches` 条目保留，**不写入 result 字段**（该字段写者与取值见机制稿 §9.2）。**槽位 id 用于暂存目录层名与导入记录**；reviewer 署名由报告文件名 `review-<agent>.md` 承载（`--as` 可选），不设第二套身份。
 - `run create --creation <path>` 给定义 id 与内容哈希、输入值/引用、步骤适用性与顺序展开规则的人确认引用；入口据此固定快照、创建实例并完成首次绑定（writer 主记录）。`run terminate --plan <path>` 给逐任务放弃/保留的批量处置（元素为任务，不是路径）。
 
 **`task.retrospect` 的登记说明**：2026-11-02 人裁「复盘作为独立机制操作」，机制稿 §11.3 的状态动作集合与机制稿 §5.1 的主记录归属已同批登记 `task.retrospect`（`control.task.retrospect` 随之按该节公式派生），门禁侧仍由机制稿 §11.2 的 `task.retrospective-done` 核验。本文只给命令与落点：处理器 `wflib/tasks.py::cmd_task_retrospect`，写入 `task.retrospective`，并在同一 action 内写 `task.retrospective-done` 的 completed 回执（机制稿 §11.2 的回执写者句；人裁 ①：该操作即该步骤的执行入口）。该操作不新增判定，只把一个已有记录字段提升为可独立期次化的动作。
@@ -416,9 +416,9 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 2.3.10 审查判定的输入核验、预览令牌与独立入口锁
 
-- **判定输入六核**（机制稿 §9.2）：`review-decide` 逐份核 ①`check-anchor` 等于**当前**锚点（导入后重跑 Check 也失效）②`findings` 无 `blocker/blocking/critical/high` ③`source-cli` 等于该槽位声明的 `reviewer_cli` ④`read-scope`/`excluded-scope` 非空 ⑤`scope-exceptions` 为空 ⑥`axes` 每轴 `conclusion=pass`，且 `material-gaps`/`missing-materials` 为空。命中即 `WF_REVIEW_INVALID`——「判定输入不成立」与「意见为否 → fail」分开。
-- **判否与输入不合法分开**（机制稿 §9.2、§11.2）：锚点、`source-cli`、材料声明、导入摘要冲突属**输入不成立** → `WF_REVIEW_INVALID` 且不写结论；阻塞发现、轴 `conclusion≠pass`、`scope-exceptions`、材料缺口、报告 `verdict≠pass` 属**有效审查判否** → 记 `verdict=fail` 并写 `attempts[].outcome=fail`，使「首轮失败→次轮通过」仍能重建 `review_fail` 触发强制复盘。
-- **外部审查固定五轴**（机制稿 §9.2、skill `wf-review`）：报告 `axes` 必须齐 `range / acceptance / contract / regression / testability`，缺一或出现五轴之外的键即 `WF_REVIEW_INVALID`；每轴结论只取 `pass|fail|uncovered`，非 `pass` 记 `fail`。Check 期内部自审用 `standard/requirement` 两轴，两者不得混用。
+- **判定输入**（机制稿 §9.2）：`review-decide` 逐份核 ①`check-anchor` 等于**当前**锚点（导入后重跑 Check 也失效）②`read-scope`/`excluded-scope` 非空且不交叠 ③`source-cli` 等于该槽位声明的 `reviewer_cli` ④`axes` 五轴齐全、结论合法、申报 verdict 与推导一致 ⑤报告无 blocking finding 直接当输入不成立（blocking 是有效审查判否，不在这里拒绝）。此外必须有主会话复核：五轴、逐报告 `report_review`、逐 finding `finding_review`、`fail` 轴指回未关闭 blocking；缺/不合规即 `WF_REVIEW_INVALID` 或 `WF_SEMANTIC_DECISION`——「判定输入不成立」与「意见为否 → fail」分开。
+- **判否与输入不合法分开**（机制稿 §9.2、§11.2）：锚点、`source-cli`、读取/排除范围矛盾、主会话复核缺失或不合规、导入摘要冲突属**输入不成立** → `WF_REVIEW_INVALID`/`WF_SEMANTIC_DECISION` 且不写结论；阻塞发现、轴 `conclusion=fail`、报告 `verdict=fail` 属**有效审查判否** → 记 `verdict=fail` 并写 `attempts[].outcome=fail`，使「首轮失败→次轮通过」仍能重建 `review_fail` 触发强制复盘。`uncovered` 轴不判 fail：主会话复核或报告覆盖即算覆盖，两者都未覆盖才走人接受缺口。
+- **外部审查固定五轴**（机制稿 §9.2、skill `wf-review`）：报告与主会话复核的 `axes` 必须齐 `range / acceptance / contract / regression / testability`，缺一或出现五轴之外的键即 `WF_REVIEW_INVALID`；每轴结论只取 `pass|fail|uncovered`，`uncovered` 按缺口处置，不记 fail。Check 期内部自审用 `standard/requirement` 两轴，两者不得混用。
 - **导入与门禁引用**（机制稿 §9.2）：同轮同槽位**同摘要**幂等重入、**不同摘要**报冲突（`WF_REVIEW_INVALID`，不覆盖也不留旧结论）；`task.review-passed` 除核 `verdict=pass` 与 `check_id` 绑定，还核 `result.imported[]` 每份报告的 `report_digest` 仍等于当前 `reviews.imported` 的同轮同槽位摘要——报告被换掉，旧 pass 立即失效。
 - **预览令牌与锁内重核**（机制稿 §10.3）：令牌是**随机 128 位 nonce**，只在本次进程/本次预览有效；`--nonce` 仅为测试注入点。确认之后**在同一把锁内重算预览并比摘要**才是漂移防护：普通 `repair` 重算 `build_preview`、`repair --dispose` 重算 `dispose_preview`（计划文件被换即失效）、`uninstall` 重核选中集合 + 写者状态 + 逐路径预览指纹 + `.gitignore` 全文。任一不符即 `WF_PREVIEW_STALE`，不动任何文件。
 - **卸载锁内重核**（机制稿 §10.3）：两种比较必须分开——**删/留**用发行摘要（本地偏离按设计保留），**确认期间是否变化**用**预览时指纹**（逐路径在预览阶段记录）；`.gitignore` 另比当前全文与预览读入是否一致。任一「变过」即 `WF_PREVIEW_STALE`，一个文件都不删；既有偏离不会因此被误判。
@@ -461,7 +461,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **锁的存活探测**（已实现，含边界）（设计稿 §4.4 的三要素）：`lock.py` 在固定标记行之后追加 `holder pid=<pid> start=<进程启动时刻>`；`verify_holder(root)` 只读判定该进程是否仍在且启动时刻一致（pid 复用会被识破），不获取锁、不改文件。获取时刷新持锁者事实、释放时清除，避免陈旧 pid 被当成存活。**运行时与 `repair`/`uninstall` 都在锁内消费该判定**：登记的持有者仍存活即 `WF_WRITER_BUSY`，不因人在预览里点了确认就清空写权；人确认是补充出口而非替代。`repair`/`uninstall` 的锁与运行时同契约（见本文 §2.3.10）。
 - **`task-new` 的主记录与意图归属**（第七至十一轮；人裁 A 已落地并修完 4 条复审缺陷）：首次创建是 writer 上的单一 `task.create` 父动作——意图与写权同一次写入；`targets` 一次固定 writer/task/binding/runtime **以及 instance/template/title/task-kind**（不可变目标，重入只按这些值重建，不从当前请求取）；四个步骤由 `_run_creation_steps()` **逐步推进**，每步先核真实后置、缺什么补什么，再置 done；`_finish_writer_action` 结案前**重核每步真实后置**，手工标 done 不能代替产物；实例不符由 `_require_instance_match` 与意图内固定值双重拒绝。旧版本留在 `task.action` 的 `task.create` 遗留形态给 `WF_RECORD_INVALID` + repair 出口，不再输出无法执行的恢复指引。`bind`（绑定既有对象）仍用独立 `session.bind` 动作，因为那不是首次创建。
 - **外部变更的阻断**（P1-1 / D-01，已接线）：`scope.external_changes` 的结果进 `check.scope_facts`，**触及本任务批准触碰面的未归属提交**在 Check 时必须有「已核对无影响」的人判（按提交 OID 精确匹配，或用 subject 含 `external-changes` 的整体声明）才放行，否则 `WF_SEMANTIC_DECISION` 并给四条出口（逐条核对、用 `task-attribute` 裁决归属、回 Plan、重检）。未触及触碰面的外部提交只记事实、不阻断。登记时的顾虑——夹具/人手提交无 trailer 会被一律判死——用「人判承载」解决，而不是放弃判定。
-- **外来未提交改动的排除与审查覆盖判定（2026-11-12，dogfood 报告 A4/B1、A3）**：外部变更核对的既有出口只覆盖**已提交**变更；未提交外来改动现在可经 `--workspace-exclusion` 声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`）落成 `task.execution.workspace_exclusions`（路径 + exists + 内容摘要），分类时摘要仍匹配者进 x 档（不进交付/指纹/材料/提交面），内容一变即回 c 档。审查侧：`review.report_input_problems` 是状态头/字段/读取与排除范围/轴与 verdict 的唯一校验实现，`lint`/导入/判定共用；`uncovered` 轴不再推导 pass——全部轴未覆盖按输入不成立拒绝，部分未覆盖须人接受（`review-decide --gap-acceptance`，带 round + axes + 乙口径确认）后才产生判定。用例：`test_workspace_exclusion.py`、`test_report_input_single_source.py`、`test_review_coverage.py`。
+- **外来未提交改动的排除与审查覆盖判定（2026-11-12，dogfood 报告 A4/B1、A3）**：外部变更核对的既有出口只覆盖**已提交**变更；未提交外来改动现在可经 `--workspace-exclusion` 声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`）落成 `task.execution.workspace_exclusions`（路径 + exists + 内容摘要），分类时摘要仍匹配者进 x 档（不进交付/指纹/材料/提交面），内容一变即回 c 档。审查侧：`review.report_input_problems` 是状态头/字段/读取与排除范围/轴与 verdict 的唯一校验实现，`lint`/导入/判定共用；`uncovered` 轴不再推导 pass——主会话复核与报告都未覆盖任何轴按输入不成立拒绝，两者都未覆盖的轴才是缺口、须人接受（`review-decide --gap-acceptance`，带 round + axes + 乙口径确认）后才产生判定。用例：`test_workspace_exclusion.py`、`test_report_input_single_source.py`、`test_review_coverage.py`。
 - **材料、日志、锚点与发起（2026-11-12）**：`materialize_delivery` 的差异源改为任务基线（`baseline_head`），基线不可用如实退 HEAD；验证日志保存完整遮罩输出（头 64 KiB + 尾 192 KiB，截断可见），记录增 `log_digest`/`log_bytes`/`log_truncated`；`workflow_snapshot_digest` 对实例任务取 `H("wf-workflow-snapshot-v1", C({run, definition_digest, snapshot_digest}))`，缺快照报 `WF_RECORD_INVALID`；`review-launch` 在无 `--launch-request` 时由 `default_launch_request` 生成三类材料/只读范围/排除面；外发确认按 `scope_digest`（task + materials）绑定，脱敏改保留白名单（未知字段与嵌套结构一律丢弃）。用例：`test_material_baseline.py`、`test_verification_log.py`、`test_anchor_workflow_snapshot.py`、`test_launch_mechanized.py`、`test_export_scope.py`、`test_redaction_allowlist.py`、`test_runtime_merge.py`。
 - **Finish 期的规范变更通路**（P1-2 / N52-02，已交付受控迁移）：`spec-update` 与 `baseline-apply` 都允许 `execute/check/finish`；在 finish 期应用后，`_reenter_check_from_finish()` 作为**父动作内部的一步**把 phase 置回 `check`，旧检查结果保留并追加 `invalidated={at, by, action_id, reason}`，门禁侧见到该失效事实即 `WF_CHECK_STALE`；不伪造新的 Check 成功回执。
 - **`.wf/out-of-scope/` 知识拒绝项（2026-11-12 已交付，人裁 A 由第三轮提前到第二轮）**：机制稿 §8.4 定 schema，四项启用前置同批打勾——
@@ -783,24 +783,24 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 
 | 副本 | 角色 | 关键约束（机制稿 §9.1） |
 |---|---|---|
-| `<skill 根>/wf-review` | reviewer 侧 | 只在给定暂存路径写报告；不写项目树、不改源码/控制字段、不提交；参数 `--task-id`、`--round`、`--reviewer-id`（= 槽位 id）、`--request <暂存>/request.json` 必备；`--review-focus` 由 wf 侧总提供，reviewer 侧按设计稿 §6.5 当作可选（缺省时按固定检查轴执行） |
+| `<skill 根>/wf-review` | reviewer 侧 | 只在给定暂存路径写报告；不写项目树、不改源码/控制字段、不提交；参数 `--task <id>`、`--round <N>`、`--as <cli>`（或显式信封）与 `--request <暂存>/request.json` 为入口约定；`--as` 在信封有 `host_id` 时可省，`--review-focus` 由 wf 侧总提供 |
 | `<skill 根>/wf-review-action` | action 侧 | 读指定轮次报告并先汇总再决策；不代替主会话修改源码 |
 
-**调用交接**：`review-launch` 为每个槽位在暂存目录写 `<staging>/request.json`（`task-id`、`round`、`reviewer-id`、`review-focus`、`check-anchor`、材料范围与排除项），并向终端打印一段**人可粘贴到 reviewer CLI 会话的 skill 调用文本**：
+**调用交接**：`review-launch` 为每个槽位在暂存目录写 `<staging>/request.json`（`task-id`、`round`、`review-focus`、`check-anchor`、`submitted_scope`、`readable_scope`、`exclusions`），并向终端打印一段**人可粘贴到 reviewer CLI 会话的 skill 调用文本**：
 
 ```
-/wf-review --task-id <id> --round <N> --reviewer-id <slot> --review-focus <检查轴> --request <staging>/request.json
+/wf-review（任务 <id>，第 <N> 轮）
 ```
 
 它不是 shell 命令：框架不安装名为 `wf-review` 的可执行入口，也不做 PATH 安装或 shell shim（本文 §2.1）；投放物只有 `<skill 根>/wf-review/SKILL.md`。宿主不能按文本调用 skill 时，由人在 reviewer CLI 中打开该 skill 并把 `<staging>/request.json` 作为唯一输入；skill 正文负责读取该文件与授权范围，报告写到 `<staging>/report.md`，不读项目树内的控制记录，导入由主会话完成（本文 §5.2）。
 
-报告格式：Markdown 正文 + 唯一带协议标记的 JSON 块 `<!-- wf-review-report:v1 -->`，块内 `protocol` 取 `wf-review-v1`，字段按机制稿 §9.1 的 `task-id`/`round`/`reviewer-id`/`source-cli`/`review-time`/`review-focus`/`check-anchor`/`read-scope`/`excluded-scope`/`scope-exceptions`/`axes`/`findings`/`verdict`。不支持版本拒绝导入（`WF_REVIEW_INVALID`）。
+报告格式：Markdown 正文 + 唯一带协议标记的 JSON 块 `<!-- wf-review-report:v1 -->`，块内 `protocol` 取 `wf-review-v1`，字段按机制稿 §9.1 的 `task-id`/`round`/`review-time`/`review-focus`/`check-anchor`/`read-scope`/`excluded-scope`/`axes`/`findings`/`verdict`；身份由文件名 `review-<agent>.md` 承载，正文的 `reviewer-id`/`source-cli` 可选。不支持版本拒绝导入（`WF_REVIEW_INVALID`）。
 
-**`--request` 属实现级增补（2026-11-05 人裁）**：设计稿 §6.5 的契约枚举只有 `--task-id`/`--round`/`--reviewer-id` 与暂存路径，`--review-focus` 明写"reviewer 侧可选"。本文在不改该枚举的前提下增加一个**输入载体**参数：把与本次审查有关的全部只读事实（锚点、材料范围、排除项）收进 `request.json`，避免 reviewer 侧再从项目树里自取控制记录。设计稿 §8.1 把"命令形态/脚本接口"委托给实现方案，故这属允许的实现级增补，不构成对设计稿 §6.5 契约的修改。
+**`--request` 属实现级增补（2026-11-05 人裁）**：设计稿 §6.5 的契约枚举是任务/轮次与暂存路径，身份由文件名承载，`--review-focus` 明写"reviewer 侧可选"。本文在不改该枚举的前提下增加一个**输入载体**参数：把与本次审查有关的全部只读事实（锚点、材料范围、排除项）收进 `request.json`，避免 reviewer 侧再从项目树里自取控制记录。设计稿 §8.1 把"命令形态/脚本接口"委托给实现方案，故这属允许的实现级增补，不构成对设计稿 §6.5 契约的修改。
 
 ### 5.2 暂存目录与导入
 
-- 发起时由 `review-launch` 输出确切暂存目录：每槽位一个 `<临时根>/wf-review/<project_id>/<task-id>/round-<N>/<slot>/`，并把全部槽位目录记入 `task.reviews.launches.temp_paths`。父目录不开放。槽位 id（`--slot`）与 reviewer 自报的 `--reviewer-id` 是同一字符串，暂存目录层名与报告文件名都用它。
+- 发起时由 `review-launch` 输出确切暂存目录：每槽位一个 `<临时根>/wf-review/<project_id>/<task-id>/round-<N>/<slot>/`，并把全部槽位目录记入 `task.reviews.launches.temp_paths`。父目录不开放。槽位 id（`--slot`）用于导入；reviewer 自报用 `--as`（可选），署名由报告文件名 `review-<agent>.md` 承载。
 - reviewer 写 `report.md`；主会话在**自己持有设计稿 §4.4 的写入权**时，重算当前锚点、核对元数据与槽位字段，再以同目录临时文件 + 原子发布写入 `<task-dir>/review/review-round-<N>/<slot>.md`（`<task-dir>` 是由稳定 id 解析出的**真实任务目录** `<task-id>-<slug>`，不是把 id 直接当目录名拼出来），读回哈希并更新 `reviews.imported`（机制稿 §9.2）。导入期间写权不转移。
 - 暂存目录在导入成功且摘要/元数据核对后成为可清理项，由人确认后清理；未导入、冲突或恢复中的轮次默认保留。卸载/`purge` 清单只列残留位置，不授予删除权限。
 

@@ -125,7 +125,12 @@ def remember_envelope(root, envelope, payload):
     if isinstance(facts.get("instance_id"), str) and facts["instance_id"]:
         session["instance_id"] = facts["instance_id"]
     merged = dict(envelope, session=session)
-    session_id = (session.get("identity") or {}).get("session_id") or "unknown"
+    # 缓存按会话分文件：host 用 session_id，wf 用 issued_id；两者都没有时宁可不缓存，
+    # 也不共用 `unknown.json`（两个会话会互相读到对方的身份/activation）。
+    identity = session.get("identity") or {}
+    session_id = identity.get("session_id") or identity.get("issued_id")
+    if not session_id:
+        return
     try:
         path = envelope_cache_path(root, session_id)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1082,6 +1087,7 @@ def cmd_enable(ctx, args):
                          "note": "人已确认这些配置在本宿主不生效（停用/残留）；日后重新启用前必须先清理"})
     # 首次启用时调用方通常还没带 activation：这里给出**可直接缓存的模板**，
     # 由适配层在后续每次请求里重放（机制稿 §1.4：由宿主/skill 按本次真实调用形成缓存）
+    binding = session_mod.load_binding(ctx.root, session_key)
     activation = ctx.activation()
     template = activation or {
         "enabled": True,
@@ -1096,12 +1102,16 @@ def cmd_enable(ctx, args):
             "activation": template,
             "activation_source": "carried" if activation else "formed_by_enable",
             "cache_hint": "把 facts.activation 原样缓存进本会话，并随每次请求放入 session.activation",
+            "binding": ({"object": binding.get("object"),
+                         "instance_id": binding.get("instance_id")} if binding else None),
             "platforms": ctx.platforms(),
             "trellis_data": state["data"],
             "trellis_disabled_confirmed": disabled,
         },
         position=codes.position(scope="session"),
-        next_="人显式选择对象：task-new 或 bind（第二轮为 run create）",
+        next_=("已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
+               "（同进程内无法区分时开新终端）" if binding
+               else "人显式选择对象：task-new、bind --task，或 run create"),
         warnings=warnings,
     )
 
@@ -1565,7 +1575,32 @@ def _ensure_run_releasable(ctx, run_id):
                            next_="先处置这些路径（提交/反向修正/承接）再释放")
 
 
+def _release_writer_locked(ctx, holder):
+    """释放写权并登记 `writer.release` 动作；调用方必须已持有项目锁。"""
+    record = ctx.writer()
+    updated = writer_mod.release(record)
+    writer_mod.save(ctx.root, updated)
+    assertion = _atomic_writer_action(
+        ctx,
+        updated,
+        "writer.release",
+        _owner_ref(holder),
+        {"session_key": ctx.key()},
+        ["verify_scope", "release"],
+        lambda current: True,
+    )
+    return updated, assertion
+
+
 def _writer_release(ctx):
+    # 释放是幂等的：正常归档成功后入口已自动释放，调用方再跑一次不应变成
+    # "写权空闲且本会话未持有"的需人裁决。空闲时只回报事实，不写记录。
+    current = ctx.writer()
+    if current.get("state") == "idle":
+        return ok(
+            facts={"already_idle": True, "generation": current.get("generation")},
+            next_="写权已空闲；下一对象需在新会话选择",
+        )
     record, holder = ctx.require_held()
     key = ctx.key()
     bind = session_mod.load_binding(ctx.root, key) or {}
@@ -1587,18 +1622,7 @@ def _writer_release(ctx):
     with _lock(ctx.root, hint="writer release"):
         # 锁内重新执行完整核验：状态、持有者、范围与代次（机制稿 §4.2）
         ctx.require_held()
-        record = ctx.writer()
-        updated = writer_mod.release(record)
-        writer_mod.save(ctx.root, updated)
-        assertion = _atomic_writer_action(
-            ctx,
-            updated,
-            "writer.release",
-            _owner_ref(holder),
-            {"session_key": key},
-            ["verify_scope", "release"],
-            lambda current: True,
-        )
+        updated, assertion = _release_writer_locked(ctx, holder)
     return ok(
         facts={"generation": updated.get("generation"), "control_assertion": assertion},
         position=codes.position(scope=object_ref.get("kind"), task_id=object_ref.get("id")),
@@ -1974,7 +1998,7 @@ def config_mod():
     return config_mod
 
 
-# `definition` 与 `run` 的子动作（未交付的仍由 runs.py 抛 `WF_CAPABILITY_UNAVAILABLE`）
+# `definition` 与 `run` 的子动作均由 runs.py 承接；不可用分支由对应 handler 抛 `WF_CAPABILITY_UNAVAILABLE`
 SUBACTIONS = {
     "definition": ("prepare", "validate"),
     "run": ("create", "advance", "pause", "resume", "locate", "terminate", "finish"),
@@ -2055,11 +2079,25 @@ def _review_command(kind):
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
         round_no = args.value("--round")
+        draft = args.value("--main-review-draft")
+        if draft:
+            try:
+                facts = review_mod.main_review_draft(ctx, task, int(round_no) if round_no else None, draft)
+                return codes.result(
+                    "WF_OK",
+                    object={"id": task.get("id"), "name": task.get("title")},
+                    position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
+                    next_="填五轴结论/依据、逐报告信赖度与逐 finding 复核后，用 --main-review <同一文件> 重跑",
+                    facts=facts,
+                )
+            except review_mod.ReviewError as exc:
+                raise CliError(exc.code, exc.facts)
         try:
             return review_mod.decide(ctx, task, int(round_no) if round_no else None,
                                      args.value("--plan"), args.value("--unavailable"),
                                      register_only=args.flag("--register-only"),
-                                     gap_acceptance_path=args.value("--gap-acceptance"))
+                                     gap_acceptance_path=args.value("--gap-acceptance"),
+                                     main_review_path=args.value("--main-review"))
         except review_mod.ReviewError as exc:
             raise CliError(exc.code, exc.facts)
 
@@ -2214,12 +2252,15 @@ COMMAND_HELP = {
                       "example": "wf.py review-status --task 2026-xxxx --json"},
     "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名，实施 CLI 取本会话）",
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
+                               "--main-review": "主会话五轴复核文件（产生 verdict 时必填）",
+                               "--main-review-draft": "按本轮已导入报告生成主会话复核待填骨架后退出",
                                "--plan": "逐条 finding 处置", "--unavailable": "不可用声明（与 --plan 互斥）",
                                "--register-only": "只登记复核关闭：不产生结论、不校验人数/异种"
                                                   "（仍需 --plan；关闭的硬条件照旧）",
                                "--gap-acceptance": "人接受覆盖缺口的确认文件"
                                                    "（by/at/quote/source + round + axes）"},
-                      "example": "wf.py review-decide --task <id> --gap-acceptance gap.json --json"},
+                      "example": "wf.py review-decide --task <id> --main-review main-review.json "
+                                 "--gap-acceptance gap.json --json"},
 }
 
 
@@ -2780,8 +2821,13 @@ def cmd_review_status(ctx, args):
         missing = sorted(set(uncovered) - accepted)
         next_ = (f"材料已齐，但本轮有未覆盖轴（{', '.join(missing)}）："
                  "补齐后重发一轮，或由人确认接受缺口后用 review-decide --gap-acceptance 重判")
+    elif ((task.get("reviews") or {}).get("result") or {}).get("round") == facts["round"]:
+        next_ = "本轮已产生判定；如需改结论请开新一轮（review-launch），不覆盖已判轮次"
+    elif not facts.get("main_review_ready"):
+        next_ = ("材料已齐、资格检查通过：先生成并填写主会话复核"
+                 "（review-decide --main-review-draft <file>），再带 --main-review 判定")
     else:
-        next_ = "材料已齐、资格检查通过：下一步 review-decide（结论以判定为准）"
+        next_ = "材料与主会话复核已齐：下一步 review-decide（结论以判定为准）"
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},
@@ -2844,9 +2890,9 @@ COMMANDS = {
     "baseline-apply": _task_command("cmd_baseline_apply"),
     "spec-update": _task_command("cmd_spec_update"),
     "dep": _task_command("cmd_dep"),
-    # v42 §4 要求删除 `task-rework`，但机制稿 §6.2 与 `workflows/instance-flow.md` 仍把
-    # `control.task.rework` 声明为 [required] 的两轮交付步骤；删命令会让部署自检
-    # （handler entry 必须存在）失败。属权威冲突，先保留桩并登记待裁，不单方面删步骤。
+    # `task-rework` 已实现（返工建 R、挂起 T、继承前置）。v42 §4 要求删除它，但机制稿 §6.2
+    # 与 `workflows/instance-flow.md` 仍把 `control.task.rework` 声明为 [required] 步骤；
+    # 删命令会让部署自检（handler entry 必须存在）失败。属权威冲突，保留命令并登记待裁。
     "task-rework": _task_command("cmd_task_rework"),
     "task-replace": _task_command("cmd_task_replace"),
     "review-context": _review_command("context"),

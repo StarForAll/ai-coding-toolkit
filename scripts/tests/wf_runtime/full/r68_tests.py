@@ -178,7 +178,14 @@ def scenario(title, sid, mutate=None):
                   json.dumps((payload_i or {}).get("facts"), ensure_ascii=False)[:160])
     if mutate and mutate.get("__after__"):
         mutate["__after__"](task_id, sid)
-    rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
+    findings = []
+    for slot in ("slot-a", "slot-b"):
+        for item in (mutate or {}).get(slot, {}).get("findings") or []:
+            findings.append(dict(item, slot=slot))
+    main_path = wfdrive.write_main_review("/tmp/r68_main.json", task_id,
+                                          ["slot-a", "slot-b"], findings=findings)
+    rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
+                         "--main-review", main_path, "--json"],
                         {"generation": gen()}, sid)
     if os.environ.get("R68_DEBUG"):
         print("   decide:", (payload or {}).get("code"),

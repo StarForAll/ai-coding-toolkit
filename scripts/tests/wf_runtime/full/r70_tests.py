@@ -227,7 +227,10 @@ for slot in ("slot-a", "slot-b"):
                   **({"findings": [{"id": "F1", "severity": "blocker", "axis": "acceptance",
                                     "assertion_ref": "a1", "summary": "真失败"}], "verdict": "fail"}
                      if slot == "slot-a" else {}))
-rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
+main1 = wfdrive.write_main_review("/tmp/r70_main_1.json", task_id, ["slot-a", "slot-b"],
+                                  findings=[{"id": "F1", "slot": "slot-a"}])
+rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
+                     "--main-review", main1, "--json"],
                     {"generation": gen()}, "sess-W1")
 record = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 first = (record.get("reviews") or {}).get("result") or {}
@@ -248,7 +251,10 @@ found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-2")
 staging2 = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-2"
 for slot in ("slot-a", "slot-b"):
     import_report(staging2, slot, 2, check, anchor)
-rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "2", "--json"],
+main2 = wfdrive.write_main_review("/tmp/r70_main_2.json", task_id, ["slot-a", "slot-b"],
+                                  round_no=2)
+rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "2",
+                     "--main-review", main2, "--json"],
                     {"generation": gen()}, "sess-W1")
 record = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 reviews = record.get("reviews") or {}

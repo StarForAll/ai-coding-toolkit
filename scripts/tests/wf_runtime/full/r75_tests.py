@@ -141,7 +141,10 @@ staging2 = glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")[0]
 p3 = report(staging2, "slot-c", "claude")
 wf(["review-import", "--task", task_id, "--round", "1", "--slot", "slot-c", "--report", p3, "--json"],
    {"generation": gen()}, "sess-A1")
-rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1", "--json"],
+main_path = wfdrive.write_main_review("/tmp/r75_main.json", task_id,
+                                      ["slot-a", "slot-b", "slot-c"])
+rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
+                     "--main-review", main_path, "--json"],
                     {"generation": gen()}, "sess-A1")
 rec("2b 三槽位齐全 → pass", "WF_OK", (payload or {}).get("code"), rc == 0)
 

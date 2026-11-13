@@ -44,7 +44,7 @@ disable-model-invocation: false
 | action | 对应命令 | 说明 |
 |---|---|---|
 | `rerun_check` | `task-check` | C1：当前检查不能用于完成任务（内容变了 / 规则版本变了 / 失效登记） |
-| `record_disposition` | `review-decide --plan <file>` | C2：关闭 blocking；只有 `accepted` 清零（见 `wf-review-action`） |
+| `record_disposition` | `review-decide --register-only --plan <file>`（只登记关闭）或带 `--main-review` 产生判定 | C2：关闭 blocking；只有 `accepted` 清零（见 `wf-review-action`） |
 | `restore_bytes` | 找回原字节放回原路径 | C3：恢复后该条离开 `unverifiable`（不依赖身份） |
 | `human_release` | `review-accept-unknown --file <决定.json>` | C3：只在该条 `release_allowed == true` 时出现 |
 | `resume_inflight` | 继续该轮证据收集后 `review-import` / `review-decide` | C4：该轮 `blocked` 为空且未判定 |
@@ -104,9 +104,4 @@ disable-model-invocation: false
 - 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
 - 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
 - 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
-- 命令形如 `<python> <项目根>/.wf/bin/wf.py <子命令>`。`<python>` 按此顺序取，**取到能跑的就整会话固定复用**：
-  ① `.wf/project-config.json` 的 `python_executable`（未设置再读 `~/.wf/config.json` 同名键，可直接读文件取值，不必先执行）；
-  ② 你自身运行时的 Python 可执行文件；
-  ③ 系统 `python3`。
-  若宿主执行策略要求审批或不在白名单（`WF_EXECUTOR_UNCONFIRMED` / 审批拒绝），改用策略允许的已核实 Python 绝对路径并固定下来；
-  **不要每条命令换解释器**，也不要因为被拒就改成手写信封或换路径重试同一效果。不装 PATH、不做 shell shim。
+- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。

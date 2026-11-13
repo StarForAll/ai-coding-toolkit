@@ -60,8 +60,22 @@ def build_task(project, root, title="repro 任务", sid="sess-R"):
     return task_id, task_dir
 
 
-def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=None):
-    """check → launch → import 两份报告 → decide。返回 (decide_rc, 载荷, 记录)。"""
+def main_review(task_id, slots, findings=(), axes=None):
+    """主会话复核：五轴 pass、逐报告 primary、逐 finding verified（夹具用）。"""
+    axes = axes or {axis: "pass" for axis in AXES}
+    return {"task": task_id, "round": 1,
+            "axes": {axis: {"conclusion": axes.get(axis, "pass"), "basis": "b",
+                            "sources": ["main"], "finding_refs": []} for axis in AXES},
+            "report_review": [{"slot": slot, "reliance": "primary",
+                               "notes": "报告覆盖与依据可用"} for slot in slots],
+            "finding_review": [{"finding_id": item.get("id"), "slot": slot,
+                                "check": "verified", "basis": "本地复核"}
+                               for slot in slots for item in findings]}
+
+
+def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=None,
+               findings=(), main_axes=None):
+    """check → launch → import 两份报告 → 主会话复核 → decide。返回 (decide_rc, 载荷, 记录)。"""
     axes = axes or {axis: {"conclusion": "pass", "basis": "b"} for axis in AXES}
     # 任务记录/绑定/写权属于本次任务的既有改动，先提交，Check 才不会把它们当冲突候选
     # 只提交治理面：业务文件 pkg/a.py 保持未提交，属本任务自己的改动（e 桶）
@@ -113,7 +127,7 @@ def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=N
                 "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
                 "read-scope": ["pkg/**"],
                 "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"],
-                "scope-exceptions": [], "axes": axes, "findings": [], "verdict": "pass"}
+                "axes": axes, "findings": list(findings), "verdict": "pass"}
         slot_dir = temp_paths[i]
         os.makedirs(slot_dir, exist_ok=True)
         report = os.path.join(slot_dir, "report.md")
@@ -124,7 +138,12 @@ def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=N
                             sid=sid, inputs={"generation": H.generation(project)})
         if rc != 0:
             raise H.Precondition(f"review-import failed: {payload}")
-    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", "1", "--json"],
+    review_path = os.path.join(root, "main-review.json")
+    json.dump(main_review(task_id, [f"slot-{i}" for i in range(len(slot_clis))],
+                          findings=findings, axes=main_axes),
+              open(review_path, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", "1",
+                                  "--main-review", review_path, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})
     record = json.load(open(os.path.join(task_dir, "task.json"), encoding="utf-8"))
     return rc, payload, record

@@ -8,23 +8,31 @@ disable-model-invocation: false
 
 主会话（持有写权者）在 `review-import` 之后使用。它汇总报告、准备处置；本轮之后的**范围内修复仍由本会话完成**——reviewer 不修代码，写处置记录也不等于修好。
 
-## 步骤（**不需要任何路径或轮次参数**）
+## 步骤（任务 id 已知；主会话复核文件按下面命令生成/填写）
 
-本会话已经知道当前任务与审查轮次，直接调即可：
+本会话知道当前任务与审查轮次；`--main-review` 是必填的复核文件：
 
 ```bash
 # 1) 导入：按文件名发现本轮已完成（status=done）的报告，重复调用幂等
 <python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --envelope <本会话信封> --json
 
-# 2) 判定：**必须显式传 --round**（缺省取最大 launch 轮，可能与 exits.round 不同）
-<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> --plan <处置.json> --json
+# 2) 生成主会话复核骨架（不产生结论；放 .wf/.runtime/，该目录不入库）
+<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \
+  --main-review-draft .wf/.runtime/main-review.json --json
+
+# 3) 填写后判定：**必须显式传 --round 与 --main-review**
+<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \
+  --main-review .wf/.runtime/main-review.json --plan <处置.json> --json
 ```
 
 1. 导入后读 `facts.imported_agents`（本轮报告来自哪些 agent）；报告正文在任务目录 `review/` 下。
-2. 先汇总：按轴列出共识、分歧与互相矛盾的事实，标明来源 agent 与 finding id。
-3. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。
-4. 把处置写成 `--plan` 文件的元素数组，再交 `review-decide`。
-5. 驳回必须本地核实；「作者不认可」不是证据。
+2. **主会话复核（不是可选步骤）**：逐份报告质疑其覆盖、证据与矛盾（`report_review.reliance` 取 `primary|partial|none`，写清为什么）；逐条 finding 本地核实（`finding_review.check` 取 `verified|disputed|unable`）；对五个轴给出**你自己的** `pass|fail|uncovered` 与依据（`basis`），来源写 `main` 或具体报告槽位。判 `fail` 必须指回本轮未关闭的 blocking finding；判 `pass` 不能覆盖未关闭 blocking。
+3. 先汇总：按轴列出共识、分歧与互相矛盾的事实，标明来源 agent 与 finding id。**reviewer 报告是辅助证据**：报告未覆盖的轴，你能核实就自己补（写 `pass/fail` + 依据），补不了才留 `uncovered` 交人；不要为补一个 reviewer 的未覆盖轴自动再发一轮。
+   - 主会话复核 `fail` 轴必须指回一条**未关闭**的 blocking finding；修好后重跑 Check、发**新一轮**，不要改已判轮次的复核。
+   - 你认为某条 finding 是误报/重分类时，主会话复核对应轴写 `pass`、`finding_review.check=disputed`，按处置规则写 `accepted`；同一轮重判可在 finding 关闭后通过。判定后再改复核内容会被拒（要改结论请开新一轮）。
+4. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。
+5. 把处置写成 `--plan` 文件的元素数组，再交 `review-decide`。
+6. 驳回必须本地核实；「作者不认可」不是证据。
 
 ## 报告还能不能沿用（内容或标准变了之后）
 
@@ -76,14 +84,18 @@ disable-model-invocation: false
 
 - 轮次不设上限；"这轮算过"的唯一依据是 `review-decide` 的 pass 加上既有 disposition 关闭事实，
   不是"报告读完了"或"建议都登记了"。
-- 本轮有**未覆盖轴**时 `review-decide` 输出需人裁决（`WF_SEMANTIC_DECISION`）：补齐后重发一轮，
-  或由人写接受文件（`by/at/quote/source` + `round` + `axes`）后用 `--gap-acceptance` 重判；
-  缺口既不判 fail，也不等于审查通过。
+- 本轮有**主会话复核与报告都未覆盖的轴**时 `review-decide` 输出需人裁决（`WF_SEMANTIC_DECISION`）：主会话能补就补，补不了才由人写接受文件（`by/at/quote/source` + `round` + `axes`）后用 `--gap-acceptance` 重判；缺口既不判 fail，也不等于审查通过。
 - 关闭证据与处置类型见 `wf-repair-loop`「这条 blocking 真的修了吗」；定位与写权事实见 `wf-continue`。
+
+## pass 之后：建议取舍与主动收敛
+
+- `review-decide` 判 pass 后，纯建议**不阻塞收工**。逐条判断本轮是否采纳：明显值得且不改验收/范围才改；采纳即改了代码，按新锚点重查/重审，不要拿旧 pass 继续。
+- 不采纳的留档并写明理由（影响面、为什么不值得本轮做、是否留作后续）；不要为了“把所有建议都做完”无限加轮。
+- 没有未关闭 blocking、缺口已接受或无需缺口时，准备收工材料（Check 结果、未核实项、待提交路径），交人调用 `wf-finish`；不要停在“报告读完了”。
 
 ## 判定边界
 
-`review-decide` 的 pass/fail 由入口按事实推导（人数、CLI 差异、锚点、阻塞项）；本 skill 不给 verdict。
+`review-decide` 的 pass/fail 由入口按事实推导（人数、CLI 差异、锚点、主会话复核与报告的覆盖、阻塞项）；本 skill 不给 verdict。
 单 reviewer 只是 degraded 参考，不满足复杂任务完成条件。
 
 ## 纪律
@@ -91,12 +103,7 @@ disable-model-invocation: false
 - 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
 - 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
 - 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
-- 命令形如 `<python> <项目根>/.wf/bin/wf.py <子命令>`。`<python>` 按此顺序取，**取到能跑的就整会话固定复用**：
-  ① `.wf/project-config.json` 的 `python_executable`（未设置再读 `~/.wf/config.json` 同名键，可直接读文件取值，不必先执行）；
-  ② 你自身运行时的 Python 可执行文件；
-  ③ 系统 `python3`。
-  若宿主执行策略要求审批或不在白名单（`WF_EXECUTOR_UNCONFIRMED` / 审批拒绝），改用策略允许的已核实 Python 绝对路径并固定下来；
-  **不要每条命令换解释器**，也不要因为被拒就改成手写信封或换路径重试同一效果。不装 PATH、不做 shell shim。
+- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。
 
 ## 来源与差异
 
@@ -106,5 +113,5 @@ disable-model-invocation: false
 | 许可 | 跟随本仓库（内部私有源，无第三方 NOTICE 义务；上游为同作者资产） |
 | 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
 | 差异 | 只读指定轮次并先汇总后决策，写回 dispositions 而非直接改记录 |
-| 最近正例 | 任务记录 `validation.md` §19：两异种 reviewer 的两份报告按轴汇总后写成 `--plan` 的 dispositions 元素，`review-decide` 据此判 pass |
+| 最近正例 | 任务记录 `validation.md` §19：两异种 reviewer 的两份报告按轴汇总、主会话写五轴复核后，把处置写成 `--plan` 的 dispositions 元素，`review-decide` 据此判 pass |
 | 最近反例 | 同节：同一 CLI 占两个槽位时 `review-decide` **拒绝输入、不产生 verdict**（旧版曾记为 fail，已按设计稿 §6.5 修订）；把汇总与决策混写会让判定无法回溯到具体报告 |
