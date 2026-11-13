@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 403
-- **Last Active**: 2026-11-12
+- **Total Sessions**: 404
+- **Last Active**: 2026-11-13
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~987 | Active |
+| `journal-8.md` | ~1029 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 404 | 2026-11-13 | wf 控制流两份分析报告核验与结构性修正 | `965a7439`, `32ae4866`, `258e772d` | `main` |
 | 403 | 2026-11-12 | wf 第二轮 dogfood 缺陷修正（材料/交付集合/代次/契约一致性） | `57afbbbb`, `535f3492` | `main` |
 | 402 | 2026-11-12 | wf 第二轮：能力交付、机制稿对齐与三轮深度审计 | `19aee32b`, `7f66ac88`, `f3a7c3d3`, `e45759a7`, `eb18036f`, `ef6ffcc4`, `90b3c1f8`, `8d898823`, `4060e841`, `f5f0a7ee`, `4dd13358`, `6430b940`, `fdbc9db4`, `a2594373`, `c94294ea`, `d5aa5575`, `51cbdd17`, `d58dec6b`, `52056274`, `2fbd5468`, `5cb9611c`, `45908a3a` | `main` |
 | 401 | 2026-11-12 | wf 文档债清理：D14 自签发订正 + denominator 覆盖率账复核 | `89b14be1`, `87c0bb16`, `ff623b69` | `main` |

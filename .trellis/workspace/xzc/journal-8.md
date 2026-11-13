@@ -985,3 +985,45 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 404: wf 控制流两份分析报告核验与结构性修正
+<!-- trellis-session: v=2 fp=71f4441243a4aa96 -->
+
+**Date**: 2026-11-13
+**Task**: wf 控制流两份分析报告核验与结构性修正
+**Branch**: `main`
+
+### Summary
+
+逐条核验 18 条主张（采纳 10/部分采纳 3/拒绝 4），修复审查输入面、外发范围、工作区排除、材料差异源、验证日志与实例锚点；688 单元测试、全量夹具 149 项与 repro 85/85 通过；发行树递增 0.1.1。
+
+### Main Changes
+
+- 会话运行态只保留合并写，修复代次被游标覆盖
+- 报告输入面单一实现；uncovered 不再推导 pass，缺口须人接受
+- 外发确认绑定 task+materials；仓库规则提交按路径覆盖；脱敏白名单与中文凭据词
+- 材料差异源改任务基线；验证日志完整落盘；实例锚点纳入定义快照；发起请求机械化
+- 外来未提交改动支持摘要绑定的排除留痕（不进交付/指纹/材料）
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `965a7439` | fix(wf): 审查输入面/外发范围/工作区排除的结构性修正 |
+| `32ae4866` | docs(wf): 设计/机制/实现与交付纪律同步 |
+| `258e772d` | chore(wf): 重建发行树（0.1.1） |
+
+### Testing
+
+- [OK] python3 -m unittest discover -s scripts/tests -t . → 688 OK
+- [OK] full/run_all.sh → 149 项 0 失败；repro 85/85
+- [OK] validate-wf-design / check-doc-refs / check-wf-analysis / validate-skills 全绿；build-wf-release --verify 通过
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 人创建 wf-v0.1.1 tag 并按需推送
