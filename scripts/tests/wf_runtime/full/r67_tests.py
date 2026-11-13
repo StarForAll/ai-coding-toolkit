@@ -206,12 +206,26 @@ open(manifest_path, "w", encoding="utf-8").write(manifest_backup)
 rec("3d 恢复后可用", "有义务", bool(wf_gates.declared_step_specs(wf_cli.Context(F, ["--envelope", env_path]))), True)
 
 # ---- 4. 聚合脚本：失败必须传播 ----
-fake = "/tmp/r67_fake_suites"
-shutil.rmtree(fake, ignore_errors=True)
+# 假环境按**真实 run_all 的契约**搭建：run_all 现在把选择交给 plan.py，
+# 所以 plan.py / suites.json / results_gate.py 必须在同一棵假树里，REPO_ROOT 也指向它。
+fake_root = "/tmp/r67_fake_repo"
+shutil.rmtree(fake_root, ignore_errors=True)
+fake = os.path.join(fake_root, "scripts/tests/wf_runtime/full")
 os.makedirs(fake)
 real = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/tests/wf_runtime/full"
 shutil.copy(os.path.join(real, "run_all.sh"), fake)
-# run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本（否则并行段无结果行，失败无法传播）
+for _name in ("plan.py", "suites.json", "results_gate.py"):
+    shutil.copy(os.path.join(real, _name), fake)
+os.makedirs(os.path.join(fake, "repro"), exist_ok=True)
+shutil.copy(os.path.join(real, "repro", "groups.json"), os.path.join(fake, "repro", "groups.json"))
+# 测试发行入口桩（dev 模式 run_all 会调用 ensure/check）
+open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
+    'print("BUILT fake test release")\nraise SystemExit(0)\n')
+# 产品树摘要桩（run_all 用它做前后比对）
+open(os.path.join(fake_root, "scripts/wf_release_common.py"), "w").write(
+    'REPO_ROOT = "/tmp/r67_fake_repo"\n\n\ndef tree_digest(root):\n'
+    '    return "sha256:" + "0" * 64\n')
+# run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本
 open(os.path.join(fake, "run_one.sh"), "w").write(
     '#!/bin/bash\nset -uo pipefail\nsuite=$1\n'
     'out="$RESULTS_DIR/$suite.out"\n'
@@ -224,61 +238,58 @@ open(os.path.join(fake, "wf_fixture.sh"), "w").write(
     '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
     ': > "$F/.wf/bin/wf.py"\n')
 open(os.path.join(fake, "f1_init.py"), "w").write("print('ok')\n")
-open(os.path.join(fake, "wf_fixture.sh"), "w").write(
-    '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
-    ': > "$F/.wf/bin/wf.py"\n')
-open(os.path.join(fake, "cp1_tests.py"), "w").write("print('[FAIL] fake')\nprint('saved 0 cases; 0 passed')\nraise SystemExit(1)\n")
-# 依 run_all.sh 里的实际清单造同名假套件，避免清单变动后假环境缺文件
-import re as _re
-suites_line = _re.search(r'SUITES="([^"]+)"', open(os.path.join(real, "run_all.sh"), encoding="utf-8").read())
-for name in suites_line.group(1).split():
-    if name == "cp1_tests":
+# 假套件/流程/extra 依 suites.json 清单生成：清单变动后假环境不会缺文件
+_manifest = json.load(open(os.path.join(real, "suites.json"), encoding="utf-8"))
+for _entry in _manifest["suites"]:
+    if _entry.get("kind") not in ("suite", "candidate"):
         continue
-    open(os.path.join(fake, f"{name}.py"), "w").write("print('saved 1 cases; 1 passed')\n")
-# run_all.sh 里直接调用的额外脚本体也要有可运行的假件
-open(os.path.join(fake, "r72_tests.py"), "w").write(
-    "print('\\n'.join('[PASS] case %d' % i for i in range(1, 8)))\nprint('saved 7 / 7')\n")
-open(os.path.join(fake, "p5_f0.py"), "w").write("print('PASS')\n" * 9)
-# repro 一键入口的桩：run_all 的 run_repro 会调用 $HERE/repro/run.sh，
-# 假环境没有该目录时会被判为"汇总缺失"而失败（2026-11-05 第八轮复审 F8-5 之后）
-os.makedirs(os.path.join(fake, "repro"), exist_ok=True)
+    if _entry["name"] == "cp1_tests":
+        continue
+    open(os.path.join(fake, f"{_entry['name']}.py"), "w").write(
+        "print('saved 1 cases; 1 passed')\n")
+open(os.path.join(fake, "cp1_tests.py"), "w").write(
+    "print('[FAIL] fake')\nprint('saved 0 cases; 0 passed')\nraise SystemExit(1)\n")
+for _name, _count in (_manifest.get("extra_expect") or {}).items():
+    _body = "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, int(_count) + 1))
+    open(os.path.join(fake, f"{_name}.py"), "w").write(
+        _body + "print('saved %d / %d')\n" % (int(_count), int(_count)))
+_flow_expect = _manifest.get("flow_expect") or {}
+open(os.path.join(fake, "p5_f0.py"), "w").write(
+    "print('PASS')\n" * int(_flow_expect.get("f0", 1)))
+for _name in ("p5_spec", "p5_v2v3", "p5_v5"):
+    open(os.path.join(fake, f"{_name}.py"), "w").write(
+        "print('PASS')\n" * int(_flow_expect.get(_name, 1)))
+# repro 一键入口的桩：run_all 的 run_repro 会调用 $HERE/repro/run.sh
 open(os.path.join(fake, "repro", "run.sh"), "w").write(
     '#!/bin/bash\n'
     'echo "ok   fake-case"\n'
     'echo "REPRO_TOTAL=1"\n'
     'echo "REPRO_PASSED=1"\n'
     'echo "REPRO_FAILED=0"\n'
+    'echo "REPRO_GREEN_SECONDS=0"\n'
+    'echo "REPRO_RED_SECONDS=0"\n'
     'echo "repro 用例：1/1"\n'
     'exit 0\n')
 os.chmod(os.path.join(fake, "repro", "run.sh"), 0o755)
-# 发行仓库桩：run_all 的 run_f0 会调用 $RELEASE_REPO/install.py
-fake_repo = "/tmp/r67_fake_release"
-shutil.rmtree(fake_repo, ignore_errors=True)
-os.makedirs(fake_repo)
-open(os.path.join(fake_repo, "wf-release.json"), "w").write("{}")
-open(os.path.join(fake_repo, "install.py"), "w").write("import sys; sys.exit(0)\n")
-# 流程的期望计数同样以 run_all.sh 为准，避免清单/用例数变动后假环境与判据脱节
-for _name, _script, _count in _re.findall(r"run_flow\s+(\S+)\s+(\S+)\s+(\d+)",
-                                        open(os.path.join(real, "run_all.sh"), encoding="utf-8").read()):
-    open(os.path.join(fake, f"{_name}.py"), "w").write("print('PASS')\n" * int(_count))
+# 测试发行副本桩：run_f0 会调用 $RELEASE_REPO/install.py
+release_cache = "/tmp/r67_fake_release_cache"
+shutil.rmtree(release_cache, ignore_errors=True)
+os.makedirs(os.path.join(release_cache, "0.1.0"))
+open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys; sys.exit(0)\n")
+# 外层可能以 `WF_SUITES=... bash run_all.sh` 启动（命令前缀会导出到子进程），
+# 假环境必须显式清空，否则内层 run_all 会被当成子集模式
+_fake_env = {**os.environ, "WF_FIX": "/tmp/r67_fake_fix",
+             "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1",
+             "WF_SUITES": "", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                      env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
-                           "WF_REBUILD_RELEASE": "0", "WF_JOBS": "2",
-                           # 假环境里没有真实技术债：清空豁免清单，
-                           # 否则"假套件全绿"会触发 LEGACY-FIXED 的销账失败（那是真环境的规则）
-                           "WF_KNOWN_LEGACY": "",
-                           "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
+                      env={**_fake_env, "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
     f"exit={proc.returncode} summary={_summary[-1] if _summary else None}",
     proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
 open(os.path.join(fake, "cp1_tests.py"), "w").write("print('saved 1 cases; 1 passed')\n")
 proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
-                       env={**os.environ, "WF_FIX": "/tmp/r67_fake_fix", "WF_RELEASE_REPO": "/tmp/r67_fake_release",
-                            "WF_REBUILD_RELEASE": "0",
-                            # 必须显式隔离：外层 run_all 会 export RESULTS_DIR，内层若沿用会把外层结果行覆盖/清空
-                            "WF_KNOWN_LEGACY": "",
-                            "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
+                       env={**_fake_env, "WF_RESULTS_DIR": "/tmp/r67_fake_results2"})
 if proc2.returncode != 0:
     print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500])
 rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode}", proc2.returncode == 0)

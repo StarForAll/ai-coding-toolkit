@@ -101,25 +101,51 @@
 
 ## 7. 并行纪律：`run_all.sh` 独占夹具
 
-`run_all.sh` 使用 `/tmp/wf-fixtures/*` 与发行仓库副本（默认 `~/.cache/wf-release-repo`），**同时跑两份会让双方挂起**
+`run_all.sh` 使用 `/tmp/wf-fixtures/*` 与**测试发行副本**（默认 `~/.cache/wf-test-release/<version>`，
+不再重建或借用产品树 `docs/workflows/wf-release`），**同时跑两份会让双方挂起**
 （本任务实际遇到一次 SIGTERM，另一次 `r71_tests` 报 `KeyError: 'directory'` 属夹具竞态）。
 跑全量前先确认没有并发实例；单跑某套件用 `WF_SUITES="<name>" bash scripts/tests/wf_runtime/full/run_all.sh`
 （它会自己重建夹具），不要直接 `python3 rXX_tests.py`。
 
+两层并行是**分开**的开关，互不继承：
+
+| 层 | 开关 | 默认 | 说明 |
+|---|---|---|---|
+| 套件层 | `--parallel` / `WF_JOBS` | 串行（1） | `unshare` + bind mount，默认不开（确定性优先） |
+| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json` |
+
 ---
 
-## 8. 收口前的最小证据集
+## 8. 收口前的最小证据集（四层）
 
-```bash
-/softwares/python/bin/python3 -m unittest discover -s scripts/tests
-/softwares/python/bin/python3 -m unittest discover -s scripts/tests/wf_runtime
-bash scripts/tests/wf_runtime/full/run_all.sh          # 独占，勿并发
-/softwares/python/bin/python3 scripts/build-wf-release.py --verify
-/softwares/python/bin/python3 scripts/build-wf-release.py --verify-token-parity
-/softwares/python/bin/python3 scripts/validate-wf-design.py
-/softwares/python/bin/python3 scripts/check-doc-refs.py
-./scripts/validate-skills.sh
-```
+**只在对应层付出对应成本**：全量入口不承担“每次编辑后的快速反馈”。
+
+| 层 | 何时 | 命令 |
+|---|---|---|
+| T0 快速 | 每次编辑后（<10s） | `/softwares/python/bin/python3 -m unittest discover -s scripts/tests -t .`（已包含 `wf_runtime`/`wf_review`，**不再重复跑子目录**） |
+| T1 定向 | 改动命中模块时（<2min） | `WF_SUITES="r68_tests r70_tests" bash scripts/tests/wf_runtime/full/run_all.sh`<br>`bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --no-build` |
+| T2 阶段收口 | 任务收口/合并前 | `bash scripts/tests/wf_runtime/full/run_all.sh --full --repro green`（59 套件 + 4 流程 + r72 + green repro）+ 单元层<br>`python3 scripts/build-wf-release.py --verify --verify-token-parity`<br>`python3 scripts/validate-wf-design.py`、`python3 scripts/check-doc-refs.py`、`./scripts/validate-skills.sh` |
+| T3 发行 | 发行前 | `bash .../run_all.sh --full --repro both`（red 只在这一层全量）<br>`python3 scripts/build-wf-release.py --version <X.Y.Z>`<br>`python3 scripts/tests/wf_runtime/full/prepare_candidate_repo.py --tree docs/workflows/wf-release --version <X.Y.Z> --out ~/.cache/wf-candidate-repo/<X.Y.Z>`<br>`bash .../run_all.sh --representative --repro green --repro-group install --fixture-deploy candidate --release-root <候选仓库根> --release-ref refs/tags/wf-v<X.Y.Z> --release-version <X.Y.Z>`<br>+ `build-wf-release.py --verify --verify-token-parity` |
+
+边界（Phase 1 起的硬约束）：
+
+1. **子集是真子集**：`WF_SUITES=...` 只跑选中的套件；`r72`/`repro`/`f0`/`p5_*` 不再隐式执行。
+   子集要跑 repro 必须显式 `WF_WITH_REPRO=1`（`--full`/`--representative` 不需要）。
+2. **repro 默认 green**：`run_all` 的全量/代表集默认 `--repro green`；red 只在 T3 或断言变更时跑。
+   独立 `repro/run.sh` 的默认仍是 `both`（兼容旧调用）。
+3. **`--mode auto` 是 red 闸门**：首次运行、新用例、helper/脚本/被测 payload 目标变化 → 该用例 both；
+   未变化 → green；candidate 模式遇到“需要 both”直接报错，要求先在 dev 模式跑 red。
+4. **发行边界**：T1/T2 只用测试发行副本（`~/.cache/wf-test-release/<version>` + `test-release-meta.json`），
+   绝不改写产品发行树；T3 用**带 tag 的候选仓库根**（`prepare_candidate_repo.py` 产物），
+   candidate 夹具必须由候选 `install.py` 部署并核对 `installation.json` 的 version/ref/rules_digest。
+5. **`--no-build` 必须校验新鲜度**：测试发行 meta 或 `<候选根>.meta.json` 与当前源树/树摘要不一致 →
+   拒绝运行，不静默使用旧副本。
+6. **candidate 只认 candidate-clean**：repro 用例须同时满足 `assertion_target=installed` 与
+   `stage_role=scaffold`；其余列入 `skipped_non_candidate`，**不算通过**；套件侧 `candidate_clean=false`
+   的不得用于候选证明（当前 53 个套件仍硬编码源码 `payload/lib`）。
+7. **red 的语义**：前置失败不算 red 成功；注入后仍绿必须失败并输出目标断言。
+8. **失败传播不降级**：套件退出码、夹具/`f1_init` 失败、结果行缺失/重复/畸形、子进程崩溃/超时、
+   repro 前置失败、分组零匹配、汇总数字不一致——任一都让 `run_all` 非零退出。
 
 任一失败先归因（实现缺陷 → 修实现；实现正确但事实不足 → 才回修机制稿），不改判据迁就绿灯。
 

@@ -1,74 +1,184 @@
 #!/bin/bash
-# 全量复现：每个套件都从干净夹具开始；任一环节失败都会让脚本以非零码退出。
-# 用法：bash run_all.sh [--wf_fix <dir>]
+# 全量/子集/代表集复现：每个套件都从干净夹具开始；任一环节失败都会让脚本以非零码退出。
+#
+# 选择与冲突判定在 `plan.py`（唯一 plan()）；本脚本只用它的计划执行，避免两份选择逻辑。
+#
+# 模式：
+#   --full            59 套件 + 4 流程 + r72 + repro（默认）
+#   --subset          只跑 WF_SUITES 选中的套件（repro 需 WF_WITH_REPRO=1）
+#   --representative  代表集 + f0/p5_spec + 代表 repro 组（T3 候选模式的入口）
+#   WF_SUITES=a,b    未显式模式时隐含 --subset
+#
+# 常用：
+#   WF_SUITES="r70_tests" bash run_all.sh                  # 真子集（1 个执行单元）
+#   bash run_all.sh --full --repro green                   # T2 阶段收口
+#   bash run_all.sh --full --repro both                     # T3-1
+#   bash run_all.sh --representative --fixture-deploy candidate \
+#     --release-root ~/.cache/wf-candidate-repo/0.1.2 \
+#     --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2
+#   bash run_all.sh --list | --dry-run                      # 只输出计划
+#
+# 环境：WF_JOBS（套件层并行，默认 1）、WF_REPRO_JOBS（用例层并行，默认 1）、
+#       WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_FIX、WF_NO_RUN=1（计划后即退出）
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=/softwares/python/bin/python3
 # 不在源码树里生成 __pycache__（第四轮复审：源树残留 pyc）
 export PYTHONDONTWRITEBYTECODE=1
-FIX=${WF_FIX:-/tmp/wf-fixtures/rerun}
-SUITES="cp1_tests cp2_tests cp3_tests cp4_tests cp4_a8 cp5_b345 cp5_b12 r1r2_tests r7r15_tests r17r24_tests r25r30_tests r31r34_tests r35_tests r35r37_tests r38r39_tests r40r42_tests r43r45_tests r46_tests r47r48_tests r49_tests r50_tests r51r52_tests r53_tests r54_tests r55_tests r56_tests r57_tests r58_tests r59_tests r60_tests r61_tests r62_tests r63_tests r64_tests r65_tests r66_tests r67_tests r68_tests r69_tests r70_tests r71_tests r74_tests r75_tests r76_tests r77_tests r79_tests r80_tests r81_tests r82_tests r83_tests r84_tests r85_tests r86_tests r87_tests r88_tests r89_tests r90_tests f1_ordinary p5_v1"
-
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
-# 2026-11-07：发行仓库不能放 /tmp——run_one 会把 /tmp 换成 tmpfs，源仓库随即不可见（并行模式全 INIT-FAILED）
-RELEASE_REPO=${WF_RELEASE_REPO:-$HOME/.cache/wf-release-repo}
-SHARED_RELEASE="$RELEASE_REPO"
+
+usage() { sed -n '2,26p' "$0"; }
+
+case "${1:-}" in
+  -h|--help) usage; exit 0 ;;
+esac
+
+# ---- 计划（唯一权威）--------------------------------------------------------
+plan_out=$("$PY" "$HERE/plan.py" --format sh -- "$@")
+plan_rc=$?
+if [ "$plan_rc" -ne 0 ]; then
+  exit "$plan_rc"
+fi
+if ! eval "$plan_out"; then
+  echo "PLAN-EVAL-FAILED" >&2
+  exit 2
+fi
+if [ "${PLAN_LIST_ONLY:-0}" = "1" ]; then
+  exit 0
+fi
+if [ "${WF_NO_RUN:-0}" = "1" ]; then
+  exit 0
+fi
+
+FIX="$PLAN_FIX"
+RESULTS_DIR="$PLAN_RESULTS_DIR"
+mkdir -p "$RESULTS_DIR"
+"$PY" "$HERE/plan.py" --format json -- "$@" > "$RESULTS_DIR/plan.json" 2>/dev/null || true
+
+TOTAL_STARTED=$SECONDS
+build_seconds=0
+init_millis=0
+suite_millis=0
+green_seconds=0
+red_seconds=0
+fail=0
+suite_ran=0
+flow_ran=0
+repro_ran=0
+
 SOURCE_HOME="$HOME"
+export SOURCE_HOME
 
-REBUILD_RELEASE=${WF_REBUILD_RELEASE:-1}
-
-# 这些套件用"改成不可写目录"来模拟写入失败；在 user namespace 里我们是 root，chmod 不起作用，
-# 所以它们必须在宿主 /tmp 的串行阶段跑（改造方案：改用"父路径是普通文件"触发 ENOTDIR，见 validation §87）。
-PARALLEL_SERIAL="cp3_tests cp4_a8 cp5_b12 r1r2_tests r7r15_tests r35_tests r67_tests r68_tests r69_tests r70_tests r71_tests r89_tests r90_tests"
-
-prepare_release_repo() {
-  # 依赖发行树的套件（f0 / d1 / r69 / r72）需要一份带 tag 的发行仓库。
-  # 默认每次从源码重建（与"从零重建"的声明一致）；WF_REBUILD_RELEASE=0 时复用已有仓库。
-  if [ "$REBUILD_RELEASE" = "0" ] && [ -f "$RELEASE_REPO/wf-release.json" ]; then
-    return 0
-  fi
-  "$PY" "$REPO_ROOT/scripts/build-wf-release.py" --version 0.1.0 >/dev/null 2>&1 || return 1
-  rm -rf "$RELEASE_REPO"
-  mkdir -p "$RELEASE_REPO"
-  cp -a "$REPO_ROOT/docs/workflows/wf-release/." "$RELEASE_REPO/" || return 1
-  git -C "$RELEASE_REPO" init -q || return 1
-  git -C "$RELEASE_REPO" config user.email tests@example.com
-  git -C "$RELEASE_REPO" config user.name tests
-  git -C "$RELEASE_REPO" add -A || return 1
-  git -C "$RELEASE_REPO" commit -qm "wf release 0.1.0" >/dev/null || return 1
-  git -C "$RELEASE_REPO" tag wf-v0.1.0 || return 1
+# ---- 发行来源 --------------------------------------------------------------
+product_digest() {
+  "$PY" - "$REPO_ROOT" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + "/scripts")
+import wf_release_common as common
+print(common.tree_digest(common.REPO_ROOT + "/docs/workflows/wf-release"))
+PY
 }
 
-prepare_release_repo || echo "release repo unavailable: 依赖发行树的套件将失败"
+PRODUCT_BEFORE=$(product_digest)
+
+build_started=$SECONDS
+BUILD_OK=1
+if [ "$PLAN_FIXTURE_DEPLOY" = "dev" ]; then
+  if [ "$PLAN_NO_BUILD" = "1" ]; then
+    if ! "$PY" "$REPO_ROOT/scripts/tests/wf_test_release.py" --check \
+        --root "$PLAN_TEST_RELEASE_ROOT" --version "$PLAN_TEST_RELEASE_VERSION"; then
+      echo "TEST-RELEASE-STALE: 测试发行副本缺失或过期（重建或去掉 --no-build）"
+      BUILD_OK=0
+    fi
+  else
+    if ! "$PY" "$REPO_ROOT/scripts/tests/wf_test_release.py" --ensure \
+        --root "$PLAN_TEST_RELEASE_ROOT" --version "$PLAN_TEST_RELEASE_VERSION"; then
+      echo "TEST-RELEASE-BUILD-FAILED"
+      BUILD_OK=0
+    fi
+  fi
+  RELEASE_REPO="$PLAN_TEST_RELEASE_ROOT"
+  RELEASE_REF="$PLAN_TEST_RELEASE_REF"
+  RELEASE_VERSION="$PLAN_TEST_RELEASE_VERSION"
+else
+  # candidate 模式只校验候选仓库，不构建测试发行副本
+  if ! "$PY" "$HERE/prepare_candidate_repo.py" --check --out "$PLAN_RELEASE_ROOT" \
+      --version "$PLAN_RELEASE_VERSION"; then
+    echo "CANDIDATE-REPO-INVALID"
+    BUILD_OK=0
+  fi
+  RELEASE_REPO="$PLAN_RELEASE_ROOT"
+  RELEASE_REF="$PLAN_RELEASE_REF"
+  RELEASE_VERSION="$PLAN_RELEASE_VERSION"
+fi
+build_seconds=$((SECONDS - build_started))
+
+export WF_FIXTURE_DEPLOY="$PLAN_FIXTURE_DEPLOY"
+export WF_RELEASE_REPO="$RELEASE_REPO"
+if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+  # dev 模式不导出候选身份：否则任何读环境的下游都会以为自己在候选模式
+  export WF_RELEASE_ROOT="$RELEASE_REPO"
+  export WF_RELEASE_REF="$RELEASE_REF"
+  export WF_RELEASE_VERSION="$RELEASE_VERSION"
+  export WF_RELEASE_META="$PLAN_RELEASE_META"
+fi
+if [ "$PLAN_FIXTURE_DEPLOY" = "dev" ]; then
+  # 断言侧只读发行副本的 lib，不读源码 payload/lib
+  export WF_TEST_LIB="$PLAN_TEST_RELEASE_ROOT/wf-release/lib"
+  # f1_candidate_smoke 之外的 dev 路径不需要候选身份
+  export WF_RELEASE_TREE="$RELEASE_REPO"
+else
+  export WF_TEST_LIB="$PLAN_RELEASE_ROOT/wf-release/lib"
+  export WF_RELEASE_TREE="$RELEASE_REPO"
+fi
+SHARED_RELEASE="$RELEASE_REPO"
+
 # 串行模式没有 run_one 的 bind mount；用软链把共享发行仓库放到套件硬编码的 /tmp 路径下
 link_release() { mkdir -p /tmp/wf-fixtures && ln -sfn "$RELEASE_REPO" /tmp/wf-fixtures/release-repo; }
 link_release
 
-# ---- 并行执行（默认开启；WF_JOBS=1 退回串行） ----
-JOBS=${WF_JOBS:-4}
-RESULTS_DIR="${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}"
+fixture_args() {
+  FIXTURE_ARGS=(--deploy "$PLAN_FIXTURE_DEPLOY")
+  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+    FIXTURE_ARGS+=(--release-root "$PLAN_RELEASE_ROOT" --release-ref "$PLAN_RELEASE_REF"
+                   --release-version "$PLAN_RELEASE_VERSION")
+  fi
+}
+
+JOBS=$PLAN_JOBS
+RESULTS_MARK="$RESULTS_DIR/lines"
 
 can_unshare() {
   unshare -Urm bash -c 'mount -t tmpfs tmpfs /proc/self/fd >/dev/null 2>&1 || mount -t tmpfs tmpfs /tmp' >/dev/null 2>&1
 }
 
+add_init_millis() {
+  local timing="$RESULTS_DIR/$1.timing"
+  if [ -f "$timing" ]; then
+    local value
+    value=$(sed -n 's/^init_millis=//p' "$timing" | head -1)
+    case "$value" in ''|*[!0-9]*) value=0 ;; esac
+    init_millis=$((init_millis + value))
+    value=$(sed -n 's/^suite_millis=//p' "$timing" | head -1)
+    case "$value" in ''|*[!0-9]*) value=0 ;; esac
+    suite_millis=$((suite_millis + value))
+  fi
+}
+
 run_suites_parallel() {
-  # 2026-11-05 第三轮复审 N3：并行汇总不能只统计「已写出的结果行」——
-  # 子进程异常、结果不可写（例如把仓库放到 /tmp 后被 unshare 的 tmpfs 遮住）都会让结果行缺失，
+  # 并行汇总不能只统计「已写出的结果行」——子进程异常、结果不可写都会让结果行缺失，
   # 而旧的计数方式仍会把计划里的套件当成已运行并给出绿灯。
-  # 现在逐套件核对：计划必须有且只有一行结果，缺行/重行/异常退出都计失败。
   local list="$1"
   mkdir -p "$RESULTS_DIR"
-  : > "$RESULTS_DIR/lines"
-  export FIX HERE PY SHARED_RELEASE="$RELEASE_REPO" WF_RELEASE_REPO="$RELEASE_REPO" RESULTS_DIR SOURCE_HOME="$HOME"
+  : > "$RESULTS_MARK"
+  export FIX HERE PY SHARED_RELEASE RESULTS_DIR SOURCE_HOME
   local xargs_rc=0
   printf '%s\n' $list | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {} || xargs_rc=$?
-  # 并行下 unshare 偶发失败会让某个套件"跑了但没有结果行"。这类缺行是**测量失败**，
-  # 不该直接当成套件失败放过：先串行重跑一次拿到确定结果，重跑仍缺再按失败计。
+  # 并行下 unshare 偶发失败会让某个套件「跑了但没有结果行」：先串行重跑一次拿确定结果
   local pre_missing="" suite0
   for suite0 in $list; do
     awk -F'\t' -v s="$suite0" 'NF==5 && $1==s && $2 ~ /^-?[0-9]+$/ && $4 ~ /^(ok|bad)$/ {found=1} END{exit !found}' \
-      "$RESULTS_DIR/lines" || pre_missing="$pre_missing $suite0"
+      "$RESULTS_MARK" || pre_missing="$pre_missing $suite0"
   done
   if [ -n "$pre_missing" ]; then
     echo "RETRY-SERIAL:$pre_missing（并行下未产出结果行，串行重跑）"
@@ -76,74 +186,83 @@ run_suites_parallel() {
       link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite0"
     done
   fi
-  sort -t$'\t' -k1 "$RESULTS_DIR/lines" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
-  local bad malformed missing dup extra
-  # 行必须正好 5 段、rc 为整数、状态只取 ok/bad；畸形行单独计失败，
-  # 否则只写「套件名」一行也会被当成"有结果"（第四轮复审 R4-3）。
-  malformed=$(awk -F'\t' 'NF!=5 || $2 !~ /^-?[0-9]+$/ || ($4!="ok" && $4!="bad")' "$RESULTS_DIR/lines" | wc -l)
-  bad=$(awk -F'\t' 'NF==5 && $4=="bad"' "$RESULTS_DIR/lines" | wc -l)
-  missing=""
-  for suite in $list; do
-    awk -F'\t' -v s="$suite" 'NF==5 && $1==s && $2 ~ /^-?[0-9]+$/ && $4 ~ /^(ok|bad)$/ {found=1} END{exit !found}' \
-      "$RESULTS_DIR/lines" || missing="$missing $suite"
-  done
-  dup=$(awk -F'\t' 'NF>=4 {print $1}' "$RESULTS_DIR/lines" | sort | uniq -d | tr '\n' ' ')
-  extra=""
-  for suite in $(awk -F'\t' 'NF>=4 {print $1}' "$RESULTS_DIR/lines" | sort -u); do
-    case " $list " in *" $suite "*) ;; *) extra="$extra $suite" ;; esac
-  done
-  if [ "$malformed" -ne 0 ]; then
-    echo "MALFORMED-RESULTS: $malformed 行"; fail=$((fail + malformed))
+  sort -t$'\t' -k1 "$RESULTS_MARK" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
+  for suite0 in $list; do add_init_millis "$suite0"; done
+  # 完整性判定只有一处实现（results_gate.py）：缺行/重行/畸形/计划外/坏结果都必须计失败，
+  # 不能只统计「已写出的结果行」。
+  local gate_out
+  gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "$list")
+  eval "$gate_out"
+  if [ "$GATE_MALFORMED" -ne 0 ]; then
+    echo "MALFORMED-RESULTS: $GATE_MALFORMED 行"
   fi
-  if [ -n "$missing" ]; then
-    echo "MISSING-RESULTS:$missing（子进程未产出结果行；/tmp 下的副本可能被 unshare 的 tmpfs 遮住，改用非 /tmp 副本或 WF_JOBS=1）"
-    fail=$((fail + $(printf '%s' "$missing" | wc -w)))
+  if [ -n "$GATE_MISSING" ]; then
+    echo "MISSING-RESULTS:$GATE_MISSING（子进程未产出结果行）"
   fi
-  if [ -n "$dup" ]; then
-    echo "DUPLICATE-RESULTS: $dup"; fail=$((fail + $(printf '%s' "$dup" | wc -w)))
+  if [ -n "$GATE_DUPLICATE" ]; then
+    echo "DUPLICATE-RESULTS: $GATE_DUPLICATE"
   fi
-  if [ -n "$extra" ]; then
-    echo "UNEXPECTED-RESULTS:$extra"; fail=$((fail + $(printf '%s' "$extra" | wc -w)))
+  if [ -n "$GATE_UNEXPECTED" ]; then
+    echo "UNEXPECTED-RESULTS:$GATE_UNEXPECTED"
   fi
+  local xargs_fail=0
   if [ "$xargs_rc" -ne 0 ]; then
-    echo "XARGS-EXIT: $xargs_rc"; fail=$((fail + 1))
+    echo "XARGS-EXIT: $xargs_rc"; xargs_fail=1
   fi
-  ran=$((ran + $(awk -F'\t' 'NF>=4 {print $1}' "$RESULTS_DIR/lines" | sort -u | wc -l)))
-  fail=$((fail + bad))
+  fail=$((fail + GATE_MALFORMED + $(printf '%s' "$GATE_MISSING" | wc -w)
+           + $(printf '%s' "$GATE_DUPLICATE" | wc -w) + $(printf '%s' "$GATE_UNEXPECTED" | wc -w)
+           + $(printf '%s' "$GATE_BAD" | wc -w) + xargs_fail))
+  suite_ran=$((suite_ran + GATE_UNIQUE))
 }
 
 run_repro() {
   # 只有一条实现：repro/run.sh（也可单独/CI 运行）。这里只消费它的机器可读汇总。
+  local args=(--mode "$PLAN_REPRO_MODE" --jobs "$PLAN_REPRO_JOBS"
+              --fixture-deploy "$PLAN_FIXTURE_DEPLOY" --results-dir "$RESULTS_DIR/repro")
+  local g
+  for g in $PLAN_REPRO_GROUPS; do args+=(--group "$g"); done
+  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+    args+=(--release-root "$PLAN_RELEASE_ROOT" --release-ref "$PLAN_RELEASE_REF"
+           --release-version "$PLAN_RELEASE_VERSION")
+  fi
+  if [ "$PLAN_NO_BUILD" = "1" ]; then args+=(--no-build); fi
   local out rc
-  out=$(bash "$HERE/repro/run.sh" --no-build 2>&1); rc=$?
-  printf '%s\n' "$out" | grep -E '^(ok|FAIL|repro)' || true
-  local total passed failed
+  out=$(bash "$HERE/repro/run.sh" "${args[@]}" 2>&1); rc=$?
+  printf '%s\n' "$out" | grep -E '^(ok|FAIL|repro|SKIP)' || true
+  local total passed failed gsec rsec skipped
   total=$(printf '%s\n' "$out" | sed -n 's/^REPRO_TOTAL=//p')
   passed=$(printf '%s\n' "$out" | sed -n 's/^REPRO_PASSED=//p')
   failed=$(printf '%s\n' "$out" | sed -n 's/^REPRO_FAILED=//p')
-  if ! [[ "${total:-}" =~ ^[0-9]+$ ]]; then
+  gsec=$(printf '%s\n' "$out" | sed -n 's/^REPRO_GREEN_SECONDS=//p')
+  rsec=$(printf '%s\n' "$out" | sed -n 's/^REPRO_RED_SECONDS=//p')
+  skipped=$(printf '%s\n' "$out" | sed -n 's/^REPRO_SKIPPED_COUNT=//p')
+  if ! [[ "${total:-}" =~ ^[0-9]+$ ]] || ! [[ "${passed:-}" =~ ^[0-9]+$ ]] || ! [[ "${failed:-}" =~ ^[0-9]+$ ]]; then
     echo "repro 汇总缺失（子进程退出 $rc）"
     fail=$((fail + 1))
     return
   fi
-  ran=$((ran + total))
+  if [ "${skipped:-0}" != "0" ]; then
+    echo "SKIPPED-NON-CANDIDATE: $skipped 个用例（candidate 模式不计通过）"
+  fi
+  repro_ran=$((repro_ran + total))
   fail=$((fail + failed))
-  # 汇总存在但退出码非零：仍要计入失败，不能只信数字
+  case "${gsec:-}" in ''|*[!0-9]*) gsec=0 ;; esac
+  case "${rsec:-}" in ''|*[!0-9]*) rsec=0 ;; esac
+  green_seconds=$((green_seconds + gsec))
+  red_seconds=$((red_seconds + rsec))
   if [ "$rc" -ne 0 ] && [ "${failed:-0}" -eq 0 ]; then
     echo "repro 退出码 $rc 与汇总不一致"
     fail=$((fail + 1))
   fi
 }
 
-
-fail=0
-ran=0
-
 run_suite() {
   local suite=$1
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$suite.out"
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" >"$log" 2>&1; then
+  local init_started=$SECONDS
+  fixture_args
+  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >"$log" 2>&1; then
     printf '%-18s FIXTURE-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
   if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
@@ -152,14 +271,18 @@ run_suite() {
   if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
     printf '%-18s INIT-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
+  local init_millis_local=$(( (SECONDS - init_started) * 1000 ))
+  init_millis=$((init_millis + init_millis_local))
   local out rc line started elapsed
   started=$SECONDS
   out=$(WF_FIX="$FIX" "$PY" "$HERE/$suite.py" 2>&1); rc=$?
   printf '%s\n' "$out" >> "$log"
   elapsed=$((SECONDS - started))
+  suite_millis=$((suite_millis + elapsed * 1000))
+  printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis_local" "$((elapsed * 1000))" > "$RESULTS_DIR/$suite.timing"
   line=$(printf '%s\n' "$out" | tail -1)
   printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
-  ran=$((ran+1))
+  suite_ran=$((suite_ran+1))
   # 判定：退出码、汇总行里的失败数、输出中的 FAIL 都算失败
   local bad status
   bad=$(printf '%s\n' "$out" | grep -c '\[FAIL\]')
@@ -167,122 +290,139 @@ run_suite() {
   if [ "$rc" -ne 0 ] || [ "$bad" -ne 0 ] || printf '%s' "$line" | grep -qE 'FAIL|(saved|total) 0'; then
     fail=$((fail+1)); status=bad
   fi
-  # 串行路径同样落一行结果：否则"跑了但没记录"，汇总只能靠 stdout 猜（结果不可机读）
   mkdir -p "$RESULTS_DIR"
-  printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$rc" "$elapsed" "$status" "$line" >> "$RESULTS_DIR/lines"
+  printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$rc" "$elapsed" "$status" "$line" >> "$RESULTS_MARK"
 }
 
-# 迭代期只跑相关套件：WF_SUITES="r88_tests r89_tests r90_tests" bash run_all.sh
-# ---- 已知技术债清单（必过门的唯一豁免来源）------------------------------------
+# ---- 已知技术债清单（必过门的唯一豁免来源）---------------------------------
 # 这些套件当前是红的、且原因已登记；它们**不阻塞**必过门，但会被单独列出。
-# 一旦它们转绿，本脚本会失败并提示从清单里移除 —— 清单不允许腐烂：
-# 豁免必须"要么一直红且被看见，要么被修掉并销账"，不能悄悄变成永久绿灯。
-# 修好一个就从这里删一个（删完即成为必过项）。
+# 一旦它们转绿，本脚本会失败并提示从清单里移除 —— 清单不允许腐烂。
 # 2026-11-10：cp3/r67/r68/r69/r70/r71 已全部修绿，清单清空——现在**没有豁免**。
 # 以后要加条目，必须同时在 task 记录里写明"为什么现在修不了、谁来修"，否则不许进清单。
 KNOWN_LEGACY="${WF_KNOWN_LEGACY-}"
 
-SELECTED="${WF_SUITES:-}"
-if [ -n "$SELECTED" ]; then
-  SUITES="$SELECTED"
-  SKIP_FLOWS=1
-else
-  SKIP_FLOWS=0
-fi
-PARALLEL_LIST=""
-SERIAL_LIST=""
-for suite in $SUITES; do
-  case " $PARALLEL_SERIAL " in
-    *" $suite "*) SERIAL_LIST="$SERIAL_LIST $suite" ;;
-    *) PARALLEL_LIST="$PARALLEL_LIST $suite" ;;
-  esac
-done
+: > "$RESULTS_MARK"
+
+PARALLEL_SERIAL_LIST="$PLAN_SUITES_SERIAL"
+PARALLEL_LIST="$PLAN_SUITES_PARALLEL"
 
 # 仓库副本位于 /tmp 时，unshare 里挂的 tmpfs 会把 /tmp 遮住，子进程看不到套件与结果文件。
-# 这种情形直接退回串行，避免制造无法解释的结果缺失（N3 的配套）。
 if [ "$JOBS" -gt 1 ]; then
   case "$HERE" in
     /tmp/*) echo "（套件目录在 /tmp 下：unshare 的 tmpfs 会遮住路径，改用串行）"; JOBS=1 ;;
   esac
 fi
-if [ "$JOBS" -gt 1 ] && can_unshare; then
-  run_suites_parallel "$PARALLEL_LIST"
-  for suite in $SERIAL_LIST; do run_suite "$suite"; done
-else
-  [ "$JOBS" -gt 1 ] && echo "（unshare 不可用：退回串行）"
-  # 串行模式共享 /tmp：某些套件会伪造 release-repo 软链，逐套件重建以隔离这种干扰
-  for suite in $SUITES; do link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
+if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; then
+  if [ "$JOBS" -gt 1 ] && [ -n "$PARALLEL_LIST" ] && can_unshare; then
+    run_suites_parallel "$PARALLEL_LIST"
+    for suite in $PARALLEL_SERIAL_LIST; do run_suite "$suite"; done
+  else
+    [ "$JOBS" -gt 1 ] && echo "（unshare 不可用：退回串行）"
+    # 串行模式共享 /tmp：某些套件会伪造 release-repo 软链，逐套件重建以隔离这种干扰
+    for suite in $PLAN_SUITES_ALL; do link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
+  fi
+fi
+if [ "$BUILD_OK" = 0 ]; then
+  fail=$((fail + 1))
 fi
 
-# 专项流程：同样要求退出码与 PASS 计数
+# ---- 流程（仅 full/representative）----------------------------------------
 run_flow() {
   local name=$1 script=$2 expect=$3
   link_release
-  export WF_RELEASE_REPO="$RELEASE_REPO"
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$name.out"
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" >"$log" 2>&1; then
-    printf '%-18s FIXTURE-FAILED\n' "$name"; fail=$((fail+1)); return
+  local init_started=$SECONDS
+  fixture_args
+  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >"$log" 2>&1; then
+    printf '%-18s FIXTURE-FAILED\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
   if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
-    printf '%-18s INIT-FAILED\n' "$name"; fail=$((fail+1)); return
+    printf '%-18s INIT-FAILED\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
-  local out rc got
+  init_millis=$((init_millis + (SECONDS - init_started) * 1000))
+  local out rc got started elapsed
+  started=$SECONDS
   out=$(WF_FIX="$FIX" "$PY" "$HERE/$script.py" 2>&1); rc=$?
+  elapsed=$((SECONDS - started))
+  suite_millis=$((suite_millis + elapsed * 1000))
   got=$(printf '%s\n' "$out" | grep -c 'PASS')
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
-  ran=$((ran+1))
+  flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -ne "$expect" ]; then fail=$((fail+1)); fi
 }
+
+# F0：从发行安装器装到一个空目录，再跑自举闭环（candidate 模式下用候选安装器）
+run_f0() {
+  local target=/tmp/wf-fixtures/f0
+  rm -rf "$target"; mkdir -p "$target"
+  if ! "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref "$RELEASE_REF" \
+      --source "$RELEASE_REPO" --platform dsh \
+      --confirm      >/dev/null 2>&1; then
+    printf '%-18s INSTALL-FAILED\n' f0; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
+  fi
+  local out got passed
+  out=$(WF_FIX="$target" "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
+  passed=$(printf '%s\n' "$out" | grep -c 'PASS')
+  printf '%-18s rc=%s PASS=%s\n' f0 "$got" "$passed"
+  flow_ran=$((flow_ran+1))
+  if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
+}
+
 run_extra() {
-  # 直接调用的专项脚本体：计入 ran，判据为退出码与 PASS 计数
+  # 直接调用的专项脚本体：计入 flow_ran，判据为退出码与 PASS 计数
   local name=$1 script=$2 expect=$3 out rc got
   out=$(WF_FIX="${WF_FIX:-/tmp/wf-fixtures/f1}" "$PY" "$HERE/$script" 2>&1); rc=$?
   got=$(printf '%s\n' "$out" | grep -c 'PASS')
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
-  ran=$((ran+1))
+  flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -lt "$expect" ]; then fail=$((fail+1)); fi
 }
-run_extra r72_tests r72_tests.py 7
-# F0：从发行安装器装到一个空目录，再跑自举闭环
-run_f0() {
-  local target=/tmp/wf-fixtures/f0
-  rm -rf "$target"; mkdir -p "$target"
-  if ! "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref refs/tags/wf-v0.1.0 \
-      --source "$RELEASE_REPO" --platform dsh \
-      --confirm      >/dev/null 2>&1; then
-    printf '%-18s INSTALL-FAILED\n' f0; fail=$((fail+1)); return
-  fi
-  local out got
-  out=$(WF_FIX="$target" "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
-  local passed
-  passed=$(printf '%s\n' "$out" | grep -c 'PASS')
-  printf '%-18s rc=%s PASS=%s\n' f0 "$got" "$passed"
-  ran=$((ran+1))
-  if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
+
+# 期望 PASS 数来自 suites.json（flow_expect/extra_expect），不在这里硬编码
+expect_of() {
+  local mapping=$1 name=$2 pair
+  for pair in $mapping; do
+    case "$pair" in
+      "$name":*) echo "${pair#*:}"; return 0 ;;
+    esac
+  done
+  return 1
 }
-if [ "$SKIP_FLOWS" = "0" ]; then
-  # 流程只有 4 项（~10s），串行跑：它们都依赖共享 /tmp 里的发行仓库与 f0 目录
-  run_f0
-  run_flow p5_spec p5_spec 19
-  run_flow p5_v2v3 p5_v2v3 12
-  run_flow p5_v5 p5_v5 12
-else
-  echo "（WF_SUITES 子集模式：跳过 f0 与 p5 流程）"
+
+for flow in $PLAN_FLOWS; do
+  if ! expect=$(expect_of "$PLAN_FLOW_EXPECT" "$flow"); then
+    echo "未知流程（suites.json 缺 flow_expect）：$flow"; fail=$((fail+1)); continue
+  fi
+  case "$flow" in
+    f0) run_f0 ;;
+    p5_*) run_flow "$flow" "$flow" "$expect" ;;
+    *) echo "未知流程：$flow"; fail=$((fail+1)) ;;
+  esac
+done
+for extra in $PLAN_EXTRA; do
+  if ! expect=$(expect_of "$PLAN_EXTRA_EXPECT" "$extra"); then
+    echo "未知 extra 套件（suites.json 缺 extra_expect）：$extra"; fail=$((fail+1)); continue
+  fi
+  case "$extra" in
+    r72_tests) run_extra r72_tests r72_tests.py "$expect" ;;
+    *) echo "未知 extra 套件：$extra"; fail=$((fail+1)) ;;
+  esac
+done
+
+if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
+  run_repro
 fi
 
-run_repro
-
 # ---- 必过门核算：区分"未登记的红"与"已登记的债" ------------------------------
-# fail 里包含了已登记套件的失败；这里把它们拆出来，只有**未登记**的失败才阻塞。
 legacy_failed=""
 legacy_fixed=""
 legacy_missing=""
-if [ -f "$RESULTS_DIR/lines" ]; then
+if [ -f "$RESULTS_MARK" ]; then
   for suite in $KNOWN_LEGACY; do
     # 子集模式（WF_SUITES）下没有参与的套件不算"清单过期"：那是没跑，不是没结果
-    case " $SUITES " in *" $suite "*) ;; *) continue ;; esac
-    state=$(awk -F'\t' -v s="$suite" 'NF==5 && $1==s {print $4}' "$RESULTS_DIR/lines" | head -1)
+    case " $PLAN_SUITES_ALL " in *" $suite "*) ;; *) continue ;; esac
+    state=$(awk -F'\t' -v s="$suite" 'NF==5 && $1==s {print $4}' "$RESULTS_MARK" | head -1)
     case "$state" in
       bad)  legacy_failed="$legacy_failed $suite" ;;
       ok)   legacy_fixed="$legacy_fixed $suite" ;;
@@ -303,7 +443,61 @@ fi
 debt=$(printf '%s' "$legacy_failed" | wc -w)
 stale=$(( $(printf '%s' "$legacy_fixed" | wc -w) + $(printf '%s' "$legacy_missing" | wc -w) ))
 unknown_fail=$(( fail - debt ))
-echo "---- 运行 $ran 项，失败 $fail 项（其中已登记债 $debt 项）----"
+total_seconds=$((SECONDS - TOTAL_STARTED))
+units_total=$((suite_ran + flow_ran + repro_ran))
+
+# ---- 产品发行树必须没被测试改写 ---------------------------------------------
+PRODUCT_AFTER=$(product_digest)
+if [ "$PRODUCT_BEFORE" != "$PRODUCT_AFTER" ]; then
+  echo "PRODUCT-TREE-CHANGED: docs/workflows/wf-release 在运行期间被改写（测试不得写产品发行树）"
+  echo "  before=$PRODUCT_BEFORE"
+  echo "  after =$PRODUCT_AFTER"
+  unknown_fail=$((unknown_fail + 1))
+fi
+
+SUMMARY_JSON="$RESULTS_DIR/summary.json"
+WF_SUMMARY_JSON="$SUMMARY_JSON" \
+WF_SUMMARY_MODE="$PLAN_MODE" WF_SUMMARY_FULL_MODE="$PLAN_FULL_MODE" \
+WF_SUMMARY_DEPLOY="$PLAN_FIXTURE_DEPLOY" \
+WF_SUMMARY_SUITE_RAN="$suite_ran" WF_SUMMARY_FLOW_RAN="$flow_ran" WF_SUMMARY_UNITS="$units_total" \
+WF_SUMMARY_REPRO_RAN="$repro_ran" WF_SUMMARY_FAIL="$unknown_fail" \
+WF_SUMMARY_DEBT="$debt" WF_SUMMARY_BUILD="$build_seconds" \
+WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
+WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
+WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
+WF_SUMMARY_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
+"$PY" - <<'PY'
+import json, os
+groups = (os.environ.get("WF_SUMMARY_REPRO_GROUPS") or "").split()
+payload = {
+    "schema_version": 1,
+    "mode": os.environ.get("WF_SUMMARY_MODE"),
+    "full_mode": int(os.environ.get("WF_SUMMARY_FULL_MODE") or 0),
+    "fixture_deploy": os.environ.get("WF_SUMMARY_DEPLOY"),
+    "suite_ran": int(os.environ.get("WF_SUMMARY_SUITE_RAN") or 0),
+    "flow_ran": int(os.environ.get("WF_SUMMARY_FLOW_RAN") or 0),
+    "repro_ran": int(os.environ.get("WF_SUMMARY_REPRO_RAN") or 0),
+    "units_total": int(os.environ.get("WF_SUMMARY_UNITS") or 0),
+    "repro_mode": os.environ.get("WF_SUMMARY_REPRO_MODE"),
+    "repro_groups": groups,
+    "fail": int(os.environ.get("WF_SUMMARY_FAIL") or 0),
+    "legacy_debt": int(os.environ.get("WF_SUMMARY_DEBT") or 0),
+    "build_seconds": int(os.environ.get("WF_SUMMARY_BUILD") or 0),
+    "init_seconds": round(int(os.environ.get("WF_SUMMARY_INIT_MS") or 0) / 1000, 2),
+    "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),
+    "green_seconds": int(os.environ.get("WF_SUMMARY_GREEN") or 0),
+    "red_seconds": int(os.environ.get("WF_SUMMARY_RED") or 0),
+    "total_seconds": int(os.environ.get("WF_SUMMARY_TOTAL") or 0),
+}
+path = os.environ["WF_SUMMARY_JSON"]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+    handle.write("\n")
+print("summary: " + path)
+PY
+
+echo "---- 运行 $units_total 项（套件 $suite_ran，流程/extra $flow_ran，repro $repro_ran），失败 $fail 项（其中已登记债 $debt 项）----"
+echo "---- 计时 build=${build_seconds}s init=$((init_millis/1000))s suite=$((suite_millis/1000))s green=${green_seconds}s red=${red_seconds}s total=${total_seconds}s ----"
 if [ "$unknown_fail" -ne 0 ] || [ "$stale" -ne 0 ]; then
   [ "$unknown_fail" -ne 0 ] && echo "GATE-FAIL: 未登记的失败 $unknown_fail 项（必过门未通过）"
   [ "$stale" -ne 0 ] && echo "GATE-BOOKKEEPING: 豁免清单有 $stale 项需要销账（转绿或已不存在）"

@@ -11,13 +11,16 @@ import sys
 
 import _harness as H
 
-TAG = "wf-v0.1.0"
+# 发行身份不再自带常量：统一由 `_harness` 从环境解析（dev=测试发行副本，candidate=候选仓库根）
+TAG = H.release_tag()
+TAG_REF = H.RELEASE_REF
 
 
-def source_repo(root, tag=TAG):
+def source_repo(root, tag=None):
+    tag = tag or TAG
     dest = os.path.join(root, "release-src")
     shutil.copytree(H.RELEASE, dest,
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git"))
     for cmd in (["git", "init", "-q"],
                 ["git", "config", "user.email", "r@example.com"],
                 ["git", "config", "user.name", "r"],
@@ -31,7 +34,7 @@ def source_repo(root, tag=TAG):
 def installer(source, project):
     """用给定源仓库安装/重装到 project，返回 CompletedProcess。"""
     return subprocess.run([sys.executable, os.path.join(source, "install.py"),
-                           "--target", project, "--release-ref", f"refs/tags/{TAG}",
+                           "--target", project, "--release-ref", TAG_REF,
                            "--source", source, "--platform", "dsh", "--confirm"],
                           capture_output=True, text=True)
 

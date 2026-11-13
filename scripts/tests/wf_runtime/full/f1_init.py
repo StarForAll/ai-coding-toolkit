@@ -2,11 +2,33 @@
 """F1 夹具：初始化任务闭环（task-new → approve → start → baseline-apply → check → knowledge → archive）。"""
 import hashlib, json, os, subprocess, sys
 
-sys.path.insert(0, "/tmp")
 import wfdrive
 
 F = wfdrive.FIX
 TASK_TEMPLATE = f"{F}/.wf/templates/task"
+HERE = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+def test_lib():
+    """wflib 来源：夹具项目 `.wf/lib`（安装产物）→ `WF_TEST_LIB` → 源码（仅 dev 回退）。
+
+    不再插入 `/tmp` 或源码绝对路径：那会让候选部署下的断言仍然读开发态源码。
+    """
+    candidates = [os.path.join(F, ".wf", "lib")]
+    if os.environ.get("WF_TEST_LIB"):
+        candidates.append(os.environ["WF_TEST_LIB"])
+    candidates.append(os.path.join(REPO, "docs", "workflows", "wf", "payload", "lib"))
+    for candidate in candidates:
+        if candidate and os.path.isdir(os.path.join(candidate, "wflib")):
+            return candidate
+    raise SystemExit("f1_init: 找不到可用的 wflib（$F/.wf/lib 与 WF_TEST_LIB 都不存在）")
+
+
+LIB = test_lib()
+if LIB not in sys.path:
+    sys.path.insert(0, LIB)
+from wflib import records as _records  # noqa: E402
 
 
 def wf(args, inputs=None):
@@ -130,8 +152,6 @@ proposal = {"files": files,
             "decision": {"source": "human terminal", "at": at, "subject": "baseline proposal for initialize task",
                          "object_digest": None, "choice": "approve",
                          "reason": "初始化任务按已批准 PRD 生成骨架"}}
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
-from wflib import records as _records
 proposal["decision"]["object_digest"] = _records.plain_digest({"files": files})
 json.dump(proposal, open("/tmp/proposal_init.json", "w"), ensure_ascii=False, indent=2)
 rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", "/tmp/proposal_init.json", "--json"], inputs)

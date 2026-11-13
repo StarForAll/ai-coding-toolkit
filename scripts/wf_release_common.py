@@ -283,6 +283,57 @@ def compatibility_block(dev_manifest):
     }
 
 
+def tree_digest(root):
+    """目录树摘要（相对路径序 + 逐文件 sha256；跳过 `.git`/`__pycache__`）。
+
+    用于“这棵发行树在测试前后有没有被改动”和“候选仓库是否由当前候选树构建”。
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    files = []
+    for base, dirs, names in os.walk(root):
+        dirs[:] = sorted(name for name in dirs if name not in (".git", "__pycache__"))
+        for name in names:
+            if name.endswith(".pyc"):
+                continue
+            path = os.path.join(base, name)
+            files.append(os.path.relpath(path, root).replace(os.sep, "/"))
+    for relative in sorted(files):
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(wf_records.file_digest(os.path.join(root, *relative.split("/"))).encode("ascii"))
+        digest.update(b"\n")
+    return "sha256:" + digest.hexdigest()
+
+
+def source_tree_digest(source_root=SOURCE_ROOT):
+    """源树摘要：按 `source_tree_files` 的登记文件逐字节算，路径序固定，不看 mtime。
+
+    与 `build_manifest` 同源（同一份枚举 + 同一份 sha256），因此可以用它判断
+    “测试发行副本是否由当前源树构建”。
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    for relative in source_tree_files(source_root):
+        absolute = os.path.join(source_root, *relative.split("/"))
+        digest.update(relative.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(wf_records.file_digest(absolute).encode("ascii"))
+        digest.update(b"\n")
+    return "sha256:" + digest.hexdigest()
+
+
+def manifest_digest(manifest):
+    """清单摘要：规范化 JSON（排序键、无空白）的 sha256。"""
+    import hashlib
+    import json
+
+    canonical = json.dumps(manifest, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def build_manifest(version, dev_manifest, source_root=SOURCE_ROOT):
     from wflib import gates
 

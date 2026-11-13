@@ -1,0 +1,153 @@
+{
+  "schema_version": 1,
+  "representative": ["review", "archive", "identity", "writer", "install"],
+  "candidate_representative": ["install"],
+  "groups": {
+    "review": [
+      "review-copies-installed",
+      "review-count-reject",
+      "review-excluded-scope-covers",
+      "review-filename-identity",
+      "review-identity-c6",
+      "review-report-boundary",
+      "review-unavailable",
+      "complexity-bootstrap-exempt",
+      "complexity-human-carrier",
+      "inspect-declares-omitted",
+      "repair-controlled-apply",
+      "baseline-apply-generated"
+    ],
+    "archive": [
+      "abandon-boundary",
+      "task-dir-ascii",
+      "task-dir-canonical",
+      "task-replace",
+      "task-replace-preview",
+      "task-rework",
+      "task-rework-handover",
+      "maintenance-disposition-s1",
+      "transfer-target-task-field",
+      "project-key-archived-evidence"
+    ],
+    "identity": [
+      "auto-identity-gates",
+      "auto-identity-zero-input",
+      "bind-instance-mismatch",
+      "bind-resume-under-lock",
+      "bind-run",
+      "envelope-cache-and-short",
+      "executor-approval-chain",
+      "executor-project-key-unusable",
+      "executor-tuple-mismatch",
+      "executor-version-change",
+      "f5-4-generation-bool",
+      "git-readiness-no-head",
+      "identity-platform-fact",
+      "r4-1-source-mismatch",
+      "ready-view",
+      "reason-code-table"
+    ],
+    "writer": [
+      "stale-writer-facts",
+      "stop-preview-readonly",
+      "stop-under-lock",
+      "stop-unstarted-surface",
+      "terminate-stop-request",
+      "handover-two-stage",
+      "gate-run"
+    ],
+    "install": [
+      "branch-source-preview",
+      "install-generation-bumps",
+      "install-lock-foreign-object",
+      "install-lock-realpath",
+      "install-receipt-metadata",
+      "install-receipt-relative",
+      "reinstall-preserves-data",
+      "release-identity-commit",
+      "uninstall-records-maintenance"
+    ]
+  },
+  "cases": {
+    "reinstall-preserves-data": {
+      "group": "install",
+      "assertion_target": "installed",
+      "stage_role": "scaffold",
+      "module": "install.py",
+      "targets": ["payload/install.py"],
+      "candidate_clean": true
+    },
+    "release-identity-commit": {
+      "group": "install",
+      "assertion_target": "installed",
+      "stage_role": "scaffold",
+      "module": "install.py",
+      "targets": ["payload/install.py"],
+      "candidate_clean": true
+    },
+    "branch-source-preview": {
+      "group": "install",
+      "assertion_target": "installed",
+      "stage_role": "scaffold",
+      "module": "install.py",
+      "targets": ["payload/install.py"],
+      "candidate_clean": true
+    },
+    "install-generation-bumps": {
+      "group": "install",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/install.py"],
+      "candidate_clean": false
+    },
+    "install-lock-foreign-object": {
+      "group": "install",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/install.py"],
+      "candidate_clean": false
+    },
+    "install-lock-realpath": {
+      "group": "install",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/install.py"],
+      "candidate_clean": false
+    },
+    "install-receipt-metadata": {
+      "group": "install",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/install.py"],
+      "candidate_clean": false
+    },
+    "install-receipt-relative": {
+      "group": "install",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/install.py"],
+      "candidate_clean": false
+    },
+    "uninstall-records-maintenance": {
+      "group": "install",
+      "assertion_target": "both",
+      "stage_role": "target",
+      "module": "install.py",
+      "targets": ["payload/lib/wflib/tasks.py"],
+      "candidate_clean": false
+    },
+    "review-count-reject": {
+      "group": "review",
+      "assertion_target": "source",
+      "stage_role": "target",
+      "module": "review.py",
+      "targets": ["payload/lib/wflib/review.py"],
+      "candidate_clean": false
+    }
+  }
+}

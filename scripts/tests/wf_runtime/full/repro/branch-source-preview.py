@@ -44,7 +44,8 @@ def check():
         spec.loader.exec_module(module)
         data["compatibility"]["rules_digest"] = module.compute_rules_digest(data)
         json.dump(data, open(manifest_path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
-        for cmd in (["git", "add", "-A"], ["git", "commit", "-qm", "patched"], ["git", "tag", "-f", "wf-v0.1.0"]):
+        for cmd in (["git", "add", "-A"], ["git", "commit", "-qm", "patched"],
+                    ["git", "tag", "-f", H.release_tag()]):
             subprocess.run(cmd, cwd=source, check=True, capture_output=True)
 
     project = os.path.join(root, "proj")
@@ -65,7 +66,7 @@ def check():
     git(project, "checkout", "-q", base)
 
     result = subprocess.run([sys.executable, os.path.join(source, "install.py"), "--target", project,
-                             "--release-ref", "refs/tags/wf-v0.1.0", "--source", source,
+                             "--release-ref", H.RELEASE_REF, "--source", source,
                              "--platform", "dsh"], capture_output=True, text=True)
     problems = []
     text = f"{result.stdout}\n{result.stderr}"

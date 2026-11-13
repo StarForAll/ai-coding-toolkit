@@ -22,9 +22,10 @@ def decision(subject, choice, digest="sha256:" + "0" * 64):
             "choice": choice, "reason": "repro"}
 
 
-def build_task(project, root, title="repro 任务", sid="sess-R"):
+def build_task(project, root, title="repro 任务", sid="sess-R", complexity=None):
     """建任务 → 写 PRD 计划块 → 批准 → 开工。返回 (task_id, task_dir)。"""
-    H.ensure_project_config(project)
+    if not os.path.isfile(os.path.join(project, ".wf", "project-config.json")):
+        H.ensure_project_config(project)
     rc, payload = H.cli(project, ["task-new", "--kind", "ordinary", "--title", title,
                                   "--template", os.path.join(project, ".wf/templates/task"),
                                   "--json"], sid=sid)
@@ -44,13 +45,19 @@ def build_task(project, root, title="repro 任务", sid="sess-R"):
     for name in ("design.md", "implement.md"):
         open(os.path.join(task_dir, name), "w").write(f"# {name}\n\n内容。\n")
     path = os.path.join(root, "approve.json")
-    json.dump([decision("approve", "approve",
-                        "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-              open(path, "w"), ensure_ascii=False)
+    approve = decision("approve", "approve",
+                       "sha256:" + hashlib.sha256(prd.encode()).hexdigest())
+    if complexity:
+        # 分级必须写在批准决定的 plan 里（decision.plan.complexity），否则归档门禁会拒绝
+        approve["plan"] = {"complexity": complexity}
+    json.dump([approve], open(path, "w"), ensure_ascii=False)
     os.makedirs(os.path.join(project, "pkg"), exist_ok=True)
     open(os.path.join(project, "pkg/a.py"), "w").write("a\n")
+    inputs = {"generation": H.generation(project)}
+    if complexity:
+        inputs["complexity"] = complexity
     rc, payload = H.cli(project, ["task-approve", "--task", task_id, "--decision", path, "--json"],
-                        sid=sid, inputs={"generation": H.generation(project)})
+                        sid=sid, inputs=inputs)
     if rc != 0:
         raise H.Precondition(f"task-approve failed: {payload}")
     rc, payload = H.cli(project, ["task-start", "--task", task_id, "--json"],

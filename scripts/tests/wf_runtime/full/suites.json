@@ -1,0 +1,697 @@
+{
+  "schema_version": 1,
+  "flows": [
+    "f0",
+    "p5_spec",
+    "p5_v2v3",
+    "p5_v5"
+  ],
+  "representative_flow": "p5_spec",
+  "suites": [
+    {
+      "name": "cp1_tests",
+      "kind": "suite",
+      "tags": [
+        "capability"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp2_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp3_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp4_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp4_a8",
+      "kind": "suite",
+      "tags": [
+        "uninstall"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp5_b345",
+      "kind": "suite",
+      "tags": [
+        "capability"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "cp5_b12",
+      "kind": "suite",
+      "tags": [
+        "capability"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r1r2_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r7r15_tests",
+      "kind": "suite",
+      "tags": [
+        "state-machine"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "大状态机广覆盖；硬编码源码 payload/lib → candidate_clean=false"
+    },
+    {
+      "name": "r17r24_tests",
+      "kind": "suite",
+      "tags": [
+        "state-machine"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r25r30_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r31r34_tests",
+      "kind": "suite",
+      "tags": [
+        "archive"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r35_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r35r37_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r38r39_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r40r42_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r43r45_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r46_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r47r48_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r49_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r50_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r51r52_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r53_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r54_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r55_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r56_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r57_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r58_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r59_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r60_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r61_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r62_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r63_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r64_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r65_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r66_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r67_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r68_tests",
+      "kind": "suite",
+      "tags": [
+        "review"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "审查/修复/基线；硬编码源码 payload/lib → candidate_clean=false"
+    },
+    {
+      "name": "r69_tests",
+      "kind": "suite",
+      "tags": [
+        "review",
+        "install"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r70_tests",
+      "kind": "suite",
+      "tags": [
+        "review"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "审查判定输入面；与 test_review_coverage/test_report_boundary 部分重叠（Phase 2 映射）"
+    },
+    {
+      "name": "r71_tests",
+      "kind": "suite",
+      "tags": [
+        "review",
+        "handover"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r74_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r75_tests",
+      "kind": "suite",
+      "tags": [
+        "review",
+        "instance"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r76_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r77_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r79_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r80_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r81_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r82_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r83_tests",
+      "kind": "suite",
+      "tags": [
+        "identity"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r84_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r85_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r86_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r87_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r88_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r89_tests",
+      "kind": "suite",
+      "tags": [
+        "install"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r90_tests",
+      "kind": "suite",
+      "tags": [],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "f1_ordinary",
+      "kind": "suite",
+      "tags": [
+        "task-lifecycle"
+      ],
+      "representative": true,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "p5_v1",
+      "kind": "suite",
+      "tags": [
+        "install",
+        "spec"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": ""
+    },
+    {
+      "name": "r72_tests",
+      "kind": "extra",
+      "tags": [
+        "review"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "run_extra：只在 full 或显式选中时执行（不计入 59 套件）"
+    },
+    {
+      "name": "d1_tests",
+      "kind": "manual",
+      "tags": [
+        "manual"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "手动套件：不在默认全量内（历史保留，不删除）"
+    },
+    {
+      "name": "d1_wf_tests",
+      "kind": "manual",
+      "tags": [
+        "manual"
+      ],
+      "representative": false,
+      "candidate_clean": false,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "手动套件：不在默认全量内（历史保留，不删除）"
+    },
+    {
+      "name": "f1_candidate_smoke",
+      "kind": "candidate",
+      "tags": [
+        "candidate",
+        "smoke"
+      ],
+      "representative": false,
+      "candidate_clean": true,
+      "fallback_representative": true,
+      "representative_flow": null,
+      "expected_seconds": null,
+      "notes": "兜底候选闭环（候选安装 → 初始化/普通任务 → 复杂审查 → 归档）；只经 .wf/bin/wf.py 与 $F/.wf/lib 断言"
+    }
+  ],
+  "flow_expect": {
+    "f0": 9,
+    "p5_spec": 19,
+    "p5_v2v3": 12,
+    "p5_v5": 12
+  },
+  "extra_expect": {
+    "r72_tests": 7
+  }
+}

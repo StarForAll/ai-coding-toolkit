@@ -1,6 +1,7 @@
 #!/bin/bash
 # 单个套件的隔离执行：私有 /tmp（tmpfs）+ 只读挂共享发行仓库。
 # 由 run_all.sh 以 unshare -Urm 调用；套件里写死的 /tmp 路径因此天然互不干扰。
+# 部署来源与发行参数通过环境（WF_FIXTURE_DEPLOY / WF_RELEASE_*）传进来。
 set -uo pipefail
 suite=$1
 : "${FIX:?}" "${HERE:?}" "${PY:?}" "${SHARED_RELEASE:?}" "${RESULTS_DIR:?}"
@@ -12,20 +13,26 @@ if [ -d "$SHARED_RELEASE" ]; then
 fi
 
 out="$RESULTS_DIR/$suite.out"
+init_started=$SECONDS
 if ! bash "$HERE/wf_fixture.sh" "$FIX" >"$out" 2>&1; then
+  printf 'init_millis=%s\nsuite_millis=0\n' "$(( (SECONDS - init_started) * 1000 ))" > "$RESULTS_DIR/$suite.timing"
   echo "$suite FIXTURE-FAILED" >> "$RESULTS_DIR/lines"; exit 0
 fi
 if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
+  printf 'init_millis=%s\nsuite_millis=0\n' "$(( (SECONDS - init_started) * 1000 ))" > "$RESULTS_DIR/$suite.timing"
   echo "$suite FIXTURE-INCOMPLETE" >> "$RESULTS_DIR/lines"; exit 0
 fi
 if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$out" 2>&1; then
+  printf 'init_millis=%s\nsuite_millis=0\n' "$(( (SECONDS - init_started) * 1000 ))" > "$RESULTS_DIR/$suite.timing"
   echo "$suite INIT-FAILED" >> "$RESULTS_DIR/lines"; exit 0
 fi
+init_millis=$(( (SECONDS - init_started) * 1000 ))
 
 started=$SECONDS
 WF_FIX="$FIX" "$PY" "$HERE/$suite.py" >>"$out" 2>&1
 rc=$?
 elapsed=$((SECONDS - started))
+printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis" "$((elapsed * 1000))" > "$RESULTS_DIR/$suite.timing"
 bad=$(grep -c '\[FAIL\]' "$out" || true)
 line=$(tail -1 "$out")
 status=ok

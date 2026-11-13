@@ -20,6 +20,38 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
 PAYLOAD = os.path.join(REPO, "docs", "workflows", "wf", "payload")
 
+# ---- 发行身份：由 runner 通过环境注入（dev=测试发行副本；candidate=候选仓库根）----------
+# 缺省值只为“直接手跑某个用例”保留开发态语义。
+DEFAULT_RELEASE = os.path.join(REPO, "docs", "workflows", "wf-release")
+RELEASE = os.environ.get("WF_RELEASE_TREE") or DEFAULT_RELEASE
+RELEASE_VERSION = os.environ.get("WF_RELEASE_VERSION") or "0.1.0"
+RELEASE_REF = os.environ.get("WF_RELEASE_REF") or f"refs/tags/wf-v{RELEASE_VERSION}"
+
+
+def release_tag(ref=None):
+    """`refs/tags/wf-vX.Y.Z` → `wf-vX.Y.Z`（install.py 需要 tag 名，记录要完整 ref）。"""
+    ref = RELEASE_REF if ref is None else ref
+    return ref.split("refs/tags/", 1)[-1]
+
+
+def test_lib():
+    """wflib 来源：夹具项目 `.wf/lib` → `WF_TEST_LIB` → 源码 payload/lib（仅 dev 回退）。
+
+    前两个都是“安装产物/发行副本”；源码回退只用于 stage 注入类用例，
+    这类用例的 `candidate_clean` 必须是 false（见 repro/groups.json）。
+    """
+    candidates = []
+    fix = os.environ.get("WF_FIX")
+    if fix:
+        candidates.append(os.path.join(fix, ".wf", "lib"))
+    if os.environ.get("WF_TEST_LIB"):
+        candidates.append(os.environ["WF_TEST_LIB"])
+    candidates.append(os.path.join(PAYLOAD, "lib"))
+    for candidate in candidates:
+        if candidate and os.path.isdir(os.path.join(candidate, "wflib")):
+            return candidate
+    return os.path.join(PAYLOAD, "lib")
+
 
 _STAGED = []
 
@@ -62,7 +94,7 @@ def require_business_code(payload, rc):
         raise Precondition(f"目标调用内部错误：code={code}")
     if not isinstance(code, str) or not code.startswith("WF_"):
         raise Precondition(f"目标调用未返回业务原因码：rc={rc} code={code}")
-    lib = os.path.join(PAYLOAD, "lib")
+    lib = test_lib()
     if lib not in sys.path:
         sys.path.insert(0, lib)
     try:
@@ -101,7 +133,7 @@ def code_problem(payload, expected_codes):
         return None
     if code in INTERNAL_CODES or not isinstance(code, str) or not code.startswith("WF_"):
         raise Precondition(f"目标调用非业务失败：code={code}")
-    lib = os.path.join(PAYLOAD, "lib")
+    lib = test_lib()
     if lib not in sys.path:
         sys.path.insert(0, lib)
     from wflib import codes as _codes
@@ -191,7 +223,7 @@ RULES_DIGEST = "sha256:" + "a" * 64
 
 def install_fixture(root, *, source_commit="c0", generation=2, platform="claudecode",
                     installed_platforms=("dsh",), roots=(".agents/skills",),
-                    rules_digest=RULES_DIGEST):
+                    rules_digest=RULES_DIGEST, release_ref=None, version=None):
     """最小可用的"已安装项目"：安装记录 + 写权记录 + 一份技能源。
 
     返回 dict：target / source / skill_root / args / writes / installation / writer。
@@ -205,8 +237,10 @@ def install_fixture(root, *, source_commit="c0", generation=2, platform="claudec
     os.makedirs(os.path.join(source, "skills/wf-start"), exist_ok=True)
     open(os.path.join(source, "skills/wf-start/SKILL.md"), "w").write("v1\n")
     os.makedirs(os.path.join(target, ".wf/install"), exist_ok=True)
-    installation = {"schema_version": 1, "release_ref": "refs/tags/wf-v0.1.0",
-                    "source_commit": source_commit, "version": "0.1.0",
+    release_ref = release_ref or RELEASE_REF
+    version = version or RELEASE_VERSION
+    installation = {"schema_version": 1, "release_ref": release_ref,
+                    "source_commit": source_commit, "version": version,
                     "rules_digest": rules_digest,
                     "platforms": list(installed_platforms), "roots": list(roots),
                     "assets": [{"target": ".wf/bin/wf.py", "root_ref": "project",
@@ -223,7 +257,7 @@ def install_fixture(root, *, source_commit="c0", generation=2, platform="claudec
     with open(os.path.join(target, ".wf/writer.json"), "w") as handle:
         json.dump(writer, handle, ensure_ascii=False, indent=2)
     args = argparse.Namespace(target=target, source=source, platform=[platform], confirm=True,
-                              json=True, release_ref="refs/tags/wf-v0.1.0")
+                              json=True, release_ref=release_ref)
     writes = [(skill_root, {"target_class": "skill_root", "source_path": "skills/wf-start/SKILL.md",
                             "digest": "sha256:y", "executable": False}, "wf-start/SKILL.md")]
     manifest = {"compatibility": {"rules_digest": rules_digest}, "assets": []}
@@ -242,7 +276,6 @@ def run_quietly(func, *args, **kwargs):
         rc = func(*args, **kwargs)
     return rc, buffer.getvalue()
 
-RELEASE = os.path.join(REPO, "docs", "workflows", "wf-release")
 WF_PYTHON = "/usr/bin/python3"
 
 
@@ -255,13 +288,14 @@ def release_source(root):
     if root in _RELEASE_SRC:
         return _RELEASE_SRC[root]
     dest = os.path.join(root, "release-src")
-    shutil.copytree(RELEASE, dest, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    shutil.copytree(RELEASE, dest,
+                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc", ".git"))
     for cmd in (["git", "init", "-q"],
                 ["git", "config", "user.email", "r@example.com"],
                 ["git", "config", "user.name", "r"],
                 ["git", "add", "-A"],
                 ["git", "commit", "-qm", "release snapshot"],
-                ["git", "tag", "wf-v0.1.0"]):
+                ["git", "tag", release_tag()]):
         subprocess.run(cmd, cwd=dest, check=True, capture_output=True)
     _RELEASE_SRC[root] = dest
     return dest
@@ -273,7 +307,7 @@ def deploy(root, platforms=("dsh",)):
     os.makedirs(project, exist_ok=True)
     source = release_source(root)
     cmd = [sys.executable, os.path.join(source, "install.py"), "--target", project,
-           "--release-ref", "refs/tags/wf-v0.1.0", "--source", source,
+           "--release-ref", RELEASE_REF, "--source", source,
            "--platform", ",".join(platforms), "--confirm"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
