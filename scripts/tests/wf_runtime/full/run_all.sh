@@ -396,10 +396,11 @@ if [ "$JOBS" -gt 1 ]; then
 fi
 if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; then
   if [ "$JOBS" -gt 1 ] && [ -n "$PARALLEL_LIST" ] && can_unshare; then
+    echo "（并行：$JOBS worker（unshare 隔离）；串行段 $(printf '%s' "$PARALLEL_SERIAL_LIST" | wc -w) 个套件）"
     run_suites_parallel "$PARALLEL_LIST"
     for suite in $PARALLEL_SERIAL_LIST; do run_suite "$suite"; done
   else
-    [ "$JOBS" -gt 1 ] && echo "（unshare 不可用：退回串行）"
+    if [ "$JOBS" -gt 1 ]; then echo "（unshare 不可用：退回串行）"; else echo "（串行：逐套件执行）"; fi
     # 串行模式共享 /tmp：某些套件会伪造 release-repo 软链，逐套件重建以隔离这种干扰
     for suite in $PLAN_SUITES_ALL; do link_release; WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
   fi

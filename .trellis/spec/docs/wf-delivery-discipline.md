@@ -114,6 +114,11 @@
 | 套件层 | `--serial` / `WF_JOBS` | 并行（4） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
 | repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 并行（4） | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
 
+并行/串行的等价性要**定期对拍**（改 runner 后至少一次）：跑一次 `--full --repro green` 和一次
+`--full --repro green --serial`，比对两份 `RESULTS_DIR/lines`（套件名/rc/status）、`repro/*.json`
+（逐用例 mode/green/red/verified）与流程行的 `rc/PASS=`。除运行期 id（task id 等）外必须逐项相等。
+2026-11-13 实测：59 套件 + 85 repro + 5 流程全部相等，并行 204s / 串行 301s。
+
 **选择器**：`WF_SUITES`（套件名）、`WF_TAGS`（tag，多值取并集）都隐含 `--subset`；两者同时给出取**交集**，
 为空即报错。未知套件/tag 一律非零并列出可选值。`--changed`/`--changed-files` 只产出建议
 （`suites.json` 的 `modules`：精确文件键优先，其次最长目录前缀；未映射的改动单列，不猜），
