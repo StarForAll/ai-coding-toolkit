@@ -278,8 +278,10 @@ os.makedirs(os.path.join(release_cache, "0.1.0"))
 open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys; sys.exit(0)\n")
 # 外层可能以 `WF_SUITES=... bash run_all.sh` 启动（命令前缀会导出到子进程），
 # 假环境必须显式清空，否则内层 run_all 会被当成子集模式
+# 假环境不跑夹具模板（模板会调用 template_check.py，而这里只验证门禁逻辑）；
+# 复制 run_all.sh 的套件必须显式关掉模板，否则会因缺少 template_check.py 而整段失败。
 _fake_env = {**os.environ, "WF_FIX": "/tmp/r67_fake_fix",
-             "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1",
+             "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
              "WF_SUITES": "", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                       env={**_fake_env, "WF_RESULTS_DIR": "/tmp/r67_fake_results1"})

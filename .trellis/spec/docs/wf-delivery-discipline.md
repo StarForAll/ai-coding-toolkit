@@ -119,6 +119,18 @@
 （`suites.json` 的 `modules`：精确文件键优先，其次最长目录前缀；未映射的改动单列，不猜），
 必须配合 `--list`，不自动执行。
 
+**夹具模板（run 内复用，不跨 run 缓存）**：`run_all` 在一个 run 内构建一次
+`wf_fixture.sh + f1_init.py` 的产物当**只读模板**（实测 175ms + 1770ms），每个套件 `cp -a`
+（约 5ms）到自己目录。复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须通过
+`template_check.py`：`.wf/bin/wf.py` 与安装记录都在、candidate 模式下 version/ref 仍等于本次候选。
+**安装记录会按安装时的绝对路径登记技能根（`installation.json` 的 `assets[].root_ref`）**，
+`recovery.md` 里也有 `python3 <项目>/.wf/bin/wf.py` 的绝对路径——所以复制后必须
+`--repoint-from <模板>` 把这些前缀改写成当前项目（只改 `.json`/`.md` 文本里的该前缀），
+再校验“不残留模板路径”。不迁移的后果不是报错，而是后续 uninstall/reinstall 类入口
+去操作**模板目录**（共享可变状态、静默串味）。任何一项不满足 → 该套件失败（**不静默 pass**）。
+排障或需要逐套件重建时用 `WF_NO_TEMPLATE=1`。**不要跨 run 缓存模板**：源树、发行版本、
+时间戳与临时目录都可能变，跨 run 复用等于用旧状态冒充新状态。
+
 **运行中不要编辑 runner 文件**：`bash` 按偏移增量读取脚本，运行期间改 `run_all.sh`/`run_one.sh`/
 `repro/run.sh`/`plan.py` 会让运行中的实例读到错位内容，结果不可信（2026-11-13 实测：
 一次全量因此作废重跑）。要改就先停掉运行，改完按下面的顺序重验。

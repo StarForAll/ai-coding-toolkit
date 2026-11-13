@@ -57,6 +57,19 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(summary["suite_ran"], 1)
         self.assertEqual(summary["repro_ran"], 0)
         self.assertEqual(summary["flow_ran"], 0)
+        self.assertTrue(summary["template_reused"], "默认应复用 run 内夹具模板")
+        self.assertGreaterEqual(summary["template_seconds"], 0)
+
+    def test_template_can_be_disabled_for_determinism(self):
+        results = tempfile.mkdtemp(prefix="wf-run-all-notemplate-")
+        self.addCleanup(lambda: __import__("shutil").rmtree(results, ignore_errors=True))
+        result = run([], {"WF_SUITES": "r70_tests", "WF_RESULTS_DIR": results,
+                          "WF_NO_TEMPLATE": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout[-2000:])
+        with open(os.path.join(results, "summary.json"), encoding="utf-8") as handle:
+            summary = json.load(handle)
+        self.assertFalse(summary["template_reused"], "WF_NO_TEMPLATE=1 时逐套件重建夹具")
+        self.assertGreater(summary["init_seconds"], 0)
 
     def test_failing_suite_makes_the_gate_fail(self):
         # f1_candidate_smoke 在 dev 部署下必须失败（安装记录是 0.0.0-dev）

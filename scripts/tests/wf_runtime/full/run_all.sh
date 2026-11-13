@@ -23,7 +23,8 @@
 #
 # 环境：WF_JOBS（套件层并行，默认 4；--serial 或 WF_JOBS=1 退回串行）、
 #       WF_REPRO_JOBS（repro 用例层并行，默认 4）、
-#       WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_FIX、WF_NO_RUN=1（计划后即退出）
+#       WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_FIX、WF_NO_RUN=1（计划后即退出）、
+#       WF_NO_TEMPLATE=1（逐套件重建夹具；默认在 run 内构建一次夹具模板后逐套件 cp -a）
 set -uo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 PY=/softwares/python/bin/python3
@@ -149,6 +150,83 @@ fixture_args() {
   fi
 }
 
+# ---- 夹具模板（run 内复用；不跨 run 缓存）----------------------------------
+# 每套件都跑 wf_fixture.sh + f1_init.py 约 1.95s（实测 175ms + 1770ms），而 cp -a 约 5ms。
+# 模板只构建一次、**只读**（任何套件都不会在模板目录里跑），每套件复制独立一份。
+# 复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须机械核对（template_check.py）。
+template_check() {
+  local leak="$1"; shift
+  local args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF")
+  if [ "$PLAN_FIXTURE_DEPLOY" != "candidate" ]; then
+    args=()
+  fi
+  if [ -n "$leak" ]; then
+    "$PY" "$HERE/template_check.py" "$1" --repoint-from "$leak" "${args[@]}" --quiet
+  else
+    "$PY" "$HERE/template_check.py" "$1" "${args[@]}" --quiet
+  fi
+}
+
+TEMPLATE_SECONDS=0
+WF_TEMPLATE_READY=0
+WF_TEMPLATE=""
+if [ "${WF_NO_TEMPLATE:-0}" != "1" ]; then
+  WF_TEMPLATE="$RESULTS_DIR/template"
+  template_started=$SECONDS
+  rm -rf "$WF_TEMPLATE"
+  fixture_args
+  if ! bash "$HERE/wf_fixture.sh" "$WF_TEMPLATE" "${FIXTURE_ARGS[@]}" >"$RESULTS_DIR/template.out" 2>&1 \
+      || ! WF_FIX="$WF_TEMPLATE" "$PY" "$HERE/f1_init.py" >>"$RESULTS_DIR/template.out" 2>&1; then
+    echo "TEMPLATE-BUILD-FAILED（见 $RESULTS_DIR/template.out）"
+    tail -5 "$RESULTS_DIR/template.out" || true
+    exit 1
+  fi
+  if ! template_check "" "$WF_TEMPLATE"; then
+    echo "TEMPLATE-BUILD-INVALID（见 $RESULTS_DIR/template.out）"
+    exit 1
+  fi
+  WF_TEMPLATE_READY=1
+  TEMPLATE_SECONDS=$((SECONDS - template_started))
+  echo "（夹具模板已构建：${WF_TEMPLATE}，${TEMPLATE_SECONDS}s；逐套件 cp -a 复用）"
+else
+  echo "（WF_NO_TEMPLATE=1：逐套件重建夹具）"
+fi
+export WF_TEMPLATE WF_TEMPLATE_READY
+
+# 准备一个套件的夹具：模板可用时只做 cp -a + 空态校验，否则重建夹具并初始化。
+# 返回码：0 成功；1 夹具失败；2 初始化失败；3 复制失败；4 复制后校验失败
+prepare_fixture() {
+  local log=$1
+  if [ "$WF_TEMPLATE_READY" = "1" ]; then
+    rm -rf "$FIX"
+    if ! cp -a "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
+      return 3
+    fi
+    if ! template_check "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
+      return 4
+    fi
+    return 0
+  fi
+  fixture_args
+  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >>"$log" 2>&1; then
+    return 1
+  fi
+  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
+    return 2
+  fi
+  return 0
+}
+
+fixture_failure_label() {
+  case "$1" in
+    1) echo FIXTURE-FAILED ;;
+    2) echo INIT-FAILED ;;
+    3) echo TEMPLATE-COPY-FAILED ;;
+    4) echo TEMPLATE-COPY-INVALID ;;
+    *) echo FIXTURE-FAILED ;;
+  esac
+}
+
 JOBS=$PLAN_JOBS
 RESULTS_MARK="$RESULTS_DIR/lines"
 
@@ -265,15 +343,15 @@ run_suite() {
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$suite.out"
   local init_started=$SECONDS
-  fixture_args
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >"$log" 2>&1; then
-    printf '%-18s FIXTURE-FAILED\n' "$suite"; fail=$((fail+1)); return
+  : > "$log"
+  local prep_rc=0
+  prepare_fixture "$log" || prep_rc=$?
+  if [ "$prep_rc" -ne 0 ]; then
+    printf '%-18s %s\n' "$suite" "$(fixture_failure_label "$prep_rc")"
+    fail=$((fail+1)); return
   fi
   if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
     printf '%-18s FIXTURE-INCOMPLETE\n' "$suite"; fail=$((fail+1)); return
-  fi
-  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
-    printf '%-18s INIT-FAILED\n' "$suite"; fail=$((fail+1)); return
   fi
   local init_millis_local=$(( (SECONDS - init_started) * 1000 ))
   init_millis=$((init_millis + init_millis_local))
@@ -337,12 +415,12 @@ run_flow() {
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$name.out"
   local init_started=$SECONDS
-  fixture_args
-  if ! bash "$HERE/wf_fixture.sh" "$FIX" "${FIXTURE_ARGS[@]}" >"$log" 2>&1; then
-    printf '%-18s FIXTURE-FAILED\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
-  fi
-  if ! WF_FIX="$FIX" "$PY" "$HERE/f1_init.py" >>"$log" 2>&1; then
-    printf '%-18s INIT-FAILED\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
+  : > "$log"
+  local prep_rc=0
+  prepare_fixture "$log" || prep_rc=$?
+  if [ "$prep_rc" -ne 0 ]; then
+    printf '%-18s %s\n' "$name" "$(fixture_failure_label "$prep_rc")"
+    fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
   init_millis=$((init_millis + (SECONDS - init_started) * 1000))
   local out rc got started elapsed
@@ -465,7 +543,7 @@ WF_SUMMARY_MODE="$PLAN_MODE" WF_SUMMARY_FULL_MODE="$PLAN_FULL_MODE" \
 WF_SUMMARY_DEPLOY="$PLAN_FIXTURE_DEPLOY" \
 WF_SUMMARY_SUITE_RAN="$suite_ran" WF_SUMMARY_FLOW_RAN="$flow_ran" WF_SUMMARY_UNITS="$units_total" \
 WF_SUMMARY_REPRO_RAN="$repro_ran" WF_SUMMARY_FAIL="$unknown_fail" \
-WF_SUMMARY_DEBT="$debt" WF_SUMMARY_BUILD="$build_seconds" \
+WF_SUMMARY_DEBT="$debt" WF_SUMMARY_BUILD="$build_seconds" WF_SUMMARY_TEMPLATE="$TEMPLATE_SECONDS" \
 WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
 WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
 WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
@@ -492,6 +570,8 @@ payload = {
     "fail": int(os.environ.get("WF_SUMMARY_FAIL") or 0),
     "legacy_debt": int(os.environ.get("WF_SUMMARY_DEBT") or 0),
     "build_seconds": int(os.environ.get("WF_SUMMARY_BUILD") or 0),
+    "template_seconds": int(os.environ.get("WF_SUMMARY_TEMPLATE") or 0),
+    "template_reused": bool(os.environ.get("WF_TEMPLATE_READY") == "1"),
     "init_seconds": round(int(os.environ.get("WF_SUMMARY_INIT_MS") or 0) / 1000, 2),
     "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),
     "green_seconds": int(os.environ.get("WF_SUMMARY_GREEN") or 0),
@@ -506,7 +586,7 @@ print("summary: " + path)
 PY
 
 echo "---- 运行 $units_total 项（套件 $suite_ran，流程/extra $flow_ran，repro $repro_ran），失败 $fail 项（其中已登记债 $debt 项）----"
-echo "---- 计时 build=${build_seconds}s init=$((init_millis/1000))s suite=$((suite_millis/1000))s green=${green_seconds}s red=${red_seconds}s total=${total_seconds}s ----"
+echo "---- 计时 build=${build_seconds}s template=${TEMPLATE_SECONDS}s init=$((init_millis/1000))s suite=$((suite_millis/1000))s green=${green_seconds}s red=${red_seconds}s total=${total_seconds}s ----"
 if [ "$unknown_fail" -ne 0 ] || [ "$stale" -ne 0 ]; then
   [ "$unknown_fail" -ne 0 ] && echo "GATE-FAIL: 未登记的失败 $unknown_fail 项（必过门未通过）"
   [ "$stale" -ne 0 ] && echo "GATE-BOOKKEEPING: 豁免清单有 $stale 项需要销账（转绿或已不存在）"
