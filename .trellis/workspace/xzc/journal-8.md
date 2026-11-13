@@ -1049,3 +1049,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 406: wf 测试体系 Phase 1：运行器与候选发行闭环
+<!-- trellis-session: v=2 fp=485f879f13fe3fe6 -->
+
+**Date**: 2026-11-13
+**Task**: wf 测试体系 Phase 1：运行器与候选发行闭环
+**Branch**: `main`
+
+### Summary
+
+按 /tmp/scripts_wf_imporve.md 落地 Phase 1A/1B/1C：plan.py 单一执行计划（真子集/模式互斥/repro gating/--list 同计划）；repro green/red/both/auto 拆分 + --group/--jobs/父进程独占 state；wf_test_release.py 测试发行隔离（不写产品树）+ prepare_candidate_repo.py 候选仓库引导 + wf_fixture --deploy candidate 安装记录核对；f1_init/_harness 的 wflib 改从 $F/.wf/lib|WF_TEST_LIB 解析；f1_candidate_smoke 兜底候选闭环；suites.json/groups.json 最小清单与交付纪律 §7/§8 最小同步；r67 假运行器按新契约重建。验证：unittest 781 OK；WF_SUITES=r70_tests=1 单元；--full --repro green=149 单元 GATE-OK；review 组 green/red 12/12；candidate 代表集 GATE-OK、inst=0.1.2；--verify/--verify-token-parity OK 且产品树字节未变。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fc7598d8` | feat(test): wf 测试运行器 Phase 1（单一计划/真子集/green-red/候选发行闭环） |
+
+### Status
+
+[OK] **Completed**

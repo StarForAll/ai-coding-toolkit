@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 405
+- **Total Sessions**: 406
 - **Last Active**: 2026-11-13
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1051 | Active |
+| `journal-8.md` | ~1073 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 406 | 2026-11-13 | wf 测试体系 Phase 1：运行器与候选发行闭环 | `fc7598d8` | `main` |
 | 405 | 2026-11-13 | wf 审查判定：主会话复核与旧口径清理 | `da1d9605` | `main` |
 | 404 | 2026-11-13 | wf 控制流两份分析报告核验与结构性修正 | `965a7439`, `32ae4866`, `258e772d` | `main` |
 | 403 | 2026-11-12 | wf 第二轮 dogfood 缺陷修正（材料/交付集合/代次/契约一致性） | `57afbbbb`, `535f3492` | `main` |
