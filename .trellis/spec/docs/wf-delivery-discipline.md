@@ -114,6 +114,11 @@
 | 套件层 | `--serial` / `WF_JOBS` | 并行（4） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
 | repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | 并行（4） | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
 
+**选择器**：`WF_SUITES`（套件名）、`WF_TAGS`（tag，多值取并集）都隐含 `--subset`；两者同时给出取**交集**，
+为空即报错。未知套件/tag 一律非零并列出可选值。`--changed`/`--changed-files` 只产出建议
+（`suites.json` 的 `modules`：精确文件键优先，其次最长目录前缀；未映射的改动单列，不猜），
+必须配合 `--list`，不自动执行。
+
 **运行中不要编辑 runner 文件**：`bash` 按偏移增量读取脚本，运行期间改 `run_all.sh`/`run_one.sh`/
 `repro/run.sh`/`plan.py` 会让运行中的实例读到错位内容，结果不可信（2026-11-13 实测：
 一次全量因此作废重跑）。要改就先停掉运行，改完按下面的顺序重验。
@@ -137,7 +142,7 @@ bash .../run_all.sh --full --repro green                      # T2 收口，一�
 | 层 | 何时 | 命令 |
 |---|---|---|
 | T0 快速 | 每次编辑后（<10s） | `/softwares/python/bin/python3 -m unittest discover -s scripts/tests -t .`（已包含 `wf_runtime`/`wf_review`，**不再重复跑子目录**） |
-| T1 定向 | 改动命中模块时（<2min） | `WF_SUITES="r68_tests r70_tests" bash scripts/tests/wf_runtime/full/run_all.sh`<br>`bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --no-build` |
+| T1 定向 | 改动命中模块时（<2min） | `bash scripts/tests/wf_runtime/full/run_all.sh --list --changed`（看建议，不执行）<br>`WF_TAGS=review bash .../run_all.sh` 或 `WF_SUITES="r68_tests r70_tests" bash .../run_all.sh`<br>`bash .../repro/run.sh --group review --mode green --no-build` |
 | T2 阶段收口 | 任务收口/合并前 | `bash scripts/tests/wf_runtime/full/run_all.sh --full --repro green`（59 套件 + 4 流程 + r72 + green repro）+ 单元层<br>`python3 scripts/build-wf-release.py --verify --verify-token-parity`<br>`python3 scripts/validate-wf-design.py`、`python3 scripts/check-doc-refs.py`、`./scripts/validate-skills.sh` |
 | T3 发行 | 发行前 | `bash .../run_all.sh --full --repro both`（red 只在这一层全量）<br>`python3 scripts/build-wf-release.py --version <X.Y.Z>`<br>`python3 scripts/tests/wf_runtime/full/prepare_candidate_repo.py --tree docs/workflows/wf-release --version <X.Y.Z> --out ~/.cache/wf-candidate-repo/<X.Y.Z>`<br>`bash .../run_all.sh --representative --repro green --repro-group install --fixture-deploy candidate --release-root <候选仓库根> --release-ref refs/tags/wf-v<X.Y.Z> --release-version <X.Y.Z>`<br>+ `build-wf-release.py --verify --verify-token-parity` |
 

@@ -156,6 +156,95 @@ class FixtureDeployTest(unittest.TestCase):
             plan.plan(["--full"] + self.candidate_args(), make())
 
 
+class TagSelectionTest(unittest.TestCase):
+    """`WF_TAGS`/`--tags` 选择套件；与 WF_SUITES 取交集；未知 tag 列出可选值。"""
+
+    def test_tags_imply_subset_and_pick_tagged_suites(self):
+        result = plan.plan(["--tags", "review"], make())
+        self.assertEqual(result["mode"], "subset")
+        self.assertEqual(result["tags"], ["review"])
+        self.assertEqual(sorted(result["suites_all"]),
+                         ["r68_tests", "r69_tests", "r70_tests", "r71_tests",
+                          "r75_tests", "r79_tests"])
+        self.assertEqual(result["repro_enabled"], 0)
+
+    def test_wf_tags_env_is_a_selector_too(self):
+        result = plan.plan([], make(WF_TAGS="archive"))
+        self.assertEqual(result["mode"], "subset")
+        self.assertIn("r31r34_tests", result["suites_all"])
+        self.assertIn("f1_ordinary", result["suites_all"])
+
+    def test_multiple_tags_are_union(self):
+        result = plan.plan([], make(WF_TAGS="handover,instance"))
+        self.assertIn("r71_tests", result["suites_all"])
+        self.assertIn("r75_tests", result["suites_all"])
+        self.assertIn("r76_tests", result["suites_all"])
+
+    def test_unknown_tag_lists_available(self):
+        with self.assertRaises(plan.PlanError) as caught:
+            plan.plan(["--tags", "nope"], make())
+        self.assertIn("review", str(caught.exception))
+
+    def test_tags_intersect_with_wf_suites(self):
+        result = plan.plan([], make(WF_SUITES="r68_tests r70_tests cp1_tests", WF_TAGS="review"))
+        self.assertEqual(sorted(result["suites_all"]), ["r68_tests", "r70_tests"])
+
+    def test_empty_intersection_is_refused(self):
+        with self.assertRaises(plan.PlanError) as caught:
+            plan.plan([], make(WF_SUITES="cp1_tests", WF_TAGS="review"))
+        self.assertIn("交集", str(caught.exception))
+
+    def test_full_and_representative_reject_tags(self):
+        for mode in ("--full", "--representative"):
+            with self.assertRaises(plan.PlanError):
+                plan.plan([mode], make(WF_TAGS="review"))
+
+
+class ChangedSuggestionTest(unittest.TestCase):
+    """`--changed` 只给建议，不自动执行；映射规则：精确文件 → 最长目录前缀。"""
+
+    def test_changed_without_list_is_refused(self):
+        with self.assertRaises(plan.PlanError) as caught:
+            plan.plan(["--changed-files", "docs/workflows/wf/payload/lib/wflib/review.py"], make())
+        self.assertIn("只给建议", str(caught.exception))
+
+    def test_changed_maps_modules_to_suites_and_repro(self):
+        result = plan.plan(["--list", "--changed-files",
+                            "docs/workflows/wf/payload/lib/wflib/review.py "
+                            "docs/workflows/wf/payload/install.py"], make())
+        self.assertIn("r68_tests", result["suggested_suites"])
+        self.assertIn("r69_tests", result["suggested_suites"])
+        self.assertIn("review", result["suggested_repro_groups"])
+        self.assertIn("install", result["suggested_repro_groups"])
+        self.assertEqual(result["unmapped_changes"], [])
+
+    def test_unmapped_change_is_reported_not_guessed(self):
+        result = plan.plan(["--list", "--changed-files", "README.md"], make())
+        self.assertEqual(result["suggested_suites"], [])
+        self.assertEqual(result["unmapped_changes"], ["README.md"])
+
+    def test_directory_prefix_mapping(self):
+        result = plan.plan(["--list", "--changed-files",
+                            "docs/workflows/wf/payload/templates/task/prd.md"], make())
+        self.assertIn("cp4_tests", result["suggested_suites"])
+
+    def test_modules_referencing_unknown_suite_is_refused(self):
+        original = plan.load_suites
+
+        def broken():
+            doc = original()
+            doc["modules"] = {"payload/lib/wflib/review.py": {"suites": ["ghost_tests"], "repro": []}}
+            return doc
+
+        plan.load_suites = broken
+        try:
+            with self.assertRaises(plan.PlanError) as caught:
+                plan.plan(["--list"], make())
+            self.assertIn("ghost_tests", str(caught.exception))
+        finally:
+            plan.load_suites = original
+
+
 class ParallelismTest(unittest.TestCase):
     """默认并行（省墙钟），`--serial`/`WF_JOBS=1` 是确定性退路。"""
 

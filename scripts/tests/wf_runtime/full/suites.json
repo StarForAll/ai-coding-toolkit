@@ -12,7 +12,8 @@
       "name": "cp1_tests",
       "kind": "suite",
       "tags": [
-        "capability"
+        "capability",
+        "writer"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -23,7 +24,10 @@
     {
       "name": "cp2_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "capability",
+        "identity"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -33,7 +37,11 @@
     {
       "name": "cp3_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "capability",
+        "executor",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -43,7 +51,11 @@
     {
       "name": "cp4_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "install",
+        "uninstall",
+        "spec"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -66,6 +78,7 @@
       "name": "cp5_b345",
       "kind": "suite",
       "tags": [
+        "spec",
         "capability"
       ],
       "representative": false,
@@ -78,7 +91,8 @@
       "name": "cp5_b12",
       "kind": "suite",
       "tags": [
-        "capability"
+        "capability",
+        "identity"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -89,7 +103,10 @@
     {
       "name": "r1r2_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "executor"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -100,7 +117,8 @@
       "name": "r7r15_tests",
       "kind": "suite",
       "tags": [
-        "state-machine"
+        "state-machine",
+        "writer"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -112,7 +130,8 @@
       "name": "r17r24_tests",
       "kind": "suite",
       "tags": [
-        "state-machine"
+        "state-machine",
+        "writer"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -123,7 +142,10 @@
     {
       "name": "r25r30_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "state-machine",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -134,7 +156,8 @@
       "name": "r31r34_tests",
       "kind": "suite",
       "tags": [
-        "archive"
+        "archive",
+        "task-lifecycle"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -145,7 +168,10 @@
     {
       "name": "r35_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "uninstall",
+        "install"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -155,7 +181,10 @@
     {
       "name": "r35r37_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "archive",
+        "writer"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -165,7 +194,10 @@
     {
       "name": "r38r39_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -175,7 +207,10 @@
     {
       "name": "r40r42_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -185,7 +220,10 @@
     {
       "name": "r43r45_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "spec",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -195,7 +233,10 @@
     {
       "name": "r46_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "scope",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -205,7 +246,10 @@
     {
       "name": "r47r48_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "spec",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -215,7 +259,10 @@
     {
       "name": "r49_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "scope",
+        "spec"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -225,7 +272,10 @@
     {
       "name": "r50_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "baseline",
+        "spec"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -235,7 +285,10 @@
     {
       "name": "r51r52_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "identity"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -245,7 +298,10 @@
     {
       "name": "r53_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "artifact"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -255,7 +311,10 @@
     {
       "name": "r54_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "complexity",
+        "plan"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -265,7 +324,10 @@
     {
       "name": "r55_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "plan",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -275,7 +337,10 @@
     {
       "name": "r56_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "config",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -285,7 +350,10 @@
     {
       "name": "r57_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "config",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -295,7 +363,10 @@
     {
       "name": "r58_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "config",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -305,7 +376,10 @@
     {
       "name": "r59_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "maintenance",
+        "archive"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -315,7 +389,10 @@
     {
       "name": "r60_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate",
+        "scope"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -325,7 +402,10 @@
     {
       "name": "r61_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "identity",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -335,7 +415,9 @@
     {
       "name": "r62_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -345,7 +427,10 @@
     {
       "name": "r63_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "security",
+        "writer"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -355,7 +440,9 @@
     {
       "name": "r64_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -365,7 +452,10 @@
     {
       "name": "r65_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "manifest",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -375,7 +465,10 @@
     {
       "name": "r66_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "writer",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -385,7 +478,11 @@
     {
       "name": "r67_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "writer",
+        "gate",
+        "runner"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -396,7 +493,9 @@
       "name": "r68_tests",
       "kind": "suite",
       "tags": [
-        "review"
+        "review",
+        "repair",
+        "baseline"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -409,6 +508,7 @@
       "kind": "suite",
       "tags": [
         "review",
+        "uninstall",
         "install"
       ],
       "representative": false,
@@ -421,7 +521,9 @@
       "name": "r70_tests",
       "kind": "suite",
       "tags": [
-        "review"
+        "review",
+        "uninstall",
+        "install"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -434,7 +536,8 @@
       "kind": "suite",
       "tags": [
         "review",
-        "handover"
+        "handover",
+        "instance"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -445,7 +548,11 @@
     {
       "name": "r74_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "scope",
+        "writer",
+        "identity"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -457,7 +564,8 @@
       "kind": "suite",
       "tags": [
         "review",
-        "instance"
+        "instance",
+        "identity"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -468,7 +576,10 @@
     {
       "name": "r76_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "maintenance",
+        "instance"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -478,7 +589,10 @@
     {
       "name": "r77_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "maintenance",
+        "config"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -488,7 +602,10 @@
     {
       "name": "r79_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "review",
+        "security"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -498,7 +615,10 @@
     {
       "name": "r80_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -508,7 +628,10 @@
     {
       "name": "r81_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -518,7 +641,10 @@
     {
       "name": "r82_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -529,7 +655,8 @@
       "name": "r83_tests",
       "kind": "suite",
       "tags": [
-        "identity"
+        "fixed-point",
+        "gate"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -540,7 +667,10 @@
     {
       "name": "r84_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -550,7 +680,10 @@
     {
       "name": "r85_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -560,7 +693,10 @@
     {
       "name": "r86_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "gate"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -570,7 +706,10 @@
     {
       "name": "r87_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "writer"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -580,7 +719,10 @@
     {
       "name": "r88_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "fixed-point",
+        "instance"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -591,7 +733,8 @@
       "name": "r89_tests",
       "kind": "suite",
       "tags": [
-        "install"
+        "install",
+        "identity"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -602,7 +745,10 @@
     {
       "name": "r90_tests",
       "kind": "suite",
-      "tags": [],
+      "tags": [
+        "identity",
+        "install"
+      ],
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
@@ -613,7 +759,8 @@
       "name": "f1_ordinary",
       "kind": "suite",
       "tags": [
-        "task-lifecycle"
+        "task-lifecycle",
+        "archive"
       ],
       "representative": true,
       "candidate_clean": false,
@@ -625,8 +772,8 @@
       "name": "p5_v1",
       "kind": "suite",
       "tags": [
-        "install",
-        "spec"
+        "identity",
+        "install"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -638,7 +785,8 @@
       "name": "r72_tests",
       "kind": "extra",
       "tags": [
-        "review"
+        "uninstall",
+        "install"
       ],
       "representative": false,
       "candidate_clean": false,
@@ -650,6 +798,7 @@
       "name": "d1_tests",
       "kind": "manual",
       "tags": [
+        "identity",
         "manual"
       ],
       "representative": false,
@@ -662,6 +811,7 @@
       "name": "d1_wf_tests",
       "kind": "manual",
       "tags": [
+        "identity",
         "manual"
       ],
       "representative": false,
@@ -675,7 +825,8 @@
       "kind": "candidate",
       "tags": [
         "candidate",
-        "smoke"
+        "smoke",
+        "task-lifecycle"
       ],
       "representative": false,
       "candidate_clean": true,
@@ -693,5 +844,204 @@
   },
   "extra_expect": {
     "r72_tests": 7
+  },
+  "modules": {
+    "payload/lib/wflib/review.py": {
+      "suites": [
+        "r68_tests",
+        "r69_tests",
+        "r70_tests",
+        "r71_tests",
+        "r75_tests",
+        "r79_tests"
+      ],
+      "repro": [
+        "review"
+      ]
+    },
+    "payload/lib/wflib/tasks.py": {
+      "suites": [
+        "r31r34_tests",
+        "f1_ordinary",
+        "r35r37_tests",
+        "r7r15_tests"
+      ],
+      "repro": [
+        "archive",
+        "writer"
+      ]
+    },
+    "payload/lib/wflib/cli.py": {
+      "suites": [
+        "cp1_tests",
+        "r75_tests",
+        "r89_tests",
+        "r90_tests"
+      ],
+      "repro": [
+        "identity",
+        "writer"
+      ]
+    },
+    "payload/lib/wflib/check.py": {
+      "suites": [
+        "r38r39_tests",
+        "r40r42_tests",
+        "r46_tests",
+        "r60_tests"
+      ],
+      "repro": [
+        "review"
+      ]
+    },
+    "payload/lib/wflib/scope.py": {
+      "suites": [
+        "r46_tests",
+        "r49_tests",
+        "r50_tests",
+        "r74_tests"
+      ],
+      "repro": [
+        "archive"
+      ]
+    },
+    "payload/lib/wflib/spec.py": {
+      "suites": [
+        "r43r45_tests",
+        "r47r48_tests"
+      ],
+      "repro": []
+    },
+    "payload/lib/wflib/writer.py": {
+      "suites": [
+        "cp3_tests",
+        "r63_tests",
+        "r66_tests",
+        "r67_tests"
+      ],
+      "repro": [
+        "writer"
+      ]
+    },
+    "payload/lib/wflib/config.py": {
+      "suites": [
+        "r54_tests",
+        "r56_tests",
+        "r57_tests",
+        "r58_tests"
+      ],
+      "repro": []
+    },
+    "payload/lib/wflib/identity_store.py": {
+      "suites": [
+        "cp2_tests",
+        "r51r52_tests",
+        "r61_tests"
+      ],
+      "repro": [
+        "identity"
+      ]
+    },
+    "payload/lib/wflib/maintenance.py": {
+      "suites": [
+        "r59_tests",
+        "r76_tests",
+        "r77_tests"
+      ],
+      "repro": [
+        "archive"
+      ]
+    },
+    "payload/lib/wflib/runs.py": {
+      "suites": [
+        "r17r24_tests",
+        "r7r15_tests"
+      ],
+      "repro": [
+        "identity"
+      ]
+    },
+    "payload/lib/wflib/sampling.py": {
+      "suites": [
+        "r31r34_tests",
+        "f1_ordinary"
+      ],
+      "repro": [
+        "archive"
+      ]
+    },
+    "payload/install.py": {
+      "suites": [
+        "cp4_tests",
+        "r69_tests",
+        "r70_tests",
+        "r72_tests",
+        "r89_tests"
+      ],
+      "repro": [
+        "install",
+        "export"
+      ]
+    },
+    "payload/bin/wf.py": {
+      "suites": [
+        "cp1_tests",
+        "r1r2_tests",
+        "r7r15_tests"
+      ],
+      "repro": [
+        "identity"
+      ]
+    },
+    "payload/bin/uninstall.py": {
+      "suites": [
+        "cp4_a8",
+        "cp4_tests",
+        "r35_tests",
+        "r72_tests"
+      ],
+      "repro": [
+        "install"
+      ]
+    },
+    "payload/bin/repair.py": {
+      "suites": [
+        "r1r2_tests",
+        "r79_tests"
+      ],
+      "repro": [
+        "writer"
+      ]
+    },
+    "payload/templates/": {
+      "suites": [
+        "cp4_tests",
+        "r53_tests"
+      ],
+      "repro": []
+    },
+    "payload/workflows/": {
+      "suites": [
+        "r7r15_tests",
+        "cp2_tests"
+      ],
+      "repro": []
+    },
+    "payload/protocol/": {
+      "suites": [
+        "r71_tests",
+        "r75_tests"
+      ],
+      "repro": [
+        "review"
+      ]
+    },
+    "skills/": {
+      "suites": [
+        "cp4_tests",
+        "r89_tests"
+      ],
+      "repro": []
+    }
   }
 }

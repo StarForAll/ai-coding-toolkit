@@ -8,6 +8,8 @@
 #   --subset          只跑 WF_SUITES 选中的套件（repro 需 WF_WITH_REPRO=1）
 #   --representative  代表集 + f0/p5_spec + 代表 repro 组（T3 候选模式的入口）
 #   WF_SUITES=a,b    未显式模式时隐含 --subset
+#   WF_TAGS=review   按 tag 选套件（同样隐含 --subset；与 WF_SUITES 取交集）
+#   --list --changed 按改动文件给出建议套件/repro 组（只建议，不执行）
 #
 # 常用：
 #   WF_SUITES="r70_tests" bash run_all.sh                  # 真子集（1 个执行单元）

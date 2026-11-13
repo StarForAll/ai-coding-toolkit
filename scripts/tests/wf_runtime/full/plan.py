@@ -100,6 +100,12 @@ def parse_args(argv):
     parser.add_argument("--release-ref", default=None)
     parser.add_argument("--release-version", default=None)
     parser.add_argument("--release-meta", default=None)
+    parser.add_argument("--tags", action="append", default=[], help="按 tag 选择套件（可重复/逗号分隔）")
+    parser.add_argument("--changed", action="store_true",
+                        help="只给建议：按改动文件映射套件与 repro 组（必须配合 --list）")
+    parser.add_argument("--changed-base", default=None, help="--changed 的比较基线（默认 HEAD）")
+    parser.add_argument("--changed-files", default=None,
+                        help="显式给出改动文件列表（空格分隔；CI 用，免 git）")
     parser.add_argument("--format", default="sh", choices=("sh", "json"))
     parser.add_argument("-h", "--help", action="store_true")
     return parser.parse_args(argv)
@@ -111,6 +117,79 @@ def _explicit_mode(args):
     if len(chosen) > 1:
         raise PlanError("模式互斥：--" + " / --".join(chosen) + " 不能同时给出")
     return chosen[0] if chosen else None
+
+
+def _split_tags(values):
+    tags = []
+    for value in values:
+        for item in str(value).replace(",", " ").split():
+            if item and item not in tags:
+                tags.append(item)
+    return tags
+
+
+def _normalize_change(path):
+    """把仓库路径映射到 `modules` 的键：去掉 `docs/workflows/wf/` 前缀。"""
+    prefix = "docs/workflows/wf/"
+    return path[len(prefix):] if path.startswith(prefix) else path
+
+
+def map_changes(files, modules):
+    """改动文件 → (suites, repro 组, 未映射文件)。
+
+    规则只有一条：先精确匹配文件键，再取**最长**的目录前缀（键以 `/` 结尾）。
+    没有两套并存的通配规则（方案稿 §5.2 的要求）。
+    """
+    suites, repro, unmapped = set(), set(), []
+    directory_keys = sorted((key for key in modules if key.endswith("/")), key=len, reverse=True)
+    for path in files:
+        key = _normalize_change(path.strip())
+        if not key:
+            continue
+        hit = key if key in modules else next((cand for cand in directory_keys if key.startswith(cand)), None)
+        if hit is None:
+            unmapped.append(path)
+            continue
+        entry = modules[hit] or {}
+        suites.update(entry.get("suites") or [])
+        repro.update(entry.get("repro") or [])
+    return sorted(suites), sorted(repro), sorted(unmapped)
+
+
+def changed_files(base=None, explicit=None):
+    """改动文件：显式列表优先，否则 `git diff <base>` + 未跟踪文件。"""
+    if explicit:
+        return [item for item in explicit.split() if item]
+    import subprocess
+
+    repo = _repo_root()
+    base = base or "HEAD"
+    files = []
+    result = subprocess.run(["git", "-C", repo, "diff", "--name-only", base],
+                            capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise PlanError(f"--changed 无法执行 git diff {base}：{result.stderr.strip()[:200]}")
+    files.extend(line.strip() for line in result.stdout.splitlines() if line.strip())
+    status = subprocess.run(["git", "-C", repo, "status", "--porcelain"],
+                            capture_output=True, text=True, check=False)
+    for line in status.stdout.splitlines():
+        if not line.strip():
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.split(" -> ", 1)[1]
+        files.append(path.strip('"'))
+    return sorted(set(files))
+
+
+def _validate_modules(suites_doc, by_name):
+    problems = []
+    for key, entry in (suites_doc.get("modules") or {}).items():
+        unknown = [name for name in (entry.get("suites") or []) if name not in by_name]
+        if unknown:
+            problems.append(f"{key}: 未知套件 {' '.join(unknown)}")
+    if problems:
+        raise PlanError("suites.json 的 modules 引用了不存在的套件：\n- " + "\n- ".join(problems))
 
 
 def _repro_candidate_groups(groups_doc, names):
@@ -136,24 +215,41 @@ def plan(argv=None, env=None):
     entries = suites_doc["suites"]
     by_name = {entry["name"]: entry for entry in entries}
 
+    _validate_modules(suites_doc, by_name)
+
     # ---- 模式 -------------------------------------------------------------
     mode = _explicit_mode(args)
     selected_env = (env.get("WF_SUITES") or "").split()
+    wanted_tags = _split_tags(args.tags) or _split_tags([env.get("WF_TAGS") or ""])
     if mode is None:
-        mode = "subset" if selected_env else "full"
-    if mode in ("full", "representative") and selected_env:
-        raise PlanError(
-            f"--{mode} 与 WF_SUITES 冲突：清空 WF_SUITES 或改用 --subset（当前 WF_SUITES={' '.join(selected_env)}）")
+        mode = "subset" if (selected_env or wanted_tags) else "full"
+    if mode in ("full", "representative"):
+        for label, values in (("WF_SUITES", selected_env), ("--tags/WF_TAGS", wanted_tags)):
+            if values:
+                raise PlanError(
+                    f"--{mode} 与 {label} 冲突：清空 {label} 或改用 --subset（当前 {' '.join(values)}）")
 
     # ---- 套件选择 ---------------------------------------------------------
     if mode == "subset":
-        if not selected_env:
-            raise PlanError("--subset 没有选择项：用 WF_SUITES='<suite> ...' 指定；可选："
+        if args.changed:
+            raise PlanError("--changed 只给建议，不自动执行：用 `--list --changed` 看建议后再显式选择")
+        if not selected_env and not wanted_tags:
+            raise PlanError("--subset 没有选择项：用 WF_SUITES='<suite> ...' 或 WF_TAGS='<tag> ...' 指定；可选套件："
                             + " ".join(entry["name"] for entry in entries))
         unknown = [name for name in selected_env if name not in by_name]
         if unknown:
             raise PlanError(f"未知套件：{' '.join(unknown)}；可选：" + " ".join(entry["name"] for entry in entries))
-        chosen = [by_name[name] for name in selected_env]
+        available_tags = sorted({tag for entry in entries for tag in entry.get("tags") or []})
+        unknown_tags = [tag for tag in wanted_tags if tag not in available_tags]
+        if unknown_tags:
+            raise PlanError(f"未知 tag：{' '.join(unknown_tags)}；可选：" + " ".join(available_tags))
+        chosen = list(entries) if not selected_env else [by_name[name] for name in selected_env]
+        if wanted_tags:
+            chosen = [entry for entry in chosen
+                      if set(wanted_tags) & set(entry.get("tags") or [])]
+        if not chosen:
+            raise PlanError("选择为空：WF_SUITES 与 tags 没有交集（"
+                            f"suites={' '.join(selected_env) or '-'} tags={' '.join(wanted_tags) or '-'}）")
     elif mode == "representative":
         chosen = [entry for entry in entries if entry.get("kind") == "suite" and entry.get("representative")]
         if not chosen:
@@ -162,6 +258,19 @@ def plan(argv=None, env=None):
         chosen = [entry for entry in entries if entry.get("kind") == "suite"]
         if not chosen:
             raise PlanError("suites.json 里没有 kind=suite 的套件")
+
+    # ---- 改动 → 建议（只建议，不执行）------------------------------------
+    suggestion = {"changed_files": [], "suggested_suites": [],
+                  "suggested_repro_groups": [], "unmapped_changes": []}
+    if args.changed or args.changed_files:
+        files = changed_files(args.changed_base, args.changed_files)
+        suites_hint, repro_hint, unmapped = map_changes(files, suites_doc.get("modules") or {})
+        suggestion = {"changed_files": files, "suggested_suites": suites_hint,
+                      "suggested_repro_groups": repro_hint, "unmapped_changes": unmapped}
+        if not args.list and not args.dry_run:
+            raise PlanError(
+                "--changed 只给建议，不自动执行：先 `--list --changed` 看建议，再显式用 "
+                "WF_SUITES=... / WF_TAGS=... 选择要跑的东西")
 
     # ---- 夹具部署来源 -----------------------------------------------------
     fixture_deploy = args.fixture_deploy or env.get("WF_FIXTURE_DEPLOY") or "dev"
@@ -321,11 +430,15 @@ def plan(argv=None, env=None):
         "no_build": 1 if args.no_build else 0,
         "list_only": 1 if list_only else 0,
         "candidate_smoke": 1 if candidate_smoke else 0,
+        "tags": wanted_tags,
+        **suggestion,
     }
 
 
 def describe(result):
     lines = [f"mode: {result['mode']}（full_mode={result['full_mode']}）"]
+    if result.get("tags"):
+        lines.append(f"tags: {' '.join(result['tags'])}")
     lines.append(f"suites({len(result['suites_all'])}): {' '.join(result['suites_all']) or '-'}")
     lines.append(f"flows: {' '.join(result['flows']) or '-'}")
     lines.append(f"extra: {' '.join(result['extra']) or '-'}")
@@ -342,6 +455,13 @@ def describe(result):
     lines.append(f"jobs: {result['jobs']}  results_dir: {result['results_dir']}")
     if result["candidate_smoke"]:
         lines.append("candidate_smoke: f1_candidate_smoke 兜底")
+    if result.get("changed_files") or result.get("suggested_suites") or result.get("unmapped_changes"):
+        lines.append(f"changed({len(result.get('changed_files') or [])}): "
+                     f"{' '.join(result.get('changed_files') or []) or '-'}")
+        lines.append("建议套件: " + (" ".join(result.get("suggested_suites") or []) or "（无映射）"))
+        lines.append("建议 repro 组: " + (" ".join(result.get("suggested_repro_groups") or []) or "（无映射）"))
+        if result.get("unmapped_changes"):
+            lines.append("未映射改动（需人工判断）: " + " ".join(result["unmapped_changes"]))
     units = len(result["suites_all"]) + len(result["flows"]) + len(result["extra"])
     suffix = " + repro" if result["repro_enabled"] else ""
     lines.append(f"计划执行单元: {units}{suffix}")
