@@ -6,8 +6,8 @@ The goal is to discover the project's real architecture before writing rules. Do
 
 1. Read the existing `.trellis/spec/` tree and note which files are templates, outdated, or already project-specific.
 2. Inspect package manifests, build scripts, workspace config, and top-level documentation to identify packages and runtime layers.
-3. Use GitNexus for execution flows, module clusters, dependency hubs, and impact-sensitive areas.
-4. Use ABCoder or language-native tooling for exact signatures, types, class boundaries, and implementation examples.
+3. Follow the host's retrieval policy to locate entry points, module boundaries, dependency hubs, and impact-sensitive areas.
+4. Use available language-native tooling and source inspection for exact signatures, types, class boundaries, and implementation examples.
 5. Read representative source and test files directly before turning any finding into a spec rule.
 
 ## What To Capture
@@ -22,31 +22,17 @@ The goal is to discover the project's real architecture before writing rules. Do
 | Configuration | Where do defaults, environment config, generated files, and templates live? |
 | Tests | Which test styles are trusted examples for new work? |
 
-## GitNexus Usage
+## Trace Flows From Source
 
-Start broad, then inspect specific symbols:
+Start from entry points named by package manifests, command registration, routes, or tests. Once a symbol or file is located, use exact searches and direct reads to follow imports, calls, validation, and state changes across files. Route unlocated code questions through the host's retrieval policy.
 
-```text
-gitnexus_query({query: "CLI command execution flow"})
-gitnexus_query({query: "template generation and migration"})
-gitnexus_context({name: "SymbolName"})
-gitnexus_cypher({query: "MATCH (n)-[r]->(m) RETURN n.name, type(r), m.name LIMIT 30"})
-```
+Record the files and symbols supporting each relationship, then check representative tests before making it a spec rule. Textual tracing does not prove exhaustive callers or runtime impact: note unresolved dynamic dispatch, dependency injection, or generated wiring when it matters.
 
-Use GitNexus results to find important files and flows. Do not quote graph output as the final authority until you have checked the relevant source files.
+## Inspect Exact Code Shapes
 
-## ABCoder Usage
+Use an already available compiler, language server, or static analyzer when exact signatures, types, class boundaries, or static references need confirmation. Verify its findings against the relevant source and tests.
 
-Use ABCoder when the spec needs exact code shapes:
-
-```text
-list_repos()
-get_repo_structure({repo_name: "package-name"})
-get_file_structure({repo_name: "package-name", file_path: "src/example.ts"})
-get_ast_node({repo_name: "package-name", node_ids: [{mod_path: "...", pkg_path: "...", name: "SymbolName"}]})
-```
-
-ABCoder is most valuable for documenting constructor patterns, function signatures, type contracts, and reference chains.
+If language tooling is unavailable, continue with direct source inspection and state the precision limit. Do not claim AST or graph guarantees from text matches, or require a new service or index before writing source-backed specs.
 
 ## Analysis Notes
 
