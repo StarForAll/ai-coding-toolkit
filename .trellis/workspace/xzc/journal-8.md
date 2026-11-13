@@ -1027,3 +1027,25 @@
 ### Next Steps
 
 - 人创建 wf-v0.1.1 tag 并按需推送
+
+
+## Session 405: wf 审查判定：主会话复核与旧口径清理
+<!-- trellis-session: v=2 fp=01291cd53617f305 -->
+
+**Date**: 2026-11-13
+**Task**: wf 审查判定：主会话复核与旧口径清理
+**Branch**: `main`
+
+### Summary
+
+reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并合并两源覆盖；read-scope/excluded-scope 矛盾机械检出；删除 scope-exceptions/material-gaps 消费；review-context 返回授权范围；归档自动释放写权、writer release 幂等、信封缓存按会话隔离；清除旧未交付/HEAD/generation 口径；设计稿 §1.1 分工按可计算性改写；713 单元 + 149 全量夹具 + 85/85 repro + 0.1.2 发行树校验全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `da1d9605` | fix(wf): 审查判定主会话复核与旧口径清理 |
+
+### Status
+
+[OK] **Completed**
