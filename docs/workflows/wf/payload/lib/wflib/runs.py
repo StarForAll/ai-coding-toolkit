@@ -1202,13 +1202,14 @@ def _advance_run_create(ctx, key, session, record, action, text, creation,
     }
     session_mod.save_binding(ctx.root, key, binding)
     cli._sync_attachment_instance(ctx, key, instance_id)
-    session_mod.write_runtime(ctx.root, key, {
-        "binding_digest": records.plain_digest(binding),
-        "instance_id": instance_id,
-        "object": {"kind": "run", "id": run_id},
-        "current_task": None,
-        "cursor": None,
-    })
+    session_mod.update_runtime(
+        ctx.root, key,
+        binding_digest=records.plain_digest(binding),
+        instance_id=instance_id,
+        object={"kind": "run", "id": run_id},
+        current_task=None,
+        cursor=None,
+    )
     # ③ 步骤后置逐个核（手工标 done 不能代替产物）
     action = dict(action)
     action["steps"] = [{"id": step, "state": "done"} for step in RUN_STEPS]
@@ -1671,13 +1672,16 @@ def advance(ctx, args):
                            ctx, "run.advance", writer_mod.owner_ref("session", key, scope),
                            action, [f"task:{task['id']}"])))
         records.write_json(run_path(ctx.root, run_id), run)
-        session_mod.write_runtime(ctx.root, key, {
-            "binding_digest": records.plain_digest(binding),
-            "instance_id": binding.get("instance_id"),
-            "object": {"kind": "run", "id": run_id},
-            "current_task": task["id"],
-            "cursor": run["cursor"],
-        })
+        # 合并写：游标变了不等于"整份侧车重建"，写权代次（`writer_generation`）由写权入口写入，
+        # 这里必须原样保留，否则下一步写操作取不到代次（dogfood 实录）。
+        session_mod.update_runtime(
+            ctx.root, key,
+            binding_digest=records.plain_digest(binding),
+            instance_id=binding.get("instance_id"),
+            object={"kind": "run", "id": run_id},
+            current_task=task["id"],
+            cursor=run["cursor"],
+        )
     stale = [step for step in ADVANCE_STEPS if not _advance_step_done(ctx, run_id, run, step)]
     if stale:
         raise DefinitionError("WF_PERSISTENCE_FAILED",
@@ -2030,13 +2034,11 @@ def _record_stop_request(ctx, run_id, plan_path, holder):
     from . import session as session_mod
 
     key = ctx.key()
-    runtime = session_mod.load_runtime(ctx.root, key) or {}
     request = {"run": run_id, "at": records.now_str(), "plan": plan_path,
                "session_key": key, "blocked_by": holder,
                "note": "只读接收：未执行任何项目写入；恢复写权后重入 run terminate 执行"}
-    merged = dict(runtime, stop_request=request)
-    written = session_mod.write_runtime(ctx.root, key, merged)
-    return dict(request, sidecar_written=bool(written),
+    merged = session_mod.update_runtime(ctx.root, key, stop_request=request)
+    return dict(request, sidecar_written=bool(merged),
                 sidecar=os.path.relpath(session_mod.runtime_path(ctx.root, key),
                                         str(ctx.root)).replace(os.sep, "/"))
 

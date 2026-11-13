@@ -150,11 +150,10 @@ def agent_from_path(path):
 def read_agent_status(path):
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            head = handle.read(400)
+            head = handle.read(STATUS_HEAD_CHARS)
     except OSError:
         return None
-    match = re.search(r"status=([a-z-]+)", head)
-    return match.group(1) if match else None
+    return report_status(head)
 
 
 # --------------------------------------------------------------------------
@@ -253,9 +252,10 @@ def slot_assignment(launch, imported, agents=()):
 
 
 def read_report(text):
-    """宽松解析：返回 `(payload, problems)`。结构坏了 payload 为 None；只是字段缺失则两者都有。
+    """宽松解析：返回 `(payload, problems)`。结构坏了 payload 为 None。
 
-    门禁用 `parse_report`（遇到第一个问题就拒），`lint report` 用本函数——两者同一份解析，
+    只管**结构**（协议标记、json 块、对象形状）；字段、状态头、范围与轴的一致性属于
+    "输入面"，由 `report_input_problems` 一处判定——导入、判定、`lint report` 共用，
     避免"容忍版"与"严格版"各写一遍（纪律 #4）。
     """
     if REPORT_MARKER not in text:
@@ -274,20 +274,104 @@ def read_report(text):
         return None, [{"reason": f"report json invalid: {exc}"}]
     if not isinstance(payload, dict):
         return None, [{"reason": "report payload must be an object"}]
-    problems = []
-    missing = [field for field in REPORT_FIELDS if field not in payload]
-    if missing:
-        problems.append({"reason": "report missing required fields", "missing_fields": missing})
-    if payload.get("protocol") != PROTOCOL:
-        problems.append({"reason": "unsupported protocol", "protocol": payload.get("protocol")})
-    return payload, problems
+    return payload, []
 
 
 def parse_report(text):
+    """结构解析（不是输入判定）：结构不成立即 `WF_REVIEW_INVALID`。
+
+    字段与范围是否成立由 `report_input_problems` 判定；调用方（导入、判定）按同一份
+    问题清单拒绝，不在这里再写一套字段要求。
+    """
     payload, problems = read_report(text)
     if problems:
         raise ReviewError("WF_REVIEW_INVALID", problems[0])
     return payload
+
+
+# 头部状态行只在**前 400 字符**内找：导入的自动发现只扫这一段，lint 必须与它同源，
+# 否则"状态行写在报告末尾"的报告会在 lint 处通过、在导入处静默跳过（dogfood 实录）。
+STATUS_HEAD_CHARS = 400
+STATUS_LINE = re.compile(r"<!-- wf-review-agent:v1 status=([a-z-]+) -->")
+
+
+def report_status(text):
+    """报告头部状态：`done` / `in-progress` / `None`（头部没有状态行）。"""
+    if not isinstance(text, str):
+        return None
+    match = STATUS_LINE.search(text[:STATUS_HEAD_CHARS])
+    return match.group(1) if match else None
+
+
+def report_input_problems(payload, *, task=None, text=None):
+    """报告**输入面**的唯一校验实现（`lint` / `import` / `decide` 共用）。
+
+    此前三处各写一套：`lint` 只核字段存在，导入核字段存在，判定核非空与敏感面——
+    结果是"lint 通过 → 导入成功 → 判定失败 → 另开一轮"（dogfood 的格式返工链）。
+    共享函数只覆盖输入面；锚点新鲜度、人数/异种、报告摘要一致性仍在导入与判定各自的
+    （也是唯一的）位置核。
+
+    返回 `{checks: {check_name: [problems]}, verdict, gaps, blocking}`：
+    - `checks` 供 lint 逐项展示；
+    - `verdict`/`gaps`/`blocking` 是 `derive_verdict` 的同一次结果，调用方不重复推导。
+    """
+    checks = {}
+
+    def add(name, problems):
+        # 通过项也登记：lint 要能回答"这次到底核了哪些面"，只列失败项会让"没核"和"核过"同形。
+        checks[name] = list(problems)
+
+    status = report_status(text) if text is not None else None
+    if text is not None:
+        add("status-head", [] if status == "done" else [{
+            "reason": ("report status header missing from the first "
+                       f"{STATUS_HEAD_CHARS} characters" if status is None
+                       else "report status is not done"),
+            "status": status,
+            "exits": ["把 `<!-- wf-review-agent:v1 status=done -->` 放在报告第一行后重新导入"],
+        }])
+
+    add("protocol", [] if payload.get("protocol") == PROTOCOL else [{
+        "reason": "unsupported protocol", "protocol": payload.get("protocol"),
+        "expected": PROTOCOL}])
+    missing = [field for field in REPORT_FIELDS if field not in payload]
+    add("required-fields", [{"reason": "missing field", "field": field} for field in missing])
+
+    if "read-scope" in payload:
+        add("read-scope", [] if payload.get("read-scope") else [{
+            "reason": "report read-scope is empty",
+            "exits": ["写清本次实际读取的路径/面（不能留空表示「读了一些」）"]}])
+    if "excluded-scope" in payload:
+        excluded = payload.get("excluded-scope")
+        gaps = exclusion_gaps(payload)
+        add("excluded-scope", ([] if excluded else [{"reason": "report excluded-scope is empty"}])
+            + ([{"reason": "excluded-scope does not cover sensitive surfaces", "missing": gaps}]
+               if excluded and gaps else []))
+
+    axes_value = payload.get("axes")
+    if isinstance(axes_value, dict):
+        verdict, axis_problems, gaps, blocking = derive_verdict(axes_value, payload.get("findings"))
+        add("axes-and-verdict", axis_problems)
+        if "verdict" in payload:
+            add("declared-verdict", [] if payload.get("verdict") == verdict else [{
+                "reason": "申报 verdict 与推导不一致",
+                "declared": payload.get("verdict"), "derived": verdict}])
+    else:
+        # 形状不成立时不再推导 verdict：对非对象取 items 会抛异常，也会让"申报不一致"变成噪声
+        verdict, gaps, blocking = None, [], []
+        add("axes-and-verdict", [{"reason": "axes must be an object"}])
+    return {"checks": checks, "verdict": verdict, "gaps": gaps, "blocking": blocking}
+
+
+def flatten_checks(checks):
+    """把 `report_input_problems` 的分组问题拉平，附上 `check` 名（导入/判定的事实面用）。"""
+    flat = []
+    for name, problems in checks.items():
+        for problem in problems or []:
+            item = dict(problem) if isinstance(problem, dict) else {"reason": str(problem)}
+            item.setdefault("check", name)
+            flat.append(item)
+    return flat
 
 
 # --------------------------------------------------------------------------
@@ -497,14 +581,15 @@ def lint_report(ctx, task, text):
     """报告的一次性全量预检（S3/C2，`wf lint report` 的唯一实现）。
 
     **不是门禁**：导入与判定仍是权威（锚点新鲜度、材料外发范围、人数/异种、报告正文摘要
-    只在那两处核）。这里只把"能一次查完的格式与引用问题"一次列全，避免 dogfood 里
-    四轮才把格式改对的返工（C2/C3）。
+    只在那两处核）。但**输入面**（状态头、必需字段、读取/排除范围、轴与 verdict 一致性）
+    与导入/判定共用 `report_input_problems`——同一份报告在两处的输入结论必须一致，
+    否则会重演"lint 通过 → 导入成功 → 判定失败 → 另开一轮"的协议返工。
     返回 `{ok, problems, checks, axes, verdict, gaps, deprecated_refs}`。
     """
     checks = []
     problems = []
 
-    def done(name, result, detail=None):
+    def done(name, result):
         checks.append({"check": name, "ok": not result, "problems": result})
         problems.extend(result)
 
@@ -513,21 +598,11 @@ def lint_report(ctx, task, text):
         return {"ok": False, "problems": structure_problems,
                 "checks": [{"check": "protocol", "ok": False, "problems": structure_problems}],
                 "axes": {}, "verdict": None, "gaps": [], "deprecated_refs": []}
-    done("protocol", structure_problems)
-    required = [field for field in REPORT_FIELDS if field not in payload]
-    done("required-fields", [{"reason": "missing field", "field": field} for field in required])
 
-    verdict = None
-    gaps = []
-    axis_problems = []
-    if isinstance(payload.get("axes"), dict):
-        verdict, axis_problems, gaps, _blocking = derive_verdict(payload.get("axes"), payload.get("findings"))
-        done("axes-and-verdict", axis_problems)
-        declared = payload.get("verdict")
-        done("declared-verdict", [] if declared == verdict else
-             [{"reason": "申报 verdict 与推导不一致", "declared": declared, "derived": verdict}])
-    else:
-        done("axes-and-verdict", [{"reason": "axes must be an object"}])
+    shared = report_input_problems(payload, task=task, text=text)
+    for name, items in shared["checks"].items():
+        done(name, items)
+    verdict, gaps = shared["verdict"], shared["gaps"]
 
     refs = []
     deprecated = []
@@ -575,11 +650,11 @@ def lint_report(ctx, task, text):
 def derive_verdict(axes, findings):
     """报告三态判定（S3 判定句，v42 B1）：`fail` 仅当存在 blocking finding。
 
-    返回 `(conclusion, problems, gaps)`：
-    - `conclusion` 取 `pass` / `fail`；
-    - `problems` 为"输入不成立"的事实（轴缺失/非法、`fail` 轴没有对应 blocking finding、
-      申报 verdict 与推导不一致）；
-    - `gaps` 为 `uncovered` 轴——它**不是** fail，而是"没把握"的缺口（走 4.8/4.9）。
+    返回 `(conclusion, problems, gaps, blocking)`：
+    - `conclusion` 取 `pass` / `fail`，只对**已覆盖**的轴成立；
+    - `problems` 为"输入不成立"的事实（轴缺失/非法、`fail` 轴没有对应 blocking finding）；
+    - `gaps` 为 `uncovered` 轴——它**不是** fail，也不构成审查通过；缺口处置见
+      `coverage_state` / `coverage_acceptance`（判定入口）与机制稿 §9.2。
     """
     conclusions = {}
     problems = []
@@ -609,6 +684,70 @@ def derive_verdict(axes, findings):
                          "exits": ["把该轴的问题写成 severity=blocking 的 finding（附 assertion_ref）",
                                    "或把该轴改成 uncovered 并按缺口处置"]})
     return ("fail" if (blocking or fail_axes) else "pass"), problems, gaps, blocking
+
+
+def coverage_state(axis_reports):
+    """本轮覆盖状态：轴是否被**任一份**报告真正覆盖。
+
+    `pass`/`fail` 都算覆盖（`fail` 是"看过并判不通过"）；`uncovered` 不算。
+    返回 `{covered, uncovered, all_uncovered}`：`all_uncovered` 表示这一轮没有任何轴被
+    真正审查过——那是输入不成立，不是"没发现缺陷"。
+    """
+    covered = set()
+    for axes in axis_reports:
+        if not isinstance(axes, dict):
+            # 形状不成立的报告由输入面校验拒绝；投影侧要能承受它，不能因 status/判定前置而抛栈
+            continue
+        for axis, result in axes.items():
+            if axis not in REVIEW_AXES:
+                continue
+            if _axis_conclusion(result) in ("pass", "fail"):
+                covered.add(axis)
+    uncovered = [axis for axis in REVIEW_AXES if axis not in covered]
+    return {"covered": sorted(covered), "uncovered": uncovered,
+            "all_uncovered": not covered}
+
+
+GAP_ACCEPTANCE_DOMAIN = "wf-gap-acceptance-v1"
+
+
+def gap_acceptance(decision, uncovered, round_no):
+    """人接受覆盖缺口的唯一校验点：`(record, problems)`。
+
+    形状与 `attestation` 同源（`by/at/quote/source`，AI 自述不被接受），另要求
+    `round` 精确等于本轮、`axes` 精确等于未覆盖集合——接受"哪些轴没看"是事实，
+    不能顺带把别的轴也算作已被接受。
+    """
+    from . import attestation as attestation_mod
+
+    if decision is None:
+        return None, []
+    problems = list(attestation_mod.problems_of(decision, action="review.gap-acceptance"))
+    axes = decision.get("axes")
+    if not isinstance(axes, list) or not all(isinstance(item, str) for item in axes):
+        problems.append({"reason": "gap acceptance requires an axes list",
+                         "uncovered": list(uncovered)})
+    elif sorted(set(axes)) != sorted(uncovered):
+        problems.append({"reason": "accepted axes do not match the uncovered axes",
+                         "accepted": sorted(set(axes)), "uncovered": sorted(uncovered)})
+    try:
+        accepted_round = int(decision.get("round"))
+    except (TypeError, ValueError):
+        accepted_round = None
+    if accepted_round != int(round_no):
+        problems.append({"reason": "gap acceptance round does not match this round",
+                         "accepted_round": decision.get("round"), "round": int(round_no)})
+    if problems:
+        return None, problems
+    digest = records.H(GAP_ACCEPTANCE_DOMAIN, {"by": decision.get("by"), "at": decision.get("at"),
+                                               "quote": decision.get("quote"),
+                                               "source": decision.get("source"),
+                                               "round": int(round_no),
+                                               "axes": sorted(uncovered)})
+    return {"round": int(round_no), "axes": sorted(uncovered),
+            "by": decision.get("by"), "at": decision.get("at"),
+            "quote": decision.get("quote"), "source": decision.get("source"),
+            "attestation_digest": digest}, []
 
 
 def status_of_round(ctx, task, round_no=None):
@@ -694,6 +833,18 @@ def status_of_round(ctx, task, round_no=None):
     reviewers = sorted({normalize_agent(item.get("agent") or item.get("slot"))
                         for item in imported if item.get("slot")})
     implementation = {review_cli((launch or {}).get("implementation_cli"))} - {None}
+    # 覆盖状态与缺口接受（与 review-decide 同一实现）：状态页要能回答"还差哪几轴/谁接受了缺口"
+    axes_reports = []
+    for entry in imported:
+        payload, cause, _reason = read_imported_report(ctx, entry)
+        if cause is None:
+            axes_reports.append((payload or {}).get("axes") or {})
+    coverage = coverage_state(axes_reports)
+    accepted_axes = sorted({axis
+                            for item in ((task.get("reviews") or {}).get("coverage_acceptances") or [])
+                            if isinstance(item, dict) and int(item.get("round") or 0) == round_no
+                            for axis in item.get("axes") or []})
+    coverage["accepted"] = accepted_axes
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
@@ -701,6 +852,7 @@ def status_of_round(ctx, task, round_no=None):
             "eligibility": review_eligibility(reviewers, implementation,
                                              imported_count=len(imported),
                                              declared_slots=len(declared)),
+            "coverage": coverage,
             "slots": slots, "anchor_current": anchor}
 
 
@@ -972,12 +1124,55 @@ def _current_anchor(ctx, task):
     return anchor, parts
 
 
-def launch(ctx, task, request_path, implementation_cli=None):
+DEFAULT_EXCLUSIONS = (".env", "id_rsa", ".npmrc", ".netrc", "secrets.json",
+                      ".codex/config.toml", "config.local.json", "../**", ".wf/tasks/**")
+
+
+def default_launch_request(ctx, task, implementation_cli=None):
+    """按当前对象生成发起请求（材料三类、只读范围、排除面都由入口算）。
+
+    `submitted_scope` 是"要外发什么"的声明，内容仍由 `review-context` 物化到暂存目录；
+    这里给的是三类材料的**来源与摘要**，不是第二份材料本体。
+    """
+    from . import scope as scope_mod
+    from . import tasks as tasks_mod
+
+    delivery = scope_mod.delivery_set(ctx.root, task)
+    touch_paths = tasks_mod.approved_touch_paths(task)
+    business = sorted(path for path in touch_paths if not str(path).startswith(".wf/"))
+    curation = [entry.get("path") for entry in task.get("curation") or []
+                if isinstance(entry, dict) and entry.get("path") and not entry.get("released")]
+    directory = tasks_mod.task_dir(ctx.root, task.get("id")) or ""
+    relative_dir = os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/") if directory else ""
+    prd_path = f"{relative_dir}/prd.md" if relative_dir else "prd.md"
+    check = task.get("check") or {}
+    commands = [{"verification_id": item.get("verification_id"), "status": item.get("status")}
+                for item in check.get("commands") or [] if isinstance(item, dict)]
+    return {
+        "implementation_clis": [implementation_cli] if implementation_cli else [],
+        "slots": [{"slot": "s1"}, {"slot": "s2"}],
+        "submitted_scope": {
+            "diff": {"source": "delivery_set", "diff_base": task.get("baseline_head"),
+                     "paths": sorted(delivery["paths"])},
+            "requirement": prd_path,
+            "test_results": {"check": check.get("id"), "commands": commands},
+        },
+        "readable_scope": {"business_code": business, "spec": sorted(curation), "prd": prd_path},
+        "exclusions": list(DEFAULT_EXCLUSIONS),
+    }
+
+
+def launch(ctx, task, request_path=None, implementation_cli=None):
     from . import cli, lock
 
-    request = records.load_json(request_path)
-    if not isinstance(request, dict):
-        raise ReviewError("WF_PATH_INVALID", {"reason": "launch request missing or not an object"})
+    if request_path:
+        request = records.load_json(request_path)
+        if not isinstance(request, dict):
+            raise ReviewError("WF_PATH_INVALID", {"reason": "launch request missing or not an object"})
+    else:
+        # 固定流转程序化（设计稿 §1.1）：材料三类、只读范围、排除面都是可机械得到的，
+        # 不再要求模型手写 JSON；`--launch-request` 仍可用于覆盖/补充。
+        request = default_launch_request(ctx, task, implementation_cli)
     # Check 的读取与核验移入锁内（见下）：锁外读到的 check 可能在排队期间被替换
     # （第十四轮复审 F14-3）。这里只做一次粗检，锁内会以重读记录为准。
     from_request = request.get("implementation_clis") or []
@@ -1013,19 +1208,13 @@ def launch(ctx, task, request_path, implementation_cli=None):
         if declared_cli and declared_cli in implementation:
             raise ReviewError("WF_REVIEW_INVALID", {"reason": "reviewer CLI must differ from implementation CLIs",
                                                     "slot": slot})
-    export_decision = request.get("export_decision")
-    if not export_decision:
-        raise ReviewError("WF_REVIEW_INVALID", {"reason": "export authorization decision required"})
-    # K6 第 3 类：材料离开本机属不可逆动作——**声明不等于确认**，要有对应动作的确认入库
     from . import authorize as authorize_mod
 
-    if authorize_mod.require(_task_dir(ctx, task), "export") is None:
-        raise ReviewError("WF_COMMIT_NOT_AUTHORIZED",
-                          {"missing_action": "export",
-                           "reason": "本次审查要把材料外发，但缺外发动作的确认（K6 第 3 类）",
-                           "exits": ["人执行 `wf authorize record --task <id> --file <决定.json>`，"
-                                     "文件里写一条 choice=export 的确认（范围 + 人 + quote）后重跑",
-                                     "改用不外发的审阅方式（例如同机只读审阅）"]})
+    export_decision = request.get("export_decision")
+    if not export_decision:
+        # 权威来源是**入库的外发确认**（绑定任务 + 材料类）；请求里的这个字段只是留痕标签。
+        recorded = authorize_mod.require(_task_dir(ctx, task), "export") or {}
+        export_decision = recorded.get("original_digest") or "recorded-authorization"
     submitted = request.get("submitted_scope") or {}
     slots_material = (("diff",), ("requirement", "requirements"), ("test_results", "tests"))
     missing_material = [names[0] for names in slots_material
@@ -1035,6 +1224,19 @@ def launch(ctx, task, request_path, implementation_cli=None):
         raise ReviewError("WF_REVIEW_INVALID",
                           {"reason": "submitted_scope lacks required material",
                            "missing": missing_material, "submitted": sorted(submitted)})
+    # K6 第 3 类：材料离开本机属不可逆动作——**声明不等于确认**，且确认必须覆盖**本次范围**
+    # （任务 + 材料类集合）；只核"曾经有过外发确认"会让旧授权复用到新增材料或另一个任务。
+    materials = sorted({names[0] for names in slots_material
+                        if any(submitted.get(name) for name in names)})
+    export_problems = authorize_mod.export_scope_problems(_task_dir(ctx, task), task.get("id"),
+                                                          materials)
+    if export_problems:
+        raise ReviewError("WF_COMMIT_NOT_AUTHORIZED",
+                          {"missing_action": "export",
+                           "materials": materials,
+                           "problems": export_problems,
+                           "exits": [item for problem in export_problems
+                                     for item in problem.get("exits") or []]})
     with lock.acquire(ctx.root, holder_hint="review-launch"):
         _record, holder = ctx.require_held(task=task.get("id"))
         path = _task_dir(ctx, task)
@@ -1170,17 +1372,21 @@ def _path_status(root, path):
     return "  ", None
 
 
-def materialize_delivery(root, paths):
+def materialize_delivery(root, paths, *, base=None):
     """按 git 状态逐路径生成材料片段（审查材料与人工复核共用的唯一实现）。
 
     - 未跟踪新文件：`git diff --no-index /dev/null <path>`（普通 `diff HEAD` 对未跟踪文件
       输出 0 字节——这是 dogfood 第 1–4 轮 reviewer「看不到新文件」的原题）；
-    - 已跟踪（含已暂存 + 未暂存）：`git diff HEAD -- <path>`；
-    - 删除：同一个 HEAD 对比给出删除 hunk；已随提交删除的路径没有未提交片段，单独标注；
+    - 已跟踪（含已暂存 + 未暂存 + **任务中途已提交**）：`git diff <base> -- <path>`，
+      `base` 取任务基线提交——只比 `HEAD` 会让"中途提交之后再接续"的任务材料退化成
+      "no textual change"，审查者看不到本任务实际交付了什么；
+    - 删除：同一个基线对比给出删除 hunk；随提交删除的路径同样出现在片段里；
     - 二进制：只给可见标记（路径 + 字节 + 摘要），不内联；
-    - 取片段失败：进 `problems` 并在正文留下 `[wf-material-missing]`，绝不静默成"无差异"。
+    - 取片段失败：进 `problems` 并在正文留下 `[wf-material-missing]`，绝不静默成"无差异"；
+    - 基线不可用（缺失/不可达）：如实进 `problems` 并退回 `HEAD`，同时在正文标注。
     """
     files, problems, chunks = [], [], []
+    diff_base, base_problem = _resolve_diff_base(root, base)
     for path in list(paths or []):
         absolute = join(root, path)
         exists = os.path.exists(absolute)
@@ -1198,7 +1404,7 @@ def materialize_delivery(root, paths):
                                                "/dev/null", path])
         else:
             kind = "deleted" if not exists else "modified"
-            text, problem = _git_capture(root, ["diff", "--no-color", "HEAD", "--", path])
+            text, problem = _git_capture(root, ["diff", "--no-color", diff_base, "--", path])
         if problem:
             problems.append({"path": path, "reason": problem})
             chunks.append(f"{MATERIAL_MISSING} {path}: {problem}")
@@ -1214,9 +1420,9 @@ def materialize_delivery(root, paths):
             if untracked and exists:
                 note = "new empty file (0 bytes of content)"
             elif not exists:
-                note = "deleted in a commit (no uncommitted fragment)"
+                note = f"deleted at or after the task baseline ({diff_base[:12]})"
             else:
-                note = "no textual change (metadata-only?)"
+                note = f"no change between the task baseline ({diff_base[:12]}) and the worktree"
         chunks.append(f"# ==== {kind} {path} ====")
         if body:
             chunks.append(body)
@@ -1225,7 +1431,24 @@ def materialize_delivery(root, paths):
         entry.update(generated=bool(body), kind=kind, bytes=len(body), note=note)
         files.append(entry)
     return {"text": "\n".join(chunks).strip(), "files": files,
-            "problems": problems, "empty": not list(paths or [])}
+            "problems": problems, "empty": not list(paths or []),
+            "diff_base": diff_base, "diff_base_problem": base_problem}
+
+
+def _resolve_diff_base(root, base):
+    """材料差异源：任务基线优先；不可用时退回 `HEAD` 并**如实**给出原因。"""
+    candidate = str(base or "").strip()
+    if candidate:
+        _text, problem = _git_capture(root, ["rev-parse", "--verify", f"{candidate}^{{commit}}"])
+        if not problem:
+            return candidate, None
+        reason = f"task baseline is not a reachable commit ({candidate}): {problem}"
+    else:
+        reason = "task baseline commit is not recorded"
+    head, problem = _git_capture(root, ["rev-parse", "--verify", "HEAD^{commit}"])
+    if problem:
+        return "HEAD", reason + "; HEAD also unavailable"
+    return "HEAD", reason + "; falling back to HEAD"
 
 
 
@@ -1240,7 +1463,7 @@ def write_materials(ctx, task, round_no, anchor, materials_dir):
     from . import tasks as tasks_mod
 
     delivery = scope_mod.delivery_set(ctx.root, task)
-    material = materialize_delivery(ctx.root, delivery["paths"])
+    material = materialize_delivery(ctx.root, delivery["paths"], base=task.get("baseline_head"))
     if material["empty"]:
         diff_text = MATERIAL_EMPTY
     elif material["text"]:
@@ -1252,6 +1475,8 @@ def write_materials(ctx, task, round_no, anchor, materials_dir):
     records.write_json(os.path.join(materials_dir, "status.json"),
                        {"paths": delivery["paths"], "files": material["files"],
                         "problems": material["problems"], "empty": material["empty"],
+                        "diff_base": material.get("diff_base"),
+                        "diff_base_problem": material.get("diff_base_problem"),
                         "buckets": {key: delivery["buckets"][key]
                                     for key in ("e", "f", "covered_f", "uncovered_f")}})
     prd_text = tasks_mod.read_prd(ctx.root, task) if hasattr(tasks_mod, "read_prd") else ""
@@ -1262,7 +1487,9 @@ def write_materials(ctx, task, round_no, anchor, materials_dir):
     records.write_json(os.path.join(materials_dir, "tests.json"), {"commands": commands})
     return {"material_paths": len(delivery["paths"]),
             "material_problems": material["problems"][:5],
-            "material_problem_count": len(material["problems"])}
+            "material_problem_count": len(material["problems"]),
+            "diff_base": material.get("diff_base"),
+            "diff_base_problem": material.get("diff_base_problem")}
 
 
 def context(ctx, task, round_no=None, reset=False, as_value=None):
@@ -1464,6 +1691,15 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
     # 身份优先看文件名；正文写了就要一致（2026-11-07：正文不再要求该字段）
     if payload.get("reviewer-id") and normalize_agent(payload.get("reviewer-id")) != identity:
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "reviewer-id mismatch", "report": payload.get("reviewer-id")})
+    # 输入面（字段、状态头、读取/排除范围、轴与 verdict 一致性）与 lint、判定同一实现；
+    # 在取锁前完成，保证"报告不合格"不会被锁内更早的锚点问题遮住。
+    input_problems = flatten_checks(report_input_problems(payload, task=task, text=text)["checks"])
+    if input_problems:
+        raise ReviewError("WF_REVIEW_INVALID",
+                          {"reason": "report input does not satisfy the protocol",
+                           "problems": input_problems,
+                           "exits": ["按问题清单修正报告后重新导入（lint report 与导入共用同一校验）",
+                                     "状态行必须在报告首行且为 status=done"]})
     from . import lock
 
     with lock.acquire(ctx.root, holder_hint="review-import"):
@@ -1510,12 +1746,6 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                     "declared": [name for name, _cli in declared_slots(launch)],
                     "imported": [item.get("slot") for item in round_imported],
                     "exits": ["按已声明的槽位数减少本轮报告，或用 review-launch 重新发起足够槽位的轮次"]})
-        # 导入端先做字段完备性核验（机制稿 §9.2「先读完整报告并核元数据，再导入」）：
-        # 缺 excluded-scope 之类的报告不再"导入成功、判定才拒"（第十一轮复审外部项）。
-        _missing = [key for key in ("protocol", "task-id", "round",
-                                    "review-time", "check-anchor", "read-scope",
-                                    "excluded-scope", "axes", "verdict")
-                    if key not in payload]
         # 身份由文件名承载（仅发现模式）：正文若仍写 source-cli / reviewer-id 必须与文件名一致
         for field in (("source-cli", "reviewer-id") if discovered else ()):
             if payload.get(field) and normalize_agent(payload.get(field)) != identity:
@@ -1523,10 +1753,6 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                   {"reason": f"report {field} differs from its file name",
                                    "field": field, "report": payload.get(field),
                                    "file_agent": identity, "slot": record_slot})
-        if _missing:
-            raise ReviewError("WF_REVIEW_INVALID",
-                              {"reason": "report missing required fields", "missing": _missing,
-                               "slot": record_slot})
         # 引用必须属于当前批准集合；本任务内改过的规则不得当判据（机制稿 §9.2、K3c）
         index, changed = assertion_index(ctx, task)
         deprecated_refs = deprecated_clause_refs(ctx, task)
@@ -1698,6 +1924,7 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
     （`report_invalid` / `anchor_stale`），供 `launches[].blocked` 直接呈现。
     """
     problems, failures, gaps_out, source_clis, blockers = [], [], [], [], []
+    report_axes = {}
     declared_slots = {slot.get("slot"): slot.get("reviewer_cli")
                       for slot in (launch or {}).get("slots") or []
                       if isinstance(slot, dict) and slot.get("slot")}
@@ -1752,50 +1979,33 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
             problems.append({"slot": entry.get("slot"), "reason": "report source-cli not declared for slot",
                              "source_cli": payload.get("source-cli"), "declared": declared_cli})
             blockers.append("report_invalid")
-        for field in ("read-scope", "excluded-scope"):
-            if not payload.get(field):
-                problems.append({"slot": entry.get("slot"), "reason": f"report lacks {field}"})
-                blockers.append("report_invalid")
-        gaps = exclusion_gaps(payload)
-        if gaps:
-            problems.append({"slot": entry.get("slot"),
-                             "reason": "excluded-scope does not cover sensitive surfaces",
-                             "missing": gaps})
+        # 输入面走**共享实现**（与 lint / import 同源）：同一份报告在三处的输入结论一致。
+        # 状态头不在判定处重核——它是"导入时是否已完成"的事实，已在导入那一刻定案，
+        # 判定侧重读同一份已导入文件不会产生新信息。
+        shared = report_input_problems(payload, task=task)
+        for problem in flatten_checks(shared["checks"]):
+            problems.append(dict(problem, slot=entry.get("slot")))
             blockers.append("report_invalid")
+        report_axes[entry.get("slot")] = payload.get("axes") or {}
         # v42 B1：报告声明过的"未覆盖项"不再一义三用（既不判 fail 也不再是必填字段），
         # 统一按**缺口**呈现；三态结论由 axes 的 uncovered 承载。
         for item in payload.get("scope-exceptions") or []:
             gaps_out.append({"slot": entry.get("slot"),
                              "reason": "报告声明的未覆盖项（按缺口处置，不判 fail）",
                              "exception": item})
-        axes = payload.get("axes") or {}
-        if not isinstance(axes, dict):
-            problems.append({"slot": entry.get("slot"), "reason": "report axes must be an object"})
-            blockers.append("report_invalid")
-            axes = {}
-        # S3 判定句（v42 B1）：fail 仅当存在 blocking finding；uncovered 产缺口不产缺陷；
-        # 申报的 verdict 必须与推导一致，否则属输入不成立（不写结论、不改阶段）。
-        derived, axis_problems, gaps, blocking = derive_verdict(axes, payload.get("findings"))
-        for problem in axis_problems:
-            problems.append(dict(problem, slot=entry.get("slot")))
-            blockers.append("report_invalid")
+        gaps, blocking = shared["gaps"], shared["blocking"]
         for gap in gaps:
             gaps_out.append(dict(gap, slot=entry.get("slot")))
         need = payload.get("material-gaps") or payload.get("missing-materials")
         if need:
             failures.append({"slot": entry.get("slot"), "reason": "report declares required material gaps",
                              "gaps": need})
-        declared = payload.get("verdict")
-        if declared != derived:
-            problems.append({"slot": entry.get("slot"), "reason": "申报 verdict 与推导不一致",
-                             "declared": declared, "derived": derived,
-                             "blocking_findings": [item.get("id") for item in blocking]})
-            blockers.append("report_invalid")
         if blocking:
             failures.append({"slot": entry.get("slot"), "reason": "report carries blocking findings",
                              "findings": blocking})
     return {"problems": problems, "failures": failures, "gaps_out": gaps_out,
-            "source_clis": source_clis, "blockers": sorted(set(blockers))}
+            "source_clis": source_clis, "blockers": sorted(set(blockers)),
+            "report_axes": report_axes}
 
 
 def review_eligibility(distinct, implementation, *, imported_count, declared_slots):
@@ -2241,13 +2451,22 @@ def _accept_result(task, facts, kept, assertion):
         facts=dict(facts, unknown_acceptances=active, control_assertion=assertion))
 
 
-def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False):
+def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False,
+           gap_acceptance_path=None):
     """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。
 
     `register_only=True`（A8）：**只登记复核关闭**，不产生结论——不推导 verdict、不写
     `result` / `rounds[]` / `attempts`，因此不需要凑齐人数/异种资格。关闭本身的硬条件照旧：
     结构、`recheck_by` 不得自证、finding 必须属已导入报告（A9 的精确身份）。
+
+    `gap_acceptance_path`：人接受覆盖缺口的确认文件（`by/at/quote/source` + `round` + `axes`）。
+    未覆盖的轴不构成审查通过，也不构成缺陷；没有这份确认时本命令输出需人裁决档。
     """
+    if gap_acceptance_path and (register_only or unavailable_path):
+        raise ReviewError("WF_SEMANTIC_DECISION", {
+            "reason": "缺口接受文件只对产生判定的那次 review-decide 有效",
+            "exits": ["去掉 --gap-acceptance 只做登记/不可用声明",
+                      "需要判定时单独跑一次 review-decide（带 --gap-acceptance）"]})
     if register_only and unavailable_path:
         raise ReviewError("WF_SEMANTIC_DECISION",
                           {"reason": "--register-only 只登记关闭，不能同时声明审查不可用"})
@@ -2283,6 +2502,13 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         unavailable = records.load_json(unavailable_path)
         if not isinstance(unavailable, dict) or not unavailable.get("evidence"):
             raise ReviewError("WF_SEMANTIC_DECISION", {"reason": "unavailable declaration requires evidence"})
+    gap_decision = None
+    if gap_acceptance_path:
+        gap_decision = records.load_json(gap_acceptance_path)
+        if not isinstance(gap_decision, dict):
+            raise ReviewError("WF_PATH_INVALID",
+                              {"reason": "gap acceptance file missing or not an object",
+                               "path": gap_acceptance_path})
     with lock.acquire(ctx.root, holder_hint="review-decide"):
         _record, holder = ctx.require_held(task=task.get("id"))
         path = _task_dir(ctx, task)
@@ -2347,7 +2573,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
         # A7：提出者从**全部历史报告重解析**取（导入记录不存 findings），跨轮有效
         proposers = proposers_from_history(ctx, task)   # (round, slot, finding_id) → 提出者
-        gaps_out = []       # uncovered 轴形成的缺口（走 4.8/4.9，不进 failures）
+        gaps_out = []       # uncovered 轴形成的缺口（按缺口处置，不进 failures）
         if unavailable:
             verdict = "unavailable"
             facts = {"unavailable": unavailable}
@@ -2429,6 +2655,45 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                 })
             verdict = "pass"
             facts = {"reviewer_clis": distinct}
+            # 覆盖判定（2026-11-12）：`uncovered` 不是缺陷，也不是审查通过。
+            # 全部轴未覆盖 = 输入不成立；部分未覆盖 = 需人接受缺口（`--gap-acceptance`）。
+            coverage = coverage_state(report_facts.get("report_axes", {}).values())
+            coverage_facts = {"covered": coverage["covered"], "uncovered": coverage["uncovered"]}
+            if coverage["all_uncovered"]:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "本轮没有任何审查轴被真正覆盖：这不构成审查结论",
+                    "covered": coverage["covered"], "uncovered": coverage["uncovered"],
+                    "report_axes": report_facts.get("report_axes") or {},
+                    "exits": ["补齐各轴结论（pass/fail 附带依据）后重发一轮",
+                              "审查环境确实不足时按设计稿 §6.5 的不可用处置留痕（不得据此判 pass）"],
+                })
+            if coverage["uncovered"]:
+                acceptance, gap_problems = gap_acceptance(gap_decision, coverage["uncovered"], round_no)
+                if gap_problems:
+                    raise ReviewError("WF_REVIEW_INVALID", {
+                        "problems": gap_problems,
+                        "uncovered": coverage["uncovered"],
+                        "exits": ["把接受文件写成 {by, at, quote, source, round, axes}，"
+                                  "axes 必须等于本轮未覆盖集合后重跑 review-decide"],
+                    })
+                if acceptance is None:
+                    raise ReviewError("WF_SEMANTIC_DECISION", {
+                        "reason": "本轮存在未覆盖的审查轴：缺口不判 fail，但也不能当作审查通过",
+                        "covered": coverage["covered"], "uncovered": coverage["uncovered"],
+                        "exits": ["补齐未覆盖轴后重发一轮（推荐）",
+                                  "人确认接受该覆盖缺口：写接受文件（by/at/quote/source + round + axes）"
+                                  "后用 --gap-acceptance 重跑 review-decide"],
+                    })
+                reviews["coverage_acceptances"] = list(reviews.get("coverage_acceptances") or []) + [acceptance]
+                coverage_facts["acceptance"] = acceptance
+            elif gap_decision is not None:
+                raise ReviewError("WF_SEMANTIC_DECISION", {
+                    "reason": "本轮没有未覆盖轴，但提供了缺口接受文件：不接受与本轮无关的确认",
+                    "accepted_round": gap_decision.get("round"),
+                    "accepted_axes": gap_decision.get("axes"),
+                    "exits": ["去掉 --gap-acceptance 重跑", "确认该确认对应的是哪一轮后重新提交"],
+                })
+            facts["coverage"] = coverage_facts
             if gaps_out:
                 facts["gaps"] = gaps_out
             reasons = []

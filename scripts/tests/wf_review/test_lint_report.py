@@ -15,10 +15,12 @@ sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 from wflib import review  # noqa: E402
 
 MARKER = review.REPORT_MARKER
+COVERED = ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"]
 
 
-def render(payload):
-    return f"{MARKER}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```\n"
+def render(payload, status="done"):
+    head = f"<!-- wf-review-agent:v1 status={status} -->\n" if status is not None else ""
+    return f"{head}{MARKER}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```\n"
 
 
 AXES = {"range": "pass", "acceptance": "pass", "contract": "pass",
@@ -30,7 +32,8 @@ def report(**overrides):
                "review-time": "2026-11-09T00:00:00Z",
                "review-focus": "范围、验收、契约、回归、可测性",
                "check-anchor": {"check_id": "c1", "check_anchor": "sha256:x"},
-               "read-scope": [], "excluded-scope": [], "scope-exceptions": [], "axes": dict(AXES),
+               "read-scope": ["pkg/**"], "excluded-scope": list(COVERED),
+               "scope-exceptions": [], "axes": dict(AXES),
                "findings": [], "verdict": "pass"}
     payload.update(overrides)
     return payload
@@ -75,6 +78,31 @@ class LintReportTest(unittest.TestCase):
         facts = review.lint_report(None, None, render(payload))
         self.assertTrue(facts["ok"], facts["problems"])
         self.assertEqual([item["axis"] for item in facts["gaps"]], ["acceptance"])
+
+    def test_input_surface_matches_the_importer(self):
+        """lint 与导入/判定同一套输入校验：空读范围/窄排除面/状态行位置都由共享实现报出。"""
+        cases = {
+            "read-scope": report(**{"read-scope": []}),
+            "excluded-scope": report(**{"excluded-scope": ["node_modules/**"]}),
+        }
+        for check, payload in cases.items():
+            facts = review.lint_report(None, None, render(payload))
+            self.assertFalse(facts["ok"], check)
+            names = {item["check"] for item in facts["checks"] if not item["ok"]}
+            self.assertIn(check, names)
+
+    def test_status_head_is_checked_where_the_importer_looks(self):
+        missing = review.lint_report(None, None, render(report(), status=None))
+        self.assertFalse(missing["ok"])
+        self.assertIn("status-head", {item["check"] for item in missing["checks"] if not item["ok"]})
+        tail = (f"{review.REPORT_MARKER}\n\n```json\n{json.dumps(report(), ensure_ascii=False)}\n```\n"
+                "<!-- wf-review-agent:v1 status=done -->\n")
+        facts = review.lint_report(None, None, tail)
+        self.assertFalse(facts["ok"], "状态行在末尾时导入扫不到，lint 不能放行")
+        not_done = review.lint_report(None, None, render(report(), status="in-progress"))
+        self.assertFalse(not_done["ok"])
+        reasons = json.dumps(not_done["problems"], ensure_ascii=False)
+        self.assertIn("not done", reasons)
 
 
 if __name__ == "__main__":

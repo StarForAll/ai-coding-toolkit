@@ -17,7 +17,8 @@ if not os.path.exists(EXTERNAL_ACK):
                 "choice": "已核对无影响", "reason": "夹具提交均为本任务改动"}],
               open(EXTERNAL_ACK, "w"), ensure_ascii=False)
 AT = "2026-11-04T09:00:00.000000Z"
-REPORT = "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n"
+REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
+          "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
 AXES = ("range", "acceptance", "contract", "regression", "testability")
 NOTES = "/tmp/r75_notes.json"
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
@@ -92,7 +93,7 @@ anchor = (check.get("anchor") or {}).get("check_anchor")
 def launch(slots):
     # K6 第 3 类：材料外发要有对应的确认入库（只在请求里写 export_decision 不够）
     _auth = "/tmp/r75_export.json"
-    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
+    json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
               open(_auth, "w"), ensure_ascii=False)

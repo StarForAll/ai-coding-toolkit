@@ -36,10 +36,11 @@ def write_report(root, relative, findings=()):
             "review-time": "2026-11-11T00:00:00.000000Z", "review-focus": "x",
             "check-anchor": {"check_id": "c1", "check_anchor": ANCHOR},
             "read-scope": ["pkg/**"],
-            "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**"],
+            "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"],
             "scope-exceptions": [], "axes": {name: "pass" for name in review.REVIEW_AXES},
             "findings": list(findings), "verdict": "pass"}
-    path.write_text(review.REPORT_MARKER + "\n\n```json\n"
+    path.write_text("<!-- wf-review-agent:v1 status=done -->\n" + review.REPORT_MARKER
+                    + "\n\n```json\n"
                     + json.dumps(body, ensure_ascii=False) + "\n```\n", encoding="utf-8")
     return relative, records.file_digest(path)
 

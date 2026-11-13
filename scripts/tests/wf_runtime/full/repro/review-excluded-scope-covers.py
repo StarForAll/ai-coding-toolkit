@@ -34,7 +34,7 @@ def import_report(project, root, task_id, round_no, slot, staging, excluded, tag
                      for name in ("range", "acceptance", "contract", "regression", "testability")},
             "findings": [], "verdict": "pass"}
     open(report, "w", encoding="utf-8").write(
-        "<!-- wf-review-report:v1 -->\n```json\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
+        "<!-- wf-review-agent:v1 status=done -->\n<!-- wf-review-report:v1 -->\n```json\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
     return report
 
 
@@ -54,28 +54,40 @@ def check():
     anchor = facts.get("anchor") or {}
     problems = []
 
-    # ① 窄排除（只写 node_modules）→ 缺覆盖，必须拒绝
-    for slot, path in zip(("s1", "s2"), staging):
-        os.makedirs(path, exist_ok=True)
-        report = import_report(project, root, task_id, round_no, slot, path, NARROW, "narrow")
+    def write_and_import(slot, path, excluded, tag):
+        report = import_report(project, root, task_id, round_no, slot, path, excluded, tag)
         body = json.loads(open(report, encoding="utf-8").read().split("```json")[1].split("```")[0])
         body["check-anchor"] = anchor
         open(report, "w", encoding="utf-8").write(
-            "<!-- wf-review-report:v1 -->\n```json\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
-        rc, payload = H.cli(project, ["review-import", "--task", task_id, "--round", str(round_no),
-                                      "--slot", slot, "--report", report, "--json"], sid=SID,
-                            inputs={"generation": H.generation(project)})
-        if rc != 0:
-            raise H.Precondition(f"导入失败：{(payload or {}).get('code')}")
-    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", str(round_no), "--json"],
-                        sid=SID, inputs={"generation": H.generation(project)})
-    if rc == 0:
-        problems.append("窄排除范围仍被判通过（excluded-scope 只核了非空）")
-    facts_out = json.dumps((payload or {}).get("facts") or {}, ensure_ascii=False)
-    if "credentials" not in facts_out and (payload or {}).get("code") != "WF_OK":
-        problems.append(f"拒绝但未点名缺哪类敏感面：{facts_out[:160]}")
+            "<!-- wf-review-agent:v1 status=done -->\n<!-- wf-review-report:v1 -->\n```json\n"
+            + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
+        return H.cli(project, ["review-import", "--task", task_id, "--round", str(round_no),
+                               "--slot", slot, "--report", report, "--json"], sid=SID,
+                     inputs={"generation": H.generation(project)})
+
+    # ① 窄排除（只写 node_modules）→ **导入处**就必须拒绝，并点名缺失的敏感面
+    #    （2026-11-12：输入面校验单一实现，lint/导入/判定同源，不再"导入成功、判定才拒"）
+    for slot, path in zip(("s1", "s2"), staging):
+        os.makedirs(path, exist_ok=True)
+        rc, payload = write_and_import(slot, path, NARROW, "narrow")
+        if rc == 0:
+            problems.append("窄排除范围在导入处仍被接受（excluded-scope 只核了非空）")
+            continue
+        facts_out = json.dumps((payload or {}).get("facts") or {}, ensure_ascii=False)
+        if "credentials" not in facts_out and "敏感面" not in facts_out:
+            problems.append(f"拒绝但未点名缺哪类敏感面：{facts_out[:160]}")
     if problems:
         raise H.TargetFailure("；".join(problems))
+
+    # ② 正对照：覆盖四类敏感面的报告两份都能导入，判定可 pass
+    for slot, path in zip(("s1", "s2"), staging):
+        rc, payload = write_and_import(slot, path, COVERED, "covered")
+        if rc != 0:
+            raise H.Precondition(f"覆盖声明未被接受：{payload}")
+    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", str(round_no), "--json"],
+                        sid=SID, inputs={"generation": H.generation(project)})
+    if rc != 0:
+        raise H.Precondition(f"覆盖声明下的判定未成立：{payload}")
     return None
 
 

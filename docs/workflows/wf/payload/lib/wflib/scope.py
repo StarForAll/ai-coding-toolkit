@@ -427,6 +427,160 @@ def vendor_paths(paths):
     return sorted(path for path in paths or [] if is_vendor(path))
 
 
+def _exclusion_records(task):
+    """任务记录里的外来改动排除（`execution.workspace_exclusions`，append-only）。"""
+    entries = ((task.get("execution") or {}).get("workspace_exclusions") or [])
+    return [item for item in entries if isinstance(item, dict) and item.get("path")]
+
+
+def _fingerprint_item(root, path):
+    from . import fingerprint
+
+    try:
+        item = fingerprint.item(root, path)
+    except OSError:
+        return None
+    return item
+
+
+def load_exclusion_declarations(path):
+    """读排除声明文件（对象或数组）并校验：`(entries, problems)`。"""
+    if not path:
+        return [], []
+    try:
+        payload = records.load_json(path)
+    except (OSError, records.RecordInvalid) as exc:
+        return [], [{"reason": f"workspace exclusion file unreadable: {exc}", "path": str(path)}]
+    if payload is None:
+        return [], [{"reason": "workspace exclusion file missing", "path": str(path)}]
+    items = payload if isinstance(payload, list) else [payload]
+    return exclusion_entries(items)
+
+
+def exclusion_entries(decisions):
+    """从决定文件里取外来改动排除声明：`(entries, problems)`。
+
+    形状：`{choice: <workspace_exclusion 域>, paths: [路径…], reason, by, at, quote, source}`。
+    路径必须是**具体路径**（不接受 glob）：摘要在记录时按当时内容固定，glob 无法绑定内容。
+    人的确认按乙口径校验（`by=human:<来源>` + `source=user-declared`）：AI 自述不被接受。
+    """
+    from . import attestation as attestation_mod
+    from . import decisions as decisions_mod
+
+    entries, problems = [], []
+    for index, decision in enumerate(decisions or []):
+        if not isinstance(decision, dict):
+            problems.append({"reason": "排除声明必须是对象（数组元素逐个校验）", "index": index})
+            continue
+        if not decisions_mod.accepts("workspace_exclusion", decision.get("choice")):
+            # 文件是以 `--workspace-exclusion` 显式传入的：不能把"认不出的 choice"当成"没有声明"，
+            # 否则排除被静默忽略、阻断却仍复现，人只能猜哪里写错了。
+            problems.append({"reason": "排除声明的 choice 不在登记域内",
+                             "choice": decision.get("choice"),
+                             "known": list(decisions_mod.domain("workspace_exclusion"))})
+            continue
+        paths = decision.get("paths")
+        if not isinstance(paths, list) or not paths:
+            problems.append({"reason": "排除声明需要 paths 列表", "choice": decision.get("choice")})
+            continue
+        for path in paths:
+            if not isinstance(path, str) or not path.strip():
+                problems.append({"reason": "排除声明的 paths 只接受非空字符串"})
+                continue
+            if any(mark in path for mark in ("*", "?", "[")):
+                problems.append({"reason": "排除声明只接受具体路径（不接受 glob）", "path": path})
+                continue
+            entries.append({"path": path.strip(), "reason": decision.get("reason"),
+                            "by": decision.get("by"), "at": decision.get("at"),
+                            "quote": decision.get("quote"), "source": decision.get("source")})
+        for problem in attestation_mod.problems_of(
+                {key: decision.get(key) for key in ("by", "at", "quote", "source")},
+                action="workspace.exclude"):
+            problems.append(problem)
+    return entries, problems
+
+
+def exclusion_records(root, classified, entries, *, now=None):
+    """把排除声明落成**摘要绑定**的记录：路径必须当前在 c 桶（未归属未提交）。
+
+    幂等：同一路径已按**相同摘要**排除时不再重复写入（重跑同一声明照常成功）。
+    """
+    c_paths = set(classified["buckets"].get("c") or [])
+    already = {item["path"]: item
+               for item in (classified.get("exclusions") or {}).get("applied") or []}
+    # 同一路径在声明里出现多次：后者覆盖前者（按路径收敛），不写重复记录
+    from . import check as check_mod
+
+    deduped = {}
+    for entry in entries:
+        deduped[entry["path"]] = entry
+    records_out, problems = [], []
+    entries = list(deduped.values())
+    for entry in entries:
+        path = entry["path"]
+        item = _fingerprint_item(root, path)
+        if not item:
+            problems.append({"reason": "无法读取该路径的当前内容摘要", "path": path})
+            continue
+        current = {"exists": item.get("exists"), "digest": item.get("digest")}
+        if path not in c_paths:
+            existing = already.get(path)
+            if existing and existing.get("saved") == current:
+                continue
+            problems.append({
+                "reason": "排除只适用于未归属的未提交路径；该路径不在 c 桶",
+                "path": path,
+                "exits": ["核对路径拼写与真实状态",
+                          "该路径若属本任务：用 task-attribute 裁决归属，而不是排除",
+                          "若属其他任务：先按其他任务收工/交接处置"]})
+            continue
+        # 人的确认原话按脱敏协议只留**摘要**：入库的是遮罩+截断后的文本，
+        # `attestation_digest` 固定原文，事后可核对但不把潜在敏感值带进 committed。
+        raw_quote = str(entry.get("quote") or "")
+        records_out.append({
+            "path": path,
+            "exists": current["exists"],
+            "digest": current["digest"],
+            "reason": entry.get("reason"),
+            "by": entry.get("by"),
+            "at": entry.get("at"),
+            "source": entry.get("source"),
+            "quote": check_mod.redact_text(raw_quote)[:300],
+            "attestation_digest": records.H("wf-exclusion-attestation-v1",
+                                            {"by": entry.get("by"), "at": entry.get("at"),
+                                             "quote": raw_quote, "source": entry.get("source")}),
+            "recorded_at": now or records.now_str(),
+        })
+    return records_out, problems
+
+
+def persist_exclusions(task, new_records):
+    """写入任务记录（同路径以最新记录替换，其余保留；append-only 语义按路径收敛）。"""
+    execution = task.setdefault("execution", {})
+    existing = list(execution.get("workspace_exclusions") or [])
+    replaced = {item["path"] for item in new_records}
+    kept = [item for item in existing
+            if isinstance(item, dict) and item.get("path") not in replaced]
+    execution["workspace_exclusions"] = kept + list(new_records)
+    return task
+
+
+def exclusion_states(root, task):
+    """逐条重算排除事实：`applied`（摘要仍匹配）/`lapsed`（内容已变，排除失效）。"""
+    applied, lapsed = [], []
+    for record in _exclusion_records(task):
+        item = _fingerprint_item(root, record["path"])
+        current = {"exists": item.get("exists"), "digest": item.get("digest")} if item else {}
+        saved = {"exists": record.get("exists"), "digest": record.get("digest")}
+        entry = {"path": record["path"], "saved": saved, "current": current,
+                 "reason": record.get("reason")}
+        if item and current == saved:
+            applied.append(entry)
+        else:
+            lapsed.append(entry)
+    return {"applied": applied, "lapsed": lapsed}
+
+
 def classify_candidates(root, task, receipts=None):
     """返回 {a: [...], b: [...], c: [...], d: [...], e: [...], f: [...], facts...}。"""
     task_id = task.get("id")
@@ -446,7 +600,7 @@ def classify_candidates(root, task, receipts=None):
     claimed_by = {}
     for item in conflicts:
         claimed_by.setdefault(item["path"], []).append(item.get("claimed_by"))
-    buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": [], "v": []}
+    buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": [], "v": [], "x": []}
     receipt_paths = set()
     for receipt in receipts or []:
         if receipt["state"] in ("applied_pending_commit", "pending_check"):
@@ -480,12 +634,20 @@ def classify_candidates(root, task, receipts=None):
             buckets["c"].append(path)
             continue
         buckets["d"].append(path)
+    # 人确认「这些外来改动不属于本任务、保持原样」的记录：只把**摘要仍匹配**的路径从 c 移到 x。
+    # 内容一变即失配 → 路径回到 c（排除不是永久豁免），x 不进交付/指纹/材料/提交面。
+    exclusions = exclusion_states(root, task)
+    applied_paths = {item["path"] for item in exclusions["applied"]}
+    if applied_paths:
+        buckets["x"] = sorted(path for path in buckets["c"] if path in applied_paths)
+        buckets["c"] = [path for path in buckets["c"] if path not in applied_paths]
     return {
         "buckets": buckets,
         "candidates": candidates,
         "touch_paths": touch_paths,
         "entry_snapshot": entry,
         "vendor_dirty": buckets["v"],
+        "exclusions": exclusions,
         # d 档的展开事实（谁在争抢）：交人裁决时要看到双方，不能只给一个裸路径
         "conflicts": conflicts,
     }

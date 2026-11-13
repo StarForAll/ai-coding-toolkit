@@ -15,7 +15,8 @@ if not os.path.exists(EXTERNAL_ACK):
                 "choice": "已核对无影响", "reason": "夹具提交均为本任务改动"}],
               open(EXTERNAL_ACK, "w"), ensure_ascii=False)
 AT = "2026-11-11T09:00:00.000000Z"
-REPORT = "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n"
+REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
+          "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
 NOTES = "/tmp/r71_notes.json"
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
@@ -204,7 +205,7 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
     json.dump(request, open(launch_path, "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
     export_path = f"/tmp/r71_export_{name}.json"
-    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
+    json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
               open(export_path, "w"), ensure_ascii=False)

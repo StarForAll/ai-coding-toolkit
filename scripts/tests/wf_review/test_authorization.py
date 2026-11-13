@@ -150,15 +150,19 @@ class EntryPointContractTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             for action in ("commit", "delete", "export", "expand", "repo_rules"):
-                info = authorize.record_authorization(
-                    tmp, action, {"choice": action, "paths": ["src/x.py"], "quote": "人确认"})
+                decision = {"choice": action, "paths": ["src/x.py"], "quote": "人确认"}
+                if action == "export":
+                    # 外发确认必须绑定"本次范围"：任务 + 材料类集合
+                    decision.update({"task": "t1",
+                                     "materials": ["diff", "requirement", "test_results"]})
+                info = authorize.record_authorization(tmp, action, decision)
                 self.assertTrue(Path(info["path"]).is_file())
                 self.assertIsNotNone(authorize.require(tmp, action))
 
     def test_export_guard_is_wired_into_launch(self):
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/review.py").read_text(encoding="utf-8")
         self.assertIn('"export"', source)
-        self.assertIn("authorize_mod.require", source)
+        self.assertIn("export_scope_problems", source)
         self.assertIn("missing_action", source)
 
 

@@ -100,6 +100,38 @@ def object_content_digest(ctx, task):
     return fingerprint.content_digest(fingerprint.items(ctx.root, object_paths(ctx, task)))
 
 
+def workflow_snapshot_digest(ctx, task):
+    """属于实例的任务：定义快照是**本任务的规则输入**（设计稿 §4.2 内容指纹末句）。
+
+    没有 `run_id` 的任务返回 None（该键对普通任务不适用，`current_anchor` 也不把它算缺项）。
+    实例任务缺快照/记录不可读 → `WF_RECORD_INVALID`：仅有哈希而无可读快照不满足恢复
+    （设计稿 §5.7），不能把它静默折成 None 让旧锚点继续有效。
+    """
+    run_id = task.get("run_id")
+    if not run_id:
+        return None
+    from . import runs as runs_mod
+
+    run = runs_mod.load_run(ctx.root, run_id)
+    definition = (run or {}).get("definition") or {}
+    definition_digest = definition.get("digest")
+    snapshot_rel = (definition.get("snapshot_path")
+                    or f".wf/workflow-runs/{run_id}/definition.md")
+    snapshot_path = join(ctx.root, snapshot_rel)
+    snapshot_digest, cause, reason = records.file_digest_state(snapshot_path)
+    if not isinstance(run, dict) or not definition_digest or cause:
+        raise CheckError("WF_RECORD_INVALID",
+                         {"reason": "run-bound task requires a readable definition snapshot",
+                          "run": run_id, "definition_digest": definition_digest,
+                          "snapshot": snapshot_rel,
+                          "cause": cause, "detail": reason,
+                          "exits": ["由 repair 核对实例记录与快照后恢复",
+                                    "确认实例已终止：按设计稿 §5.9 处置该任务的归属后再重跑 Check"]})
+    return records.H("wf-workflow-snapshot-v1", {"run": run_id,
+                                                 "definition_digest": definition_digest,
+                                                 "snapshot_digest": snapshot_digest})
+
+
 def anchor_parts(ctx, task, *, check=None):
     from . import tasks as tasks_mod
 
@@ -117,7 +149,7 @@ def anchor_parts(ctx, task, *, check=None):
         "assertions_digest": assertions_digest(ctx, task),
         "baseline_digest": records.file_digest(join(ctx.root, ".wf/baseline.md")),
         "config_digest": records.file_digest(join(ctx.root, ".wf/project-config.json")),
-        "workflow_snapshot_digest": None,
+        "workflow_snapshot_digest": workflow_snapshot_digest(ctx, task),
     }
 
 
@@ -180,26 +212,36 @@ def resolve_verifications(ctx, task, point):
 # --------------------------------------------------------------------------
 
 
+# 键名的扫描长度必须**有界**：`[a-z0-9_.-]*` 无限长时，正则会在每一位置尝试扩张，
+# 对一整行无分隔字符（压缩后的 JSON、长 token 串）退化成 O(n²)——400KB 日志实测挂死。
+# 键名超过 64 字符的写法不在遮罩范围内（正常键名远短于此），这个界只限制"找键名"的扫描，
+# 不限制被遮罩的值（`\S+` 仍可长）。
+_KEY = r"[a-z0-9_.-]{0,64}"
+
 SECRET_PATTERNS = (
     # Authorization: Bearer <值>（不设长度门槛，任意取值都遮罩）
     re.compile(r"(?i)\bBearer\s+[^\s\"',;]+"),
     # --token/--api-key/--access-token/--client-secret 等分离或等号/冒号写法（文本形态）
-    re.compile(r"(?i)(--?[a-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key)[a-z0-9_.-]*)"
+    re.compile(r"(?i)(--?" + _KEY + r"(?:token|secret|password|passwd|api[_-]?key)" + _KEY + r")"
                r"(\s*[=:]\s*|\s+)\S+"),
     # key: value / key=value
-    re.compile(r"(?i)\b([a-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd)[a-z0-9_.-]*)\b\s*[:=]\s*\S+"),
+    re.compile(r"(?i)\b(" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
+               + r")\b\s*[:=]\s*\S+"),
     # JSON/字典内嵌：键名可能带引号、值也可能带引号（{"token":"x"}、{'access_token': "y"}）
-    re.compile(r"(?i)([\"']?[a-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd)[a-z0-9_.-]*[\"']?"
-               r"\s*:\s*)([\"'])[^\"']*\2"),           # 带引号的值允许含空格/逗号
-    re.compile(r"(?i)([\"']?[a-z0-9_.-]*(?:api[_-]?key|token|secret|password|passwd)[a-z0-9_.-]*[\"']?"
-               r"\s*:\s*)(?![\"'])[^\s,}]+"),           # 不带引号的单词值
+    re.compile(r"(?i)([\"']?" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
+               + r"[\"']?\s*:\s*)([\"'])[^\"']*\2"),     # 带引号的值允许含空格/逗号
+    re.compile(r"(?i)([\"']?" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
+               + r"[\"']?\s*:\s*)(?![\"'])[^\s,}]+"),     # 不带引号的单词值
+    # 中文键名：本框架文档与人写的 quote 以中文为主，`口令：xxx` / `口令 xxx` 同样是凭据
+    re.compile(r"(?:密码|口令|密钥|令牌|私钥|凭据)\s*[:：=]\s*\S+"),
+    re.compile(r"(?i)(?:密码|口令|密钥|令牌|私钥)\s+[A-Za-z0-9_.\-]{6,}\b"),
     re.compile(r"\bsk-[A-Za-z0-9_\-]{12,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{12,}\b"),
 )
 
-SECRET_HEAD = re.compile(r"(?i)^(--?[a-z0-9_.-]*(?:token|secret|password|passwd|api[_-]?key)[a-z0-9_.-]*)"
-                         r"(\s*[=:]\s*|\s+)")
+SECRET_HEAD = re.compile(r"(?i)^(--?" + _KEY + r"(?:token|secret|password|passwd|api[_-]?key)"
+                         + _KEY + r")(\s*[=:]\s*|\s+)")
 
 
 NON_SECRET_KEYS = frozenset({
@@ -223,24 +265,60 @@ def _non_secret_key(raw):
     return key.endswith(("_count", "_limit", "_budget", "_size", "_type"))
 
 
-def redact_text(text):
-    """文本级遮罩：日志、facts 摘要、命令回显都走这一处，避免两套规则不一致。"""
-    def mask(match):
-        raw = match.group(0)
-        if _non_secret_key(raw):
-            return raw
-        head = SECRET_HEAD.match(raw)
-        if head:
-            return head.group(0) + "***"
-        head = re.match(r"""(?i)[\w\- "'{}\[\],:]*?[:=]\s*""", raw)
-        if head:
-            return head.group(0) + "***"
-        return "***"
+# 触发词：只有出现这些片段的位置才可能构成敏感键名。用它先定位**窗口**，再在窗口内跑完整规则——
+# 全篇逐位置跑正则会在长行（压缩 JSON、长 token 串）上退化成二次方；400KB 日志实测挂死。
+TRIGGER = re.compile(r"(?i)(bearer|token|secret|password|passwd|api[_-]?key|sk-|gh[pousr]_|akia"
+                        r"|密码|口令|密钥|令牌|私钥|凭据)")
+# 窗口半宽：覆盖常见的 `key: value`、`--token value` 与 YAML 换行写法；超出此距离的
+# "键在这里、值在很远的地方"不属这些规则表达的形态。
+MASK_WINDOW = 512
 
-    out = text
+
+def _mask_match(match):
+    raw = match.group(0)
+    if _non_secret_key(raw):
+        return raw
+    head = SECRET_HEAD.match(raw)
+    if head:
+        return head.group(0) + "***"
+    head = re.match(r"""(?i)[\w\- "'{}\[\],:]*?[:=]\s*""", raw)
+    if head:
+        return head.group(0) + "***"
+    return "***"
+
+
+def _mask_window(window):
+    out = window
     for pattern in SECRET_PATTERNS:
-        out = pattern.sub(mask, out)
+        out = pattern.sub(_mask_match, out)
     return out
+
+
+def redact_text(text):
+    """文本级遮罩：日志、facts 摘要、命令回显都走这一处，避免两套规则不一致。
+
+    先按触发词定位窗口（合并重叠窗口），只在窗口内跑完整规则：语义与"全篇逐位置匹配"一致
+    到窗口边界，但对长行是线性开销。
+    """
+    if not isinstance(text, str) or not text:
+        return text or ""
+    spans = [(match.start(), match.end()) for match in TRIGGER.finditer(text)]
+    if not spans:
+        return text
+    windows = []
+    for start, end in spans:
+        left, right = max(0, start - MASK_WINDOW), min(len(text), end + MASK_WINDOW)
+        if windows and left <= windows[-1][1]:
+            windows[-1] = (windows[-1][0], max(windows[-1][1], right))
+        else:
+            windows.append((left, right))
+    out, cursor = [], 0
+    for left, right in windows:
+        out.append(text[cursor:left])
+        out.append(_mask_window(text[left:right]))
+        cursor = right
+    out.append(text[cursor:])
+    return "".join(out)
 
 
 # 兼容旧名：所有调用点都走同一实现
@@ -393,6 +471,38 @@ def validate_check_result(task, check):
     return problems
 
 
+LOG_HEAD_BYTES = 64 * 1024
+LOG_TAIL_BYTES = 192 * 1024
+
+
+def _log_payload(argv, cwd, exit_code, output):
+    """把一次验证的执行事实写成可复核的日志文本（完整输出 + 可见截断）。
+
+    此前只落最后一行 summary，复核只能靠人保留终端（dogfood 第 3 轮 reviewer 的
+    "原始日志仅摘要"）。截断上限是**机制常量**而不是项目配置：日志是可丢弃证据，
+    重复输出同一结论不引入新的预算键。
+    """
+    import hashlib
+
+    raw = str(output or "").encode("utf-8", "replace")
+    truncated = False
+    dropped = 0
+    if len(raw) > LOG_HEAD_BYTES + LOG_TAIL_BYTES:
+        truncated = True
+        dropped = len(raw) - LOG_HEAD_BYTES - LOG_TAIL_BYTES
+        body = (raw[:LOG_HEAD_BYTES]
+                + f"\n[wf-log-truncated kept={LOG_HEAD_BYTES + LOG_TAIL_BYTES} "
+                  f"dropped={dropped} total={len(raw)}]\n".encode("utf-8")
+                + raw[-LOG_TAIL_BYTES:])
+    else:
+        body = raw
+    head = (f"argv: {records.canonical(argv)}\ncwd: {cwd}\nexit_code: {exit_code}\n"
+            f"output_bytes: {len(raw)}\ntruncated: {truncated}\n\n").encode("utf-8")
+    payload = head + body
+    return {"text": payload, "bytes": len(raw), "truncated": truncated,
+            "digest": "sha256:" + hashlib.sha256(payload).hexdigest()}
+
+
 def _run_argv(ctx, task, verification, log_dir):
     invocation = verification.get("invocation") or {}
     argv = list(invocation.get("argv") or [])
@@ -412,6 +522,7 @@ def _run_argv(ctx, task, verification, log_dir):
         raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config",
                                                "detail": problem})
     timeout = value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    output = ""
     try:
         result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False,
                                 timeout=timeout)
@@ -420,6 +531,10 @@ def _run_argv(ctx, task, verification, log_dir):
         summary = output.strip().splitlines()[-1] if output.strip() else ""
     except subprocess.TimeoutExpired as exc:
         exit_code = None
+        partial = exc.stdout or exc.stderr or ""
+        if isinstance(partial, bytes):
+            partial = partial.decode("utf-8", "replace")
+        output = partial
         summary = f"timed out after {timeout}s"
     except OSError as exc:
         exit_code = None
@@ -430,9 +545,9 @@ def _run_argv(ctx, task, verification, log_dir):
     # 日志与 facts 都按秘密边界遮罩；命令参数一并过一遍（argv 可能带内联值）
     masked_argv = redact_argv(argv)
     summary = redact_text(summary)
-    with open(log_path, "w", encoding="utf-8") as handle:
-        handle.write(f"argv: {records.canonical(masked_argv)}\ncwd: {cwd}\nexit_code: {exit_code}\n\n")
-        handle.write(summary + "\n")
+    log = _log_payload(masked_argv, cwd, exit_code, redact_text(output))
+    with open(log_path, "wb") as handle:
+        handle.write(log["text"])
     status = "passed" if exit_code == 0 else ("not_run" if exit_code is None else "failed")
     return {
         "verification_id": verification.get("id"),
@@ -446,6 +561,9 @@ def _run_argv(ctx, task, verification, log_dir):
         "status": status,
         "summary": summary,
         "evidence_ref": os.path.relpath(log_path, str(ctx.root)).replace(os.sep, "/"),
+        "log_digest": log["digest"],
+        "log_bytes": log["bytes"],
+        "log_truncated": log["truncated"],
     }
 
 
@@ -723,7 +841,7 @@ def tdd_evidence_problem(evidence, commands, history_commands=None):
     return None
 
 
-def run_check_scope(ctx, task, decisions, review_notes_path):
+def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=None):
     """Check 的**锁内准备段**：范围核对、知识兜底、锚点固定（机制稿 §3.5 ①②）。
 
     这一段只读文件与记录，**不执行任何外部命令**——长操作留给 `run_check_execute()` 在锁外跑
@@ -733,11 +851,21 @@ def run_check_scope(ctx, task, decisions, review_notes_path):
     # ① 范围核对
     receipts = _receipts(ctx)
     classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
+    # 人对外来改动的排除（本次声明给出时消费；记录进任务，摘要变化即失效）
+    if exclusion_entries:
+        new_records, problems = scope.exclusion_records(ctx.root, classified, exclusion_entries)
+        if problems:
+            raise CheckError("WF_SEMANTIC_DECISION",
+                             {"problems": problems,
+                              "exits": ["只排除未归属未提交的路径；属本任务的用 task-attribute 裁决归属"]})
+        scope.persist_exclusions(task, new_records)
+        classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
     external, external_findings = scope.external_changes(ctx.root, task)
     buckets = classified["buckets"]
     scope_facts = {
         "candidates": len(classified["candidates"]),
         "buckets": {key: buckets[key] for key in ("a", "b", "c", "d", "e", "f")},
+        "excluded": classified.get("exclusions") or {},
         "external_changes": external_findings,
         "external_pending": len(external_findings or []),
     }
@@ -767,7 +895,11 @@ def run_check_scope(ctx, task, decisions, review_notes_path):
                                         e=sorted(set(scope_facts["buckets"]["e"]) | set(covered_expansion)),
                                         f=[]))
     if buckets["c"]:
-        raise CheckError("WF_WORKSPACE_UNRESOLVED", dict(scope_facts, other_tasks=buckets["c"]))
+        raise CheckError("WF_WORKSPACE_UNRESOLVED",
+                         dict(scope_facts, other_tasks=buckets["c"],
+                              exits=["确认这些外来改动不属于本任务：写一条 choice=排除外来改动 的决定"
+                                     "（paths + by/at/quote/source）后用 --decision 重跑 task-check",
+                                     "由人实际处置这些路径（提交 / 移走 / 具名承接）后重跑"]))
     pending_external = [item for item in (external_findings or [])
                         if _external_touches_task(item, task)
                         and not _external_checked(item, decisions, task)]
@@ -958,12 +1090,13 @@ def run_check_finish(ctx, task, state, commands):
     return check, "WF_CHECK_FAILED", facts
 
 
-def run_check(ctx, task, decisions, review_notes_path):
+def run_check(ctx, task, decisions, review_notes_path, exclusion_entries=None):
     """固定五步的兼容入口：三段顺序执行（不需要拆锁的调用方用它）。
 
     `cmd_task_check` 不用它——它必须在执行段前后各取/放一次锁。
     """
-    state = run_check_scope(ctx, task, decisions, review_notes_path)
+    state = run_check_scope(ctx, task, decisions, review_notes_path,
+                            exclusion_entries=exclusion_entries)
     commands = run_check_execute(ctx, task, state)
     return run_check_finish(ctx, task, state, commands)
 

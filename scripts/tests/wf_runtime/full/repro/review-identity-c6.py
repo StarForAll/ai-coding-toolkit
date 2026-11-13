@@ -33,7 +33,7 @@ def launch(project, task_id, root, impl):
                "submitted_scope": {"diff": True, "requirement": True, "test_results": True}},
               open(request, "w", encoding="utf-8"), ensure_ascii=False)
     _auth = os.path.join(root, "export.json")
-    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意外发审查材料",
+    json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意外发审查材料",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
               open(_auth, "w"), ensure_ascii=False)

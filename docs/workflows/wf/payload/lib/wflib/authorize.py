@@ -25,9 +25,24 @@ ACTIONS = {
     "repo_rules": "仓库级规则文件",
 }
 
-# 脱敏规则里"入库保留"与"留 runtime"的项（其余字段一律按 runtime_only 处理）
-RUNTIME_ONLY_KEYS = ("content", "content_full", "items", "paths_detail", "secret", "credential",
-                     "token", "password", "authorization_header")
+# 入库保留项 = `protocol/redaction.json` 中 `effect=keep` 的语义标签在代码里的字段映射。
+# 其余字段（含未知字段、嵌套字典、明细清单）一律丢弃并留下 `dropped_keys`——黑名单做不到
+# "未知字段不泄漏"，dogfood 里 `quote` 与嵌套字典的敏感原文就是这样进 committed 的。
+KEEP_SCALAR_KEYS = (
+    # 动作类型 / 决策取值
+    "action", "choice", "decision", "verdict",
+    # 路径清单或变化摘要（含人写的变化理由：属"可审计凭证"的一部分，入库前同样过遮罩）
+    "paths", "path", "subject", "changes", "target", "target_task", "reason",
+    # 时间 / 人
+    "at", "time", "by", "source",
+    # 摘要类（协议明确允许：记录内保留 digest 与要点）
+    "object_digest", "original_digest", "scope_digest",
+)
+QUOTE_KEYS = ("quote",)
+QUOTE_MAX_CHARS = 500
+
+# 外发授权绑定的材料类集合（机制稿 §9.1：diff / 需求 / 测试结果三类）
+EXPORT_MATERIALS = ("diff", "requirement", "test_results")
 
 
 def is_repo_rule(ctx, path):
@@ -42,36 +57,108 @@ def repo_rule_paths(ctx, paths):
     return sorted(path for path in paths or [] if is_repo_rule(ctx, path))
 
 
+def _kept_value(key, value):
+    """单字段的保留形态：标量/路径清单原样（过遮罩），quote 只留摘要，其余 None（丢弃）。"""
+    from . import check as check_mod
+
+    if key in QUOTE_KEYS:
+        text = check_mod.redact_text(str(value or ""))
+        if len(text) > QUOTE_MAX_CHARS:
+            return text[:QUOTE_MAX_CHARS] + "…<truncated>"
+        return text
+    if isinstance(value, bool) or value is None:
+        return value
+    if isinstance(value, (int, float)):
+        return value
+    if isinstance(value, str):
+        return check_mod.redact_text(value)
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return [check_mod.redact_text(item) for item in value]
+    return None
+
+
 def redact(decision):
     """按 `protocol/redaction.json` 的 `keep` 口径产出可入库副本，并给出原文摘要。
 
-    保留：动作类型、路径清单或变化摘要、决策取值、时间、人、quote 摘要（以及它们的 digest）；
-    丢弃：外发内容全文、删除清单明细、凭据类上下文——这些留在 runtime 原件里。
+    采用**保留白名单**：只有 `KEEP_SCALAR_KEYS` 与 `QUOTE_KEYS` 里的字段可能入库，
+    其余（含未知字段、嵌套结构、明细清单）一律丢弃并在 `redaction.dropped_keys` 留痕。
+    所有保留字符串都过遮罩；`quote` 只留摘要（截断 + 遮罩）。
     """
     decision = decision if isinstance(decision, dict) else {}
     kept = {}
+    dropped = []
     for key, value in decision.items():
-        if key in RUNTIME_ONLY_KEYS:
+        if key not in KEEP_SCALAR_KEYS and key not in QUOTE_KEYS:
+            dropped.append(key)
             continue
-        if isinstance(value, (str, int, float, bool)) or value is None:
-            kept[key] = value
-        elif isinstance(value, list) and all(isinstance(item, str) for item in value):
-            kept[key] = list(value)
-        elif isinstance(value, dict):
-            kept[key] = {k: v for k, v in value.items()
-                         if isinstance(v, (str, int, float, bool)) or v is None}
-        else:
-            kept[key] = f"<omitted:{type(value).__name__}>"
+        transformed = _kept_value(key, value)
+        if transformed is None:
+            dropped.append(key)
+            continue
+        kept[key] = transformed
     original_digest = records.H("wf-authorization-original-v1", decision)
     kept["original_digest"] = original_digest
     kept["redaction"] = {"source": "protocol/redaction.json",
-                         "dropped_keys": sorted(set(decision) - set(kept)),
+                         "mode": "keep-allowlist",
+                         "dropped_keys": sorted(set(dropped)),
                          "when": records.now_str()}
     return kept, original_digest
 
 
+def export_scope(task_id, materials):
+    """外发授权的范围身份：任务 + 材料类集合（目的地由任务与暂存根派生，不单列）。
+
+    授权入库只保存这个 digest（协议允许保留摘要），比较时用当前意图重算：
+    旧授权给另一个任务、或材料类集合变了（新增一类材料），都不再匹配。
+    """
+    return records.H("wf-export-scope-v1", {"task": str(task_id),
+                                            "materials": sorted(str(item) for item in materials or [])})
+
+
+def export_scope_problems(task_dir, task_id, materials):
+    """`review-launch` 的前置：已入库的外发授权必须覆盖**本次**任务与材料类集合。"""
+    payload = require(task_dir, "export")
+    if payload is None:
+        return [{"reason": "本次审查要把材料外发，但缺外发动作的确认（K6 第 3 类）",
+                 "missing_action": "export",
+                 "exits": ["人执行 `wf authorize record --task <id> --file <决定.json>`，"
+                           "文件里写一条 choice=export 的确认（task + materials + 人 + quote）后重跑",
+                           "改用不外发的审阅方式（例如同机只读审阅）"]}]
+    declared = payload.get("scope_digest")
+    if not declared:
+        return [{"reason": "外发确认没有绑定范围（缺 scope_digest）：不能用于本次外发",
+                 "recorded": sorted(payload),
+                 "exits": ["重新记录一条带 task + materials 的 export 确认（旧确认只覆盖当时未细分的类别）"]}]
+    expected = export_scope(task_id, materials)
+    if declared != expected:
+        return [{"reason": "外发确认的范围与本次不一致（任务或材料类集合不同）",
+                 "recorded_scope": declared, "current_scope": expected,
+                 "current_task": str(task_id), "current_materials": sorted(materials or []),
+                 "exits": ["为本任务/本次材料类集合重新记录一条 export 确认",
+                           "缩小本次材料范围到已授权集合内"]}]
+    return []
+
+
 def authorization_path(task_dir, action):
     return os.path.join(str(task_dir), f"authorization-{action}.json")
+
+
+def export_decision_problems(decision):
+    """外发确认的形状：必须写明本任务与材料类集合（这是"本次范围"的可核对事实）。"""
+    problems = []
+    if not str((decision or {}).get("task") or "").strip():
+        problems.append({"reason": "export authorization must name the task",
+                         "field": "task"})
+    materials = (decision or {}).get("materials")
+    if not isinstance(materials, list) or not materials:
+        problems.append({"reason": "export authorization must list the material classes",
+                         "field": "materials", "known": list(EXPORT_MATERIALS)})
+    else:
+        unknown = sorted({str(item) for item in materials} - set(EXPORT_MATERIALS))
+        if unknown:
+            problems.append({"reason": "unknown material class in export authorization",
+                             "unknown": unknown, "known": list(EXPORT_MATERIALS)})
+    return problems
 
 
 def record_authorization(task_dir, action, decision, *, raw_copy_dir=None):
@@ -81,6 +168,11 @@ def record_authorization(task_dir, action, decision, *, raw_copy_dir=None):
     redacted, digest = redact(decision)
     redacted["action"] = action
     redacted["action_zh"] = ACTIONS[action]
+    if action == "export":
+        problems = export_decision_problems(decision)
+        if problems:
+            raise ValueError(f"export authorization is incomplete: {problems}")
+        redacted["scope_digest"] = export_scope(decision.get("task"), decision.get("materials") or [])
     path = authorization_path(task_dir, action)
     records.write_json(path, redacted)
     if raw_copy_dir:

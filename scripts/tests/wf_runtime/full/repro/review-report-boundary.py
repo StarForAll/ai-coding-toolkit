@@ -72,7 +72,7 @@ def check():
                 "check-anchor": anchor, "read-scope": ["pkg/**"], "excluded-scope": [".wf/**", ".env", "*.pem", ".codex/**", "../**"],
                 "scope-exceptions": [], "axes": axes, "findings": [], "verdict": "pass"}
         open(report, "w", encoding="utf-8").write(
-            "<!-- wf-review-report:v1 -->\n```json\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
+            "<!-- wf-review-agent:v1 status=done -->\n<!-- wf-review-report:v1 -->\n```json\n" + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
         rc, payload = H.cli(project, ["review-import", "--task", task_id, "--round", str(round_no),
                                       "--slot", slot_id, "--report", report, "--json"], sid=SID,
                             inputs={"generation": H.generation(project)})

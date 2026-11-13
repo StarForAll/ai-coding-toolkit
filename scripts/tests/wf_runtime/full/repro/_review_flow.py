@@ -9,7 +9,8 @@ NOTE = {"standard": {"conclusion": "pass", "basis": "b"},
         "requirement": {"conclusion": "pass", "basis": "b"}}
 AXES = ("range", "acceptance", "contract", "regression", "testability")
 AT = "2026-11-05T00:00:00.000000Z"
-REPORT = """<!-- wf-review-report:v1 -->
+REPORT = """<!-- wf-review-agent:v1 status=done -->
+<!-- wf-review-report:v1 -->
 ```json
 {body}
 ```
@@ -88,7 +89,7 @@ def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=N
     json.dump(request, open(launch_path, "w"), ensure_ascii=False)
     # K6 第 3 类：材料外发必须有对应确认入库（请求里的 export_decision 只是声明）
     auth = os.path.join(root, "export.json")
-    json.dump([{"choice": "export", "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
+    json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
               open(auth, "w"), ensure_ascii=False)

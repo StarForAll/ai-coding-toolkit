@@ -215,7 +215,8 @@ def new_task_record(kind, title):
         "attribution": {"decisions": [], "inherited": []},
         "check": None,
         "check_history": [],
-        "execution": {"required_steps": [], "actions": [], "human_decisions": [], "debug_declarations": []},
+        "execution": {"required_steps": [], "actions": [], "human_decisions": [],
+                      "debug_declarations": [], "workspace_exclusions": []},
         "reviews": {"last_round": 0, "attempts": [], "launches": [], "imported": [], "dispositions": [], "result": None},
         "curation": [],
         "knowledge": None,
@@ -1487,13 +1488,14 @@ def _ensure_creation_step(ctx, key, session, record, action, step, task_id):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"bound": binding.get("object"), "intended": task_id},
                             next_="按原意图续做同一对象；不改绑")
-        if not session_mod.write_runtime(ctx.root, key, {
-            "binding_digest": records.plain_digest(binding),
-            "instance_id": binding.get("instance_id"),
-            "object": {"kind": "task", "id": task_id},
-            "current_task": task_id,
-            "cursor": None,
-        }):
+        if not session_mod.update_runtime(
+            ctx.root, key,
+            binding_digest=records.plain_digest(binding),
+            instance_id=binding.get("instance_id"),
+            object={"kind": "task", "id": task_id},
+            current_task=task_id,
+            cursor=None,
+        ):
             raise TaskError("WF_PERSISTENCE_FAILED",
                             {"reason": "session runtime cache write failed", "session_key": key})
     return record
@@ -2038,12 +2040,37 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
     )
 
 
+def _apply_exclusion_entries(ctx, task, classified, entries, *, receipts=None):
+    """把本次声明里的外来改动排除落进记录，并返回**重新分类**的结果。
+
+    路径必须当前在 c 桶（未归属未提交），摘要按记录时的真实内容固定。
+    校验不通过整批拒绝（零写入）。
+    """
+    from . import scope as scope_mod
+
+    if not entries:
+        return classified
+    new_records, problems = scope_mod.exclusion_records(ctx.root, classified, entries)
+    if problems:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"problems": problems,
+                         "exits": ["只排除未归属未提交的路径；属本任务的用 task-attribute 裁决归属"]})
+    scope_mod.persist_exclusions(task, new_records)
+    return scope_mod.classify_candidates(ctx.root, task, receipts=receipts)
+
+
 def cmd_task_start(ctx, args):
-    from . import cli, gates, lock
+    from . import gates, lock
 
     task_id = args.value("--task")
+    exclusion_file = args.value("--workspace-exclusion")
     if not task_id:
         raise TaskError("WF_PATH_INVALID", {"reason": "task-start requires --task <id>"})
+    exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
+    if exclusion_problems:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"problems": exclusion_problems,
+                         "exits": ["按问题清单修正声明文件（paths 只写具体路径，确认要带 by/at/quote/source）"]})
     task = _load_or_fail(ctx, task_id)
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-start"):
@@ -2077,8 +2104,12 @@ def cmd_task_start(ctx, args):
         if current.get("error"):
             raise TaskError(current["error"][0], current["error"][1])
         if current.get("version") != (task.get("plan") or {}).get("version"):
-            raise TaskError("WF_APPROVAL_MISSING", {"approved": (task.get("plan") or {}).get("version"),
-                                                   "current": current.get("version")})
+            raise TaskError("WF_APPROVAL_MISSING",
+                            {"approved": (task.get("plan") or {}).get("version"),
+                             "current": current.get("version"),
+                             "exits": ["规划有实质变化：回 Plan 重新批准（task-replan --decision 后 task-approve）",
+                                       "只是排版/进度/说明改动：写 choice=机械修订 的决定文件后"
+                                       "重跑 task-approve（接等价链，不重复人批准）"]})
         if task.get("kind") == "ordinary":
             config_record, problems = config.load_project_config(ctx.root, allow_missing=True)
             if config_record is None or not os.path.exists(join(ctx.root, ".wf/baseline.md")):
@@ -2103,10 +2134,25 @@ def cmd_task_start(ctx, args):
         if task.get("kind") == "ordinary":
             receipts = task_receipts(ctx.root)
             classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
+            classified = _apply_exclusion_entries(ctx, task, classified, exclusion_entries,
+                                                  receipts=receipts)
             if classified["buckets"]["c"]:
-                raise TaskError("WF_WORKSPACE_UNRESOLVED", {"other_tasks": classified["buckets"]["c"]})
+                raise TaskError("WF_WORKSPACE_UNRESOLVED",
+                                {"other_tasks": classified["buckets"]["c"],
+                                 "exclusions": classified.get("exclusions"),
+                                 "exits": ["确认这些外来改动不属于本任务：写一份声明"
+                                           "（choice=排除外来改动 + paths + by/at/quote/source）"
+                                           "后用 --workspace-exclusion 重跑 task-start",
+                                           "由人实际处置这些路径（提交 / 移走 / 具名承接）后重跑"]})
             if classified["buckets"]["f"]:
                 raise TaskError("WF_SCOPE_VIOLATION", {"out_of_scope": classified["buckets"]["f"]})
+        elif exclusion_entries:
+            # 初始化/接入任务不走 c 档门禁，排除声明在这里没有消费点：显式拒绝，不静默丢弃
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "工作区排除只适用于普通任务；该任务类型不使用 c 档门禁",
+                             "kind": task.get("kind"),
+                             "exits": ["去掉 --workspace-exclusion 后重跑",
+                                       "该路径若确属本任务：用 task-attribute 裁决归属"]})
         # P2-3：执行候选唯一性对全部 kind 生效（initialize/bootstrap 也不能与别的执行同时存在）
         others = [
             other for _path, other in iter_tasks(ctx.root)
@@ -2584,9 +2630,15 @@ def cmd_task_check(ctx, args):
     task_id = args.value("--task")
     decision_path = args.value("--decision")
     review_notes = args.value("--review-notes")
+    exclusion_file = args.value("--workspace-exclusion")
     if not task_id:
         raise TaskError("WF_PATH_INVALID", {"reason": "task-check requires --task <id>"})
     decisions = cli._load_decision(decision_path) if decision_path else []
+    exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
+    if exclusion_problems:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"problems": exclusion_problems,
+                         "exits": ["按问题清单修正声明文件（paths 只写具体路径，确认要带 by/at/quote/source）"]})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-check"):
         _record, holder = ctx.require_held(task=task_id)
@@ -2602,7 +2654,8 @@ def cmd_task_check(ctx, args):
         if blocking:
             raise TaskError(blocking[0]["code"] or "WF_SEMANTIC_DECISION", {"missing": blocking})
         try:
-            state = check_mod.run_check_scope(ctx, task, decisions, review_notes)
+            state = check_mod.run_check_scope(ctx, task, decisions, review_notes,
+                                              exclusion_entries=exclusion_entries)
         except check_mod.CheckError as exc:
             raise TaskError(exc.code, exc.facts)
 
@@ -3568,16 +3621,21 @@ def cmd_archive(ctx, args):
         from . import authorize as authorize_mod
 
         rule_hits = authorize_mod.repo_rule_paths(ctx, grant_paths)
-        if rule_hits and not authorize_mod.require(path, "repo_rules"):
-            action = actions.fail(dict(task["action"]), "repo-level rule files without authorization")
-            task["action"] = action
-            save_task(ctx.root, path, task)
-            raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
-                            {"missing_action": "repo_rules",
-                             "repo_rule_paths": rule_hits,
-                             "reason": "提交范围含仓库级规则文件，但缺该动作的确认（K6 第 5 类）",
-                             "exits": ["在本次决定文件里写一条 repo_rules 确认（路径 + 变化摘要 + 人 + quote）后重入",
-                                       "把这些路径移出本次提交范围"]})
+        if rule_hits:
+            # 与 `delete` 同口径：确认必须**覆盖这些路径**，只核"有过该类确认"会让旧确认
+            # 复用到另一组规则文件（dogfood：授权类别存在即放行）。
+            covered, uncovered = authorize_mod.covers(path, "repo_rules", rule_hits, root=ctx.root)
+            if not covered:
+                action = actions.fail(dict(task["action"]), "repo-level rule files without authorization")
+                task["action"] = action
+                save_task(ctx.root, path, task)
+                raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
+                                {"missing_action": "repo_rules",
+                                 "repo_rule_paths": rule_hits,
+                                 "uncovered": uncovered,
+                                 "reason": "提交范围含仓库级规则文件，但确认未覆盖这些路径（K6 第 5 类）",
+                                 "exits": ["在本次决定文件里写一条 repo_rules 确认，paths 覆盖上面未覆盖的路径后重入",
+                                           "把这些路径移出本次提交范围"]})
         # K6 第 2 类：本次提交范围里的**删除**要有一次确认（删除是不可逆动作）
         deleted_in_grant = _deleted_paths(ctx.root, grant_paths)
         if deleted_in_grant:

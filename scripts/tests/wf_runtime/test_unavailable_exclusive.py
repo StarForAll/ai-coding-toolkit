@@ -43,7 +43,7 @@ def write_report(root):
             "review-time": "2026-11-11T00:00:00.000000Z", "review-focus": "x",
             "check-anchor": {"check_id": "c1", "check_anchor": ANCHOR},
             "read-scope": ["pkg/**"],
-            "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**"],
+            "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"],
             "scope-exceptions": [], "axes": {name: "pass" for name in review.REVIEW_AXES},
             "findings": [{"id": "f1", "severity": "blocking"}], "verdict": "pass"}
     path.write_text(review.REPORT_MARKER + "\n\n```json\n"

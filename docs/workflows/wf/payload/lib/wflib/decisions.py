@@ -38,6 +38,8 @@ DOMAINS = {
     "debug_ruling": ("同一问题", "不同问题"),
     # 验收项结论（Check 的 `acceptance_results[].conclusion` 与人工接受决定）
     "acceptance_conclusion": ("passed", "failed", "pending"),
+    # 外来未提交改动的排除（人确认"不属于本任务、保持原样"；路径 + 记录时内容摘要绑定）
+    "workspace_exclusion": ("排除外来改动", "exclude-foreign"),
 }
 
 
