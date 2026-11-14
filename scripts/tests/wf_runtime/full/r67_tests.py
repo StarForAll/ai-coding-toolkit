@@ -237,19 +237,23 @@ open(os.path.join(fake_root, "scripts/wf_release_common.py"), "w").write(
     '    return "sha256:" + "0" * 64\n')
 # run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本
 open(os.path.join(fake, "run_one.sh"), "w").write(
-    '#!/bin/bash\nset -uo pipefail\nsuite=$1\n'
+    '#!/bin/bash\nset -uo pipefail\nrecord=$1\n'
+    'suite=${record%%:*}\nkind=$(printf "%s" "$record" | cut -d: -f2)\n'
+    'expect=$(printf "%s" "$record" | cut -d: -f3)\nscript=${record##*:}\n'
+    'case "$kind" in suite|candidate) ekind=suite ;; flow|extra) ekind=flow ;; *) ekind=suite ;; esac\n'
     'out="$RESULTS_DIR/$suite.out"\n'
-    '"$PY" "$HERE/$suite.py" >"$out" 2>&1\nrc=$?\n'
-    'bad=$(grep -c "\\[FAIL\\]" "$out" || true)\nline=$(tail -1 "$out")\n'
-    'status=ok\n'
-    'if [ "$rc" -ne 0 ] || [ "$bad" -ne 0 ] || printf "%s" "$line" | grep -qE "FAIL|(saved|total) 0"; then status=bad; fi\n'
+    '"$PY" "$HERE/execution.py" --name "$suite" --kind "$ekind" --expected "$expect" \\\n'
+    '  --log "$RESULTS_DIR/$suite.test.log" --result "$RESULTS_DIR/$suite.test.log.json" \\\n'
+    '  -- "$PY" "$HERE/$script" >>"$out" 2>&1\nrc=$?\n'
+    'line=$(tail -1 "$out")\n'
+    'status=ok\n[ "$rc" -eq 0 ] || status=bad\n'
     'printf "%s\\t%s\\t%s\\t%s\\t%s\\n" "$suite" "$rc" "0" "$status" "$line" >> "$RESULTS_DIR/lines"\n')
 open(os.path.join(fake, "wf_fixture.sh"), "w").write(
     '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
     ': > "$F/.wf/bin/wf.py"\n')
 open(os.path.join(fake, "f1_init.py"), "w").write("print('ok')\n")
 # 假套件/流程/extra 依注册表清单生成：清单变动后假环境不会缺文件
-_manifest = json.load(open(os.path.join(real, "suites.json"), encoding="utf-8"))
+_manifest = json.load(open(os.path.join(real, "units.json"), encoding="utf-8"))
 # plan.py 的 modules 键存在性校验要求 REPO/docs/workflows/wf/<key> 存在：
 # 依清单生成桩路径（目录键建目录、文件键建空文件），假环境跟上 plan.py 的契约面。
 for _key in (_manifest.get("modules") or {}):
@@ -259,25 +263,25 @@ for _key in (_manifest.get("modules") or {}):
     else:
         os.makedirs(os.path.dirname(_stub), exist_ok=True)
         open(_stub, "w").close()
-for _entry in _manifest["suites"]:
-    if _entry.get("kind") not in ("suite", "candidate"):
+# 桩文件按注册表逐可计划单元生成：**文件名取该单元的 `script`**（不是 `<name>.py`），
+# 输出行数等于 `expect`——名字或 script 拼错会在假树里缺文件/少行，由 run_all 当场暴露。
+for _entry in _manifest["units"]:
+    if _entry.get("kind") not in ("suite", "flow", "extra", "candidate"):
         continue
-    if _entry["name"] == "cp1_tests":
-        continue
-    open(os.path.join(fake, f"{_entry['name']}.py"), "w").write(
-        "print('saved 1 cases; 1 passed')\n")
-open(os.path.join(fake, "cp1_tests.py"), "w").write(
-    "print('[FAIL] fake')\nprint('saved 0 cases; 0 passed')\nraise SystemExit(1)\n")
-for _name, _count in (_manifest.get("extra_expect") or {}).items():
-    _body = "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, int(_count) + 1))
-    open(os.path.join(fake, f"{_name}.py"), "w").write(
-        _body + "print('saved %d / %d')\n" % (int(_count), int(_count)))
-_flow_expect = _manifest.get("flow_expect") or {}
-open(os.path.join(fake, "p5_f0.py"), "w").write(
-    "print('PASS')\n" * int(_flow_expect.get("f0", 1)))
-for _name in ("p5_spec", "p5_v2v3", "p5_v5"):
-    open(os.path.join(fake, f"{_name}.py"), "w").write(
-        "print('PASS')\n" * int(_flow_expect.get(_name, 1)))
+    _name = _entry["name"]
+    _script = _entry.get("script", _name + ".py")
+    _count = int(_entry["expect"])
+    _path = os.path.join(fake, _script)
+    os.makedirs(os.path.dirname(_path), exist_ok=True)
+    _passes = "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, _count + 1))
+    if _name == "cp1_tests":
+        # 唯一失败桩：用于“失败必须传播”的负例。
+        open(_path, "w").write(
+            "print('[FAIL] fake')\nprint('saved 0 cases; 0 passed')\nraise SystemExit(1)\n")
+    elif _entry.get("kind") in ("suite", "candidate"):
+        open(_path, "w").write(_passes + "print('saved %d / %d')\n" % (_count, _count))
+    else:
+        open(_path, "w").write(_passes)
 # repro 一键入口的桩：run_all 的 run_repro 会调用 $HERE/repro/run.sh
 open(os.path.join(fake, "repro", "run.sh"), "w").write(
     '#!/bin/bash\n'
@@ -316,13 +320,36 @@ _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
     f"exit={proc.returncode} summary={_summary[-1] if _summary else None} stderr={(proc.stderr or '')[-180:]}",
     proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
-open(os.path.join(fake, "cp1_tests.py"), "w").write("print('saved 1 cases; 1 passed')\n")
+_cp1_expect = int(next(item["expect"] for item in _manifest["units"] if item["name"] == "cp1_tests"))
+open(os.path.join(fake, "cp1_tests.py"), "w").write(
+    "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, _cp1_expect + 1))
+    + "print('saved %d / %d')\n" % (_cp1_expect, _cp1_expect))
 proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                        env={**_fake_env, "WF_RESULTS_DIR": _fake_results2})
 if proc2.returncode != 0:
     print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500],
           "stderr:", (proc2.stderr or "")[-500:])
 rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode} stderr={(proc2.stderr or '')[-180:]}", proc2.returncode == 0)
+
+# 4c 期望用例数预算：桩少输出一行 [PASS]（汇总行同步改成 expect-1，内部自洽）→
+# execution.verdict 的 observed != expect 必须让它变红；错误行要指出单元名与期望/实际。
+open(os.path.join(fake, "cp1_tests.py"), "w").write(
+    "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, _cp1_expect))
+    + "print('saved %d / %d')\n" % (_cp1_expect - 1, _cp1_expect - 1))
+_fake_results3 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+atexit.register(shutil.rmtree, _fake_results3, ignore_errors=True)
+proc3 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
+                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results3})
+_budget_log = ""
+try:
+    _budget_log = open(os.path.join(_fake_results3, "cp1_tests.out"), encoding="utf-8").read()
+except OSError:
+    pass
+rec("4c 少一行 PASS → 红且指出期望/实际", "exit≠0 且 EXECUTION-FAILED 指到 cp1_tests",
+    f"exit={proc3.returncode} log_tail={_budget_log.strip().splitlines()[-1:] }",
+    proc3.returncode != 0 and "cp1_tests" in proc3.stdout
+    and "EXECUTION-FAILED: cp1_tests" in _budget_log
+    and "expected=" + str(_cp1_expect) in _budget_log)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

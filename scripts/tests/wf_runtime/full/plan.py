@@ -8,7 +8,7 @@
     python3 plan.py --format json --dry-run
     python3 plan.py --list
 
-退出码：0 = 计划成立；2 = 选项冲突/未知套件/未知组（stderr 说明）。
+退出码：0 = 计划成立；2 = 选项冲突/未知套件/未知组/注册表非法（stderr 说明）。
 """
 from __future__ import annotations
 
@@ -19,33 +19,44 @@ import shlex
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SUITES_JSON = os.path.join(HERE, "suites.json")
+UNITS_JSON = os.path.join(HERE, "units.json")
+LEGACY_SUITES_JSON = os.path.join(HERE, "suites.json")
 GROUPS_JSON = os.path.join(HERE, "repro", "groups.json")
 DEFAULT_FIX = f"/tmp/wf-fixtures/run-{os.getpid()}"
-DEFAULT_JOBS = min(8, os.cpu_count() or 4)   # 套件层默认并行数（不超过物理核，防少核机器超订）
+DEFAULT_JOBS = min(8, os.cpu_count() or 4)   # 执行单元默认并行数（不超过物理核，防少核机器超订）
 DEFAULT_REPRO_JOBS = min(8, os.cpu_count() or 4)  # repro 用例层默认并行数（同上）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
 TEST_RELEASE_FALLBACK = "0.1.0"
 REPRO_MODES = ("green", "red", "both", "none", "auto")
+UNIT_KINDS = ("suite", "flow", "extra", "candidate", "manual")
+PLANNABLE_KINDS = ("suite", "flow", "extra", "candidate")
+FIXTURE_KINDS = ("template", "install")
+# 条目字段白名单：未知字段一律拒绝（防下一个死字段悄无声息地长回来）。
+UNIT_FIELDS = {
+    "name", "script", "kind", "expect", "fixture", "tags", "representative",
+    "candidate_clean", "isolated_user", "parallel", "notes",
+}
+TOP_FIELDS = {"schema_version", "units", "modules", "representative_flow"}
+SCHEMA_VERSION = 2
+
 # 假树清单（三桶，单一来源）：r67_tests 的假运行器树按它复制/桩化。
 # - COPY：纯工具 + plan.py 无条件依赖的数据，原样复制；
 # - STUB：复制真实文件会改变假环境语义（假树没有真夹具/真 worker 契约），由 r67 写桩；
 # - SPECIAL：run_all.sh 自身（复制，不做归类推导）。
 # G8（test_runner_hygiene）扫描 run_all.sh 的静态 `"$HERE/<相对路径>"` 引用：
 # 每个命中必须属于 COPY ∪ STUB ∪ SPECIAL ∪ 注册表每个可计划单元的 script。
-# 注意 `repro/groups.json` 由本文件的常量引用（不出现在 run_all.sh 的静态引用里），
+# 注意 `repro/groups.json` 由 plan.py 的常量引用（不出现在 run_all.sh 的静态引用里），
 # G8 扫不到——它的正确性由 r67 冒烟保证。
-# 过渡状态：三桶机制先落地，注册表改名在 Step 2；本步桶内是当前文件名 suites.json，
-# Step 2 与 `git mv` 同提交改成 units.json。
 FAKE_TREE_COPY = (
     "plan.py",
-    "suites.json",
+    "units.json",
     "repro/groups.json",
     "results_gate.py",
     "execution.py",
     "fixture_scope.py",
     "prepare_candidate_repo.py",
     "source_hygiene.py",
+    "template_check.py",
 )
 FAKE_TREE_STUB = (
     "run_one.sh",
@@ -54,12 +65,6 @@ FAKE_TREE_STUB = (
     "repro/run.sh",
 )
 FAKE_TREE_SPECIAL = ("run_all.sh",)
-# 串行集合的唯一来源是 suites.json 的 `"parallel": false` 字段（本文件不再持有平行常量）。
-# 历史注记：原 13 个强制串行条目（chmod 写入失败注入 + 保守遗留）已全部解除——
-# chmod 注入改由 wfdrive.deny_writes 的三探针等价契约承担（ro bind mount 在 user
-# namespace 内同样成立）；保守遗留项经逐套件审计（夹具来源/共享路径/用户状态/pty·sleep/
-# 嵌套运行器五项）确认并行安全。今后确需串行的套件：suites.json 置 parallel:false
-# 并在 notes 登记具体理由（load_suites 校验 notes 非空，防无理由串行）。
 
 
 class PlanError(Exception):
@@ -70,14 +75,65 @@ class PlanError(Exception):
         self.code = code
 
 
-def load_suites(path=SUITES_JSON):
+def _is_positive_int(value):
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _validate_entry(entry, seen):
+    if not isinstance(entry, dict):
+        raise PlanError(f"units.json 的条目必须是对象：{entry!r}")
+    unknown = sorted(set(entry) - UNIT_FIELDS)
+    name = entry.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise PlanError(f"units.json 条目缺 name：{entry!r}")
+    if unknown:
+        raise PlanError(f"{name}: 未知字段 {' '.join(unknown)}（字段白名单见 plan.py::UNIT_FIELDS）")
+    if name in seen:
+        raise PlanError(f"{name}: 条目重复")
+    seen.add(name)
+    kind = entry.get("kind")
+    if kind not in UNIT_KINDS:
+        raise PlanError(f"{name}: kind 非法 {kind!r}（可选 {' '.join(UNIT_KINDS)}）")
+    script = entry.get("script", f"{name}.py")
+    if not isinstance(script, str) or not script or os.path.isabs(script) or ".." in script.split("/"):
+        raise PlanError(f"{name}: script 必须是 HERE 下的相对路径：{script!r}")
+    if kind in PLANNABLE_KINDS:
+        expect = entry.get("expect")
+        if not _is_positive_int(expect):
+            raise PlanError(f"{name}: expect 必须是正整数（当前 {expect!r}）")
+        fixture = entry.get("fixture", "template")
+        if fixture not in FIXTURE_KINDS:
+            raise PlanError(f"{name}: fixture 非法 {fixture!r}（可选 {' '.join(FIXTURE_KINDS)}）")
+        if not os.path.isfile(os.path.join(HERE, script)):
+            raise PlanError(f"{name}: script 指向的文件不存在：HERE/{script}")
+    elif entry.get("expect") is not None or entry.get("fixture") is not None:
+        raise PlanError(f"{name}: manual 单元不接受 expect/fixture（不在任何执行面内）")
+    if kind == "manual" and not (entry.get("notes") or "").strip():
+        raise PlanError(f"{name}: manual 单元必须在 notes 说明为何手动")
+    # 串行是例外不是默认：parallel:false 必须携带 notes 理由，防无理由串行悄悄回潮。
+    if entry.get("parallel") is False and not (entry.get("notes") or "").strip():
+        raise PlanError(f"{name}: parallel:false 必须在 notes 登记不可并行理由")
+    if "tags" in entry and not isinstance(entry["tags"], list):
+        raise PlanError(f"{name}: tags 必须是数组")
+
+
+def load_units(path=UNITS_JSON):
+    if not os.path.exists(path) and os.path.exists(LEGACY_SUITES_JSON):
+        raise PlanError(
+            "检测到旧注册表 suites.json：请迁移为 units.json（顶层 units 数组 + 每条 expect/fixture/script），"
+            "旧 schema 不再兼容（不静默并存两套真相）")
     with open(path, encoding="utf-8") as handle:
         doc = json.load(handle)
-    # 串行是例外不是默认：parallel:false 必须携带 notes 理由，防无理由串行悄悄回潮。
-    unexplained = [entry["name"] for entry in doc.get("suites") or []
-                   if entry.get("parallel") is False and not (entry.get("notes") or "").strip()]
-    if unexplained:
-        raise PlanError("parallel:false 的套件必须在 notes 登记不可并行理由：" + " ".join(unexplained))
+    if not isinstance(doc, dict) or not isinstance(doc.get("units"), list):
+        raise PlanError("units.json 必须使用顶层 units 数组（旧 suites.json schema 不再兼容）")
+    unknown = sorted(set(doc) - TOP_FIELDS)
+    if unknown:
+        raise PlanError(f"units.json 未知顶层字段：{' '.join(unknown)}")
+    if doc.get("schema_version") != SCHEMA_VERSION:
+        raise PlanError(f"units.json schema_version 必须是 {SCHEMA_VERSION}（当前 {doc.get('schema_version')!r}）")
+    seen = set()
+    for entry in doc["units"]:
+        _validate_entry(entry, seen)
     return doc
 
 
@@ -123,12 +179,18 @@ def parse_args(argv):
     parser.add_argument("--subset", action="store_true")
     parser.add_argument("--representative", action="store_true")
     parser.add_argument("--parallel", action="store_true", help="显式并行（现在是默认）")
-    parser.add_argument("--serial", action="store_true", help="套件层串行（确定性/排障）")
+    parser.add_argument("--serial", action="store_true", help="执行单元层串行（确定性/排障）")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-build", action="store_true")
+    parser.add_argument("--no-template", action="store_true",
+                        help="关闭整套模板机制（含跨 run 缓存）：逐单元重建夹具")
+    parser.add_argument("--no-template-cache", action="store_true",
+                        help="只关跨 run 模板缓存（run 内模板照旧构建复用）")
     parser.add_argument("--repro", dest="repro_mode", default=None)
     parser.add_argument("--repro-group", dest="repro_groups", action="append", default=[])
+    parser.add_argument("--repro-concurrent", action="store_true",
+                        help="主池与 repro 并发（显式实验通道，不进默认路径）")
     parser.add_argument("--fixture-deploy", dest="fixture_deploy", default=None)
     parser.add_argument("--release-root", default=None)
     parser.add_argument("--release-ref", default=None)
@@ -216,8 +278,8 @@ def changed_files(base=None, explicit=None):
     return sorted(set(files))
 
 
-def _validate_modules(suites_doc, by_name):
-    """modules 映射的完整性校验（三个方向，防 --changed 建议静默缺失）。
+def _validate_modules(units_doc, by_name):
+    """modules 映射的完整性校验（四个方向，防 --changed 建议静默缺失）。
 
     ① 模块 → 套件：引用的套件必须存在（原有校验）；
     ② 套件 → 模块：每个可计划套件（kind ∈ suite/extra/candidate）必须被 ≥1 模块覆盖
@@ -226,9 +288,12 @@ def _validate_modules(suites_doc, by_name):
        （键按 docs/workflows/wf/ 前缀剥除后的相对路径解析，不按仓库根裸解析），
        防"永不命中的假键"让 ② 变纸面门；
     ④ 命中 → 非空：map_changes 命中键时该条目的 suites 不得为空（空条目 = 建议静默缺失）。
+
+    flow 单元（f0/p5_*）不参与 `--changed` 建议：它们不是源码映射的套件，只由
+    full/representative 选择（或显式 WF_SUITES），因此不要求在 modules 里覆盖。
     """
     problems = []
-    modules = suites_doc.get("modules") or {}
+    modules = units_doc.get("modules") or {}
     for key, entry in modules.items():
         unknown = [name for name in (entry.get("suites") or []) if name not in by_name]
         if unknown:
@@ -247,7 +312,7 @@ def _validate_modules(suites_doc, by_name):
     if uncovered:
         problems.append("未被任何模块覆盖的可计划套件（--changed 会漏建议）：" + " ".join(uncovered))
     if problems:
-        raise PlanError("suites.json 的 modules 校验失败：\n- " + "\n- ".join(problems))
+        raise PlanError("units.json 的 modules 校验失败：\n- " + "\n- ".join(problems))
 
 
 def _repro_candidate_groups(groups_doc, names):
@@ -263,17 +328,23 @@ def _repro_candidate_groups(groups_doc, names):
     return kept, dropped
 
 
+def unit_record(entry):
+    """执行记录编码：`name:kind:expect:fixture:script`（五段固定顺序，冒号分隔、无空格）。"""
+    return ":".join((entry["name"], entry["kind"], str(entry["expect"]),
+                     entry.get("fixture", "template"), entry.get("script", entry["name"] + ".py")))
+
+
 def plan(argv=None, env=None):
     env = os.environ if env is None else env
     args = parse_args(list(sys.argv[1:] if argv is None else argv))
     if args.help:
         raise PlanError("help", code=0)
-    suites_doc = load_suites()
+    units_doc = load_units()
     groups_doc = load_groups()
-    entries = suites_doc["suites"]
+    entries = units_doc["units"]
     by_name = {entry["name"]: entry for entry in entries}
 
-    _validate_modules(suites_doc, by_name)
+    _validate_modules(units_doc, by_name)
 
     # ---- 模式 -------------------------------------------------------------
     mode = _explicit_mode(args)
@@ -287,21 +358,26 @@ def plan(argv=None, env=None):
                 raise PlanError(
                     f"--{mode} 与 {label} 冲突：清空 {label} 或改用 --subset（当前 {' '.join(values)}）")
 
-    # ---- 套件选择 ---------------------------------------------------------
+    # ---- 单元选择 ---------------------------------------------------------
     if mode == "subset":
         if args.changed:
             raise PlanError("--changed 只给建议，不自动执行：用 `--list --changed` 看建议后再显式选择")
         if not selected_env and not wanted_tags:
             raise PlanError("--subset 没有选择项：用 WF_SUITES='<suite> ...' 或 WF_TAGS='<tag> ...' 指定；可选套件："
-                            + " ".join(entry["name"] for entry in entries))
+                            + " ".join(entry["name"] for entry in entries if entry["kind"] != "manual"))
         unknown = [name for name in selected_env if name not in by_name]
         if unknown:
-            raise PlanError(f"未知套件：{' '.join(unknown)}；可选：" + " ".join(entry["name"] for entry in entries))
+            raise PlanError(f"未知套件：{' '.join(unknown)}；可选："
+                            + " ".join(entry["name"] for entry in entries if entry["kind"] != "manual"))
+        manual = [name for name in selected_env if by_name[name]["kind"] == "manual"]
+        if manual:
+            raise PlanError(f"manual 单元不参与计划（需真实宿主条件，见 notes）：{' '.join(manual)}")
         available_tags = sorted({tag for entry in entries for tag in entry.get("tags") or []})
         unknown_tags = [tag for tag in wanted_tags if tag not in available_tags]
         if unknown_tags:
             raise PlanError(f"未知 tag：{' '.join(unknown_tags)}；可选：" + " ".join(available_tags))
         chosen = list(entries) if not selected_env else [by_name[name] for name in selected_env]
+        chosen = [entry for entry in chosen if entry["kind"] != "manual"]
         if wanted_tags:
             chosen = [entry for entry in chosen
                       if set(wanted_tags) & set(entry.get("tags") or [])]
@@ -309,20 +385,20 @@ def plan(argv=None, env=None):
             raise PlanError("选择为空：WF_SUITES 与 tags 没有交集（"
                             f"suites={' '.join(selected_env) or '-'} tags={' '.join(wanted_tags) or '-'}）")
     elif mode == "representative":
-        chosen = [entry for entry in entries if entry.get("kind") == "suite" and entry.get("representative")]
+        chosen = [entry for entry in entries if entry["kind"] == "suite" and entry.get("representative")]
         if not chosen:
-            raise PlanError("代表集为空：suites.json 里没有 representative=true 的套件")
+            raise PlanError("代表集为空：units.json 里没有 representative=true 的套件")
     else:
-        chosen = [entry for entry in entries if entry.get("kind") == "suite"]
+        chosen = [entry for entry in entries if entry["kind"] == "suite"]
         if not chosen:
-            raise PlanError("suites.json 里没有 kind=suite 的套件")
+            raise PlanError("units.json 里没有 kind=suite 的套件")
 
     # ---- 改动 → 建议（只建议，不执行）------------------------------------
     suggestion = {"changed_files": [], "suggested_suites": [],
                   "suggested_repro_groups": [], "unmapped_changes": []}
     if args.changed or args.changed_files:
         files = changed_files(args.changed_base, args.changed_files)
-        suites_hint, repro_hint, unmapped = map_changes(files, suites_doc.get("modules") or {})
+        suites_hint, repro_hint, unmapped = map_changes(files, units_doc.get("modules") or {})
         suggestion = {"changed_files": files, "suggested_suites": suites_hint,
                       "suggested_repro_groups": repro_hint, "unmapped_changes": unmapped}
         if not args.list and not args.dry_run:
@@ -359,7 +435,7 @@ def plan(argv=None, env=None):
         if clean:
             chosen = clean
         elif mode == "representative":
-            fallback = [entry for entry in entries if entry.get("kind") == "candidate"]
+            fallback = [entry for entry in entries if entry["kind"] == "candidate"]
             if not fallback:
                 raise PlanError("candidate 模式下没有 candidate_clean 套件，也没有 f1_candidate_smoke 兜底")
             chosen = fallback
@@ -368,18 +444,24 @@ def plan(argv=None, env=None):
             raise PlanError(
                 "candidate 模式下没有 candidate_clean=true 的套件可跑（代表集请用 --representative 走兜底闭环）")
 
-    # ---- 流程 / extra -----------------------------------------------------
-    if mode == "full":
-        flows = list(suites_doc.get("flows") or [])
-        extra = [entry["name"] for entry in entries if entry.get("kind") == "extra"]
+    # ---- 流程 / extra（四类可计划单元同池）--------------------------------
+    if mode == "subset":
+        unit_entries = list(chosen)
     elif mode == "representative":
-        flow = suites_doc.get("representative_flow") or "p5_spec"
-        flows = ["f0"] + ([flow] if flow and flow != "f0" else [])
-        extra = []
+        flow_names = ["f0", units_doc.get("representative_flow") or "p5_spec"]
+        unit_entries = list(chosen) + [by_name[name] for name in flow_names if name in by_name]
     else:
-        flows = []
-        extra = [entry["name"] for entry in chosen if entry.get("kind") == "extra"]
-    chosen = [entry for entry in chosen if entry.get("kind") != "extra"]
+        flows = [entry for entry in entries if entry["kind"] == "flow"]
+        extra = [entry for entry in entries if entry["kind"] == "extra"]
+        unit_entries = list(chosen) + flows + extra
+    # 去重（同名单元只执行一次）并保持顺序
+    deduped, seen_names = [], set()
+    for entry in unit_entries:
+        if entry["name"] in seen_names:
+            continue
+        seen_names.add(entry["name"])
+        deduped.append(entry)
+    unit_entries = deduped
 
     # ---- repro gating -----------------------------------------------------
     repro_mode = args.repro_mode or env.get("WF_REPRO_MODE") or None
@@ -431,15 +513,33 @@ def plan(argv=None, env=None):
         else:
             repro_groups = []      # full/subset 默认跑全部用例（不给组过滤）
 
-    # ---- 并行 -------------------------------------------------------------
-    # 默认并行（省墙钟）；`--serial` 或 `WF_JOBS=1` 退回串行（确定性/排障）。
+    # ---- 并发预算（单一来源：本函数）-------------------------------------
+    # 默认 repro 与主池串行（决策 #3）：总并发全部给主池。`--repro-concurrent`
+    # 打开时才按 实测工作比 主池 298s : repro 190s ≈ 5/3 分摊。
     if args.serial:
         jobs = 1
+        repro_jobs = 1
     else:
-        jobs = int(env.get("WF_JOBS") or DEFAULT_JOBS)
-    repro_jobs = int(env.get("WF_REPRO_JOBS") or DEFAULT_REPRO_JOBS)
-    if jobs < 1 or repro_jobs < 1:
-        raise PlanError("WF_JOBS / WF_REPRO_JOBS 必须是正整数")
+        total_jobs = int(env.get("WF_TOTAL_JOBS") or env.get("WF_JOBS") or DEFAULT_JOBS)
+        if total_jobs < 1:
+            raise PlanError("WF_TOTAL_JOBS / WF_JOBS 必须是正整数")
+        if args.repro_concurrent or env.get("WF_REPRO_CONCURRENT") == "1":
+            jobs = max(1, round(total_jobs * 5 / 8))
+            repro_jobs = max(1, total_jobs - jobs)
+        else:
+            jobs = total_jobs
+            repro_jobs = int(env.get("WF_REPRO_JOBS") or DEFAULT_REPRO_JOBS)
+        if repro_jobs < 1:
+            raise PlanError("WF_REPRO_JOBS 必须是正整数")
+    repro_concurrent = bool(args.repro_concurrent or env.get("WF_REPRO_CONCURRENT") == "1")
+    if mode == "subset" and not repro_enabled:
+        repro_concurrent = False
+
+    # ---- 开关（模板机制）--------------------------------------------------
+    no_template = bool(args.no_template or env.get("WF_NO_TEMPLATE") == "1")
+    no_template_cache = bool(args.no_template_cache or env.get("WF_NO_TEMPLATE_CACHE") == "1")
+    if no_template:
+        no_template_cache = True   # WF_NO_TEMPLATE = 关闭整套模板机制（含缓存）
 
     # ---- 测试发行（仅 dev）-----------------------------------------------
     if fixture_deploy == "dev":
@@ -451,14 +551,15 @@ def plan(argv=None, env=None):
     else:
         version, test_release_root, test_release_ref = None, None, None
 
-    parallel_names = [entry["name"] for entry in chosen if entry.get("parallel") is not False]
-    serial_names = [entry["name"] for entry in chosen if entry.get("parallel") is False]
-    # isolated-user 的唯一来源：suites.json 的 isolated_user 字段（run_all/run_one 消费
-    # PLAN_ISOLATED_SUITES 做成员判定——套件特判不进 bash 分支）。
-    isolated_suites = [entry["name"] for entry in chosen if entry.get("isolated_user")]
+    records = [unit_record(entry) for entry in unit_entries]
+    parallel_records = [unit_record(entry) for entry in unit_entries
+                        if (entry["kind"] in PLANNABLE_KINDS and entry.get("parallel") is not False)]
+    serial_records = [unit_record(entry) for entry in unit_entries
+                      if (entry["kind"] in PLANNABLE_KINDS and entry.get("parallel") is False)]
+    # isolated-user 的唯一来源：units.json 的 isolated_user 字段（run_all/run_one 消费
+    # PLAN_ISOLATED_UNITS 做成员判定——套件特判不进 bash 分支）。
+    isolated_units = [entry["name"] for entry in unit_entries if entry.get("isolated_user")]
 
-    flow_expect = {name: (suites_doc.get("flow_expect") or {}).get(name) for name in flows}
-    extra_expect = {name: (suites_doc.get("extra_expect") or {}).get(name) for name in extra}
     results_dir = env.get("WF_RESULTS_DIR") or os.path.join(
         os.path.expanduser("~"), ".cache", "wf-test-run", f"run-{os.getpid()}")
     list_only = bool(args.list or args.dry_run)
@@ -468,18 +569,20 @@ def plan(argv=None, env=None):
         "parallel": 1 if jobs > 1 else 0,
         "jobs": jobs,
         "fix": env.get("WF_FIX") or DEFAULT_FIX,
-        "suites_all": [entry["name"] for entry in chosen],
-        "suites_parallel": parallel_names,
-        "suites_serial": serial_names,
-        "isolated_suites": isolated_suites,
-        "flows": flows,
-        "extra": extra,
-        "flow_expect": flow_expect,
-        "extra_expect": extra_expect,
+        "units": [{"name": entry["name"], "kind": entry["kind"],
+                   "expect": entry.get("expect"), "fixture": entry.get("fixture", "template"),
+                   "script": entry.get("script", entry["name"] + ".py")}
+                  for entry in unit_entries],
+        "units_parallel": parallel_records,
+        "units_serial": serial_records,
+        "isolated_units": isolated_units,
+        "no_template": 1 if no_template else 0,
+        "no_template_cache": 1 if no_template_cache else 0,
         "repro_enabled": 1 if repro_enabled else 0,
         "repro_mode": repro_mode if repro_enabled else "none",
         "repro_groups": repro_groups if repro_enabled else [],
         "repro_jobs": repro_jobs,
+        "repro_concurrent": 1 if (repro_concurrent and repro_enabled) else 0,
         "fixture_deploy": fixture_deploy,
         "release_root": release_root or "",
         "release_ref": release_ref or "",
@@ -501,12 +604,17 @@ def describe(result):
     lines = [f"mode: {result['mode']}（full_mode={result['full_mode']}）"]
     if result.get("tags"):
         lines.append(f"tags: {' '.join(result['tags'])}")
-    lines.append(f"suites({len(result['suites_all'])}): {' '.join(result['suites_all']) or '-'}")
-    lines.append(f"flows: {' '.join(result['flows']) or '-'}")
-    lines.append(f"extra: {' '.join(result['extra']) or '-'}")
+    units = result["units"]
+    kinds = {}
+    for unit in units:
+        kinds[unit["kind"]] = kinds.get(unit["kind"], 0) + 1
+    summary = " ".join(f"{kind}={count}" for kind, count in sorted(kinds.items())) or "-"
+    lines.append(f"units({len(units)}): {summary}")
+    lines.append("单元: " + (" ".join(unit["name"] for unit in units) or "-"))
     if result["repro_enabled"]:
+        parallel_note = "并发" if result["repro_concurrent"] else "串行"
         lines.append(f"repro: {result['repro_mode']} groups={' '.join(result['repro_groups']) or '(all)'} "
-                     f"jobs={result['repro_jobs']}")
+                     f"jobs={result['repro_jobs']}（主池{parallel_note}）")
     else:
         lines.append("repro: none")
     lines.append(f"fixture_deploy: {result['fixture_deploy']}")
@@ -524,9 +632,8 @@ def describe(result):
         lines.append("建议 repro 组: " + (" ".join(result.get("suggested_repro_groups") or []) or "（无映射）"))
         if result.get("unmapped_changes"):
             lines.append("未映射改动（需人工判断）: " + " ".join(result["unmapped_changes"]))
-    units = len(result["suites_all"]) + len(result["flows"]) + len(result["extra"])
     suffix = " + repro" if result["repro_enabled"] else ""
-    lines.append(f"计划执行单元: {units}{suffix}")
+    lines.append(f"计划执行单元: {len(units)}{suffix}")
     return "\n".join(lines)
 
 
@@ -535,9 +642,14 @@ def emit(result, fmt):
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return
     for key, value in result.items():
+        if key == "units":
+            print(f"PLAN_UNITS={shlex.quote(' '.join(unit_record(entry) for entry in value))}")
+            continue
         name = "PLAN_" + key.upper()
         if isinstance(value, dict):
             value = " ".join(f"{key}:{'' if item is None else item}" for key, item in value.items())
+        elif isinstance(value, list) and value and isinstance(value[0], dict):
+            value = " ".join(unit_record(entry) for entry in value)
         elif isinstance(value, list):
             value = " ".join(value)
         elif isinstance(value, int):
@@ -551,11 +663,14 @@ USAGE = """run_all.sh 执行计划（plan.py）
   --full | --subset | --representative   互斥模式（无显式模式时：WF_SUITES 非空→subset，否则 full）
   --repro green|red|both|none|auto       repro 模式（不是组名）
   --repro-group NAME                      repro 组（可重复；组定义见 repro/groups.json）
+  --repro-concurrent                     主池与 repro 并发（显式实验通道，默认串行）
   --fixture-deploy dev|candidate         candidate 需同时给 --release-root/--release-ref/--release-version
   --list | --dry-run                     只输出计划，不执行
   --no-build                             不重建测试发行（必须已有新鲜 meta）
-  --parallel | --serial                  套件层并行（默认 4）/ 串行（确定性、排障）
-                                         WF_JOBS 覆盖并发数；WF_REPRO_JOBS 覆盖 repro 并发数
+  --no-template                          关闭整套模板机制（含跨 run 缓存）
+  --no-template-cache                    只关跨 run 模板缓存
+  --parallel | --serial                  执行单元层并行 / 串行（确定性、排障）
+                                         WF_TOTAL_JOBS 覆盖总并发；WF_REPRO_JOBS 覆盖 repro 并发数
   --format sh|json
 """
 

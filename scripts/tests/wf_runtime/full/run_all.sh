@@ -87,10 +87,10 @@ now_ms() {
   uptime=${uptime/./}
   printf '%s\n' "$((10#$uptime * 10))"
 }
-# isolated-user 的唯一来源：suites.json isolated_user 字段（plan.py → PLAN_ISOLATED_SUITES）；
+# isolated-user 的唯一来源：units.json isolated_user 字段（plan.py → PLAN_ISOLATED_UNITS）；
 # 这里只做成员判定，套件特判不进 bash 分支。
 isolated_args() {
-  case " ${WF_ISOLATED_SUITES:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
+  case " ${WF_ISOLATED_UNITS:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
 }
 run_command() {
   local phase=$1 log=$2 kind=$3 expected=""; shift 3
@@ -104,7 +104,7 @@ run_command() {
 FIX="$PLAN_FIX"
 RESULTS_DIR="$PLAN_RESULTS_DIR"
 export WF_RESULTS_DIR="$RESULTS_DIR" WF_FIX="$FIX"
-export WF_ISOLATED_SUITES="${PLAN_ISOLATED_SUITES:-}"
+export WF_ISOLATED_UNITS="${PLAN_ISOLATED_UNITS:-}"
 LEGACY_FIXTURE_ROOT="$FIX.legacy"
 WF_LEGACY_FIXTURE_ROOT="$LEGACY_FIXTURE_ROOT"
 export WF_LEGACY_FIXTURE_ROOT
@@ -322,20 +322,25 @@ add_init_millis() {
 run_suites_parallel() {
   # 并行汇总不能只统计「已写出的结果行」——子进程异常、结果不可写都会让结果行缺失，
   # 而旧的计数方式仍会把计划里的套件当成已运行并给出绿灯。
-  local list="$1"
+  local -a records=("$@")
+  local rec
   mkdir -p "$RESULTS_DIR"
   : > "$RESULTS_MARK"
   export FIX HERE PY SHARED_RELEASE RESULTS_DIR SOURCE_HOME
   local xargs_rc=0
-  printf '%s\n' $list | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {} || xargs_rc=$?
+  if [ "$#" -gt 0 ]; then
+    printf '%s\n' "${records[@]}" | xargs -P "$JOBS" -I{} unshare -Urm bash "$HERE/run_one.sh" {} || xargs_rc=$?
+  fi
   # Missing worker results are infrastructure failures, not permission to rerun
   # a partly executed test against different state. Preserve logs and fail closed.
   sort -t$'\t' -k1 "$RESULTS_MARK" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
-  for suite0 in $list; do add_init_millis "$suite0"; done
+  for rec in "${records[@]}"; do add_init_millis "${rec%%:*}"; done
   # 完整性判定只有一处实现（results_gate.py）：缺行/重行/畸形/计划外/坏结果都必须计失败，
-  # 不能只统计「已写出的结果行」。
+  # 不能只统计「已写出的结果行」。--expected 只取记录第一段（名字），不传执行记录。
+  local -a names=()
+  for rec in "${records[@]}"; do names+=("${rec%%:*}"); done
   local gate_out
-  gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "$list")
+  gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "${names[*]}")
   eval "$gate_out"
   if [ "$GATE_MALFORMED" -ne 0 ]; then
     echo "MALFORMED-RESULTS: $GATE_MALFORMED 行"
@@ -400,8 +405,18 @@ run_repro() {
   fi
 }
 
+# 记录解析：`name:kind:expect:fixture:script` 五段固定顺序（plan.py 是唯一产出点）。
+record_name() { printf '%s' "${1%%:*}"; }
+record_field() {
+  local record=$1 index=$2
+  printf '%s' "$record" | cut -d: -f"$index"
+}
+record_script() { printf '%s' "${1##*:}"; }
+
 run_suite() {
-  local suite=$1
+  local record=$1
+  local suite expect script
+  suite=$(record_name "$record"); expect=$(record_field "$record" 3); script=$(record_script "$record")
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$suite.out"
   local init_started=$(now_ms)
@@ -419,7 +434,8 @@ run_suite() {
   init_millis=$((init_millis + init_millis_local))
   local out rc line started elapsed elapsed_ms
   started=$(now_ms)
-  out=$(WF_FIX="$FIX" run_command "$suite" "$RESULTS_DIR/$suite.test.log" suite "$PY" "$HERE/$suite.py" 2>&1); rc=$?
+  out=$(WF_FIX="$FIX" run_command "$suite" "$RESULTS_DIR/$suite.test.log" suite \
+        --expected "$expect" "$PY" "$HERE/$script" 2>&1); rc=$?
   printf '%s\n' "$out" >> "$log"
   elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
   suite_millis=$((suite_millis + elapsed_ms))
@@ -427,10 +443,9 @@ run_suite() {
   line=$(printf '%s\n' "$out" | tail -1)
   printf '%-18s rc=%s %ss %s\n' "$suite" "$rc" "$elapsed" "$line"
   suite_ran=$((suite_ran+1))
-  # 判定：退出码、汇总行里的失败数、输出中的 FAIL 都算失败
+  # 判定：退出码、汇总行里的失败数、FAIL 行都由 execution.py 统一解释（含 expect 预算）
   local status=ok
   if [ "$rc" -ne 0 ]; then fail=$((fail+1)); status=bad; fi
-  mkdir -p "$RESULTS_DIR"
   printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "$rc" "$elapsed" "$status" "$line" >> "$RESULTS_MARK"
 }
 
@@ -443,8 +458,28 @@ KNOWN_LEGACY="${WF_KNOWN_LEGACY-}"
 
 : > "$RESULTS_MARK"
 
-SERIAL_LIST="$PLAN_SUITES_SERIAL"
-PARALLEL_LIST="$PLAN_SUITES_PARALLEL"
+# 单元派发（Step 2 过渡态）：kind 决定既有三段执行形状；调度合并在 Step 4。
+# 记录只由 plan.py 产出，bash 不重算 kind/expect/script。
+SUITE_PARALLEL_RECORDS=()
+SUITE_SERIAL_RECORDS=()
+FLOW_RECORDS=()
+EXTRA_RECORDS=()
+UNIT_NAMES=()
+for rec in $PLAN_UNITS; do
+  UNIT_NAMES+=("$(record_name "$rec")")
+  kind=$(record_field "$rec" 2)
+  case "$kind" in
+    suite|candidate)
+      case " $PLAN_UNITS_SERIAL " in
+        *" $rec "*) SUITE_SERIAL_RECORDS+=("$rec") ;;
+        *) SUITE_PARALLEL_RECORDS+=("$rec") ;;
+      esac
+      ;;
+    flow) FLOW_RECORDS+=("$rec") ;;
+    extra) EXTRA_RECORDS+=("$rec") ;;
+    *) echo "PLAN-RECORD-INVALID: 未知 kind ${kind}（$rec）"; fail=$((fail+1)) ;;
+  esac
+done
 
 # 仓库副本位于 /tmp 时，unshare 里挂的 tmpfs 会把 /tmp 遮住，子进程看不到套件与结果文件。
 if [ "$JOBS" -gt 1 ]; then
@@ -452,16 +487,16 @@ if [ "$JOBS" -gt 1 ]; then
     /tmp/*) echo "（套件目录在 /tmp 下：unshare 会遮住输入路径，改用串行）"; JOBS=1; FALLBACK_REASON="repository-under-tmp" ;;
   esac
 fi
-if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; then
-  if [ "$JOBS" -gt 1 ] && [ -n "$PARALLEL_LIST" ] && can_unshare; then
-    echo "（并行：$JOBS worker（unshare 隔离）；串行段 $(printf '%s' "$SERIAL_LIST" | wc -w) 个套件）"
+if [ "${#SUITE_PARALLEL_RECORDS[@]}" -gt 0 ] || [ "${#SUITE_SERIAL_RECORDS[@]}" -gt 0 ]; then
+  if [ "$JOBS" -gt 1 ] && [ "${#SUITE_PARALLEL_RECORDS[@]}" -gt 0 ] && can_unshare; then
+    echo "（并行：$JOBS worker（unshare 隔离）；串行段 ${#SUITE_SERIAL_RECORDS[@]} 个套件）"
     EXECUTION_MODE=unshare
-    run_suites_parallel "$PARALLEL_LIST"
-    for suite in $SERIAL_LIST; do run_suite "$suite"; done
+    run_suites_parallel ${SUITE_PARALLEL_RECORDS[@]+"${SUITE_PARALLEL_RECORDS[@]}"}
+    for rec in ${SUITE_SERIAL_RECORDS[@]+"${SUITE_SERIAL_RECORDS[@]}"}; do run_suite "$rec"; done
   else
     if [ "$JOBS" -gt 1 ] && [ -z "$FALLBACK_REASON" ]; then
       if ! can_unshare; then FALLBACK_REASON="unshare-unavailable"
-      elif [ -z "$PARALLEL_LIST" ]; then FALLBACK_REASON="all-suites-require-serial"
+      elif [ "${#SUITE_PARALLEL_RECORDS[@]}" -eq 0 ]; then FALLBACK_REASON="all-suites-require-serial"
       else FALLBACK_REASON="parallel-worker-capability-unavailable"
       fi
       echo "（$FALLBACK_REASON：退回串行）"
@@ -470,16 +505,20 @@ if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; th
     fi
     JOBS=1
     # 串行模式共享 /tmp：某些套件会伪造 release-repo 软链，逐套件重建以隔离这种干扰
-    for suite in $PLAN_SUITES_ALL; do WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$suite"; done
+    for rec in ${SUITE_PARALLEL_RECORDS[@]+"${SUITE_PARALLEL_RECORDS[@]}"} ${SUITE_SERIAL_RECORDS[@]+"${SUITE_SERIAL_RECORDS[@]}"}; do
+      WF_RELEASE_REPO="$RELEASE_REPO" run_suite "$rec"
+    done
   fi
 fi
 if [ "$BUILD_OK" = 0 ]; then
   fail=$((fail + 1))
 fi
 
-# ---- 流程（仅 full/representative）----------------------------------------
+# ---- 流程 / extra（同一份 PLAN_UNITS 记录驱动；Step 4 并入统一 worker）------
 run_flow() {
-  local name=$1 script=$2 expect=$3
+  local record=$1
+  local name expect script
+  name=$(record_name "$record"); expect=$(record_field "$record" 3); script=$(record_script "$record")
   mkdir -p "$RESULTS_DIR"
   local log="$RESULTS_DIR/$name.out"
   local init_started=$(now_ms)
@@ -493,13 +532,14 @@ run_flow() {
   init_millis=$((init_millis + ($(now_ms) - init_started)))
   local out rc got started elapsed elapsed_ms
   started=$(now_ms)
-  out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script.py" 2>&1); rc=$?
+  out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow \
+        --expected "$expect" "$PY" "$HERE/$script" 2>&1); rc=$?
   elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
   suite_millis=$((suite_millis + elapsed_ms))
   printf '%s\n' "$out" >> "$log"
-  # PASS 计数唯一来源：execution.py 结果 JSON（verdict 的 passed 字段）——
+  # PASS 计数唯一来源：execution.py 结果 JSON（verdict 的 observed 字段）——
   # shell 不再本地复制行文法判定；解析失败计基础设施失败（不静默）。
-  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/$name.test.log.json") || {
+  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["observed"])' "$RESULTS_DIR/$name.test.log.json") || {
     printf '%-18s RESULT-JSON-INVALID\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return; }
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
@@ -508,64 +548,49 @@ run_flow() {
 
 # F0：从发行安装器装到一个空目录，再跑自举闭环（candidate 模式下用候选安装器）
 run_f0() {
-  local target="$LEGACY_FIXTURE_ROOT/f0"
+  local record=$1
+  local name expect script
+  name=$(record_name "$record"); expect=$(record_field "$record" 3); script=$(record_script "$record")
+  local target="$LEGACY_FIXTURE_ROOT/$name"
   "$PY" "$HERE/fixture_scope.py" reset "$target" --forbid "$RESULTS_DIR" \
     --forbid "$RELEASE_REPO" || { fail=$((fail+1)); return; }
-  if ! run_command f0-install "$RESULTS_DIR/f0-install.log" raw "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref "$RELEASE_REF" \
+  if ! run_command "$name-install" "$RESULTS_DIR/$name-install.log" raw "$PY" "$RELEASE_REPO/install.py" --target "$target" --release-ref "$RELEASE_REF" \
       --source "$RELEASE_REPO" --platform dsh \
-      --confirm >"$RESULTS_DIR/f0-install.out" 2>&1; then
-    printf '%-18s INSTALL-FAILED\n' f0; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
+      --confirm >"$RESULTS_DIR/$name-install.out" 2>&1; then
+    printf '%-18s INSTALL-FAILED\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return
   fi
   local out got passed
-  out=$(WF_FIX="$target" run_command f0 "$RESULTS_DIR/f0.test.log" flow --expected 9 "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
-  passed=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/f0.test.log.json") || passed=RESULT-JSON-INVALID
-  printf '%-18s rc=%s PASS=%s\n' f0 "$got" "$passed"
+  out=$(WF_FIX="$target" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script" 2>&1); got=$?
+  passed=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["observed"])' "$RESULTS_DIR/$name.test.log.json") || passed=RESULT-JSON-INVALID
+  printf '%-18s rc=%s PASS=%s\n' "$name" "$got" "$passed"
   flow_ran=$((flow_ran+1))
-  if [ "$got" -ne 0 ] || [ "$passed" != "9" ]; then fail=$((fail+1)); fi
+  if [ "$got" -ne 0 ] || [ "$passed" != "$expect" ]; then fail=$((fail+1)); fi
 }
 
 run_extra() {
   # 直接调用的专项脚本体：计入 flow_ran，判据为退出码与 PASS 计数（唯一来源：
   # execution.py 结果 JSON；解析失败计基础设施失败，不静默）
-  local name=$1 script=$2 expect=$3 out rc got log="$RESULTS_DIR/$1.out"
+  local record=$1
+  local name expect script
+  name=$(record_name "$record"); expect=$(record_field "$record" 3); script=$(record_script "$record")
+  local out rc got log="$RESULTS_DIR/$name.out"
   out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script" 2>&1); rc=$?
   printf '%s\n' "$out" >> "$log"
-  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/$name.test.log.json") || {
+  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["observed"])' "$RESULTS_DIR/$name.test.log.json") || {
     printf '%-18s RESULT-JSON-INVALID\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return; }
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
-  if [ "$rc" -ne 0 ] || [ "$got" -lt "$expect" ]; then fail=$((fail+1)); fi
+  if [ "$rc" -ne 0 ] || [ "$got" -ne "$expect" ]; then fail=$((fail+1)); fi
 }
 
-# 期望 PASS 数来自 suites.json（flow_expect/extra_expect），不在这里硬编码
-expect_of() {
-  local mapping=$1 name=$2 pair
-  for pair in $mapping; do
-    case "$pair" in
-      "$name":*) echo "${pair#*:}"; return 0 ;;
-    esac
-  done
-  return 1
-}
-
-for flow in $PLAN_FLOWS; do
-  if ! expect=$(expect_of "$PLAN_FLOW_EXPECT" "$flow"); then
-    echo "未知流程（suites.json 缺 flow_expect）：$flow"; fail=$((fail+1)); continue
-  fi
-  case "$flow" in
-    f0) run_f0 ;;
-    p5_*) run_flow "$flow" "$flow" "$expect" ;;
-    *) echo "未知流程：$flow"; fail=$((fail+1)) ;;
+for rec in ${FLOW_RECORDS[@]+"${FLOW_RECORDS[@]}"}; do
+  case "$(record_name "$rec")" in
+    f0) run_f0 "$rec" ;;
+    *) run_flow "$rec" ;;
   esac
 done
-for extra in $PLAN_EXTRA; do
-  if ! expect=$(expect_of "$PLAN_EXTRA_EXPECT" "$extra"); then
-    echo "未知 extra 套件（suites.json 缺 extra_expect）：$extra"; fail=$((fail+1)); continue
-  fi
-  case "$extra" in
-    r72_tests) run_extra r72_tests r72_tests.py "$expect" ;;
-    *) echo "未知 extra 套件：$extra"; fail=$((fail+1)) ;;
-  esac
+for rec in ${EXTRA_RECORDS[@]+"${EXTRA_RECORDS[@]}"}; do
+  run_extra "$rec"
 done
 
 if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
@@ -579,7 +604,7 @@ legacy_missing=""
 if [ -f "$RESULTS_MARK" ]; then
   for suite in $KNOWN_LEGACY; do
     # 子集模式（WF_SUITES）下没有参与的套件不算"清单过期"：那是没跑，不是没结果
-    case " $PLAN_SUITES_ALL " in *" $suite "*) ;; *) continue ;; esac
+    case " ${UNIT_NAMES[*]} " in *" $suite "*) ;; *) continue ;; esac
     state=$(awk -F'\t' -v s="$suite" 'NF==5 && $1==s {print $4}' "$RESULTS_MARK" | head -1)
     case "$state" in
       bad)  legacy_failed="$legacy_failed $suite" ;;

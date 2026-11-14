@@ -143,6 +143,9 @@ def verdict(log_path, rc, kind, expected=None):
     if kind == 'suite' and re.fullmatch(r'TASK_ID [a-zA-Z0-9-]+', tail):
         kind = 'steps'
     evidence = passed
+    # 「用例数」的唯一观测点：PASS 行形态数（raw/suite/flow/repro），步骤型输出则是
+    # 通过的 step 行数——它与 `expect` 预算比较；`passed` 仍保持 PASS 行计数以兼容既有消费者。
+    observed = passed
     if kind == 'suite':
         summary = re.fullmatch(r'(?:saved|total)\s+(\d+)\s*/\s*(\d+)', tail)
         alternative = re.fullmatch(r'saved\s+(\d+)\s+(?:cases|checks);\s*(\d+)\s+passed', tail)
@@ -163,15 +166,17 @@ def verdict(log_path, rc, kind, expected=None):
         evidence = len(steps) if steps and re.fullmatch(r'TASK_ID [a-zA-Z0-9-]+', tail) else 0
         if any(not re.fullmatch(r'\[[^]]+\] exit=0 code=WF_OK', line) for line in steps):
             evidence = 0
+        observed = evidence
     elif kind == 'repro':
         evidence = int(bool(re.fullmatch(r'PASS (?:green|red): .+', tail)))
     elif kind == 'raw':
         evidence = 1
     ok = rc == 0 and failures == 0 and evidence > 0
     if expected is not None:
-        ok = ok and passed == expected
-    return {'ok': ok, 'assertions': evidence, 'passed': passed, 'tail': tail,
-            'reason': '' if ok else f'rc={rc} assertions={evidence} failures={failures} expected={expected}'}
+        ok = ok and observed == expected
+    return {'ok': ok, 'assertions': evidence, 'passed': passed, 'observed': observed,
+            'tail': tail,
+            'reason': '' if ok else f'rc={rc} observed={observed} failures={failures} expected={expected}'}
 
 
 def isolated_user(log_path):

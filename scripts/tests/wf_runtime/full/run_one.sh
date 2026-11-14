@@ -3,7 +3,10 @@
 # 由 run_all.sh 以 unshare -Urm 调用；套件里写死的 /tmp 路径因此天然互不干扰。
 # 部署来源与发行参数通过环境（WF_FIXTURE_DEPLOY / WF_RELEASE_*）传进来。
 set -uo pipefail
-suite=$1
+record=$1
+suite=${record%%:*}
+expect=$(printf '%s' "$record" | cut -d: -f3)
+script=${record##*:}
 : "${FIX:?}" "${HERE:?}" "${PY:?}" "${SHARED_RELEASE:?}" "${RESULTS_DIR:?}"
 # Every worker owns a separate fixture path. The old shared path was hidden by
 # tmpfs but still raced during setup and cleanup before the namespace was ready.
@@ -11,7 +14,7 @@ if [ "${WF_NAMESPACE_READY:-0}" != "1" ]; then
   FIX="${FIX}-${suite}-${BASHPID}"
   export FIX
   export NAMESPACE_ERROR_LOG="$RESULTS_DIR/$suite.namespace.log"
-  exec "$PY" "$HERE/namespace.py" bash "$0" "$@"
+  exec "$PY" "$HERE/namespace.py" bash "$0" "$record"
 fi
 export WF_FIX="$FIX" WF_LEGACY_FIXTURE_ROOT="$FIX.legacy"
 now_ms() { "$PY" -c 'import time; print(int(time.monotonic()*1000))'; }
@@ -53,14 +56,14 @@ if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
 fi
 init_millis=$(( $(now_ms) - init_started ))
 
-# isolated-user 成员判定与 run_all.sh 同源（WF_ISOLATED_SUITES ← suites.json isolated_user
+# isolated-user 成员判定与 run_all.sh 同源（WF_ISOLATED_UNITS ← units.json isolated_user
 # 字段经 plan.py 下发）。修复：并行路径此前缺失 --isolated-user，套件会写真用户配置。
 isolated_args() {
-  case " ${WF_ISOLATED_SUITES:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
+  case " ${WF_ISOLATED_UNITS:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
 }
 user_args=($(isolated_args "$suite"))
 started=$(now_ms)
-WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$suite" --kind suite --log "$RESULTS_DIR/$suite.test.log" --result "$RESULTS_DIR/$suite.test.log.json" ${user_args[@]+"${user_args[@]}"} -- "$PY" "$HERE/$suite.py" >>"$out" 2>&1
+WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$suite" --kind suite --expected "$expect" --log "$RESULTS_DIR/$suite.test.log" --result "$RESULTS_DIR/$suite.test.log.json" ${user_args[@]+"${user_args[@]}"} -- "$PY" "$HERE/$script" >>"$out" 2>&1
 rc=$?
 # 套件耗时的唯一来源：execution.py 结果 JSON 的 seconds（time.monotonic，精度优于
 # /proc/uptime 的 10ms）——run_one 不再自算套件段计时；init 段不经 execution.py，

@@ -104,7 +104,8 @@ class RunAllContractTest(unittest.TestCase):
         with open(os.path.join(results, "plan.json"), encoding="utf-8") as handle:
             plan = json.load(handle)
         self.assertEqual(plan["mode"], "subset")
-        self.assertEqual(plan["suites_all"], ["r70_tests"])
+        self.assertEqual([unit["name"] for unit in plan["units"]], ["r70_tests"])
+        self.assertEqual(plan["units"][0]["kind"], "suite")
         self.assertEqual(plan["repro_enabled"], 0)
 
     def test_subset_runs_exactly_one_unit(self):

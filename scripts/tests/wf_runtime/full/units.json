@@ -1,40 +1,32 @@
 {
-  "schema_version": 1,
-  "flows": [
-    "f0",
-    "p5_spec",
-    "p5_v2v3",
-    "p5_v5"
-  ],
-  "representative_flow": "p5_spec",
-  "suites": [
+  "schema_version": 2,
+  "units": [
     {
       "name": "cp1_tests",
       "kind": "suite",
+      "expect": 20,
       "tags": [
         "capability",
         "writer"
       ],
       "representative": true,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "cp2_tests",
       "kind": "suite",
+      "expect": 15,
       "tags": [
         "capability",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "cp3_tests",
       "kind": "suite",
+      "expect": 19,
       "tags": [
         "capability",
         "executor",
@@ -43,60 +35,56 @@
       "representative": false,
       "candidate_clean": false,
       "isolated_user": true,
-      "representative_flow": null,
       "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（plan.py 下发 PLAN_ISOLATED_SUITES，run_all/run_one 同一成员判定）"
     },
     {
       "name": "cp4_tests",
       "kind": "suite",
+      "expect": 6,
       "tags": [
         "install",
         "uninstall",
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "cp4_a8",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "uninstall"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "cp5_b345",
       "kind": "suite",
+      "expect": 8,
       "tags": [
         "spec",
         "capability"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "cp5_b12",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "capability",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r1r2_tests",
       "kind": "suite",
+      "expect": 14,
       "tags": [
         "gate",
         "executor"
@@ -104,359 +92,331 @@
       "representative": false,
       "candidate_clean": false,
       "isolated_user": true,
-      "representative_flow": null,
       "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（同 cp3_tests）"
     },
     {
       "name": "r7r15_tests",
       "kind": "suite",
+      "expect": 37,
       "tags": [
         "state-machine",
         "writer"
       ],
       "representative": true,
       "candidate_clean": false,
-      "representative_flow": null,
       "notes": "大状态机广覆盖；硬编码源码 payload/lib → candidate_clean=false"
     },
     {
       "name": "r17r24_tests",
       "kind": "suite",
+      "expect": 30,
       "tags": [
         "state-machine",
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r25r30_tests",
       "kind": "suite",
+      "expect": 10,
       "tags": [
         "state-machine",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r31r34_tests",
       "kind": "suite",
+      "expect": 13,
       "tags": [
         "archive",
         "task-lifecycle"
       ],
       "representative": true,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r35_tests",
       "kind": "suite",
+      "expect": 10,
       "tags": [
         "uninstall",
         "install"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r35r37_tests",
       "kind": "suite",
+      "expect": 15,
       "tags": [
         "archive",
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r38r39_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "gate",
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r40r42_tests",
       "kind": "suite",
+      "expect": 10,
       "tags": [
         "gate",
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r43r45_tests",
       "kind": "suite",
+      "expect": 16,
       "tags": [
         "spec",
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r46_tests",
       "kind": "suite",
+      "expect": 5,
       "tags": [
         "scope",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r47r48_tests",
       "kind": "suite",
+      "expect": 8,
       "tags": [
         "spec",
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r49_tests",
       "kind": "suite",
+      "expect": 7,
       "tags": [
         "scope",
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r50_tests",
       "kind": "suite",
+      "expect": 7,
       "tags": [
         "baseline",
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r51r52_tests",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "gate",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r53_tests",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "gate",
         "artifact"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r54_tests",
       "kind": "suite",
+      "expect": 15,
       "tags": [
         "complexity",
         "plan"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r55_tests",
       "kind": "suite",
+      "expect": 8,
       "tags": [
         "plan",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r56_tests",
       "kind": "suite",
+      "expect": 4,
       "tags": [
         "config",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r57_tests",
       "kind": "suite",
+      "expect": 7,
       "tags": [
         "config",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r58_tests",
       "kind": "suite",
+      "expect": 10,
       "tags": [
         "config",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r59_tests",
       "kind": "suite",
+      "expect": 8,
       "tags": [
         "maintenance",
         "archive"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r60_tests",
       "kind": "suite",
+      "expect": 6,
       "tags": [
         "gate",
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r61_tests",
       "kind": "suite",
+      "expect": 6,
       "tags": [
         "identity",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r62_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r63_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "security",
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r64_tests",
       "kind": "suite",
+      "expect": 5,
       "tags": [
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r65_tests",
       "kind": "suite",
+      "expect": 6,
       "tags": [
         "manifest",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r66_tests",
       "kind": "suite",
+      "expect": 12,
       "tags": [
         "writer",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r67_tests",
       "kind": "suite",
+      "expect": 16,
       "tags": [
         "writer",
         "gate",
         "runner"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r68_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "review",
         "repair",
@@ -464,25 +424,24 @@
       ],
       "representative": false,
       "candidate_clean": false,
-      "representative_flow": null,
       "notes": "审查/修复/基线；硬编码源码 payload/lib → candidate_clean=false"
     },
     {
       "name": "r69_tests",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "review",
         "uninstall",
         "install"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r70_tests",
       "kind": "suite",
+      "expect": 5,
       "tags": [
         "review",
         "uninstall",
@@ -490,251 +449,231 @@
       ],
       "representative": true,
       "candidate_clean": false,
-      "representative_flow": null,
       "notes": "审查判定输入面；与 test_review_coverage/test_report_boundary 部分重叠（Phase 2 映射）"
     },
     {
       "name": "r71_tests",
       "kind": "suite",
+      "expect": 16,
       "tags": [
         "review",
         "handover",
         "instance"
       ],
       "representative": true,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r74_tests",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "scope",
         "writer",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r75_tests",
       "kind": "suite",
+      "expect": 12,
       "tags": [
         "review",
         "instance",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r76_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "maintenance",
         "instance"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r77_tests",
       "kind": "suite",
+      "expect": 17,
       "tags": [
         "maintenance",
         "config"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r79_tests",
       "kind": "suite",
+      "expect": 18,
       "tags": [
         "review",
         "security"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r80_tests",
       "kind": "suite",
+      "expect": 22,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r81_tests",
       "kind": "suite",
+      "expect": 29,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r82_tests",
       "kind": "suite",
+      "expect": 27,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r83_tests",
       "kind": "suite",
+      "expect": 30,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r84_tests",
       "kind": "suite",
+      "expect": 13,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r85_tests",
       "kind": "suite",
+      "expect": 16,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r86_tests",
       "kind": "suite",
+      "expect": 19,
       "tags": [
         "fixed-point",
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r87_tests",
       "kind": "suite",
+      "expect": 11,
       "tags": [
         "fixed-point",
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r88_tests",
       "kind": "suite",
+      "expect": 7,
       "tags": [
         "fixed-point",
         "instance"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r89_tests",
       "kind": "suite",
+      "expect": 12,
       "tags": [
         "install",
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r90_tests",
       "kind": "suite",
+      "expect": 13,
       "tags": [
         "identity",
         "install"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "f1_ordinary",
       "kind": "suite",
+      "expect": 9,
       "tags": [
         "task-lifecycle",
         "archive"
       ],
       "representative": true,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "p5_v1",
       "kind": "suite",
+      "expect": 12,
       "tags": [
         "identity",
         "install"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "representative_flow": null,
-      "notes": ""
+      "candidate_clean": false
     },
     {
       "name": "r72_tests",
       "kind": "extra",
+      "expect": 7,
       "tags": [
         "uninstall",
         "install"
       ],
       "representative": false,
       "candidate_clean": false,
-      "representative_flow": null,
-      "notes": "run_extra：只在 full 或显式选中时执行（不计入 59 套件）"
+      "notes": "full/representative 与显式 WF_SUITES=r72_tests 时执行（与套件同池，kind=extra）"
     },
     {
       "name": "d1_tests",
@@ -745,7 +684,6 @@
       ],
       "representative": false,
       "candidate_clean": false,
-      "representative_flow": null,
       "notes": "手动套件：不在默认全量内（历史保留，不删除）"
     },
     {
@@ -757,12 +695,12 @@
       ],
       "representative": false,
       "candidate_clean": false,
-      "representative_flow": null,
       "notes": "手动套件：不在默认全量内（历史保留，不删除）"
     },
     {
       "name": "f1_candidate_smoke",
       "kind": "candidate",
+      "expect": 17,
       "tags": [
         "candidate",
         "smoke",
@@ -770,20 +708,48 @@
       ],
       "representative": false,
       "candidate_clean": true,
-      "fallback_representative": true,
-      "representative_flow": null,
       "notes": "兜底候选闭环（候选安装 → 初始化/普通任务 → 复杂审查 → 归档）；只经 .wf/bin/wf.py 与 $F/.wf/lib 断言"
+    },
+    {
+      "name": "f0",
+      "kind": "flow",
+      "expect": 9,
+      "fixture": "install",
+      "script": "p5_f0.py",
+      "tags": [
+        "flow"
+      ],
+      "notes": "安装器闭环：从发行安装器装到空目录后跑自举（fixture=install）"
+    },
+    {
+      "name": "p5_spec",
+      "kind": "flow",
+      "expect": 19,
+      "tags": [
+        "flow"
+      ],
+      "notes": "V1–V5 规格流程"
+    },
+    {
+      "name": "p5_v2v3",
+      "kind": "flow",
+      "expect": 12,
+      "tags": [
+        "flow"
+      ],
+      "notes": "p5 流程：p5_v2v3"
+    },
+    {
+      "name": "p5_v5",
+      "kind": "flow",
+      "expect": 12,
+      "tags": [
+        "flow"
+      ],
+      "notes": "p5 流程：p5_v5"
     }
   ],
-  "flow_expect": {
-    "f0": 9,
-    "p5_spec": 19,
-    "p5_v2v3": 12,
-    "p5_v5": 12
-  },
-  "extra_expect": {
-    "r72_tests": 7
-  },
+  "representative_flow": "p5_spec",
   "modules": {
     "payload/lib/wflib/review.py": {
       "suites": [
