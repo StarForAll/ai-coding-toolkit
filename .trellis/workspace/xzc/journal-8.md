@@ -1108,3 +1108,30 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 408: wf 运行器第二轮：契约化提速与证据完整性
+<!-- trellis-session: v=2 fp=b33f6667a57f917f -->
+
+**Date**: 2026-11-14
+**Task**: wf 运行器第二轮：契约化提速与证据完整性
+**Branch**: `main`
+
+### Summary
+
+按 11-14-wf-runner-round2-contracts 的 Step 0–6 完成：①卫生（61 处 /tmp 注入、仓库级 pyc 忽略、source_hygiene 前后对拍、删除 r64 恒真 P3-1）；②注册表统一 units.json + expect 预算 + 五段记录（f0 script 单点）；③pyc 重定向与模板跨 run 缓存（发布/命中/七条失效实证，dev 身份入 key）；④统一执行池（flows 入池、gate 覆盖串行段、repro 默认串行 + 显式并发开关、summary schema 2）；⑤G1/G2/G3/G8/G9 + G5 热路径闸门与文档。收口：full 90.3/88.8s → 50.8/44.8s（−44%/−50%，硬性≤65s、目标≤60s），串行 268s，lines 64/repro 85/计数逐项对拍相等；T0 883 tests OK，慢契约 9 tests OK。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3620973a` | refactor(test): 收口 wf 运行器源树卫生契约 |
+| `c25023af` | refactor(test): wf 运行器注册表统一为 units.json 并下发期望用例数 |
+| `e5f91366` | perf(test): wf 运行器字节码缓存与模板跨 run 缓存 |
+| `80c19fbe` | perf(test): wf 运行器统一执行池（flows 入池）与证据完整性收口 |
+| `2529ea03` | test(docs): 补齐 wf 运行器防回归闸门并同步运行器契约文档 |
+| `06d8253b` | docs(spec): 修正运行器选择器段落里遗留的 suites.json 引用 |
+
+### Status
+
+[OK] **Completed**
