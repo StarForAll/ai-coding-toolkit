@@ -147,6 +147,37 @@ def remove(root, forbidden=()):
     return True
 
 
+def move(source, target, forbidden=()):
+    """Rename an owned fixture and keep its ownership marker consistent.
+
+    Used by the template cache publisher: a directory rename without moving the
+    marker would leave the new path unowned (and the old marker stale), which
+    would either refuse later cleanup or let an unowned tree be adopted.
+    """
+    source = validate(source, forbidden)
+    target = validate(target, forbidden)
+    owner = marker(source)
+    if owner.is_symlink():
+        raise FixtureError(f'ownership marker must not be a symlink: {owner}')
+    if not source.exists():
+        raise FixtureError(f'fixture does not exist: {source}')
+    try:
+        record = json.loads(owner.read_text())
+    except (OSError, ValueError) as exc:
+        raise FixtureError(f'refusing to move an unowned fixture: {source}') from exc
+    # 只要求 marker 是本工具的格式；`root` 允许指向旧路径——缓存根被整体移动/拷贝后，
+    # marker 随目录走但记录仍指向旧根，这正是要处理的“搬动后的缓存条目”。`remove` 保持
+    # 严格 root 比对（删除数据），`move` 只是改名并重写 marker（不丢数据）。
+    if record.get('owner') != OWNER:
+        raise FixtureError(f'refusing to move an unowned fixture: {source}')
+    if target.exists():
+        raise FixtureError(f'move target already exists: {target}')
+    os.rename(source, target)
+    owner.unlink(missing_ok=True)
+    write_marker(marker(target), {'owner': OWNER, 'root': str(target)})
+    return target
+
+
 def clone(source, target):
     source = Path(source).resolve()
     target = reset(target, forbidden=[source])
@@ -305,6 +336,9 @@ def main(argv=None):
     p = sub.add_parser('clone')
     p.add_argument('source')
     p.add_argument('target')
+    p = sub.add_parser('move')
+    p.add_argument('source')
+    p.add_argument('target')
     p = sub.add_parser('claim-results')
     p.add_argument('root')
     p = sub.add_parser('prepare-results')
@@ -334,6 +368,8 @@ def main(argv=None):
             verify_lease()
             if args.operation == 'clone':
                 clone(args.source, args.target)
+            elif args.operation == 'move':
+                move(args.source, args.target)
             elif args.operation == 'claim-results':
                 claim_results(args.root)
             elif args.operation == 'prepare-results':

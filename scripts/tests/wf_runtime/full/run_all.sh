@@ -38,8 +38,11 @@ case "${1:-}" in
   -h|--help) usage; exit 0 ;;
 esac
 
-# 不在源码树里生成 __pycache__（第四轮复审：源树残留 pyc）
-export PYTHONDONTWRITEBYTECODE=1
+# 字节码缓存策略（D3.1）：pyc 一律落在仓库与夹具之外。计划前用 bootstrap 前缀——
+# 结果目录尚未 claim，先写 pyc 会让“非空无主目录”被 fixture_scope 拒绝；claim/prepare
+# 之后改指结果目录（随 run 轮转，可经 WF_PYCACHE 注入）。
+export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-${TMPDIR:-/tmp}/wf-pycache-bootstrap}"
+unset PYTHONDONTWRITEBYTECODE
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
 WF_RESULTS_DIR=${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}
 export WF_RESULTS_DIR
@@ -57,6 +60,8 @@ if [ -z "${WF_RUNNER_CONTROL_PID:-}" ]; then
     --result "$WF_RESULTS_DIR/.runner.json" -- bash "$0" "$@"
 fi
 "$PY" "$HERE/fixture_scope.py" prepare-results "$WF_RESULTS_DIR" || exit 1
+export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$WF_RESULTS_DIR/pycache}"
+mkdir -p "$PYTHONPYCACHEPREFIX"
 # 结果缓存轮转：只回收本 scope（run-*）的带 marker 目录，保留最近 20；root 可经
 # WF_RESULTS_CACHE 注入（r67 假环境/契约测试指向临时根，不触碰真实用户缓存）。
 # bootstrap 不在此接入——那是无自动调用点的一次性存量清理（任务 design D5.3）。
@@ -115,8 +120,10 @@ mkdir -p "$RESULTS_DIR"
   --forbid "$PLAN_TEST_RELEASE_ROOT" --forbid "$PLAN_RELEASE_ROOT" || exit 1
 WF_TEMPLATE=""
 WF_TEMPLATE_READY=0
+# run 内模板（结果目录里）由本 run 拥有、结束即删；跨 run 缓存条目绝不在此删除。
+RUN_TEMPLATE=""
 cleanup_fixtures() {
-  for fixture_path in "$FIX" "$LEGACY_FIXTURE_ROOT" "$WF_TEMPLATE"; do
+  for fixture_path in "$FIX" "$LEGACY_FIXTURE_ROOT" ${RUN_TEMPLATE:+"$RUN_TEMPLATE"}; do
     [ -n "$fixture_path" ] || continue
     "$PY" "$HERE/fixture_scope.py" remove "$fixture_path" >/dev/null 2>&1 || true
   done
@@ -220,48 +227,213 @@ fixture_args() {
   fi
 }
 
-# ---- 夹具模板（run 内复用；不跨 run 缓存）----------------------------------
-# 每套件都跑 wf_fixture.sh + f1_init.py 约 1.95s（实测 175ms + 1770ms），而 cp -a 约 5ms。
-# 模板只构建一次、**只读**（任何套件都不会在模板目录里跑），每套件复制独立一份。
-# 复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须机械核对（template_check.py）。
-template_check() {
-  local leak="$1"; shift
+# ---- 夹具模板（run 内构建 + 跨 run 缓存；一处策略两个载体）-------------------
+# 每单元都跑 wf_fixture.sh + f1_init.py 约 1.95s，而 cp -a 约 5ms：模板只构建一次、
+# 只读，每单元复制独立一份。复制不会搬走记录里的绝对路径与外部暂存目录，所以克隆后
+# 必须 repoint + 残留检查（template_check.py 是唯一判定点，bash 只传参与读退出码）。
+template_check() {   # template_check <root> [extra args...]
+  local root=$1; shift
   local args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF")
-  if [ "$PLAN_FIXTURE_DEPLOY" != "candidate" ]; then
-    args=()
+  if [ "$PLAN_FIXTURE_DEPLOY" != "candidate" ]; then args=(); fi
+  "$PY" "$HERE/template_check.py" "$root" "${args[@]}" --quiet "$@"
+}
+
+template_repoint() {  # template_repoint <root> <from> [extra args...]
+  local root=$1 from=$2; shift 2
+  local args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF")
+  if [ "$PLAN_FIXTURE_DEPLOY" != "candidate" ]; then args=(); fi
+  "$PY" "$HERE/template_check.py" "$root" --repoint-from "$from" "${args[@]}" --quiet "$@"
+}
+
+# key = <payload_digest12>-<py_maj.min>-<deploy>[-<version>-<ref>]
+# digest 是内容摘要（相对路径序 + 逐文件 sha256，跳过 .git/__pycache__/*.pyc，不看 mtime）：
+# 改内容才失效，只 touch 不失效。非 [A-Za-z0-9._-] 字符统一折叠为 '-'（ref 含 '/'）。
+compute_template_key() {
+  local version="$PLAN_TEST_RELEASE_VERSION" ref="$PLAN_TEST_RELEASE_REF"
+  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+    version="$PLAN_RELEASE_VERSION"; ref="$PLAN_RELEASE_REF"
   fi
-  if [ -n "$leak" ]; then
-    "$PY" "$HERE/template_check.py" "$1" --repoint-from "$leak" "${args[@]}" --quiet
-  else
-    "$PY" "$HERE/template_check.py" "$1" "${args[@]}" --quiet
+  "$PY" - "$REPO_ROOT" "$PLAN_FIXTURE_DEPLOY" "$version" "$ref" <<'PY'
+import os, re, sys
+repo, deploy, version, ref = sys.argv[1:5]
+sys.path.insert(0, os.path.join(repo, "scripts"))
+import wf_release_common as common
+
+digest = common.tree_digest(os.path.join(repo, "docs/workflows/wf/payload")).split(":", 1)[-1][:12]
+pyver = "%d.%d" % sys.version_info[:2]
+
+def sanitize(value):
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-") or "x"
+
+parts = [digest, pyver, deploy]
+if deploy == "candidate" and version and ref:
+    parts += [version, ref]
+print("-".join(sanitize(part) for part in parts))
+PY
+}
+
+build_template_tree() {  # build_template_tree <root> <out-file>
+  local root=$1 out=$2
+  "$PY" "$HERE/fixture_scope.py" reset "$root" || return 1
+  fixture_args
+  if ! run_command template-fixture "$RESULTS_DIR/template-fixture.log" raw \
+      bash "$HERE/wf_fixture.sh" "$root" "${FIXTURE_ARGS[@]}" >"$out" 2>&1; then
+    return 1
   fi
+  if ! WF_FIX="$root" run_command template-init "$RESULTS_DIR/template-init.log" raw \
+      "$PY" "$HERE/f1_init.py" >>"$out" 2>&1; then
+    return 1
+  fi
+  return 0
+}
+
+cleanup_template_cache_stale() {  # 陈旧条目/半成品：flock 保证无并发运行器，直接按所有权回收
+  local root=$1 path
+  for path in "$root"/*.stale-* "$root"/*.build; do
+    [ -e "$path" ] || continue
+    "$PY" "$HERE/fixture_scope.py" remove "$path" >/dev/null 2>&1 \
+      || echo "（无法回收陈旧模板缓存条目：$path）"
+  done
+}
+
+cache_entry_root() {  # 有效条目打印 meta.root；无效返回非零（诊断走 stderr）
+  local entry=$1 meta="$1.meta.json" root
+  if [ ! -f "$meta" ]; then
+    echo "TEMPLATE-CACHE-INVALID: 缺少 meta（没有 meta 的条目一律无效）" >&2
+    return 1
+  fi
+  root=$("$PY" - "$entry" "$meta" <<'PY'
+import json, os, sys
+entry, meta = os.path.abspath(sys.argv[1]), sys.argv[2]
+try:
+    record = json.load(open(meta, encoding="utf-8"))
+except (OSError, ValueError):
+    raise SystemExit(1)
+root = record.get("root")
+if not isinstance(root, str) or not root or root != os.path.realpath(entry):
+    raise SystemExit(1)
+print(root)
+PY
+  ) || {
+    echo "TEMPLATE-CACHE-MOVED: meta.root 与条目 realpath 不一致（缓存根被移动/条目被拷贝）" >&2
+    return 1
+  }
+  template_check "$entry" >&2 || {
+    echo "TEMPLATE-CACHE-INVALID: 空态/安装身份校验失败" >&2; return 1; }
+  "$PY" "$HERE/source_hygiene.py" check --strict "$entry" >&2 || {
+    echo "TEMPLATE-CACHE-INVALID: 条目内含字节码产物（strict 判脏）" >&2; return 1; }
+  printf '%s\n' "$root"
+  return 0
+}
+
+publish_template_cache() {  # 发布序列：build → 校验 → 挪旧 → 改名 → repoint → 最后写 meta
+  local entry=$1 build="$1.build"
+  if [ -e "$build" ]; then
+    "$PY" "$HERE/fixture_scope.py" remove "$build" >/dev/null 2>&1 || return 1
+  fi
+  if ! build_template_tree "$build" "$RESULTS_DIR/template.out"; then
+    echo "TEMPLATE-BUILD-FAILED（见 $RESULTS_DIR/template.out）" >&2
+    tail -5 "$RESULTS_DIR/template.out" >&2 || true
+    return 1
+  fi
+  if ! template_check "$build"; then
+    echo "TEMPLATE-BUILD-INVALID（见 $RESULTS_DIR/template.out）" >&2
+    return 1
+  fi
+  if [ -e "$entry" ]; then
+    "$PY" "$HERE/fixture_scope.py" move "$entry" "$entry.stale-$$" || return 1
+  fi
+  "$PY" "$HERE/fixture_scope.py" move "$build" "$entry" || return 1
+  if ! template_repoint "$entry" "$build" --expect-repoint-min 1; then
+    echo "TEMPLATE-REPOINT-MISMATCH: 发布时改写数 < 1（记录未指向构建路径）" >&2
+    return 1
+  fi
+  "$PY" - "$entry" "$TEMPLATE_CACHE_KEY" <<'PY'
+import datetime, json, os, sys
+entry, key = sys.argv[1], sys.argv[2]
+meta = entry + ".meta.json"
+record = {
+    "key": key,
+    "digest": key.split("-", 1)[0],
+    "pyver": "%d.%d" % sys.version_info[:2],
+    "deploy": os.environ.get("PLAN_FIXTURE_DEPLOY", ""),
+    "version": os.environ.get("PLAN_RELEASE_VERSION", ""),
+    "ref": os.environ.get("PLAN_RELEASE_REF", ""),
+    "root": os.path.realpath(entry),
+    "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+}
+temporary = meta + ".tmp"
+with open(temporary, "w", encoding="utf-8") as handle:
+    json.dump(record, handle, ensure_ascii=False, indent=2, sort_keys=True)
+    handle.write("\n")
+os.replace(temporary, meta)
+PY
+  return 0
 }
 
 TEMPLATE_SECONDS=0
 WF_TEMPLATE_READY=0
 WF_TEMPLATE=""
-if [ "${WF_NO_TEMPLATE:-0}" != "1" ]; then
-  WF_TEMPLATE="$RESULTS_DIR/template"
-  template_started=$(now_ms)
-  "$PY" "$HERE/fixture_scope.py" reset "$WF_TEMPLATE" || exit 1
-  fixture_args
-  if ! run_command template-fixture "$RESULTS_DIR/template-fixture.log" raw bash "$HERE/wf_fixture.sh" "$WF_TEMPLATE" "${FIXTURE_ARGS[@]}" >"$RESULTS_DIR/template.out" 2>&1 \
-      || ! WF_FIX="$WF_TEMPLATE" run_command template-init "$RESULTS_DIR/template-init.log" raw "$PY" "$HERE/f1_init.py" >>"$RESULTS_DIR/template.out" 2>&1; then
-    echo "TEMPLATE-BUILD-FAILED（见 $RESULTS_DIR/template.out）"
-    tail -5 "$RESULTS_DIR/template.out" || true
-    exit 1
-  fi
-  if ! template_check "" "$WF_TEMPLATE"; then
-    echo "TEMPLATE-BUILD-INVALID（见 $RESULTS_DIR/template.out）"
-    exit 1
-  fi
-  WF_TEMPLATE_READY=1
-  TEMPLATE_SECONDS=$(( ($(now_ms) - template_started) / 1000 ))
-  echo "（夹具模板已构建：${WF_TEMPLATE}，${TEMPLATE_SECONDS}s；逐套件 cp -a 复用）"
+WF_TEMPLATE_SOURCE=""
+TEMPLATE_SOURCE=run-build
+TEMPLATE_CACHE_HIT=0
+TEMPLATE_CACHE_KEY=""
+TEMPLATE_CACHE_ROOT="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}/template"
+if [ "$PLAN_NO_TEMPLATE" = "1" ]; then
+  TEMPLATE_SOURCE=none
+  echo "（模板机制关闭（--no-template/WF_NO_TEMPLATE=1）：逐单元重建夹具）"
 else
-  echo "（WF_NO_TEMPLATE=1：逐套件重建夹具）"
+  template_started=$(now_ms)
+  if [ "$PLAN_NO_TEMPLATE_CACHE" = "1" ]; then
+    WF_TEMPLATE="$RESULTS_DIR/template"
+    RUN_TEMPLATE="$WF_TEMPLATE"
+    if ! build_template_tree "$WF_TEMPLATE" "$RESULTS_DIR/template.out"; then
+      echo "TEMPLATE-BUILD-FAILED（见 $RESULTS_DIR/template.out）"
+      tail -5 "$RESULTS_DIR/template.out" || true
+      exit 1
+    fi
+    if ! template_check "$WF_TEMPLATE"; then
+      echo "TEMPLATE-BUILD-INVALID（见 $RESULTS_DIR/template.out）"
+      exit 1
+    fi
+    TEMPLATE_SOURCE=run-build
+    WF_TEMPLATE_SOURCE="$WF_TEMPLATE"
+    WF_TEMPLATE_READY=1
+  else
+    mkdir -p "$TEMPLATE_CACHE_ROOT"
+    cleanup_template_cache_stale "$TEMPLATE_CACHE_ROOT"
+    TEMPLATE_CACHE_KEY=$(compute_template_key) || {
+      echo "TEMPLATE-CACHE-KEY-FAILED"; exit 1; }
+    TEMPLATE_ENTRY="$TEMPLATE_CACHE_ROOT/$TEMPLATE_CACHE_KEY"
+    if entry_root=$(cache_entry_root "$TEMPLATE_ENTRY"); then
+      WF_TEMPLATE="$TEMPLATE_ENTRY"
+      WF_TEMPLATE_SOURCE="$entry_root"
+      WF_TEMPLATE_READY=1
+      TEMPLATE_SOURCE=cache
+      TEMPLATE_CACHE_HIT=1
+      echo "（模板缓存命中：$TEMPLATE_ENTRY）"
+    else
+      if [ -e "$TEMPLATE_ENTRY" ]; then
+        "$PY" "$HERE/fixture_scope.py" move "$TEMPLATE_ENTRY" "$TEMPLATE_ENTRY.stale-$$" \
+          || { echo "TEMPLATE-CACHE-STALE-FAILED"; exit 1; }
+      fi
+      if ! publish_template_cache "$TEMPLATE_ENTRY"; then
+        echo "TEMPLATE-CACHE-PUBLISH-FAILED: $TEMPLATE_ENTRY"
+        exit 1
+      fi
+      WF_TEMPLATE="$TEMPLATE_ENTRY"
+      WF_TEMPLATE_SOURCE="$TEMPLATE_ENTRY"
+      WF_TEMPLATE_READY=1
+      TEMPLATE_SOURCE=cache
+      TEMPLATE_CACHE_HIT=0
+      echo "（模板缓存已发布：$TEMPLATE_ENTRY）"
+    fi
+  fi
+  TEMPLATE_SECONDS=$(( ($(now_ms) - template_started) / 1000 ))
+  echo "（夹具来源：$TEMPLATE_SOURCE（hit=$TEMPLATE_CACHE_HIT），${TEMPLATE_SECONDS}s；逐单元 cp -a 复用）"
 fi
 export WF_TEMPLATE WF_TEMPLATE_READY
+export WF_TEMPLATE_SOURCE
 
 # 准备一个套件的夹具：模板可用时只做 cp -a + 空态校验，否则重建夹具并初始化。
 # 返回码：0 成功；1 夹具失败；2 初始化失败；3 复制失败；4 复制后校验失败
@@ -271,7 +443,7 @@ prepare_fixture() {
     if ! "$PY" "$HERE/fixture_scope.py" clone "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
       return 3
     fi
-    if ! template_check "$WF_TEMPLATE" "$FIX" >>"$log" 2>&1; then
+    if ! template_repoint "$FIX" "${WF_TEMPLATE_SOURCE:-$WF_TEMPLATE}" --expect-repoint-min 1 >>"$log" 2>&1; then
       return 4
     fi
     return 0
@@ -657,6 +829,10 @@ WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
 WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
 WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_TOTAL_MS="$total_millis" WF_SUMMARY_EFFECTIVE_JOBS="$JOBS" WF_SUMMARY_EXECUTION_MODE="$EXECUTION_MODE" WF_SUMMARY_FALLBACK="$FALLBACK_REASON" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
 WF_SUMMARY_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
+WF_SUMMARY_PYCACHE_ROOT="$PYTHONPYCACHEPREFIX" \
+WF_SUMMARY_TEMPLATE_SOURCE="$TEMPLATE_SOURCE" \
+WF_SUMMARY_TEMPLATE_CACHE_HIT="$TEMPLATE_CACHE_HIT" \
+WF_SUMMARY_TEMPLATE_CACHE_KEY="$TEMPLATE_CACHE_KEY" \
 WF_SUMMARY_JOBS="$PLAN_JOBS" WF_SUMMARY_REPRO_JOBS="$PLAN_REPRO_JOBS" \
 "$PY" - <<'PY'
 import json, os
@@ -685,6 +861,10 @@ payload = {
     "build_seconds": int(os.environ.get("WF_SUMMARY_BUILD") or 0),
     "template_seconds": int(os.environ.get("WF_SUMMARY_TEMPLATE") or 0),
     "template_reused": bool(os.environ.get("WF_TEMPLATE_READY") == "1"),
+    "template_source": os.environ.get("WF_SUMMARY_TEMPLATE_SOURCE"),
+    "template_cache_hit": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_HIT") == "1",
+    "template_cache_key": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_KEY") or None,
+    "pycache_root": os.environ.get("WF_SUMMARY_PYCACHE_ROOT"),
     "init_seconds": round(int(os.environ.get("WF_SUMMARY_INIT_MS") or 0) / 1000, 2),
     "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),
     "green_seconds": int(os.environ.get("WF_SUMMARY_GREEN") or 0),

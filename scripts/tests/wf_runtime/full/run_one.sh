@@ -8,6 +8,8 @@ suite=${record%%:*}
 expect=$(printf '%s' "$record" | cut -d: -f3)
 script=${record##*:}
 : "${FIX:?}" "${HERE:?}" "${PY:?}" "${SHARED_RELEASE:?}" "${RESULTS_DIR:?}"
+# pyc 一律落在结果目录（run_all 已导出；独立调用时兜底），不落源树/夹具。
+export PYTHONPYCACHEPREFIX="${PYTHONPYCACHEPREFIX:-${WF_PYCACHE:-$RESULTS_DIR/pycache}}"
 # Every worker owns a separate fixture path. The old shared path was hidden by
 # tmpfs but still raced during setup and cleanup before the namespace was ready.
 if [ "${WF_NAMESPACE_READY:-0}" != "1" ]; then
@@ -31,7 +33,17 @@ if [ "${WF_TEMPLATE_READY:-0}" = "1" ]; then
     if [ "$WF_FIXTURE_DEPLOY" = "candidate" ]; then
       check_args=(--quiet --version "$WF_RELEASE_VERSION" --ref "$WF_RELEASE_REF")
     fi
-    "$PY" "$HERE/template_check.py" "$FIX" --repoint-from "${WF_TEMPLATE_SOURCE:-$WF_TEMPLATE}" "${check_args[@]}" >>"$out" 2>&1 || prep_rc=4
+    # 克隆后一次判三件事：重锚定、无残留、至少改写 1 个（0 改写 = 记录与模板源不一致）。
+    check_out=$("$PY" "$HERE/template_check.py" "$FIX" \
+      --repoint-from "${WF_TEMPLATE_SOURCE:-$WF_TEMPLATE}" --expect-repoint-min 1 \
+      "${check_args[@]}" 2>&1) || {
+      printf '%s\n' "$check_out" >>"$out"
+      case "$check_out" in
+        *"改写数"*) prep_rc=5 ;;
+        *) prep_rc=4 ;;
+      esac
+    }
+    printf '%s\n' "$check_out" >>"$out"
   fi
 else
   "$PY" "$HERE/execution.py" --name fixture --log "$out.fixture.log" -- bash "$HERE/wf_fixture.sh" "$FIX" >>"$out" 2>&1 || prep_rc=1
@@ -46,13 +58,16 @@ if [ "$prep_rc" -ne 0 ]; then
     2) label=INIT-FAILED ;;
     3) label=TEMPLATE-COPY-FAILED ;;
     4) label=TEMPLATE-COPY-INVALID ;;
+    5) label=TEMPLATE-REPOINT-MISMATCH ;;
     *) label=FIXTURE-FAILED ;;
   esac
-  echo "$suite $label" >> "$RESULTS_DIR/lines"; exit 0
+  printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "1" "$(( ($(now_ms) - init_started) / 1000 ))" "bad" "$label" >> "$RESULTS_DIR/lines"
+  exit 0
 fi
 if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
   printf 'init_millis=%s\nsuite_millis=0\n' "$(( $(now_ms) - init_started ))" > "$RESULTS_DIR/$suite.timing"
-  echo "$suite FIXTURE-INCOMPLETE" >> "$RESULTS_DIR/lines"; exit 0
+  printf '%s\t%s\t%s\t%s\t%s\n' "$suite" "1" "$(( ($(now_ms) - init_started) / 1000 ))" "bad" "FIXTURE-INCOMPLETE" >> "$RESULTS_DIR/lines"
+  exit 0
 fi
 init_millis=$(( $(now_ms) - init_started ))
 

@@ -26,6 +26,9 @@ REPO="$(cd "$FULL/../../../.." && pwd)"
 # 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY="${PY:-/softwares/python/bin/python3}"
 SCOPE="$FULL/fixture_scope.py"
+# 字节码缓存：计划/claim 前用 bootstrap 前缀（结果目录尚未准备），prepare 后改指结果目录。
+export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-${TMPDIR:-/tmp}/wf-pycache-repro-bootstrap}"
+unset PYTHONDONTWRITEBYTECODE
 case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
   || ! "$PY" "$SCOPE" check-lease >/dev/null 2>&1; then
@@ -150,6 +153,8 @@ if [ -z "$RESULTS" ]; then
   RESULTS="${WF_REPRO_RESULTS_DIR:-$HOME/.cache/wf-test-run/repro-$MODE-$$}"
 fi
 "$PY" "$SCOPE" prepare-results "$RESULTS" || exit 1
+export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$RESULTS/pycache}"
+mkdir -p "$PYTHONPYCACHEPREFIX"
 # 结果缓存轮转：独立 repro 入口只回收本 scope（repro-*）的带 marker 目录；root 可经
 # WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
 RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"

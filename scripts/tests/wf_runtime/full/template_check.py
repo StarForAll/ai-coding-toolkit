@@ -99,16 +99,28 @@ def main(argv=None):
                         help="把记录里指向该模板路径的绝对路径改写为当前项目路径（复制后必做）")
     parser.add_argument("--version", default=None)
     parser.add_argument("--ref", default=None)
+    parser.add_argument("--expect-repoint-min", type=int, default=None,
+                        help="要求 --repoint-from 至少改写 N 个文件（0 = 静默 no-op，属异常）")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args(argv)
+    if args.expect_repoint_min is not None and not args.repoint_from:
+        parser.error("--expect-repoint-min 需要同时给出 --repoint-from")
+    repointed = None
     if args.repoint_from:
         touched = repoint(args.root, args.repoint_from)
+        repointed = len(touched)
+        # 结构化改写计数：判定留在本文件一处，bash 只传参与读退出码。
+        print(f"TEMPLATE-REPOINT-COUNT={repointed}")
         if touched and not args.quiet:
-            print(f"TEMPLATE-REPOINT: {len(touched)} 个文件 → {os.path.realpath(args.root)}")
+            print(f"TEMPLATE-REPOINT: {repointed} 个文件 → {os.path.realpath(args.root)}")
         leak = args.repoint_from
     else:
         leak = args.leak_from
     problems = check(args.root, leak, args.version, args.ref)
+    if (repointed is not None and args.expect_repoint_min is not None
+            and repointed < args.expect_repoint_min):
+        problems.insert(0, f"改写数 {repointed} < 期望最小 {args.expect_repoint_min}"
+                            "（记录未指向 --repoint-from，或路径形态不一致）")
     if problems:
         for problem in problems:
             print(f"TEMPLATE-CHECK-FAILED: {problem}")

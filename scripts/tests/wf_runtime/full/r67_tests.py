@@ -313,6 +313,8 @@ _fake_cache = tempfile.mkdtemp(prefix="wf-r67-fake-cache-")
 atexit.register(shutil.rmtree, _fake_cache, ignore_errors=True)
 _fake_env = {**os.environ, "WF_FIX": _fake_fix, "WF_RESULTS_CACHE": _fake_cache,
              "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
+             # 显式再钉一次缓存开关：`WF_NO_TEMPLATE=1` 蕴含关闭缓存，但不能依赖实现漂移。
+             "WF_NO_TEMPLATE_CACHE": "1",
              "WF_SUITES": "cp1_tests", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results1})

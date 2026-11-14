@@ -19,6 +19,14 @@ def main():
     results = Path(os.environ['RESULTS_DIR']).resolve()
     release = Path(os.environ['SHARED_RELEASE']).resolve()
     template = Path(os.environ['WF_TEMPLATE']).resolve() if os.environ.get('WF_TEMPLATE_READY') == '1' else None
+    # run 内模板位于结果目录内，需要在结果目录的可写 bind 之后补一个只读 remount；
+    # 跨 run 缓存条目在结果目录之外（只经 /mnt 只读挂入），没有这个嵌套关系。
+    template_relative = None
+    if template is not None:
+        try:
+            template_relative = template.relative_to(results)
+        except ValueError:
+            template_relative = None
     shared = Path('/mnt/wf-test-runner')
     try:
         subprocess.run(['mount', '-t', 'tmpfs', 'tmpfs', '/mnt'], check=True)
@@ -26,7 +34,8 @@ def main():
         bind(release, shared / 'release', readonly=True)
         if template is not None:
             bind(template, shared / 'template', readonly=True)
-            bind(template, shared / 'results' / template.relative_to(results), readonly=True)
+            if template_relative is not None:
+                bind(template, shared / 'results' / template_relative, readonly=True)
         subprocess.run(['mount', '-t', 'tmpfs', 'tmpfs', '/tmp'], check=True)
         # Never expose the host fixture parent: each worker has private state.
         Path(os.environ['FIX']).parent.mkdir(parents=True, exist_ok=True)
@@ -34,8 +43,9 @@ def main():
         bind(shared / 'release', release, readonly=True)
         bind(shared / 'release', Path('/tmp/wf-fixtures/release-repo'), readonly=True)
         if template is not None:
-            # Restore nested read-only mounts after their writable parent mount.
-            bind(shared / 'template', template, readonly=True)
+            if template_relative is not None:
+                # Restore the nested read-only mount after its writable parent mount.
+                bind(shared / 'template', template, readonly=True)
             os.environ['WF_TEMPLATE_SOURCE'] = str(template)
             os.environ['WF_TEMPLATE'] = str(shared / 'template')
     except (OSError, subprocess.CalledProcessError) as exc:
