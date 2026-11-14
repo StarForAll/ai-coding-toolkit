@@ -4,7 +4,8 @@ import json, os, subprocess, sys, time
 sys.path.insert(0, "/tmp")
 F = os.environ.get("WF_FIX", "/tmp/wf-fixtures/d1")
 WF = os.path.join(F, ".wf/bin/wf.py")
-PYTHON = "/usr/bin/python3"
+import wfdrive
+PYTHON = wfdrive.PYTHON
 REAL = os.environ.get("DSH_SESSION_ID") or "session-unknown"
 results = []
 
@@ -88,7 +89,7 @@ rec("D1-6b 只读诊断不因 provider 不匹配而停", "WF_OK", (payload or {}
     (payload or {}).get("code") == "WF_OK")
 
 # ---- 7. wf 签发身份的字段核验（单元）----
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+sys.path.insert(0, wfdrive.LIB)
 from wflib import session as wf_session
 try:
     value = wf_session._identity_value({"provider": "wf", "identity": {"issued_id": "b" * 32}})

@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/docs/wf-delivery-discipline.md", "reason": "§7 并行纪律/验证顺序/对拍要求与 §12 运行器执行与证据契约是本任务全部改动与验证的治理契约；收口时需同步更新其中数字与签名"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "脚本改动前必读的约定入口（Python/Shell 约定、退出码、反硬编码路径模式）"}
+{"file": ".trellis/spec/scripts/python-conventions.md", "reason": "修改 wfdrive.py/fixture_scope.py/plan.py/execution.py 及新增单元测试需遵循的 Python 约定"}
+{"file": ".trellis/spec/scripts/shell-conventions.md", "reason": "修改 run_all.sh/run_one.sh/wf_fixture.sh/repro/run.sh 需遵循的 Shell 约定"}
+{"file": ".trellis/spec/docs/index.md", "reason": "full/README.md 与交付纪律文档更新时的文档规范入口"}
+{"file": ".trellis/tasks/archive/2026-11/11-13-wf-test-runner-reliability-performance/validation.md", "reason": "上一轮运行器任务的基线数字、等价性对拍方法与遗留决策（13 个保守串行条目）的直接来源"}
+{"file": ".trellis/tasks/archive/2026-11/11-13-wf-test-runner-reliability-performance/design.md", "reason": "上一轮确立的单一来源边界（plan/execution/results_gate/repro_select/fixture_scope），本任务不得破坏"}

@@ -3,9 +3,9 @@
 import json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
+sys.path.insert(0, wfdrive.REPO + "/docs/workflows/wf/payload")
 from wflib import check as wf_check, session as wf_session, spec as wf_spec, assets as wf_assets
 import install as wf_install
 
@@ -158,7 +158,7 @@ json.dump({"id": "2026-x", "status": "plan", "plan": {"version": None, "approval
           open(os.path.join(draft, ".wf/tasks/2026-x-draft/task.json"), "w"))
 evidence = wf_install.__dict__.get("project_key_approved")
 import importlib.util
-spec_file = "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/bin/wf.py"
+spec_file = wfdrive.REPO + "/docs/workflows/wf/payload/bin/wf.py"
 module_spec = importlib.util.spec_from_file_location("wf_boot", spec_file)
 boot = importlib.util.module_from_spec(module_spec)
 module_spec.loader.exec_module(boot)
@@ -203,7 +203,7 @@ rec("A5d 非字符串项目值给结构化出口", "WF_EXECUTOR_UNCONFIRMED",
     (error2 or (None, None))[1], (error2 or (None, None))[1] == "WF_EXECUTOR_UNCONFIRMED")
 
 # ---- 其他 agent 7：wf-start 说明与运行时一致（activation/instance 重放） ----
-skill = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/skills/wf-start/SKILL.md",
+skill = open(wfdrive.REPO + "/docs/workflows/wf/skills/wf-start/SKILL.md",
              encoding="utf-8").read()
 rec("A7 wf-start 写明 activation 与 instance_id 重放", "含两者",
     "activation" in skill and "instance_id" in skill,

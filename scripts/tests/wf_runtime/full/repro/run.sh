@@ -1,28 +1,32 @@
 #!/usr/bin/env bash
-# 修复的可证伪用例：一键（CI 可用）运行器。
-#
-# 每个用例有两个面：`--expect green`（当前树成立）与 `--expect red`（注入原缺陷后必须变红）。
-# 只有 green 的"证据"无法区分"修好了"和"没修"，所以：
-#   --mode both  两个面都跑（**默认**，保持兼容）；
-#   --mode green 只跑当前树（T2 收口默认）；
-#   --mode red   只跑注入面（断言变更/发行前的证伪检查）；
-#   --mode auto  首次运行、新用例、helper/脚本/被测 payload 目标变化 → 该用例 both；未变化 → green
-#                （candidate 模式遇到需要 both 会报错并提示先在 dev 模式跑 red）。
-#
-# 用法：
-#   bash .../repro/run.sh --mode green --no-build
-#   bash .../repro/run.sh --group review --mode red --no-build
-#   bash .../repro/run.sh --mode auto --jobs 4
-#   bash .../repro/run.sh --list
-#   bash .../repro/run.sh --fixture-deploy candidate --release-root <候选仓库根> \
-#        --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2 --mode green --no-build
+# 修复的可证伪用例：一键（CI 可用）运行器。详细用法：repro/run.sh -h
 set -uo pipefail
+# usage 是唯一文本来源（heredoc），不按行号回头注释提取——头注释不再承载正文。
+usage() { cat <<'EOF'
+每个用例有两个面：`--expect green`（当前树成立）与 `--expect red`（注入原缺陷后必须变红）。
+只有 green 的"证据"无法区分"修好了"和"没修"，所以：
+  --mode both  两个面都跑（**默认**，保持兼容）；
+  --mode green 只跑当前树（T2 收口默认）；
+  --mode red   只跑注入面（断言变更/发行前的证伪检查）；
+  --mode auto  首次运行、新用例、helper/脚本/被测 payload 目标变化 → 该用例 both；未变化 → green
+               （candidate 模式遇到需要 both 会报错并提示先在 dev 模式跑 red）。
+
+用法：
+  bash .../repro/run.sh --mode green --no-build
+  bash .../repro/run.sh --group review --mode red --no-build
+  bash .../repro/run.sh --mode auto --jobs 4
+  bash .../repro/run.sh --list
+  bash .../repro/run.sh --fixture-deploy candidate --release-root <候选仓库根> \
+       --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2 --mode green --no-build
+EOF
+}
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FULL="$(dirname "$HERE")"
 REPO="$(cd "$FULL/../../../.." && pwd)"
+# 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY="${PY:-/softwares/python/bin/python3}"
 SCOPE="$FULL/fixture_scope.py"
-case "${1:-}" in -h|--help) sed -n '2,18p' "$0"; exit 0 ;; esac
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
   || ! "$PY" "$SCOPE" check-lease >/dev/null 2>&1; then
   export WF_RUNNER_ENTRY_PID=$$
@@ -41,7 +45,7 @@ RELEASE_VERSION="${WF_RELEASE_VERSION:-}"
 RELEASE_META="${WF_RELEASE_META:-}"
 RESULTS="${WF_REPRO_RESULTS:-}"
 
-usage() { sed -n '2,24p' "$0"; }
+# usage 已在文件顶部以 heredoc 定义（唯一文本来源），此处不再重复定义。
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -146,6 +150,11 @@ if [ -z "$RESULTS" ]; then
   RESULTS="${WF_REPRO_RESULTS_DIR:-$HOME/.cache/wf-test-run/repro-$MODE-$$}"
 fi
 "$PY" "$SCOPE" prepare-results "$RESULTS" || exit 1
+# 结果缓存轮转：独立 repro 入口只回收本 scope（repro-*）的带 marker 目录；root 可经
+# WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
+RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" \
+  --scope repro --exclude "$RESULTS" || true
 mkdir -p "$RESULTS/logs"
 export WF_REPRO_RESULTS="$RESULTS"
 export PY REPRO_INPUTS_JSON

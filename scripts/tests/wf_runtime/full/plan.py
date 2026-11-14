@@ -22,16 +22,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SUITES_JSON = os.path.join(HERE, "suites.json")
 GROUPS_JSON = os.path.join(HERE, "repro", "groups.json")
 DEFAULT_FIX = f"/tmp/wf-fixtures/run-{os.getpid()}"
-DEFAULT_JOBS = 4          # 套件层默认并行数（实测 8 套件 68s → 29s）
-DEFAULT_REPRO_JOBS = 4    # repro 用例层默认并行数（实测结果与 jobs=1 逐项一致）
+DEFAULT_JOBS = min(8, os.cpu_count() or 4)   # 套件层默认并行数（不超过物理核，防少核机器超订）
+DEFAULT_REPRO_JOBS = min(8, os.cpu_count() or 4)  # repro 用例层默认并行数（同上）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
 TEST_RELEASE_FALLBACK = "0.1.0"
 REPRO_MODES = ("green", "red", "both", "none", "auto")
-# 这些套件必须串行（改成不可写目录模拟写入失败：user namespace 里是 root，chmod 不生效）
-PARALLEL_SERIAL = {
-    "cp3_tests", "cp4_a8", "cp5_b12", "r1r2_tests", "r7r15_tests", "r35_tests",
-    "r67_tests", "r68_tests", "r69_tests", "r70_tests", "r71_tests", "r89_tests", "r90_tests",
-}
+# 串行集合的唯一来源是 suites.json 的 `"parallel": false` 字段（本文件不再持有平行常量）。
+# 历史注记：原 13 个强制串行条目（chmod 写入失败注入 + 保守遗留）已全部解除——
+# chmod 注入改由 wfdrive.deny_writes 的三探针等价契约承担（ro bind mount 在 user
+# namespace 内同样成立）；保守遗留项经逐套件审计（夹具来源/共享路径/用户状态/pty·sleep/
+# 嵌套运行器五项）确认并行安全。今后确需串行的套件：suites.json 置 parallel:false
+# 并在 notes 登记具体理由（load_suites 校验 notes 非空，防无理由串行）。
 
 
 class PlanError(Exception):
@@ -44,7 +45,13 @@ class PlanError(Exception):
 
 def load_suites(path=SUITES_JSON):
     with open(path, encoding="utf-8") as handle:
-        return json.load(handle)
+        doc = json.load(handle)
+    # 串行是例外不是默认：parallel:false 必须携带 notes 理由，防无理由串行悄悄回潮。
+    unexplained = [entry["name"] for entry in doc.get("suites") or []
+                   if entry.get("parallel") is False and not (entry.get("notes") or "").strip()]
+    if unexplained:
+        raise PlanError("parallel:false 的套件必须在 notes 登记不可并行理由：" + " ".join(unexplained))
+    return doc
 
 
 def load_groups(path=GROUPS_JSON):
@@ -183,13 +190,37 @@ def changed_files(base=None, explicit=None):
 
 
 def _validate_modules(suites_doc, by_name):
+    """modules 映射的完整性校验（三个方向，防 --changed 建议静默缺失）。
+
+    ① 模块 → 套件：引用的套件必须存在（原有校验）；
+    ② 套件 → 模块：每个可计划套件（kind ∈ suite/extra/candidate）必须被 ≥1 模块覆盖
+       ——新增套件漏映射在计划期即被拒，不再静默漏建议；
+    ③ 键 → 仓库：每个 modules 键必须真实存在——解析基准与 `_normalize_change` 同构
+       （键按 docs/workflows/wf/ 前缀剥除后的相对路径解析，不按仓库根裸解析），
+       防"永不命中的假键"让 ② 变纸面门；
+    ④ 命中 → 非空：map_changes 命中键时该条目的 suites 不得为空（空条目 = 建议静默缺失）。
+    """
     problems = []
-    for key, entry in (suites_doc.get("modules") or {}).items():
+    modules = suites_doc.get("modules") or {}
+    for key, entry in modules.items():
         unknown = [name for name in (entry.get("suites") or []) if name not in by_name]
         if unknown:
             problems.append(f"{key}: 未知套件 {' '.join(unknown)}")
+        if not (entry.get("suites") or []):
+            problems.append(f"{key}: suites 为空（命中该键时建议会静默缺失）")
+        base = os.path.join(_repo_root(), "docs", "workflows", "wf", key)
+        if not os.path.exists(base):
+            problems.append(f"{key}: 仓库中不存在（解析基准 docs/workflows/wf/<key>）")
+    covered = set()
+    for entry in modules.values():
+        covered.update(entry.get("suites") or [])
+    plannable = {name for name, entry in by_name.items()
+                 if entry.get("kind") in ("suite", "extra", "candidate")}
+    uncovered = sorted(plannable - covered)
+    if uncovered:
+        problems.append("未被任何模块覆盖的可计划套件（--changed 会漏建议）：" + " ".join(uncovered))
     if problems:
-        raise PlanError("suites.json 的 modules 引用了不存在的套件：\n- " + "\n- ".join(problems))
+        raise PlanError("suites.json 的 modules 校验失败：\n- " + "\n- ".join(problems))
 
 
 def _repro_candidate_groups(groups_doc, names):
@@ -393,8 +424,11 @@ def plan(argv=None, env=None):
     else:
         version, test_release_root, test_release_ref = None, None, None
 
-    parallel_names = [entry["name"] for entry in chosen if entry["name"] not in PARALLEL_SERIAL]
-    serial_names = [entry["name"] for entry in chosen if entry["name"] in PARALLEL_SERIAL]
+    parallel_names = [entry["name"] for entry in chosen if entry.get("parallel") is not False]
+    serial_names = [entry["name"] for entry in chosen if entry.get("parallel") is False]
+    # isolated-user 的唯一来源：suites.json 的 isolated_user 字段（run_all/run_one 消费
+    # PLAN_ISOLATED_SUITES 做成员判定——套件特判不进 bash 分支）。
+    isolated_suites = [entry["name"] for entry in chosen if entry.get("isolated_user")]
 
     flow_expect = {name: (suites_doc.get("flow_expect") or {}).get(name) for name in flows}
     extra_expect = {name: (suites_doc.get("extra_expect") or {}).get(name) for name in extra}
@@ -410,6 +444,7 @@ def plan(argv=None, env=None):
         "suites_all": [entry["name"] for entry in chosen],
         "suites_parallel": parallel_names,
         "suites_serial": serial_names,
+        "isolated_suites": isolated_suites,
         "flows": flows,
         "extra": extra,
         "flow_expect": flow_expect,
@@ -517,10 +552,14 @@ def main(argv=None):
         # 否则 run_all.sh 的 `eval "$plan_out"` 会把摘要当成命令执行。
         print(describe(result), file=sys.stderr if fmt == "sh" else sys.stdout)
         emit(result, fmt)
-        os.makedirs(result["results_dir"], exist_ok=True)
-        with open(os.path.join(result["results_dir"], "plan.json"), "w", encoding="utf-8") as handle:
-            json.dump(result, handle, ensure_ascii=False, indent=2, sort_keys=True)
-            handle.write("\n")
+        # plan.json 只在“显式给出结果目录”时镜像写入：run_all 全路径（含 --dry-run/
+        # 契约测试）都先 export WF_RESULTS_DIR 并 claim 目录，行为不变；直接 `--list`
+        # 未显式给目录则不建不写——旧逻辑每泄漏一个无主 run-<pid> 空目录（D5.1）。
+        if os.environ.get("WF_RESULTS_DIR"):
+            os.makedirs(result["results_dir"], exist_ok=True)
+            with open(os.path.join(result["results_dir"], "plan.json"), "w", encoding="utf-8") as handle:
+                json.dump(result, handle, ensure_ascii=False, indent=2, sort_keys=True)
+                handle.write("\n")
         return 0
     emit(result, fmt)
     return 0

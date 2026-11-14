@@ -2,8 +2,8 @@
 """V5：调试计数与复盘（F1，初始化已完成）。"""
 import hashlib, json, os, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 

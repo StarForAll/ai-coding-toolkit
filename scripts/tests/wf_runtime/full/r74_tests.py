@@ -3,8 +3,8 @@
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import paths as wf_paths, scope as wf_scope
 
 F = wfdrive.FIX

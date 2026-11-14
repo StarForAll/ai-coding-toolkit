@@ -2,8 +2,8 @@
 """V1：宿主会话身份能力与固定绑定（F1v 夹具，capability 初值 unknown）。"""
 import json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 
@@ -31,8 +31,8 @@ rc_ro, ro_payload, _ = wf(["status", "--json"])
 rec("未安装平台时只读诊断仍可运行", "WF_OK", (ro_payload or {}).get("code"),
     (ro_payload or {}).get("code") == "WF_OK")
 
-proc = subprocess.run(["/softwares/python/bin/python3",
-                       "/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py",
+proc = subprocess.run([wfdrive.TOOL_PYTHON,
+                       wfdrive.REPO + "/scripts/wf-dev-deploy.py",
                        "--target", F, "--platform", "dsh", "--confirm"],
                       capture_output=True, text=True)
 installed["platforms"] = saved

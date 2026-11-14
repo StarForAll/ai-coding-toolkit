@@ -2,8 +2,8 @@
 """V2（归档持久化派生）与 V3（维护组与后续任务共存），F1 夹具（已完成初始化任务）。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 
@@ -130,11 +130,11 @@ plan = {"operation": operation,
 json.dump(plan, open("/tmp/dispose_plan.json", "w"), ensure_ascii=False, indent=2)
 import re as _re
 
-preview = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"),
+preview = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"),
                           "--project", F, "--dispose", "/tmp/dispose_plan.json"],
                          capture_output=True, text=True)
 token = _re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
-apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"),
+apply_run = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"),
                             "--project", F, "--dispose", "/tmp/dispose_plan.json",
                             "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,

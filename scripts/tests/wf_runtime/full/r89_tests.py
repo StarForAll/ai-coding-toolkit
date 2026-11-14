@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """第五十七轮 R92：--platform 取代 --skill-root 的定点用例。"""
 import json, os, subprocess, sys, tempfile
+import wfdrive
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import wfdrive
 
 RELEASE = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
 results = []
@@ -15,7 +15,7 @@ def rec(name, expected, actual, ok):
 
 
 def install(target, *platforms, extra=()):
-    args = ["/softwares/python/bin/python3", os.path.join(RELEASE, "install.py"),
+    args = [wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
             "--target", target, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE]
     for name in platforms:
         args += ["--platform", name]
@@ -79,7 +79,7 @@ rec("R92 省略平台被拒", "WF_PATH_INVALID",
 
 # 6) --skill-root 不再被接受
 t6 = fresh("legacy")
-r6 = subprocess.run(["/softwares/python/bin/python3", os.path.join(RELEASE, "install.py"),
+r6 = subprocess.run([wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
                      "--target", t6, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE,
                      "--skill-root", "/tmp/whatever"], capture_output=True, text=True)
 rec("R92 --skill-root 已移除", "argparse 拒绝",
@@ -89,7 +89,7 @@ rec("R92 --skill-root 已移除", "argparse 拒绝",
 # 7) 技能副本算框架资产：安装后 Check 不被判成未归属改动
 t7 = fresh("scope")
 install(t7, "dsh", extra=CONFIRM)
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+sys.path.insert(0, wfdrive.LIB)
 from wflib import scope as wf_scope
 
 installed = wf_scope.installed_asset_paths(t7)
@@ -106,7 +106,7 @@ for label, extra in (("重复 flag", ["--platform", "codex", "--platform", "clau
                      ("空格多值", ["--platform", "codex", "claudecode"]),
                      ("逗号分隔", ["--platform", "codex,claudecode"])):
     t = fresh("form")
-    args = ["/softwares/python/bin/python3", os.path.join(RELEASE, "install.py"),
+    args = [wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
             "--target", t, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE] + extra + list(CONFIRM)
     r = subprocess.run(args, capture_output=True, text=True)
     ok = (r.returncode == 0 and os.path.isdir(os.path.join(t, ".agents/skills/wf-start"))

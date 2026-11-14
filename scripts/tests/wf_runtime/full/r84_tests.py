@@ -3,8 +3,8 @@
 import hashlib, json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import records as wf_records, spec as wf_spec, tasks as wf_tasks, cli as wf_cli
 
 F = wfdrive.FIX
@@ -88,7 +88,7 @@ for text, label in (('{"a":1', "截断"), ("{oops}", "非法"), ("NaN", "常量"
     rec(f"B2-1 {label} JSON 归一为 RecordInvalid", "RecordInvalid", kind, kind == "RecordInvalid")
 
 # ---- B4-1：d 桶的处置（登记为已知边界或实现） ----
-doc = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf-framework-implementation.md",
+doc = open(wfdrive.REPO + "/docs/workflows/wf-framework-implementation.md",
            encoding="utf-8").read()
 rec("B4-1 d 档在实现稿登记为已交付（不是「已知边界」）", "含「d 档」且标 2026-11-12 交付",
     f"d档={'d 档' in doc} 交付={'d 档（归属语义存疑，2026-11-12 交付）' in doc}",

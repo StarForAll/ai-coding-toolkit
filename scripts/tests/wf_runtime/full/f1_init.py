@@ -2,8 +2,8 @@
 """F1 夹具：初始化任务闭环（task-new → approve → start → baseline-apply → check → knowledge → archive）。"""
 import hashlib, json, os, subprocess, sys
 
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 TASK_TEMPLATE = f"{F}/.wf/templates/task"
 HERE = os.path.dirname(os.path.abspath(__file__))

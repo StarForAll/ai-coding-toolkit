@@ -2,8 +2,8 @@
 """CP3（A6 提交范围 / A7 审查 attempt / A9 执行器 / A16 处理器表 / A17 rules_digest）回归用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import assets as wf_assets, cli as wf_cli, gates as wf_gates
 
 F = wfdrive.FIX
@@ -169,7 +169,7 @@ WF = os.path.join(F, ".wf/bin/wf.py")
 
 
 def status():
-    proc = subprocess.run(["/usr/bin/python3", WF, "status", "--json"], capture_output=True, text=True)
+    proc = subprocess.run([wfdrive.PYTHON, WF, "status", "--json"], capture_output=True, text=True)
     try:
         payload = json.loads(proc.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
@@ -259,7 +259,7 @@ sample = {"schema_version": 1,
                                 "lines": ["/.wf-lock"]}}
 import importlib.util
 spec = importlib.util.spec_from_file_location(
-    "wf_install", "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py")
+    "wf_install", wfdrive.REPO + "/docs/workflows/wf/payload/install.py")
 install_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install_mod)
 rec("A17 两处 rules_digest 一致（含非 ASCII 路径）", "相同摘要",

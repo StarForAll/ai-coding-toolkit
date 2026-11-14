@@ -2,8 +2,8 @@
 """CP5 / B3 崩溃点、B4 dedupe 双扣、B5 spec 拆分（F1）。"""
 import hashlib, json, os, signal, subprocess, sys, time
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 WF = os.path.join(F, ".wf/bin/wf.py")
 results = []
@@ -75,7 +75,7 @@ task_b4, gen_b4, dir_b4, d_b4 = make_task(
     "CP5 dedupe 双扣", ["src/b4.txt"],
     "sess-G1",
     verifications=[{"id": "v1", "invocation": {"kind": "argv", "argv": [
-        "/usr/bin/python3", "-c",
+        wfdrive.PYTHON, "-c",
         "import sys; sys.exit(0 if open('src/b4.txt').read().strip()=='ok' else 1)"]},
         "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}],
     acceptance=[{"id": "a1", "statement": "内容为 ok", "verification_ids": ["v1"]}])
@@ -187,7 +187,7 @@ envelope = json.dumps({"session": {"provider": "host",
                                    "instance_id": wfdrive._binding_instance("sess-G3"),
                                    "activation": {"enabled": True, "start_source": "test", "enabled_at": AT}},
                        "inputs": {"generation": gen_b3}})
-proc = subprocess.Popen(["/usr/bin/python3", WF, "archive", "--task", task_b3,
+proc = subprocess.Popen([wfdrive.PYTHON, WF, "archive", "--task", task_b3,
                          "--decision", archive_decision, "--json"],
                         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 proc.stdin.write(envelope.encode()); proc.stdin.close()

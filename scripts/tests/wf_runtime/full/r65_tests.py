@@ -2,8 +2,8 @@
 """第二十八轮 R65：R1–R6 修正（套件同步、兼容性、登记纪律）。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, tasks as wf_tasks
 
 F = wfdrive.FIX

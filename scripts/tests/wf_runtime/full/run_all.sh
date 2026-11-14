@@ -1,34 +1,38 @@
 #!/bin/bash
 # 全量/子集/代表集复现：每个套件都从干净夹具开始；任一环节失败都会让脚本以非零码退出。
-#
 # 选择与冲突判定在 `plan.py`（唯一 plan()）；本脚本只用它的计划执行，避免两份选择逻辑。
-#
-# 模式：
-#   --full            59 套件 + 4 流程 + r72 + repro（默认）
-#   --subset          只跑 WF_SUITES 选中的套件（repro 需 WF_WITH_REPRO=1）
-#   --representative  代表集 + f0/p5_spec + 代表 repro 组（T3 候选模式的入口）
-#   WF_SUITES=a,b    未显式模式时隐含 --subset
-#   WF_TAGS=review   按 tag 选套件（同样隐含 --subset；与 WF_SUITES 取交集）
-#   --list --changed 按改动文件给出建议套件/repro 组（只建议，不执行）
-#
-# 常用：
-#   WF_SUITES="r70_tests" bash run_all.sh                  # 真子集（1 个执行单元）
-#   bash run_all.sh --full --repro green                   # T2 阶段收口
-#   bash run_all.sh --full --repro both                     # T3-1
-#   bash run_all.sh --representative --fixture-deploy candidate \
-#     --release-root ~/.cache/wf-candidate-repo/0.1.2 \
-#     --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2
-#   bash run_all.sh --serial                                # 套件层串行（确定性/排障）
-#   bash run_all.sh --list | --dry-run                      # 只输出计划
-#
-# 环境：WF_JOBS（套件层并行，默认 4；--serial 或 WF_JOBS=1 退回串行）、
-#       WF_REPRO_JOBS（repro 用例层并行，默认 4）、
-#       WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_FIX、WF_NO_RUN=1（计划后即退出）、
-#       WF_NO_TEMPLATE=1（逐套件重建夹具；默认在 run 内构建一次夹具模板后逐套件 cp -a）
+# 详细用法：run_all.sh --help
 set -uo pipefail
+# usage 是唯一文本来源（heredoc），不按行号回头注释提取——头注释不再承载正文。
+usage() { cat <<'EOF'
+模式：
+  --full            59 套件 + 4 流程 + r72 + repro（默认）
+  --subset          只跑 WF_SUITES 选中的套件（repro 需 WF_WITH_REPRO=1）
+  --representative  代表集 + f0/p5_spec + 代表 repro 组（T3 候选模式的入口）
+  WF_SUITES=a,b    未显式模式时隐含 --subset
+  WF_TAGS=review   按 tag 选套件（同样隐含 --subset；与 WF_SUITES 取交集）
+  --list --changed 按改动文件给出建议套件/repro 组（只建议，不执行）
+
+常用：
+  WF_SUITES="r70_tests" bash run_all.sh                  # 真子集（1 个执行单元）
+  bash run_all.sh --full --repro green                   # T2 阶段收口
+  bash run_all.sh --full --repro both                     # T3-1
+  bash run_all.sh --representative --fixture-deploy candidate \
+    --release-root ~/.cache/wf-candidate-repo/0.1.2 \
+    --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2
+  bash run_all.sh --serial                                # 套件层串行（确定性/排障）
+  bash run_all.sh --list | --dry-run                      # 只输出计划
+
+环境：WF_JOBS（套件层并行，默认 min(8,cpu)；--serial 或 WF_JOBS=1 退回串行）、
+      WF_REPRO_JOBS（repro 用例层并行，默认 min(8,cpu)）、
+      WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_RESULTS_CACHE（缓存轮转根，
+      默认 ~/.cache/wf-test-run）、WF_FIX、WF_NO_RUN=1（计划后即退出）、
+      WF_NO_TEMPLATE=1（逐套件重建夹具；默认在 run 内构建一次夹具模板后逐套件 cp -a）
+EOF
+}
 HERE=$(cd "$(dirname "$0")" && pwd)
+# 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY=/softwares/python/bin/python3
-usage() { sed -n '2,26p' "$0"; }
 
 case "${1:-}" in
   -h|--help) usage; exit 0 ;;
@@ -53,6 +57,12 @@ if [ -z "${WF_RUNNER_CONTROL_PID:-}" ]; then
     --result "$WF_RESULTS_DIR/.runner.json" -- bash "$0" "$@"
 fi
 "$PY" "$HERE/fixture_scope.py" prepare-results "$WF_RESULTS_DIR" || exit 1
+# 结果缓存轮转：只回收本 scope（run-*）的带 marker 目录，保留最近 20；root 可经
+# WF_RESULTS_CACHE 注入（r67 假环境/契约测试指向临时根，不触碰真实用户缓存）。
+# bootstrap 不在此接入——那是无自动调用点的一次性存量清理（任务 design D5.3）。
+RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$HERE/fixture_scope.py" prune-results "$RESULTS_CACHE" \
+  --scope run --exclude "$WF_RESULTS_DIR" || true
 
 # ---- 计划（唯一权威）--------------------------------------------------------
 plan_out=$("$PY" "$HERE/plan.py" --format sh -- "$@")
@@ -77,11 +87,16 @@ now_ms() {
   uptime=${uptime/./}
   printf '%s\n' "$((10#$uptime * 10))"
 }
+# isolated-user 的唯一来源：suites.json isolated_user 字段（plan.py → PLAN_ISOLATED_SUITES）；
+# 这里只做成员判定，套件特判不进 bash 分支。
+isolated_args() {
+  case " ${WF_ISOLATED_SUITES:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
+}
 run_command() {
   local phase=$1 log=$2 kind=$3 expected=""; shift 3
   local expected_args=()
   local user_args=()
-  case "$phase" in cp3_tests|r1r2_tests) user_args=(--isolated-user) ;; esac
+  user_args=($(isolated_args "$phase"))
   if [ "${1:-}" = "--expected" ]; then expected=$2; shift 2; expected_args=(--expected "$expected"); fi
   "$PY" "$HERE/execution.py" --name "$phase" --kind "$kind" --log "$log" --result "$log.json" \
     "${expected_args[@]}" "${user_args[@]}" -- "$@"
@@ -89,6 +104,7 @@ run_command() {
 FIX="$PLAN_FIX"
 RESULTS_DIR="$PLAN_RESULTS_DIR"
 export WF_RESULTS_DIR="$RESULTS_DIR" WF_FIX="$FIX"
+export WF_ISOLATED_SUITES="${PLAN_ISOLATED_SUITES:-}"
 LEGACY_FIXTURE_ROOT="$FIX.legacy"
 WF_LEGACY_FIXTURE_ROOT="$LEGACY_FIXTURE_ROOT"
 export WF_LEGACY_FIXTURE_ROOT
@@ -422,7 +438,7 @@ KNOWN_LEGACY="${WF_KNOWN_LEGACY-}"
 
 : > "$RESULTS_MARK"
 
-PARALLEL_SERIAL_LIST="$PLAN_SUITES_SERIAL"
+SERIAL_LIST="$PLAN_SUITES_SERIAL"
 PARALLEL_LIST="$PLAN_SUITES_PARALLEL"
 
 # 仓库副本位于 /tmp 时，unshare 里挂的 tmpfs 会把 /tmp 遮住，子进程看不到套件与结果文件。
@@ -433,10 +449,10 @@ if [ "$JOBS" -gt 1 ]; then
 fi
 if [ -n "$PLAN_SUITES_ALL" ] || [ -n "$PLAN_FLOWS" ] || [ -n "$PLAN_EXTRA" ]; then
   if [ "$JOBS" -gt 1 ] && [ -n "$PARALLEL_LIST" ] && can_unshare; then
-    echo "（并行：$JOBS worker（unshare 隔离）；串行段 $(printf '%s' "$PARALLEL_SERIAL_LIST" | wc -w) 个套件）"
+    echo "（并行：$JOBS worker（unshare 隔离）；串行段 $(printf '%s' "$SERIAL_LIST" | wc -w) 个套件）"
     EXECUTION_MODE=unshare
     run_suites_parallel "$PARALLEL_LIST"
-    for suite in $PARALLEL_SERIAL_LIST; do run_suite "$suite"; done
+    for suite in $SERIAL_LIST; do run_suite "$suite"; done
   else
     if [ "$JOBS" -gt 1 ] && [ -z "$FALLBACK_REASON" ]; then
       if ! can_unshare; then FALLBACK_REASON="unshare-unavailable"
@@ -476,7 +492,10 @@ run_flow() {
   elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
   suite_millis=$((suite_millis + elapsed_ms))
   printf '%s\n' "$out" >> "$log"
-  got=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
+  # PASS 计数唯一来源：execution.py 结果 JSON（verdict 的 passed 字段）——
+  # shell 不再本地复制行文法判定；解析失败计基础设施失败（不静默）。
+  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/$name.test.log.json") || {
+    printf '%-18s RESULT-JSON-INVALID\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return; }
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -ne "$expect" ]; then fail=$((fail+1)); fi
@@ -494,18 +513,20 @@ run_f0() {
   fi
   local out got passed
   out=$(WF_FIX="$target" run_command f0 "$RESULTS_DIR/f0.test.log" flow --expected 9 "$PY" "$HERE/p5_f0.py" 2>&1); got=$?
-  passed=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
+  passed=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/f0.test.log.json") || passed=RESULT-JSON-INVALID
   printf '%-18s rc=%s PASS=%s\n' f0 "$got" "$passed"
   flow_ran=$((flow_ran+1))
-  if [ "$got" -ne 0 ] || [ "$passed" -ne 9 ]; then fail=$((fail+1)); fi
+  if [ "$got" -ne 0 ] || [ "$passed" != "9" ]; then fail=$((fail+1)); fi
 }
 
 run_extra() {
-  # 直接调用的专项脚本体：计入 flow_ran，判据为退出码与 PASS 计数
+  # 直接调用的专项脚本体：计入 flow_ran，判据为退出码与 PASS 计数（唯一来源：
+  # execution.py 结果 JSON；解析失败计基础设施失败，不静默）
   local name=$1 script=$2 expect=$3 out rc got log="$RESULTS_DIR/$1.out"
   out=$(WF_FIX="$FIX" run_command "$name" "$RESULTS_DIR/$name.test.log" flow --expected "$expect" "$PY" "$HERE/$script" 2>&1); rc=$?
   printf '%s\n' "$out" >> "$log"
-  got=$(printf '%s\n' "$out" | grep -Ec '^\[PASS\]|^PASS([ :]|$)|^\[[^]]+\].*: PASS([ —]|$)')
+  got=$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["assertion_result"]["passed"])' "$RESULTS_DIR/$name.test.log.json") || {
+    printf '%-18s RESULT-JSON-INVALID\n' "$name"; fail=$((fail+1)); flow_ran=$((flow_ran+1)); return; }
   printf '%-18s rc=%s PASS=%s\n' "$name" "$rc" "$got"
   flow_ran=$((flow_ran+1))
   if [ "$rc" -ne 0 ] || [ "$got" -lt "$expect" ]; then fail=$((fail+1)); fi

@@ -2,8 +2,8 @@
 """第三十轮 R67：写权入口实例/能力核验、baseline 状态与提案、清单声明、聚合脚本退出码。"""
 import atexit, hashlib, json, os, shutil, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, cli as wf_cli
 
 F = wfdrive.FIX
@@ -11,7 +11,7 @@ results = []
 
 
 def _proposal_digest(files):
-    sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    sys.path.insert(0, wfdrive.LIB)
     from wflib import records as _r
 
     return _r.plain_digest({"files": files})
@@ -212,7 +212,7 @@ fake_root = tempfile.mkdtemp(prefix="wf-r67-fake-repo-")
 atexit.register(shutil.rmtree, fake_root, ignore_errors=True)
 fake = os.path.join(fake_root, "scripts/tests/wf_runtime/full")
 os.makedirs(fake)
-real = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/tests/wf_runtime/full"
+real = wfdrive.REPO + "/scripts/tests/wf_runtime/full"
 shutil.copy(os.path.join(real, "run_all.sh"), fake)
 for _name in ("plan.py", "suites.json", "results_gate.py", "execution.py", "fixture_scope.py"):
     shutil.copy(os.path.join(real, _name), fake)
@@ -240,6 +240,15 @@ open(os.path.join(fake, "wf_fixture.sh"), "w").write(
 open(os.path.join(fake, "f1_init.py"), "w").write("print('ok')\n")
 # 假套件/流程/extra 依 suites.json 清单生成：清单变动后假环境不会缺文件
 _manifest = json.load(open(os.path.join(real, "suites.json"), encoding="utf-8"))
+# plan.py 的 modules 键存在性校验要求 REPO/docs/workflows/wf/<key> 存在：
+# 依清单生成桩路径（目录键建目录、文件键建空文件），假环境跟上 plan.py 的契约面。
+for _key in (_manifest.get("modules") or {}):
+    _stub = os.path.join(fake_root, "docs", "workflows", "wf", _key)
+    if _key.endswith("/"):
+        os.makedirs(_stub, exist_ok=True)
+    else:
+        os.makedirs(os.path.dirname(_stub), exist_ok=True)
+        open(_stub, "w").close()
 for _entry in _manifest["suites"]:
     if _entry.get("kind") not in ("suite", "candidate"):
         continue
@@ -284,7 +293,11 @@ _fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
 _fake_results2 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
 for _path in (_fake_fix, _fake_results1, _fake_results2):
     atexit.register(shutil.rmtree, _path, ignore_errors=True)
-_fake_env = {**os.environ, "WF_FIX": _fake_fix,
+# 假运行器也接入 prune-results（复制的 run_all.sh 会执行缓存轮转）：
+# WF_RESULTS_CACHE 指向假缓存根——绝不触碰真实用户缓存（任务 design D5.2）。
+_fake_cache = tempfile.mkdtemp(prefix="wf-r67-fake-cache-")
+atexit.register(shutil.rmtree, _fake_cache, ignore_errors=True)
+_fake_env = {**os.environ, "WF_FIX": _fake_fix, "WF_RESULTS_CACHE": _fake_cache,
              "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
              "WF_SUITES": "cp1_tests", "WF_WITH_REPRO": "", "WF_KNOWN_LEGACY": ""}
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,

@@ -2,8 +2,8 @@
 """F1 专属：本地 spec 生命周期（新增/更新/合并/改名/删除 + 依赖解除 + 索引同步），全程无 MCP。"""
 import hashlib, json, os, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 SID = "sess-G"
 results = []

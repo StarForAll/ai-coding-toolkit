@@ -2,8 +2,8 @@
 """第三十五轮 R71：交接实例核验、dispose 锁内重核、审查五轴齐全。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
@@ -97,7 +97,7 @@ rec("1c 正常交接发起", "WF_OK", (payload or {}).get("code"), rc == 0)
 
 # ---------- 2. dispose 锁内重核 ----------
 def run_dispose(plan_path, mutator=None):
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F,
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"), "--project", F,
                              "--dispose", plan_path, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
@@ -171,7 +171,7 @@ def reset_writer():
         record["holder"] = None
         json.dump(record, open(os.path.join(F, ".wf/writer.json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=2)
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
     while "请输入预览指纹确认" not in buffer:

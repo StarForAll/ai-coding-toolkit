@@ -3,7 +3,8 @@
 import json, os, subprocess, uuid
 F = os.environ.get("WF_FIX", "/tmp/wf-fixtures/d1")
 WF = os.path.join(F, ".wf/bin/wf.py")
-PYTHON = "/usr/bin/python3"
+import wfdrive
+PYTHON = wfdrive.PYTHON
 results = []
 
 

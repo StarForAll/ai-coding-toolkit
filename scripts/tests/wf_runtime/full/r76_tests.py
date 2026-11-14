@@ -3,8 +3,8 @@
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks, cli as wf_cli, lock as wf_lock
 
 F = wfdrive.FIX
@@ -113,13 +113,13 @@ def hold_lock():
     """子进程持锁并把 fact 写入临时文件，主进程据此确认。"""
     code = (
         "import sys, time, os;"
-        "sys.path.insert(0, '/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib');"
+        f"sys.path.insert(0, {wfdrive.LIB!r});"
         "from wflib import lock;"
         "h = lock.acquire(%r);"
         "open('/tmp/r76_holding', 'w').write('1');"
         "time.sleep(20)"
     ) % F
-    return subprocess.Popen(["/usr/bin/python3", "-c", code], stdout=subprocess.DEVNULL,
+    return subprocess.Popen([wfdrive.PYTHON, "-c", code], stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL)
 
 
@@ -133,7 +133,7 @@ for _ in range(200):
     time.sleep(0.05)
 
 try:
-    proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
+    proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
                           capture_output=True, text=True, input="0" * 32 + "\n")
     blocked = "WF_WRITER_BUSY" in (proc.stdout + proc.stderr) or "lock" in (proc.stdout + proc.stderr).lower()
     rec("3 锁被活进程持有时 repair 拒绝", "非成功且指出锁/写权",

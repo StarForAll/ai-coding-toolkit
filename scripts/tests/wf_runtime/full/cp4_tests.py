@@ -2,8 +2,8 @@
 """CP4（A1 前置核验 / A4 spec 模板 / A8 卸载偏离 / A19 spec 输出）回归用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import spec as wf_spec
 
 F = wfdrive.FIX
@@ -117,7 +117,7 @@ wf(["writer", "release", "--json"], {"generation": gen_b}, "sess-R2")
 
 # ---------------- T2 / A4：spec 模板可被解析 ----------------
 meta, problems = wf_spec.parse_frontmatter(os.path.join(
-    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/templates/spec/rule.md"))
+    wfdrive.REPO + "/docs/workflows/wf/payload/templates/spec/rule.md"))
 errors, paths, path_problems = wf_spec.validate_metadata(meta)
 rec("A4 模板 frontmatter 可解析", "problems 为空且 metadata 含 status/author",
     f"problems={problems} errors={errors} path_problems={path_problems}",
@@ -129,7 +129,7 @@ task_c, gen_c, dir_c, d_c = make_task("CP4 spec 输出", ["src/pc.txt"], "sess-R
 approve(task_c, d_c, gen_c, "sess-R3")
 open(os.path.join(F, "src/pc.txt"), "w").write("pc\n")
 wf(["task-start", "--task", task_c, "--json"], {"generation": gen_c}, "sess-R3")
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "spec",
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "spec",
                        "--file", ".wf/spec/index.md"], input=json.dumps({
                            "session": {"provider": "host",
                                        "identity": {"host_id": "dsh", "session_id": "sess-R3"},
@@ -139,7 +139,7 @@ proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "sp
 rec("A19 非 JSON 模式只输出正文", "stdout 为文件正文，无结果头",
     f"header={'PASS' in proc.stdout} stderr_lines={len(proc.stderr.strip().splitlines())}",
     "PASS" not in proc.stdout and "spec 索引" in proc.stdout and proc.stderr.strip())
-proc_json = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "spec",
+proc_json = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "spec",
                             "--file", ".wf/spec/index.md", "--json"], input=json.dumps({
                                 "session": {"provider": "host",
                                             "identity": {"host_id": "dsh", "session_id": "sess-R3"},

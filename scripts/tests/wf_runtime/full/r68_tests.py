@@ -2,8 +2,8 @@
 """第三十一轮 R68：审查判定输入、repair 预览漂移与锁、基线批准与前像、续做分类。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
@@ -55,7 +55,7 @@ def proposal_digest(files):
 def run_repair(writer_mutator=None):
     """同进程起 repair --apply：读到指纹提示后改动写者，再输入指纹。"""
     writer_path = os.path.join(F, ".wf/writer.json")
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"), "--project", F, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""
     while "请输入预览指纹确认" not in buffer:
@@ -283,20 +283,22 @@ locked = os.path.join(F, ".wf/spec/locked")
 os.makedirs(locked, exist_ok=True)
 blocked = os.path.join(locked, "r68d.md")
 open(blocked, "w").write("# 占位\n")
-os.chmod(locked, 0o555)
-files = [{"path": ".wf/spec/rules/r68c.md", "content": "# c\n", "before": None},
-         {"path": ".wf/spec/locked/r68d.md", "content": "# d\n",
-          "before": "sha256:" + hashlib.sha256(open(blocked, "rb").read()).hexdigest()}]
-body = {"files": files,
-        "approval": {"source": "human", "at": AT, "subject": "r68 resume", "choice": "approve",
-                     "object_digest": proposal_digest(files)}}
-path = "/tmp/r68_resume.json"
-json.dump(body, open(path, "w"), ensure_ascii=False)
-rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", path, "--json"],
-                    {"generation": gen()}, sid)
-rec("11 部分写入失败给结构化退出", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
-    (payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
-os.chmod(locked, 0o755)
+deny = wfdrive.deny_writes(locked)  # 三探针等价契约（chmod 层/ro bind mount 按探针选择）
+try:
+    files = [{"path": ".wf/spec/rules/r68c.md", "content": "# c\n", "before": None},
+             {"path": ".wf/spec/locked/r68d.md", "content": "# d\n",
+              "before": "sha256:" + hashlib.sha256(open(blocked, "rb").read()).hexdigest()}]
+    body = {"files": files,
+            "approval": {"source": "human", "at": AT, "subject": "r68 resume", "choice": "approve",
+                         "object_digest": proposal_digest(files)}}
+    path = "/tmp/r68_resume.json"
+    json.dump(body, open(path, "w"), ensure_ascii=False)
+    rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", path, "--json"],
+                        {"generation": gen()}, sid)
+    rec("11 部分写入失败给结构化退出", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
+        (payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
+finally:
+    wfdrive.allow_writes(deny)
 rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", path, "--json"],
                     {"generation": gen()}, sid)
 facts = (payload or {}).get("facts") or {}

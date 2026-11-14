@@ -1,5 +1,22 @@
 #!/usr/bin/env python3
-"""Bound test commands, retain logs and interpret legacy assertion output once."""
+"""Bound test commands, retain logs and interpret legacy assertion output once.
+
+## 套件输出契约（verdict 是唯一解释点）
+
+套件/流程脚本的人类可读输出遵循以下行文法，`verdict()` 是它们唯一的地方解释器
+（run_all.sh 只消费结果 JSON 的 assertion_result，不在 shell 里复制判定）：
+
+- PASS 行：`[PASS] ...`、`PASS ...`、`[<标签>]: PASS ...`（三种前缀形态）；
+- FAIL 行：`[FAIL] ...` 或 `... FAIL ...`（作 failures 计数）；
+- 汇总行（suite kind 的尾行，三种格式）：
+  1. `saved <good> / <total>`；
+  2. `saved <total> cases; <good> passed`；
+  3. `saved <total> cases`（此时要求 passed 行计数 == total）；
+- steps 型输出：逐行 `[<步骤>] exit=<rc> code=WF_OK`，尾行 `TASK_ID <id>`；
+- repro 型输出：尾行 `PASS green|red: <detail>`。
+
+新增套件输出格式时改 verdict（唯一实现），不要在调用点新增判定。
+"""
 from __future__ import annotations
 
 import argparse
@@ -227,7 +244,8 @@ def main(argv=None):
             import fixture_scope
             fixture_scope.remove(user_root)
     check = verdict(args.log, result['rc'], args.kind, args.expected)
-    result.update(name=args.name, kind=args.kind, assertion_result=check)
+    result.update(name=args.name, kind=args.kind, assertion_result=check,
+                  isolated_user=bool(user_root))
     if not check['ok'] and result['rc'] == 0:
         result.update(rc=1, status='failed', reason=check['reason'])
     if args.result:

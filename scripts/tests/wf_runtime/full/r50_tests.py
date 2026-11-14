@@ -2,15 +2,15 @@
 """第十四轮 R50：baseline-apply 与 spec 写入对同一目标作出一致边界判定。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
 def _pd(files):
     import sys as _s
-    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    _s.path.insert(0, wfdrive.LIB)
     from wflib import records as _r
     return _r.plain_digest({"files": files})
 

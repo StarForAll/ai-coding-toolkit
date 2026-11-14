@@ -2,8 +2,8 @@
 """第九轮 R40–R42 用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import cli as wf_cli
 
 F = wfdrive.FIX

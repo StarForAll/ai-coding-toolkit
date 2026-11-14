@@ -3,8 +3,117 @@ import json, os, subprocess, sys
 
 FIX = os.environ.get("WF_FIX", "/tmp/wf-fixtures/f1")
 WF = os.path.join(FIX, ".wf/bin/wf.py")
-PYTHON = "/usr/bin/python3"
+# SUT 驱动解释器（启动被测 wf.py）：默认保持异解释器是既定决策——wflib/session.py 的
+# l2_anchor 会跳过与自身同解释器的祖先，SUT 与驱动同解释器会把锚点推出 harness 之外
+# （探针证据见任务 11-13-wf-runner-speed-quality 的 evidence/anchor-probe.txt）。
+# WF_TEST_PYTHON 是可覆盖口；全库 SUT 驱动点（full/repro/单元层/manual）一律引本常量。
+PYTHON = os.environ.get("WF_TEST_PYTHON") or "/usr/bin/python3"
+# 工具侧解释器（启动 install.py / wf-dev-deploy.py）：与运行器同解释器，与 SUT 驱动面
+# 不共用默认——install.py::runtime_support 用 sys.executable 自检，不受锚点耦合影响。
+TOOL_PYTHON = sys.executable
+# 仓库根与 wflib 路径（替代散落各套件的硬编码绝对路径；WF_TEST_LIB 优先=发行副本）。
+# wfdrive.py 位于 <repo>/scripts/tests/wf_runtime/full/，故上溯 5 层 dirname。
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))))))
+LIB = os.environ.get("WF_TEST_LIB") or os.path.join(REPO, "docs", "workflows", "wf", "payload", "lib")
 TS = "2026-11-03T00:00:00.000000Z"
+
+
+def deny_writes(path):
+    """让 path 暂时满足 deny 契约，返回恢复令牌；契约建立不了即抛异常（fail-closed）。
+
+    deny 契约（按行为定义，不按机制）：对 path 内**新建条目**、**改写已存在文件**、
+    **删除已存在条目**都必须失败。两环境按同一契约对拍，不比较机制细节。
+
+    双机制按探针结果选择（不按环境猜测）：
+    - chmod 层：目录 0o555、文件 0o444——普通用户路径即成立；
+    - root 场景 chmod 不约束（探针仍通过）→ 升级 ro bind mount
+      （mount --bind + remount,bind,ro；user namespace 内可用，namespace.py 同机制）。
+    任一探针在两层后仍通过 → 抛异常：注入未建立，测试不得继续，
+    杜绝"注入失效但套件绿灯"。失败路径自动恢复原状，不留半拒绝状态。
+    """
+    path = os.path.abspath(str(path))
+    if not os.path.isdir(path):
+        raise RuntimeError(f"deny_writes: 不是目录：{path}")
+    sentinel = os.path.join(path, ".wf-deny-sentinel")
+    if not os.path.exists(sentinel):
+        with open(sentinel, "w", encoding="utf-8") as handle:
+            handle.write("sentinel\n")
+        sentinel_created = True
+    else:
+        sentinel_created = False
+    targets = [path]
+    for base, dirs, names in os.walk(path):
+        targets.extend(os.path.join(base, name) for name in names + dirs)
+    original = {target: (os.stat(target).st_mode & 0o7777) for target in targets}
+    token = {"path": path, "modes": original, "sentinel_created": sentinel_created,
+             "mounted": False}
+    try:
+        for target in targets:
+            os.chmod(target, 0o555 if os.path.isdir(target) else 0o444)
+        problems = _probe_denied(path)
+        if problems:
+            # 探测残留必须在进入 mount 层前删除干净（ro 下删不掉，且会污染后续
+            # fixture 空态/模板校验）：先恢复模式，兜底清理，再挂载。
+            for target, mode in original.items():
+                os.chmod(target, mode)
+            check = os.path.join(path, ".wf-deny-check")
+            if os.path.exists(check):
+                os.unlink(check)
+            subprocess.run(["mount", "--bind", path, path], check=True)
+            subprocess.run(["mount", "-o", "remount,bind,ro", path], check=True)
+            token["mounted"] = True
+            problems = _probe_denied(path)
+        if problems:
+            raise RuntimeError(f"deny_writes: 契约未建立（探针通过：{', '.join(problems)}）")
+    except Exception:
+        allow_writes(token)
+        raise
+    return token
+
+
+def allow_writes(token):
+    """按 deny_writes 的令牌恢复：先 umount（若挂载），再恢复原模式，最后删助手哨兵。"""
+    path = token["path"]
+    if token.get("mounted"):
+        subprocess.run(["umount", path], check=True)
+        token["mounted"] = False
+    for target, mode in token["modes"].items():
+        os.chmod(target, mode)
+    if token.get("sentinel_created"):
+        sentinel = os.path.join(path, ".wf-deny-sentinel")
+        if os.path.exists(sentinel):
+            os.unlink(sentinel)
+    return True
+
+
+def _probe_denied(path):
+    """三探针：新建/改写/删除都必须失败。返回未成立的探针名列表（空 = 契约成立）。"""
+    problems = []
+    check = os.path.join(path, ".wf-deny-check")
+    try:
+        fd = os.open(check, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        os.close(fd)
+        os.unlink(check)
+        problems.append("create")
+    except OSError:
+        pass
+    sentinel = os.path.join(path, ".wf-deny-sentinel")
+    try:
+        with open(sentinel, "r+b"):
+            pass
+        problems.append("modify")
+    except OSError:
+        pass
+    try:
+        os.unlink(sentinel)
+        # unlink 成功 = 删除未被拒；重建哨兵让后续探针仍有目标（此刻目录必可写）。
+        with open(sentinel, "w", encoding="utf-8") as handle:
+            handle.write("sentinel\n")
+        problems.append("unlink")
+    except OSError:
+        pass
+    return problems
 
 
 def envelope(inputs=None, sid="sess-A", activation=True, instance_id=None):

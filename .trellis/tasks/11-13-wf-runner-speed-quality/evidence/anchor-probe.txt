@@ -1,0 +1,6 @@
+# D4.3 锚点探针输出（2026-11-14T00:17:48+08:00）
+# 链：unshare -Urm bash → python(level1=运行器解释器) → python(level2=配置解释器, 调 l2_anchor)
+[配置①现状-异解释器] child=/usr/bin/python3 parent=/softwares/python/bin/python3
+[配置①现状-异解释器] stdout: {"anchor": {"boot": "68364601-8788-4da7-9fd5-f231fa642f24", "exe": "python3.14", "kind": "pid", "pid": 2813290, "start": "57844766"}, "key": "bf20583927858502a80548c0d5fd1e8dd09a744d82fa7119494b20493104ad93"}
+[配置②假设统一-同解释器] child=/softwares/python/bin/python3 parent=/softwares/python/bin/python3
+[配置②假设统一-同解释器] stdout: {"anchor": {"boot": "68364601-8788-4da7-9fd5-f231fa642f24", "exe": "zcode-cli", "kind": "pid", "pid": 920514, "start": "54588456"}, "key": "c71d55ab823d2f4a2e8794bb9abce8eccf89bba563bbd037f5716234953b4f0d"}

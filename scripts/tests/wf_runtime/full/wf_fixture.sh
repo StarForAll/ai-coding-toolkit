@@ -1,19 +1,23 @@
 #!/bin/bash
-# 重建夹具（仓库外临时目录）。
-#
-# 用法：
-#   wf_fixture.sh <F> [nocap] [--deploy dev|candidate]
-#                 [--release-root DIR --release-ref REF --release-version X.Y.Z] [--profile install]
-#
-# 部署来源：
-#   dev       源码树 → `scripts/wf-dev-deploy.py`（安装记录 0.0.0-dev），T1/T2 用；
-#   candidate 候选仓库根的 `install.py --source <候选根>`，安装后核对 installation.json
-#             的 version / release_ref / rules_digest，不符即失败（不回退 dev）。
+# 重建夹具（仓库外临时目录）。详细用法：wf_fixture.sh --help
 set -e
+# usage 是唯一文本来源（heredoc），不按行号回头注释提取——头注释不再承载正文。
+usage() { cat <<'EOF'
+用法：
+  wf_fixture.sh <F> [nocap] [--deploy dev|candidate]
+                [--release-root DIR --release-ref REF --release-version X.Y.Z] [--profile install]
+
+部署来源：
+  dev       源码树 → `scripts/wf-dev-deploy.py`（安装记录 0.0.0-dev），T1/T2 用；
+  candidate 候选仓库根的 `install.py --source <候选根>`，安装后核对 installation.json
+            的 version / release_ref / rules_digest，不符即失败（不回退 dev）。
+EOF
+}
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../../.." && pwd)
+# 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY=/softwares/python/bin/python3
-case "${1:-}" in -h|--help) sed -n '2,14p' "$0"; exit 0 ;; esac
+case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
   || ! "$PY" "$HERE/fixture_scope.py" check-lease >/dev/null 2>&1; then
   export WF_RUNNER_ENTRY_PID=$$
@@ -34,7 +38,7 @@ while [ $# -gt 0 ]; do
     --release-ref) RELEASE_REF="${2:-}"; shift 2 ;;
     --release-version) RELEASE_VERSION="${2:-}"; shift 2 ;;
     --profile) PROFILE="${2:-}"; shift 2 ;;
-    -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) if [ -z "$F" ]; then F="$1"; else MODE="$1"; fi; shift ;;
   esac

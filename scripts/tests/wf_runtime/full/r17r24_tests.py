@@ -2,8 +2,8 @@
 """第四轮 R17–R24 用例（隔离夹具）。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks
 
 F = wfdrive.FIX

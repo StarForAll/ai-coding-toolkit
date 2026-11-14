@@ -2,14 +2,14 @@
 """第五轮 R25–R30 用例（R25/R27/R29 由第四轮用例覆盖，这里补 R28、R30 与 R29 的直接断言）。"""
 import datetime, hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
 import sys as _sys
-_sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+_sys.path.insert(0, wfdrive.LIB)
 from wflib import records as _wf_records
 
 

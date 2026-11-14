@@ -2,8 +2,8 @@
 """第十七轮 R54：四项条件汇总后统一提议复杂度。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []

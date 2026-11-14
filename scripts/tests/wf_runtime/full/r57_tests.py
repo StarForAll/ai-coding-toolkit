@@ -2,8 +2,8 @@
 """第二十轮 R57：配置非法一律阻断依赖判断（统一取值器 + 全消费者回扫）。"""
 import datetime, hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import config as wf_config
 
 F = wfdrive.FIX

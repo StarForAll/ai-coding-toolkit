@@ -2,8 +2,8 @@
 """第三轮 R7–R15 用例（隔离夹具）。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks
 
 F = wfdrive.FIX
@@ -11,7 +11,7 @@ results = []
 
 def _pd(files):
     import sys as _s
-    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    _s.path.insert(0, wfdrive.LIB)
     from wflib import records as _r
     return _r.plain_digest({"files": files})
 
@@ -360,7 +360,7 @@ rec("R14 记录进入提交才算已持久化", "persisted=True", result.get("pe
 clean()
 lock_path = os.path.join(F, ".wf-lock")
 open(lock_path, "wb").write(b"")
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
                        "--title", "R15-empty", "--template", os.path.join(F, ".wf/templates/task"), "--json"],
                       cwd=F, capture_output=True, text=True,
                       input=json.dumps({"session": {"provider": "host",
@@ -375,7 +375,7 @@ rec("R15 空锁不被认领", "WF_CAPABILITY_UNAVAILABLE",
 rec("R15 空锁未被补写", "仍为空", open(lock_path, "rb").read().decode("latin-1") or "<empty>",
     open(lock_path, "rb").read() == b"")
 open(lock_path, "wb").write(b"wf-lock")
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
                        "--title", "R15", "--template", os.path.join(F, ".wf/templates/task"), "--json"],
                       cwd=F, capture_output=True, text=True,
                       input=json.dumps({"session": {"provider": "host",
@@ -390,7 +390,7 @@ rec("R15 部分标记返回 WF_CAPABILITY_UNAVAILABLE", "WF_CAPABILITY_UNAVAILAB
 mark = open(lock_path, "rb").read()
 rec("R15 不覆写未知内容", "标记仍为 wf-lock", mark.decode("latin-1"), mark == b"wf-lock")
 open(lock_path, "wb").write(b"wf-lock-v1\n")
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "status"], cwd=F,
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "status"], cwd=F,
                       capture_output=True, text=True)
 rec("R15 合法标记恢复正常", "rc=0", proc.returncode, proc.returncode == 0)
 

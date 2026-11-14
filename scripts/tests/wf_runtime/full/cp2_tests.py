@@ -2,8 +2,8 @@
 """CP2（A2 等价链 / A3 activation / A13 阈值 / A14 Trellis 三档）回归用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 AT = "2026-11-03T10:00:00.000000Z"
@@ -135,7 +135,7 @@ json.dump(config, open(config_path, "w"), ensure_ascii=False, indent=2)
 clean()
 task3, gen3, dir3, d3 = make_task("CP2 A13 阈值", ["src/p13.txt"],
                                   [{"id": "v1", "invocation": {"kind": "argv", "argv": [
-                                      "/usr/bin/python3", "-c",
+                                      wfdrive.PYTHON, "-c",
                                       "import sys; sys.exit(0 if open('src/p13.txt').read().strip()=='ok' else 1)"]},
                                     "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}],
                                   [{"id": "a1", "statement": "内容为 ok", "verification_ids": ["v1"]}], "sess-P3")

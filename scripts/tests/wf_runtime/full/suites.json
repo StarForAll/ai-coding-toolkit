@@ -18,7 +18,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -31,7 +30,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -44,9 +42,9 @@
       ],
       "representative": false,
       "candidate_clean": false,
+      "isolated_user": true,
       "representative_flow": null,
-      "expected_seconds": null,
-      "notes": ""
+      "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（plan.py 下发 PLAN_ISOLATED_SUITES，run_all/run_one 同一成员判定）"
     },
     {
       "name": "cp4_tests",
@@ -59,7 +57,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -71,7 +68,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -84,7 +80,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -97,7 +92,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -109,9 +103,9 @@
       ],
       "representative": false,
       "candidate_clean": false,
+      "isolated_user": true,
       "representative_flow": null,
-      "expected_seconds": null,
-      "notes": ""
+      "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（同 cp3_tests）"
     },
     {
       "name": "r7r15_tests",
@@ -123,7 +117,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "大状态机广覆盖；硬编码源码 payload/lib → candidate_clean=false"
     },
     {
@@ -136,7 +129,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -149,7 +141,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -162,7 +153,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -175,7 +165,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -188,7 +177,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -201,7 +189,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -214,7 +201,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -227,7 +213,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -240,7 +225,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -253,7 +237,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -266,7 +249,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -279,7 +261,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -292,7 +273,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -305,7 +285,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -318,7 +297,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -331,7 +309,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -344,7 +321,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -357,7 +333,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -370,7 +345,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -383,7 +357,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -396,7 +369,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -409,7 +381,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -421,7 +392,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -434,7 +404,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -446,7 +415,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -459,7 +427,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -472,7 +439,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -486,7 +452,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -500,7 +465,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "审查/修复/基线；硬编码源码 payload/lib → candidate_clean=false"
     },
     {
@@ -514,7 +478,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -528,7 +491,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "审查判定输入面；与 test_review_coverage/test_report_boundary 部分重叠（Phase 2 映射）"
     },
     {
@@ -542,7 +504,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -556,7 +517,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -570,7 +530,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -583,7 +542,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -596,7 +554,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -609,7 +566,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -622,7 +578,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -635,7 +590,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -648,7 +602,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -661,7 +614,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -674,7 +626,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -687,7 +638,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -700,7 +650,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -713,7 +662,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -726,7 +674,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -739,7 +686,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -752,7 +698,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -765,7 +710,6 @@
       "representative": true,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -778,7 +722,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": ""
     },
     {
@@ -791,7 +734,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "run_extra：只在 full 或显式选中时执行（不计入 59 套件）"
     },
     {
@@ -804,7 +746,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "手动套件：不在默认全量内（历史保留，不删除）"
     },
     {
@@ -817,7 +758,6 @@
       "representative": false,
       "candidate_clean": false,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "手动套件：不在默认全量内（历史保留，不删除）"
     },
     {
@@ -832,7 +772,6 @@
       "candidate_clean": true,
       "fallback_representative": true,
       "representative_flow": null,
-      "expected_seconds": null,
       "notes": "兜底候选闭环（候选安装 → 初始化/普通任务 → 复杂审查 → 归档）；只经 .wf/bin/wf.py 与 $F/.wf/lib 断言"
     }
   ],
@@ -853,7 +792,11 @@
         "r70_tests",
         "r71_tests",
         "r75_tests",
-        "r79_tests"
+        "r79_tests",
+        "r62_tests",
+        "r65_tests",
+        "r83_tests",
+        "f1_candidate_smoke"
       ],
       "repro": [
         "review"
@@ -864,7 +807,19 @@
         "r31r34_tests",
         "f1_ordinary",
         "r35r37_tests",
-        "r7r15_tests"
+        "r7r15_tests",
+        "r25r30_tests",
+        "r55_tests",
+        "r62_tests",
+        "r65_tests",
+        "r82_tests",
+        "r84_tests",
+        "r86_tests",
+        "r87_tests",
+        "r88_tests",
+        "cp5_b12",
+        "cp5_b345",
+        "f1_candidate_smoke"
       ],
       "repro": [
         "archive",
@@ -876,7 +831,13 @@
         "cp1_tests",
         "r75_tests",
         "r89_tests",
-        "r90_tests"
+        "r90_tests",
+        "r64_tests",
+        "r83_tests",
+        "r84_tests",
+        "r85_tests",
+        "cp5_b12",
+        "p5_v1"
       ],
       "repro": [
         "identity",
@@ -888,7 +849,12 @@
         "r38r39_tests",
         "r40r42_tests",
         "r46_tests",
-        "r60_tests"
+        "r60_tests",
+        "r80_tests",
+        "r81_tests",
+        "r82_tests",
+        "r85_tests",
+        "r86_tests"
       ],
       "repro": [
         "review"
@@ -899,7 +865,8 @@
         "r46_tests",
         "r49_tests",
         "r50_tests",
-        "r74_tests"
+        "r74_tests",
+        "r86_tests"
       ],
       "repro": [
         "archive"
@@ -908,7 +875,10 @@
     "payload/lib/wflib/spec.py": {
       "suites": [
         "r43r45_tests",
-        "r47r48_tests"
+        "r47r48_tests",
+        "r25r30_tests",
+        "r64_tests",
+        "cp5_b345"
       ],
       "repro": []
     },
@@ -917,7 +887,10 @@
         "cp3_tests",
         "r63_tests",
         "r66_tests",
-        "r67_tests"
+        "r67_tests",
+        "r25r30_tests",
+        "r55_tests",
+        "r87_tests"
       ],
       "repro": [
         "writer"
@@ -936,7 +909,9 @@
       "suites": [
         "cp2_tests",
         "r51r52_tests",
-        "r61_tests"
+        "r61_tests",
+        "r84_tests",
+        "p5_v1"
       ],
       "repro": [
         "identity"
@@ -946,7 +921,8 @@
       "suites": [
         "r59_tests",
         "r76_tests",
-        "r77_tests"
+        "r77_tests",
+        "r82_tests"
       ],
       "repro": [
         "archive"
@@ -955,7 +931,8 @@
     "payload/lib/wflib/runs.py": {
       "suites": [
         "r17r24_tests",
-        "r7r15_tests"
+        "r7r15_tests",
+        "r88_tests"
       ],
       "repro": [
         "identity"
@@ -964,7 +941,9 @@
     "payload/lib/wflib/sampling.py": {
       "suites": [
         "r31r34_tests",
-        "f1_ordinary"
+        "f1_ordinary",
+        "r65_tests",
+        "cp5_b345"
       ],
       "repro": [
         "archive"
@@ -976,7 +955,10 @@
         "r69_tests",
         "r70_tests",
         "r72_tests",
-        "r89_tests"
+        "r89_tests",
+        "r81_tests",
+        "r85_tests",
+        "f1_candidate_smoke"
       ],
       "repro": [
         "install",

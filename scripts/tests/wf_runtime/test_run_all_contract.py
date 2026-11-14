@@ -4,6 +4,7 @@
 所以要显式开 `WF_SLOW_TESTS=1` 才执行；默认单元层只跑快测试。
 """
 
+import atexit
 import json
 import os
 import subprocess
@@ -20,6 +21,12 @@ SLOW = os.environ.get("WF_SLOW_TESTS") == "1"
 
 def run(args, env=None, timeout=900):
     merged = {**os.environ, **(env or {})}
+    # 契约测试不触碰真实用户缓存：run_all 会按 scope 执行缓存轮转，
+    # WF_RESULTS_CACHE 缺省指向 ~/.cache/wf-test-run——注入临时根隔离（design D5.2）。
+    if not merged.get("WF_RESULTS_CACHE"):
+        cache = tempfile.mkdtemp(prefix="wf-contract-cache-")
+        atexit.register(__import__("shutil").rmtree, cache, ignore_errors=True)
+        merged["WF_RESULTS_CACHE"] = cache
     if not merged.get("WF_RESULTS_DIR"):
         with tempfile.TemporaryDirectory(prefix="wf-run-all-args-") as results:
             merged["WF_RESULTS_DIR"] = results
@@ -52,8 +59,12 @@ class RunAllContractTest(unittest.TestCase):
             self.assertEqual(summary['fail'], 0)
 
     def test_interrupting_root_runner_cleans_its_command_and_fixtures(self):
-        with tempfile.TemporaryDirectory(prefix='wf-root-cancel-') as results:
-            env = {**os.environ, 'WF_RESULTS_DIR': results, 'WF_SUITES': 'r68_tests', 'WF_JOBS': '1'}
+        with tempfile.TemporaryDirectory(prefix='wf-root-cancel-') as results, \
+             tempfile.TemporaryDirectory(prefix='wf-root-cancel-cache-') as cache:
+            # WF_RESULTS_CACHE 指向临时根：被中断的 runner 也会执行缓存轮转，
+            # 不得触碰真实用户缓存（design D5.2；与 run() 助手同一注入）。
+            env = {**os.environ, 'WF_RESULTS_DIR': results, 'WF_RESULTS_CACHE': cache,
+                   'WF_SUITES': 'r68_tests', 'WF_JOBS': '1'}
             proc = subprocess.Popen(['bash', str(RUN_ALL)], cwd=str(REPO), env=env,
                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             try:

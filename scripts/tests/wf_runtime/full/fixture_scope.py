@@ -154,6 +154,105 @@ def clone(source, target):
     return target
 
 
+DEFAULT_CACHE = Path.home() / '.cache' / 'wf-test-run'
+_KEEP_NAMES = {'lines', 'plan.err', 'selection.tsv'}
+_KEEP_DIRS = {'logs', 'repro', 'template'}
+
+
+def _validate_cache_root(root):
+    root = Path(root)
+    if root != root.resolve():
+        raise FixtureError(f'prune root 包含符号链接：{root}')
+    resolved = root.resolve()
+    temp = Path(tempfile.gettempdir()).resolve()
+    if resolved != DEFAULT_CACHE.resolve() and temp not in resolved.parents:
+        raise FixtureError(
+            f'prune root 必须是标准缓存根（{DEFAULT_CACHE}）或临时目录之下：{root}')
+    return root
+
+
+def _valid_results_owner(directory):
+    marker = results_marker(directory)
+    try:
+        return json.loads(marker.read_text()) == {'owner': OWNER, 'root': str(directory)}
+    except (OSError, ValueError):
+        return False
+
+
+def _bootstrap_eligible(directory):
+    """无主历史目录的保守判定：顶层内容全部为运行器已知产物（复用 prepare-results
+    的文件白名单 + 已知子目录名 logs/repro/template）。子树内容不再逐项审查——
+    它们全部是运行器自产副本，整树删除是有意行为（实现注释，见任务 design D5.3）。"""
+    try:
+        for name in os.listdir(directory):
+            if name.endswith(('.json', '.out', '.log', '.timing')) or name in _KEEP_NAMES:
+                continue
+            if name in _KEEP_DIRS and os.path.isdir(Path(directory) / name):
+                continue
+            return False, name
+    except OSError:
+        return False, os.listdir(directory)
+    return True, None
+
+
+def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
+    """回收结果缓存：只删带有效所有权 marker 的目录（marker 校验兜底，宁可留着）。
+
+    - root：标准缓存根（DEFAULT_CACHE）；scope：'run'|'repro' 前缀隔离，run_all 与
+      独立 repro 入口互不越界回收对方产物；
+    - bootstrap：额外允许删除"无主但顶层内容全部为运行器已知产物"的历史目录
+      （一次性存量收敛；无自动调用点，仅手工执行）；
+    - liveness 安全前提：全局 flock 只允许一个根运行器持有 lease（lock_run），
+      其他运行器无法创建有效 marker，故不存在"删到活目录"的窗口——该前提若被
+      破坏，prune 只会漏删不会误删；
+    - 单条删除失败跳过并计数，不中断；输出 PRUNED=<n> KEPT=<m>。
+    """
+    root = _validate_cache_root(root)
+    if scope not in ('run', 'repro'):
+        raise FixtureError(f'--scope 只接受 run|repro（收到 {scope!r}）')
+    prefix = {'run': 'run-', 'repro': 'repro-'}[scope]
+    exclude = {Path(item).absolute() for item in exclude}
+    candidates = []
+    for entry in root.iterdir():
+        if entry.name == 'repro-state.json' or not entry.is_dir() or entry.is_symlink():
+            continue
+        if not entry.name.startswith(prefix):
+            continue
+        if entry in exclude:
+            continue
+        candidates.append(entry)
+    owned = [entry for entry in candidates if _valid_results_owner(entry)]
+    owned.sort(key=lambda entry: (results_marker(entry).stat().st_mtime), reverse=True)
+    pruned = 0
+    kept = 0
+    for index, entry in enumerate(owned):
+        if index < keep:
+            kept += 1
+            continue
+        try:
+            shutil.rmtree(entry)
+            pruned += 1
+        except OSError as exc:
+            # marker 校验兜底的 fail-safe：删不掉就留着并报告，不中断后续回收。
+            print(f'PRUNE-SKIPPED {entry.name}: {exc}', file=sys.stderr)
+            kept += 1
+    if bootstrap:
+        for entry in candidates:
+            if _valid_results_owner(entry) or entry in exclude:
+                continue
+            eligible, offender = _bootstrap_eligible(entry)
+            if not eligible:
+                print(f'PRUNE-SKIPPED {entry.name}: 未知顶层内容 {offender!r}', file=sys.stderr)
+                continue
+            try:
+                shutil.rmtree(entry)
+                pruned += 1
+            except OSError as exc:
+                print(f'PRUNE-SKIPPED {entry.name}: {exc}', file=sys.stderr)
+    print(f'PRUNED={pruned} KEPT={kept}', file=sys.stderr)
+    return 0
+
+
 def verify_lease():
     """Prove an ancestor still holds the inherited kernel flock, across mount namespaces."""
     try:
@@ -213,6 +312,13 @@ def main(argv=None):
     p = sub.add_parser('lease')
     p.add_argument('command', nargs=argparse.REMAINDER)
     sub.add_parser('check-lease')
+    prune = sub.add_parser('prune-results')
+    prune.add_argument('root')
+    prune.add_argument('--scope', choices=('run', 'repro'), required=True)
+    prune.add_argument('--keep', type=int, default=20)
+    prune.add_argument('--exclude', action='append', default=[])
+    prune.add_argument('--bootstrap', action='store_true',
+                       help='额外回收无主但顶层内容全部为运行器已知产物的历史目录（仅手工执行）')
     args = parser.parse_args(argv)
     try:
         if args.operation == 'lease':
@@ -232,6 +338,8 @@ def main(argv=None):
                 claim_results(args.root)
             elif args.operation == 'prepare-results':
                 prepare_results(args.root)
+            elif args.operation == 'prune-results':
+                prune_results(args.root, args.scope, args.keep, args.exclude, args.bootstrap)
             else:
                 {'reset': reset, 'remove': remove, 'validate': validate}[args.operation](args.root, args.forbid)
         return 0

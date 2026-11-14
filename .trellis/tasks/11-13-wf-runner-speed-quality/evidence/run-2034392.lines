@@ -1,0 +1,59 @@
+cp1_tests	0	16	ok	saved 20 cases; 20 passed
+cp2_tests	0	8	ok	saved 15 cases; 15 passed
+cp3_tests	0	9	ok	saved 19 cases; 19 passed
+cp4_tests	0	5	ok	saved 6 cases; 6 passed
+cp4_a8	0	0	ok	saved 9 cases; 9 passed
+cp5_b345	0	9	ok	saved 8 cases; 8 passed
+cp5_b12	0	4	ok	saved 9 cases; 9 passed
+r1r2_tests	0	4	ok	saved 14 cases; 14 passed
+r7r15_tests	0	16	ok	saved 37 cases; 37 passed
+r17r24_tests	0	24	ok	total 30 / 30
+r25r30_tests	0	4	ok	saved 10 / 10
+r31r34_tests	0	6	ok	saved 13 / 13
+r35_tests	0	1	ok	saved 10 cases; 10 passed
+r35r37_tests	0	5	ok	saved 15 / 15
+r38r39_tests	0	2	ok	saved 11 / 11
+r40r42_tests	0	2	ok	saved 10 / 10
+r43r45_tests	0	5	ok	saved 16 / 16
+r46_tests	0	1	ok	saved 5 / 5
+r47r48_tests	0	2	ok	saved 8 / 8
+r49_tests	0	2	ok	saved 7 / 7
+r50_tests	0	1	ok	saved 7 / 7
+r51r52_tests	0	3	ok	saved 9 / 9
+r53_tests	0	2	ok	saved 9 / 9
+r54_tests	0	3	ok	saved 15 / 15
+r55_tests	0	3	ok	saved 8 / 8
+r56_tests	0	2	ok	saved 4 / 4
+r57_tests	0	1	ok	saved 7 / 7
+r58_tests	0	3	ok	saved 10 / 10
+r59_tests	0	1	ok	saved 8 / 8
+r60_tests	0	0	ok	saved 6 / 6
+r61_tests	0	1	ok	saved 6 / 6
+r62_tests	0	0	ok	saved 11 / 11
+r63_tests	0	1	ok	saved 11 / 11
+r64_tests	0	1	ok	saved 6 / 6
+r65_tests	0	2	ok	saved 6 / 6
+r66_tests	0	2	ok	saved 12 / 12
+r67_tests	0	11	ok	saved 15 / 15
+r68_tests	0	25	ok	saved 16 / 16
+r69_tests	0	4	ok	saved 9 / 9
+r70_tests	0	6	ok	saved 5 / 5
+r71_tests	0	22	ok	saved 20 / 20
+r74_tests	0	2	ok	saved 9 / 9
+r75_tests	0	4	ok	saved 12 / 12
+r76_tests	0	1	ok	saved 11 / 11
+r77_tests	0	0	ok	saved 17 / 17
+r79_tests	0	1	ok	saved 18 / 18
+r80_tests	0	0	ok	saved 22 / 22
+r81_tests	0	0	ok	saved 29 / 29
+r82_tests	0	0	ok	saved 27 / 27
+r83_tests	0	0	ok	saved 30 / 30
+r84_tests	0	1	ok	saved 13 / 13
+r85_tests	0	1	ok	saved 16 / 16
+r86_tests	0	0	ok	saved 19 / 19
+r87_tests	0	2	ok	saved 11 / 11
+r88_tests	0	1	ok	saved 7 / 7
+r89_tests	0	3	ok	saved 12 / 12
+r90_tests	0	3	ok	saved 13 / 13
+f1_ordinary	0	2	ok	TASK_ID 2026-8c5f84c550644b05983b16909bece324
+p5_v1	0	2	ok	saved 12 cases

@@ -2,8 +2,8 @@
 """第三十四轮 R70：卸载既有偏离与确认期变化之分、真实审查失败必须落盘。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
@@ -47,7 +47,7 @@ def _release_source():
     两处都可能不存在（未构建/未挂载）——那就明确报出来，而不是让卸载步骤连锁失败。
     """
     candidates = [os.environ.get("WF_RELEASE_REPO"), "/tmp/wf-fixtures/release-repo",
-                  "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf-release"]
+                  wfdrive.REPO + "/docs/workflows/wf-release"]
     for path in candidates:
         # install.py 要求"已检出的发行目录"：既要有清单，也要有 wf-release/ 实体assets
         if (path and os.path.exists(os.path.join(path, "wf-release.json"))
@@ -62,8 +62,8 @@ def make_project(name):
     subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                     "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
-    proc = subprocess.run(["/softwares/python/bin/python3",
-                           "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+    proc = subprocess.run([wfdrive.TOOL_PYTHON,
+                           wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                            "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
                            "--source", _release_source(),
                            "--platform", "dsh",
@@ -77,7 +77,7 @@ def make_project(name):
 
 
 def run_uninstall(target, mutator=None):
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(target, ".wf/bin/uninstall.py"),
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(target, ".wf/bin/uninstall.py"),
                              "--project", target, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""

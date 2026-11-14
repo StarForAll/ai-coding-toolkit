@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """第三十六轮 R72：卸载入口的清单一致性与资产边界。"""
 import json, os, re, subprocess, sys
+import wfdrive
 F_BASE = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "r72")
 results = []
 
@@ -15,8 +16,8 @@ def make_project(name):
     subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                     "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
-    subprocess.run(["/softwares/python/bin/python3",
-                    "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+    subprocess.run([wfdrive.TOOL_PYTHON,
+                    wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                     "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
                     "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
                     "--platform", "dsh",
@@ -27,7 +28,7 @@ def make_project(name):
 
 def run_uninstall(target):
     """同进程：读到指纹提示后输入该指纹。"""
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(target, ".wf/bin/uninstall.py"),
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(target, ".wf/bin/uninstall.py"),
                              "--project", target, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""

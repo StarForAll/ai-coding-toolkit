@@ -53,10 +53,22 @@ if [ ! -f "$FIX/.wf/bin/wf.py" ]; then
 fi
 init_millis=$(( $(now_ms) - init_started ))
 
+# isolated-user 成员判定与 run_all.sh 同源（WF_ISOLATED_SUITES ← suites.json isolated_user
+# 字段经 plan.py 下发）。修复：并行路径此前缺失 --isolated-user，套件会写真用户配置。
+isolated_args() {
+  case " ${WF_ISOLATED_SUITES:-} " in *" $1 "*) printf '%s\n' --isolated-user ;; esac
+}
+user_args=($(isolated_args "$suite"))
 started=$(now_ms)
-WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$suite" --kind suite --log "$RESULTS_DIR/$suite.test.log" --result "$RESULTS_DIR/$suite.test.log.json" -- "$PY" "$HERE/$suite.py" >>"$out" 2>&1
+WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$suite" --kind suite --log "$RESULTS_DIR/$suite.test.log" --result "$RESULTS_DIR/$suite.test.log.json" ${user_args[@]+"${user_args[@]}"} -- "$PY" "$HERE/$suite.py" >>"$out" 2>&1
 rc=$?
-elapsed_ms=$(( $(now_ms) - started )); elapsed=$((elapsed_ms / 1000))
+# 套件耗时的唯一来源：execution.py 结果 JSON 的 seconds（time.monotonic，精度优于
+# /proc/uptime 的 10ms）——run_one 不再自算套件段计时；init 段不经 execution.py，
+# 保留本地 now_ms。结果 JSON 缺失（如进程被杀）计 0，由 results_gate 兜底判失败。
+elapsed_ms=$("$PY" -c 'import json,sys
+try: print(int(float(json.load(open(sys.argv[1]))["seconds"]) * 1000))
+except (OSError, ValueError, KeyError): print(0)' "$RESULTS_DIR/$suite.test.log.json" 2>/dev/null) || elapsed_ms=$(( $(now_ms) - started ))
+elapsed=$((elapsed_ms / 1000))
 printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis" "$elapsed_ms" > "$RESULTS_DIR/$suite.timing"
 line=$(tail -1 "$out")
 status=ok

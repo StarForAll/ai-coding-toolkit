@@ -3,8 +3,8 @@
 import hashlib, json, os, sys
 
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 SID = "sess-B"
 

@@ -22,7 +22,8 @@ with open(skill, "a", encoding="utf-8") as handle:
 with open(workflow, "a", encoding="utf-8") as handle:
     handle.write("\n本地修改：仅用于 CP4 偏离用例。\n")
 
-preview = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/uninstall.py"),
+import wfdrive
+preview = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/uninstall.py"),
                           "--project", F], capture_output=True, text=True)
 rec("A8 预览列出本地偏离", "列 2 项偏离",
     f"count={len(re.findall('local content differs', preview.stdout))}",
@@ -30,7 +31,7 @@ rec("A8 预览列出本地偏离", "列 2 项偏离",
 token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
 rec("A8 预览给出短指纹", "8 位十六进制", token.group(1) if token else None, bool(token))
 
-apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/uninstall.py"),
+apply_run = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/uninstall.py"),
                             "--project", F, "--apply", "--nonce", token.group(1)],
                            capture_output=True, text=True, input=token.group(1) + "\n")
 rec("A8 卸载应用成功", "WF_OK", apply_run.stdout.splitlines()[0] if apply_run.stdout else apply_run.stderr[-200:],

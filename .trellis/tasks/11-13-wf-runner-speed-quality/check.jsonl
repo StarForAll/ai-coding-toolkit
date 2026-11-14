@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/docs/wf-delivery-discipline.md", "reason": "检查阶段核对：验证顺序（T0→契约→冒烟→representative→full）、并行/串行对拍逐项相等、失败传播不降级、运行中禁改 runner"}
+{"file": ".trellis/spec/scripts/index.md", "reason": "检查阶段核对退出码约定、--help 可用、无硬编码路径、无静默失败"}
+{"file": ".trellis/tasks/archive/2026-11/11-13-wf-test-runner-reliability-performance/validation.md", "reason": "对照上一轮验收口径：149 单元计数不变、对拍方法一致、性能对比需同口径（并行/串行分开采样）"}

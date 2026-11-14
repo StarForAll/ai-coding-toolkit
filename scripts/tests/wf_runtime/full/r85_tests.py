@@ -3,8 +3,8 @@
 import json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import check as wf_check, gates as wf_gates, spec as wf_spec, tasks as wf_tasks
 
 F = wfdrive.FIX
@@ -93,7 +93,7 @@ rec("R50-10b 符号引用不误判", "[]", wf_tasks.retrospective_evidence_probl
     wf_tasks.retrospective_evidence_problems(Ctx(), symbolic) == [])
 
 # ---- R50-11：安装预览展示 session_profile ----
-install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+install_src = open(wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                    encoding="utf-8").read()
 rec("R50-11 预览含平台与技能目录", "含 平台： 与 技能目录（目标项目内）",
     ("平台：" in install_src) and ("技能目录（目标项目内）" in install_src),

@@ -2,8 +2,8 @@
 """CP1（A5/A10/A11/A12/A15/A18/A21/A22/A23）回归用例。"""
 import hashlib, json, os, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 AT = "2026-11-03T09:00:00.000000Z"

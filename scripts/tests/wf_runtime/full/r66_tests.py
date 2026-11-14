@@ -2,8 +2,8 @@
 """第二十九轮 R66：公共写入口统一核验（实例标识、写者结构、终态、清单义务、重复记录）。"""
 import hashlib, json, os, shutil, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, tasks as wf_tasks, writer as wf_writer, cli as wf_cli
 
 F = wfdrive.FIX

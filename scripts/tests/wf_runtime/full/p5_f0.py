@@ -2,8 +2,8 @@
 """F0（全新项目：无 Git/无基线）：自举 + Git 就绪。夹具由 install.py 从发行树安装。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 SID = "sess-F"
 results = []
@@ -101,7 +101,7 @@ proposal = {"files": [
     {"path": ".wf/baseline.md", "content": baseline, "before": None},
     {"path": ".wf/spec/index.md", "content": open(f"{F}/.wf/templates/spec/index.md", encoding="utf-8").read(), "before": None},
 ]}
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+sys.path.insert(0, wfdrive.LIB)
 from wflib import records as _wf_records
 
 proposal["approval"] = {"source": "human terminal", "at": "2026-11-07T00:00:00.000000Z",

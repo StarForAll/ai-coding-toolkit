@@ -2,14 +2,15 @@
 """第二十四轮 R61：完整指纹核验 + 待核必进门禁。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 def sync_journal():
     """把 writer.json 里最后一条回执同步进**提交层账本**（`.wf/install/maintenance.jsonl`）。
 
     回执账本在提交层，探针从提交树读它；套件模拟维护动作时只写 writer.json 的话，
     探针永远判 pending。断言不变，只是让模拟与真实入口同构。
     """
-    sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    sys.path.insert(0, wfdrive.LIB)
     from wflib import maintenance as _m
     receipts = (json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
                 .get("maintenance_results") or [])
@@ -17,7 +18,6 @@ def sync_journal():
         _m.append(F, receipts[-1])
 
 
-import wfdrive
 from wflib import tasks as wf_tasks, fingerprint as wf_fp, cli as wf_cli
 
 F = wfdrive.FIX

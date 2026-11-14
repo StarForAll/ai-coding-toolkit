@@ -2,8 +2,8 @@
 """第三十三轮 R69：前像结构与整批预检、审查导入冲突、卸载内容重核。"""
 import hashlib, json, os, re, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
@@ -198,8 +198,8 @@ UN = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), 
 subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                 "reset", UN], check=True)
 subprocess.run(["git", "init", "-q"], cwd=UN, capture_output=True)
-subprocess.run(["/softwares/python/bin/python3",
-                "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+subprocess.run([wfdrive.TOOL_PYTHON,
+                wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                 "--target", UN, "--release-ref", "refs/tags/wf-v0.1.0",
                 "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
                 "--platform", "dsh",
@@ -208,7 +208,7 @@ subprocess.run(["/softwares/python/bin/python3",
 
 
 def run_uninstall(mutator=None):
-    proc = subprocess.Popen(["/usr/bin/python3", os.path.join(UN, ".wf/bin/uninstall.py"),
+    proc = subprocess.Popen([wfdrive.PYTHON, os.path.join(UN, ".wf/bin/uninstall.py"),
                              "--project", UN, "--apply"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     buffer = ""

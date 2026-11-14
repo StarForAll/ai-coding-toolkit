@@ -2,12 +2,12 @@
 """第二十七轮 R64：P3 改进项。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates
 
 F = wfdrive.FIX
-ROOT = "/home/xzc/projects/personal/ai-coding-toolkit"
+ROOT = wfdrive.REPO
 results = []
 AT = "2026-11-05T11:00:00.000000Z"
 
@@ -43,7 +43,7 @@ content = ((payload or {}).get("facts") or {}).get("content")
 rec("P3-2 json 模式也交付正文", "content 非空",
     (content or "")[:12], bool(content))
 payload_json = json.dumps(wfdrive.envelope({"generation": write_gen()}, "sess-J1"))
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F, ".wf/bin/wf.py"), "spec", "--file", ".wf/spec/index.md"],
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "spec", "--file", ".wf/spec/index.md"],
                       cwd=F, input=payload_json, capture_output=True, text=True)
 out = proc.stdout
 rec("P3-2 非 json 模式仍有正文", "stdout 非空", (out or "")[:12], bool((out or "").strip()))

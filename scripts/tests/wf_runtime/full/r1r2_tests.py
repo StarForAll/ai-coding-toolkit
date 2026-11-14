@@ -2,15 +2,15 @@
 """R1（整批预校验 + 未完成动作接续）与 R2（confirm-executor 交互闸门）用例。"""
 import json, os, pty, shutil, subprocess, sys, time
 sys.path.insert(0, "/tmp")
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 WF = os.path.join(F, ".wf/bin/wf.py")
 results = []
 
 def _pd(files):
     import sys as _s
-    _s.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    _s.path.insert(0, wfdrive.LIB)
     from wflib import records as _r
     return _r.plain_digest({"files": files})
 
@@ -89,37 +89,39 @@ rec("R1 拒绝时零写入", "first.md 不存在", os.path.exists(os.path.join(F
 
 # 写入中途失败 → 动作留存 → 同提案重入续做
 os.makedirs(os.path.join(F, ".wf/spec/blocked-dir"), exist_ok=True)
-os.chmod(os.path.join(F, ".wf/spec/blocked-dir"), 0o555)
-files2 = [
-    {"path": ".wf/spec/first.md", "content": "# first\n", "before": None},
-    {"path": ".wf/spec/blocked-dir/x.md", "content": "# blocked\n", "before": None}]
-proposal2 = {"files": files2,
-             "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
-                          "subject": "baseline proposal r1", "choice": "approve",
-                          "object_digest": _pd(files2), "reason": "R1 用例"}}
-json.dump(proposal2, open("/tmp/r12_proposal_mid.json", "w"), ensure_ascii=False)
-rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_mid.json", "--json"],
-                    {"generation": gen1})
-rec("R1 中途写入失败映射为结构化退出码", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
-    (payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
-record = json.load(open(os.path.join(dir1, "task.json")))
-pending = record.get("action") or {}
-rec("R1 失败后动作留在未完成态", "kind=baseline.apply 且 state!=done",
-    f"kind={pending.get('kind')} state={pending.get('state')}",
-    pending.get("kind") == "baseline.apply" and pending.get("state") != "done")
-first_action = pending.get("id")
-files3 = [{"path": ".wf/spec/first.md", "content": "# different\n", "before": None},
-          {"path": ".wf/spec/blocked-dir/x.md", "content": "# different\n", "before": None}]
-json.dump({"files": files3,
-           "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
-                        "subject": "baseline proposal r1", "choice": "approve",
-                        "object_digest": _pd(files3), "reason": "R1 用例"}},
-          open("/tmp/r12_proposal_other.json", "w"), ensure_ascii=False)
-rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_other.json", "--json"],
-                    {"generation": gen1})
-rec("R1 不同提案不得覆盖未完成动作", "WF_ACTION_INCOMPLETE", (payload or {}).get("code"),
-    (payload or {}).get("code") == "WF_ACTION_INCOMPLETE")
-os.chmod(os.path.join(F, ".wf/spec/blocked-dir"), 0o755)
+deny = wfdrive.deny_writes(os.path.join(F, ".wf/spec/blocked-dir"))  # 空目录注入：助手哨兵保证探针有目标
+try:
+    files2 = [
+        {"path": ".wf/spec/first.md", "content": "# first\n", "before": None},
+        {"path": ".wf/spec/blocked-dir/x.md", "content": "# blocked\n", "before": None}]
+    proposal2 = {"files": files2,
+                 "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+                              "subject": "baseline proposal r1", "choice": "approve",
+                              "object_digest": _pd(files2), "reason": "R1 用例"}}
+    json.dump(proposal2, open("/tmp/r12_proposal_mid.json", "w"), ensure_ascii=False)
+    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_mid.json", "--json"],
+                        {"generation": gen1})
+    rec("R1 中途写入失败映射为结构化退出码", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
+        (payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
+    record = json.load(open(os.path.join(dir1, "task.json")))
+    pending = record.get("action") or {}
+    rec("R1 失败后动作留在未完成态", "kind=baseline.apply 且 state!=done",
+        f"kind={pending.get('kind')} state={pending.get('state')}",
+        pending.get("kind") == "baseline.apply" and pending.get("state") != "done")
+    first_action = pending.get("id")
+    files3 = [{"path": ".wf/spec/first.md", "content": "# different\n", "before": None},
+              {"path": ".wf/spec/blocked-dir/x.md", "content": "# different\n", "before": None}]
+    json.dump({"files": files3,
+               "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+                            "subject": "baseline proposal r1", "choice": "approve",
+                            "object_digest": _pd(files3), "reason": "R1 用例"}},
+              open("/tmp/r12_proposal_other.json", "w"), ensure_ascii=False)
+    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_other.json", "--json"],
+                        {"generation": gen1})
+    rec("R1 不同提案不得覆盖未完成动作", "WF_ACTION_INCOMPLETE", (payload or {}).get("code"),
+        (payload or {}).get("code") == "WF_ACTION_INCOMPLETE")
+finally:
+    wfdrive.allow_writes(deny)
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_mid.json", "--json"],
                     {"generation": gen1})
 rec("R1 同提案重入续做成功", "WF_OK 且两份文件都在",
@@ -184,7 +186,7 @@ clean()
 
 
 def run_confirm(stdin_kind, answer=None):
-    args = ["/usr/bin/python3", WF, "confirm-executor", "--scope", "project"]
+    args = [wfdrive.PYTHON, WF, "confirm-executor", "--scope", "project"]
     if stdin_kind == "pipe":
         return subprocess.run(args, cwd=F, capture_output=True, text=True, input=(answer or "") + "\n")
     master, slave = pty.openpty()

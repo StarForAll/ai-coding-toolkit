@@ -25,13 +25,14 @@ with open(skill, "a", encoding="utf-8") as handle:
 with open(workflow, "a", encoding="utf-8") as handle:
     handle.write("\n本地修改：R5 偏离用例。\n")
 
-preview = subprocess.run(["/usr/bin/python3", os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5],
+import wfdrive
+preview = subprocess.run([wfdrive.PYTHON, os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5],
                          capture_output=True, text=True)
 rec("R5 正式记录下预览可运行", "输出预览且列出 2 项偏离",
     f"deviations={len(re.findall('local content differs', preview.stdout))}",
     preview.returncode == 0 and len(re.findall("local content differs", preview.stdout)) == 2)
 token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
-apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5,
+apply_run = subprocess.run([wfdrive.PYTHON, os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5,
                             "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
@@ -57,7 +58,7 @@ lock_path = os.path.join(F3, ".wf-lock")
 with open(lock_path, "wb") as handle:
     handle.write(b"wf-lock")  # 部分标记（缺 -v1 与换行）
 
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F3, ".wf/bin/wf.py"), "task-new", "--kind", "ordinary",
                        "--title", "R3", "--template", os.path.join(F3, ".wf/templates/task"), "--json"],
                       cwd=F3, capture_output=True, text=True,
                       input=json.dumps({"session": {"provider": "host",
@@ -69,10 +70,10 @@ proc = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/wf.py"), "t
 rec("R3 部分标记返回能力不可用", "WF_CAPABILITY_UNAVAILABLE",
     f"code={'WF_CAPABILITY_UNAVAILABLE' in proc.stdout} rc={proc.returncode}",
     "WF_CAPABILITY_UNAVAILABLE" in proc.stdout)
-preview = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/repair.py"), "--project", F3],
+preview = subprocess.run([wfdrive.PYTHON, os.path.join(F3, ".wf/bin/repair.py"), "--project", F3],
                          capture_output=True, text=True)
 token = re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
-apply_run = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/repair.py"), "--project", F3,
+apply_run = subprocess.run([wfdrive.PYTHON, os.path.join(F3, ".wf/bin/repair.py"), "--project", F3,
                             "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
@@ -85,7 +86,7 @@ rec("R3 清理顺序写入维护流程文档", "含锁人工清理顺序与空�
     "确认无 wf 进程" in flow and "自动补写标记" not in flow and "排他创建" in flow)
 with open(lock_path, "wb") as handle:
     handle.write(b"wf-lock-v1\n")
-proc = subprocess.run(["/usr/bin/python3", os.path.join(F3, ".wf/bin/wf.py"), "status"],
+proc = subprocess.run([wfdrive.PYTHON, os.path.join(F3, ".wf/bin/wf.py"), "status"],
                       cwd=F3, capture_output=True, text=True)
 rec("R3 人工清理后恢复正常", "status 正常输出",
     f"rc={proc.returncode}", proc.returncode == 0)

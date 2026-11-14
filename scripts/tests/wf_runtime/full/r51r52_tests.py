@@ -2,8 +2,8 @@
 """第十五轮 R51–R52 用例。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import spec as wf_spec
 
 F = wfdrive.FIX

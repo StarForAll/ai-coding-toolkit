@@ -2,12 +2,12 @@
 """第二十六轮 R63：P2-6 日志/facts 秘密边界 + P2-7 副本来源登记。"""
 import hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import check as wf_check
 
 F = wfdrive.FIX
-SRC = "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/skills"
+SRC = wfdrive.REPO + "/docs/workflows/wf/skills"
 results = []
 
 EXTERNAL_ACK = "/tmp/wf_external_ack.json"

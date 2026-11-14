@@ -30,6 +30,7 @@ def _load(name, path):
 
 
 checker = _load("wf_template_check", FULL / "template_check.py")
+wfdrive = _load("wf_runner_wfdrive", FULL / "wfdrive.py")
 
 
 def make_project(root, version="0.1.0", ref="refs/tags/wf-v0.1.0", leak=None):
@@ -142,7 +143,7 @@ class TemplateReuseIntegrationTest(unittest.TestCase):
                                            "activation": {"enabled": True, "start_source": "human:test",
                                                           "enabled_at": "2026-11-13T00:00:00Z"}},
                                "inputs": {}})
-        result = subprocess.run(["/usr/bin/python3", os.path.join(self.copy, ".wf", "bin", "wf.py"),
+        result = subprocess.run([wfdrive.PYTHON, os.path.join(self.copy, ".wf", "bin", "wf.py"),
                                  "help", "--json"], input=envelope, capture_output=True, text=True,
                                 cwd=self.copy, env={**os.environ, "TMPDIR": empty_tmp})
         self.assertIn("WF_OK", result.stdout, (result.stdout + result.stderr)[-800:])

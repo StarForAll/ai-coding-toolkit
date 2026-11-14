@@ -2,8 +2,8 @@
 """第二十一轮 R58：结构级/字段级分类 + 阈值消费者阻断。"""
 import datetime, hashlib, json, os, subprocess, sys
 sys.path.insert(0, "/tmp")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import config as wf_config
 
 F = wfdrive.FIX
@@ -95,7 +95,7 @@ json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"co
 def run_final_gate():
     """直接取归档门禁（debug 待决分支在 final_gate 内）。"""
     import importlib
-    sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
+    sys.path.insert(0, wfdrive.LIB)
     from wflib import gates as gates_mod
     from wflib import cli as wf_cli
     env_path = "/tmp/r58_env.json"

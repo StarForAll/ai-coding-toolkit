@@ -111,8 +111,34 @@
 
 | 层 | 开关 | 默认 | 说明 |
 |---|---|---|---|
-| 套件层 | `--serial` / `WF_JOBS` | 并行（4） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
-| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | run_all 为 4，独立入口为 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
+| 套件层 | `--serial` / `WF_JOBS` | 并行（min(8, cpu_count)） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
+| repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | run_all 为 min(8, cpu_count)，独立入口为 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
+
+**串行集合（2026-11-14 清空，任务 11-13-wf-runner-speed-quality）**：原 13 个强制串行
+套件全部转入并行池——chmod 写入失败注入改由 `wfdrive.deny_writes` 三探针等价契约承担
+（chmod 层 + ro bind mount 层按探针结果选择，fail-closed；空目录注入由助手哨兵统一）；
+其余 11 个保守遗留项经五项审计（夹具来源/共享路径/用户状态/pty·sleep/嵌套运行器）确认
+并行安全。今后确需串行的套件：`suites.json` 置 `"parallel": false` 并在 `notes` 登记
+具体理由（`load_suites` 校验 notes 非空，防无理由串行回潮）。`--isolated-user` 特判
+（cp3/r1r2）由 `suites.json` 的 `isolated_user` 字段经 `PLAN_ISOLATED_SUITES` 下发，
+run_all/run_one 同一成员判定——套件特判不进 bash 分支。
+
+**结果缓存轮转（2026-11-14 起）**：run_all（`--scope run`）与独立 repro 入口
+（`--scope repro`）在 `prepare-results` 之后各自回收本前缀的带 marker 结果目录，保留
+最近 20；root 经 `WF_RESULTS_CACHE` 注入（默认 `~/.cache/wf-test-run`）——r67 假环境与
+契约测试必须指向临时根，不触碰真实用户缓存。`--bootstrap`（仅手工执行）额外回收无主
+但顶层内容全部为已知产物的历史目录；liveness 保障隐式依赖全局 flock 单运行器。
+直接 `plan.py --list` 不再创建结果目录；显式 `WF_RESULTS_DIR` 时 plan.json 仍镜像写入
+（`test_dry_run_only_prints_plan` 消费该行为）。
+
+**SUT 驱动解释器契约（2026-11-14 起，不得当纯清理）**：被测 `wf.py` 的驱动解释器
+默认保持**异于运行器的解释器**（`wfdrive.PYTHON` / `_harness.WF_PYTHON` 两处单点默认，
+`WF_TEST_PYTHON` 可覆盖）——`wflib/session.py::l2_anchor` 跳过与自身同解释器的祖先，
+统一解释器会把进程锚点推出 harness 之外（随调用方环境漂移、不可复现，自动会话入口
+`WF_IDENTITY_UNRESOLVED`）；full 层没有任何断言消费真实进程锚点，所以"统一"是无断言
+覆盖的 SUT 可见行为变更。工具侧（install.py/wf-dev-deploy.py 启动）用
+`wfdrive.TOOL_PYTHON = sys.executable`，与 SUT 驱动面不共用默认。数据侧
+`/usr/bin/python3` 断言字面量不动（白名单 + 守恒校验）。
 
 并行/串行的等价性要**定期对拍**（改 runner 后至少一次）：跑一次 `--full --repro green` 和一次
 `--full --repro green --serial`，比对两份 `RESULTS_DIR/lines`（套件名/rc/status）、`repro/*.json`
@@ -310,8 +336,8 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 ### 2. Signatures
 
 - `execution.run(argv, log_path, *, timeout, cwd=None, env=None)`：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
-- `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。
-- `fixture_scope reset|clone|remove|claim-results|prepare-results|lease|check-lease`：临时目录归属与运行互斥。
+- `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。**PASS 计数的唯一消费来源是结果 JSON 的 `assertion_result`**（run_all.sh 不在 shell 里复制行文法判定）；套件输出契约（三汇总行格式 + PASS/FAIL 行文法 + steps 终态）文档化在 execution.py 模块 docstring。
+- `fixture_scope reset|clone|remove|claim-results|prepare-results|lease|check-lease|prune-results`：临时目录归属、运行互斥与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。
 - `repro_select.input_fingerprint(case)`、`auto_modes(cases, groups_doc)`、`commit_state(results_dir)`：repro 新鲜度与唯一状态写者。
 
 ### 3. Contracts
@@ -320,7 +346,7 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 夹具只能是安全临时路径或专用测试缓存内目录。非空目录须有匹配其规范路径的所有权标记；符号链接、与项目/发行/结果重叠的夹具拒绝。结束清理自身夹具和模板，保留日志；不自动接管历史目录。`cp3/r1r2` 使用合成执行器确认集合和临时 HOME，不复制真人确认记录；夹具 Git 忽略测试生成的 check-logs，不依赖全局 Git 配置。
 
-`summary` 的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际。`init_seconds/suite_seconds` 是累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令用 `time.monotonic`；不要以伪毫秒整数宣称测量精度。
+`summary` 的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际。`init_seconds/suite_seconds` 是累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
 repro schema 2 每个用例分别记录 green/red 的 `fingerprint/verified_at`。输入包含完整源树、脚本、helper、目标、清单和执行协议摘要。green 不能更新 red；局部执行不能刷新其他 case。旧 schema 1 只作 legacy 留存并要求 both；损坏或未知 schema 明确拒绝覆盖。未知/不存在目标不得生成可复用的 red 证据。运行前冻结、运行后与状态提交前重核摘要。
 

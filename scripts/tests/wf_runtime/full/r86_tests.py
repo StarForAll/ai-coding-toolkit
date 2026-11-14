@@ -3,8 +3,8 @@
 import json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
 from wflib import check as wf_check, scope as wf_scope, tasks as wf_tasks
 
 F = wfdrive.FIX
@@ -91,19 +91,19 @@ rec("D-14 引用检查带 unknown 分类", "含 unknown/status",
     sorted(refs_summary), {"dangling", "unknown", "status"} <= set(refs_summary))
 
 # ---- D-15/D-16：预览与落盘证据同源 ----
-install_src = open("/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py",
+install_src = open(wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                    encoding="utf-8").read()
 rec("D-15 安装器预览与落盘共用平台解析", "含 resolve_skill_roots",
     "resolve_skill_roots(args.target" in install_src,
     "resolve_skill_roots(args.target" in install_src)
-dev_src = open("/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py",
+dev_src = open(wfdrive.REPO + "/scripts/wf-dev-deploy.py",
                encoding="utf-8").read()
 rec("D-16 开发态预览含平台与技能目录", "含 平台：",
     "平台：" in dev_src and "技能目录（目标项目内）" in dev_src,
     "平台：" in dev_src and "技能目录（目标项目内）" in dev_src)
 
 # ---- D-17/D-18：字节复现按 sha256；版本单源 ----
-build_src = open("/home/xzc/projects/personal/ai-coding-toolkit/scripts/build-wf-release.py",
+build_src = open(wfdrive.REPO + "/scripts/build-wf-release.py",
                  encoding="utf-8").read()
 rec("D-17 复现比对用 sha256", "含 file_digest", "file_digest(path) == file_digest" in build_src,
     "file_digest(path) == file_digest" in build_src)

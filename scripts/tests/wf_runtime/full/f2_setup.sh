@@ -3,6 +3,7 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../../../.." && pwd)
 F=${WF_LEGACY_FIXTURE_ROOT:-/tmp/wf-fixtures}/f2
+# 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY=/softwares/python/bin/python3
 if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
   || ! "$PY" "$HERE/fixture_scope.py" check-lease >/dev/null 2>&1; then

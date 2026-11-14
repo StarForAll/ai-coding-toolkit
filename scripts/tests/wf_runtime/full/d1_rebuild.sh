@@ -1,7 +1,9 @@
 #!/bin/bash
 # 重建 D1 两个夹具到 $HOME/.cache/wf-fixtures（抗 /tmp 清空）
 set -e
-ROOT=/home/xzc/projects/personal/ai-coding-toolkit
+# 仓库根由脚本位置派生（脚本位于 <repo>/scripts/tests/wf_runtime/full/）
+ROOT=$(cd "$(dirname "$0")/../../../.." && pwd)
+# 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY=/softwares/python/bin/python3
 if [ "${WF_RUNNER_ENTRY_PID:-}" != "$$" ] || [ -z "${WF_FIXTURE_LEASE_FD:-}" ] \
   || ! "$PY" "$ROOT/scripts/tests/wf_runtime/full/fixture_scope.py" check-lease >/dev/null 2>&1; then

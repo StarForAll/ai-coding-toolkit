@@ -3,8 +3,8 @@
 import json, os, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import wfdrive
 
+import wfdrive
 F = wfdrive.FIX
 results = []
 
@@ -69,11 +69,11 @@ rec("R93 A 用旧代次写被拒", "WF_GENERATION_STALE 或 WF_WRITER_BUSY",
 
 # 4) 装完再追加 agent：只加平台，不动既有资产（要求写权空闲）
 wf(["writer", "release", "--json"], {"generation": gen()}, sid="sess-R93-B")
-install_py = "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/install.py"
+install_py = wfdrive.REPO + "/docs/workflows/wf/payload/install.py"
 before_assets = len(installation.get("assets") or [])
 # 夹具是 dev 部署（release_ref=dev:...）：追加平台用开发态部署工具，正式发行用 install.py
-dev_deploy = "/home/xzc/projects/personal/ai-coding-toolkit/scripts/wf-dev-deploy.py"
-proc = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", F,
+dev_deploy = wfdrive.REPO + "/scripts/wf-dev-deploy.py"
+proc = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
                        "--platform", "cursor", "--confirm"], capture_output=True, text=True)
 after = json.load(open(inst_path, encoding="utf-8"))
 if proc.returncode != 0:
@@ -127,7 +127,7 @@ json.dump(bad_inst, open(inst_path, "w"), ensure_ascii=False, indent=2)
 _tampered_inst = open(inst_path, encoding="utf-8").read()
 _writer_before = open(_writer_path, encoding="utf-8").read()
 _dir_before = _tree_snapshot()
-proc_src = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", F,
+proc_src = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
                            "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
 _dir_after = _tree_snapshot()
 rec("R4-1 不同来源追加平台被拒且零写入",
@@ -149,7 +149,7 @@ for label, value in (("broken", "broken"), ("true", True), ("false", False)):
     broken_snap = open(_writer_path, encoding="utf-8").read()
     inst_before_gen = open(inst_path, encoding="utf-8").read()
     _dir_before = _tree_snapshot()
-    proc_gen = subprocess.run(["/softwares/python/bin/python3", dev_deploy, "--target", F,
+    proc_gen = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
                                "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
     _dir_after = _tree_snapshot()
     rec(f"R4-2 generation={label} 结构化拒绝且零写入",

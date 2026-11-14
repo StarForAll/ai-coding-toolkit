@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.join(HERE, "repro"))
 
 import _harness as H            # noqa: E402
 import _review_flow as F        # noqa: E402
+import wfdrive
 import wfdrive                  # noqa: E402
 
 PROJECT = wfdrive.FIX

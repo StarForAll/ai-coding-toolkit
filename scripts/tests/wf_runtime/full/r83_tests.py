@@ -3,9 +3,9 @@
 import contextlib, hashlib, io, json, os, shutil, subprocess, sys, tempfile
 sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload/lib")
-sys.path.insert(0, "/home/xzc/projects/personal/ai-coding-toolkit/docs/workflows/wf/payload")
 import wfdrive
+sys.path.insert(0, wfdrive.LIB)
+sys.path.insert(0, wfdrive.REPO + "/docs/workflows/wf/payload")
 from wflib import session as wf_session, spec as wf_spec, tasks as wf_tasks
 import install as wf_install
 

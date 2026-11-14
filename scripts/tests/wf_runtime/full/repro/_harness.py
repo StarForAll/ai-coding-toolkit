@@ -276,7 +276,10 @@ def run_quietly(func, *args, **kwargs):
         rc = func(*args, **kwargs)
     return rc, buffer.getvalue()
 
-WF_PYTHON = "/usr/bin/python3"
+# SUT 驱动解释器：默认保持异解释器（与 full/wfdrive.PYTHON 同式同默认——两处字面量
+# 必须一致，test_wfdrive_readonly 的常量断言守卫）。理由同 wfdrive.PYTHON 的注释：
+# wflib/session.py 的 l2_anchor 跳过同解释器祖先，统一会把锚点推出 harness 之外。
+WF_PYTHON = os.environ.get("WF_TEST_PYTHON") or "/usr/bin/python3"
 
 
 _RELEASE_SRC = {}

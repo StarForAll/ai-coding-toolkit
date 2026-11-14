@@ -1,0 +1,102 @@
+# 解释器字面量白名单清单（Step 6 固化，Step 11 复核时按当前树重生成——本文件即重生成结果）
+# 门槛：scripts/tests/wf_runtime/**/*.py|sh 下 /usr/bin/python3 与 /softwares/python/bin/python3
+# 全部命中必须落入白名单分类（见 implement.md 白名单节）；守恒校验：内容级集合比对 0 新增 0 消失
+scripts/tests/wf_runtime/full/cp1_tests.py:95 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:114 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:170 [999488dbf881] "argv": ["/usr/bin/python3", "-c", "open('src/a11.txt','a').write('x')"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:185 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:204 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:230 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:252 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:268 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp1_tests.py:285 [56303f8add26] [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp2_tests.py:68 [aee8e20ccdff] V1 = {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp3_tests.py:50 [63839afc8159] "kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp4_tests.py:53 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/cp5_b12.py:71 [ca7624c1bd47] "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/cp5_b345.py:49 [63839afc8159] "kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/d1_rebuild.sh:6 [9ddba188cb1e] PY=/softwares/python/bin/python3
+scripts/tests/wf_runtime/full/f1_init.py:91 [d4c09b131537] {"id": "v0", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print('start ok')"]},
+scripts/tests/wf_runtime/full/f1_init.py:93 [a3f64c329a77] {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "import json, os; json.load(open('.wf/project-config.json')); [os.stat(p) for p in ('.wf/baseline.md', '.wf/spec/index.md')]; print('config ok')"]},
+scripts/tests/wf_runtime/full/f1_init.py:136 [f3c6f0d1dc63] .replace("{{WF_REQUIRED:verification-commands}}", "/usr/bin/python3 -c \"from src.calc import add; assert add(1,2)==3\"")
+scripts/tests/wf_runtime/full/f1_ordinary.py:63 [ba4f12dc23c2] {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "from src.calc import multiply; assert multiply(3,4)==12 and multiply(-2,5)==-10; print('multiply ok')"]},
+scripts/tests/wf_runtime/full/f1_ordinary.py:99 [cac59885507b] `/usr/bin/python3 -c "from src.calc import multiply; assert multiply(3,4)==12 and multiply(-2,5)==-10"`
+scripts/tests/wf_runtime/full/f2_setup.sh:7 [9ddba188cb1e] PY=/softwares/python/bin/python3
+scripts/tests/wf_runtime/full/p5_f0.py:43 [d475dc4f2030] "argv": ["/usr/bin/python3", "-c", "import json,os; json.load(open('.wf/project-config.json')); os.stat('.wf/baseline.md'); print('ok')"]},
+scripts/tests/wf_runtime/full/p5_f0.py:94 [1819a4fcb898] ("architecture", "单包"), ("risks", "无"), ("verification-commands", "/usr/bin/python3 -c \"print(1)\""),
+scripts/tests/wf_runtime/full/p5_spec.py:38 [7eb9a6bb3b19] "argv": ["/usr/bin/python3", "-c", "import os; assert os.path.isfile('.wf/spec/index.md'); print('ok')"]},
+scripts/tests/wf_runtime/full/p5_v2v3.py:39 [f6efc680f71b] "verifications": [{{"id": "v1", "invocation": {{"kind": "argv", "argv": ["/usr/bin/python3", "-c", "{argv[0]}"]}},
+scripts/tests/wf_runtime/full/p5_v5.py:42 [bf12550e2297] "argv": ["/usr/bin/python3", "-c", "import sys; sys.exit(0 if open('flag.txt').read().strip()=='ok' else 1)"]},
+scripts/tests/wf_runtime/full/r17r24_tests.py:74 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r17r24_tests.py:272 [1aa38a8c0bdb] ver21 = [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/r17r24_tests.py:325 [9de85dae7e85] {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/r17r24_tests.py:328 [eae59c195257] {"id": "v2", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(2)"]},
+scripts/tests/wf_runtime/full/r1r2_tests.py:50 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r1r2_tests.py:178 [514739345587] config["python_executable"] = "/usr/bin/python3"
+scripts/tests/wf_runtime/full/r1r2_tests.py:183 [25ceb0251f93] text += "\npython_executable: /usr/bin/python3\n"
+scripts/tests/wf_runtime/full/r25r30_tests.py:56 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r31r34_tests.py:47 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r35r37_tests.py:47 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r38r39_tests.py:52 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r40r42_tests.py:51 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r43r45_tests.py:66 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r46_tests.py:70 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r47r48_tests.py:65 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r49_tests.py:65 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r50_tests.py:76 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r51r52_tests.py:51 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r53_tests.py:51 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r54_tests.py:46 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r55_tests.py:53 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r56_tests.py:97 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r58_tests.py:78 [f1cd839df599] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/r59_tests.py:104 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r62_tests.py:94 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r63_tests.py:63 [ca7624c1bd47] "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/r65_tests.py:51 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r66_tests.py:44 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r67_tests.py:52 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r68_tests.py:104 [322ce062808f] "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r69_tests.py:64 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r70_tests.py:157 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r71_tests.py:61 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r74_tests.py:58 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r75_tests.py:61 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r79_tests.py:36 [7e0a6ac04f88] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]}}],
+scripts/tests/wf_runtime/full/r79_tests.py:40 [c1f7786f2082] "plan": {"verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]}}],
+scripts/tests/wf_runtime/full/r79_tests.py:57 [1b056ef441c0] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]}}]}),
+scripts/tests/wf_runtime/full/r79_tests.py:109 [cd2149ff5ca7] argv = wf_check.redact_argv(["/usr/bin/python3", "tool", "--token", secret, "plain"])
+scripts/tests/wf_runtime/full/r7r15_tests.py:65 [63839afc8159] "kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r7r15_tests.py:180 [a3462fdd1a29] {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r7r15_tests.py:182 [72722c0a967c] {"id": "v2", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "raise SystemExit(3)"]},
+scripts/tests/wf_runtime/full/r80_tests.py:20 [3652fb5ede78] ARGV = {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]}
+scripts/tests/wf_runtime/full/r80_tests.py:51 [c46752674c8e] wrong_argv = dict(ARGV, argv=["/usr/bin/python3", "-c", "print(2)"])
+scripts/tests/wf_runtime/full/r80_tests.py:136 [c9cd29948d0a] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/r80_tests.py:204 [670e79e02b48] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c",
+scripts/tests/wf_runtime/full/r81_tests.py:156 [ef9e0323b87a] open(os.path.join(draft, ".wf/tasks/2026-x-draft/prd.md"), "w").write("python_executable: /usr/bin/python3\n")
+scripts/tests/wf_runtime/full/r81_tests.py:166 [58f3904ab8af] boot.project_key_approved(draft, "/usr/bin/python3"),
+scripts/tests/wf_runtime/full/r81_tests.py:167 [749876ca3e35] boot.project_key_approved(draft, "/usr/bin/python3") is None)
+scripts/tests/wf_runtime/full/r81_tests.py:177 [ed0704b745cd] bool(boot.project_key_approved(draft, "/usr/bin/python3")),
+scripts/tests/wf_runtime/full/r81_tests.py:178 [2b0eba5c675a] bool(boot.project_key_approved(draft, "/usr/bin/python3")))
+scripts/tests/wf_runtime/full/r81_tests.py:182 [58f3904ab8af] boot.project_key_approved(draft, "/usr/bin/python3"),
+scripts/tests/wf_runtime/full/r81_tests.py:183 [749876ca3e35] boot.project_key_approved(draft, "/usr/bin/python3") is None)
+scripts/tests/wf_runtime/full/r87_tests.py:94 [9c80eee73445] "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/repro/_executor_set.py:50 [327f4e62f41a] shutil.copy2("/usr/bin/python3", path)
+scripts/tests/wf_runtime/full/repro/_harness.py:282 [ec217f19b16e] WF_PYTHON = os.environ.get("WF_TEST_PYTHON") or "/usr/bin/python3"
+scripts/tests/wf_runtime/full/repro/baseline-apply-generated.py:40 [c9cd29948d0a] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/repro/complexity-bootstrap-exempt.py:25 [c9cd29948d0a] "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
+scripts/tests/wf_runtime/full/repro/d21-executor-set-multi-clone.py:5 [0f3c10eb323f] 场景：项目 A 确认 `/usr/bin/python3`，其 clone B 改配置并确认
+scripts/tests/wf_runtime/full/repro/d21-executor-set-multi-clone.py:6 [93a7bd4258d1] `/softwares/python/bin/python3`；两份 project 作用域确认携带同一
+scripts/tests/wf_runtime/full/repro/d21-executor-set-multi-clone.py:20 [b56149415e60] PY_A = "/usr/bin/python3"
+scripts/tests/wf_runtime/full/repro/d21-executor-set-multi-clone.py:21 [39adf62f41cd] PY_B = "/softwares/python/bin/python3"
+scripts/tests/wf_runtime/full/repro/d21-executor-set-purge-reconfirm.py:17 [9a6e28ec78ba] PY = "/usr/bin/python3"
+scripts/tests/wf_runtime/full/repro/executor-project-key-unusable.py:19 [e84a1088a812] GLOBAL_PY = "/softwares/python/bin/python3"
+scripts/tests/wf_runtime/full/repro/executor-project-key-unusable.py:24 [250f321335aa] '        if not os.path.isfile(project_value) and os.path.isfile("/softwares/python/bin/python3"):\n'
+scripts/tests/wf_runtime/full/repro/executor-project-key-unusable.py:25 [182dafb45cf0] '            return "global", "/softwares/python/bin/python3", None  # 注入：项目键不可用即降级\n'
+scripts/tests/wf_runtime/full/repro/run.sh:27 [c47e49c98fad] PY="${PY:-/softwares/python/bin/python3}"
+scripts/tests/wf_runtime/full/run_all.sh:35 [9ddba188cb1e] PY=/softwares/python/bin/python3
+scripts/tests/wf_runtime/full/wf_fixture.sh:19 [9ddba188cb1e] PY=/softwares/python/bin/python3
+scripts/tests/wf_runtime/full/wfdrive.py:10 [d16fb9228604] PYTHON = os.environ.get("WF_TEST_PYTHON") or "/usr/bin/python3"
+scripts/tests/wf_runtime/test_inspection_hint.py:38 [b36e114b2754] "python_executable": "/usr/bin/python3"}
+scripts/tests/wf_runtime/test_project_key_semantic.py:46 [2c1026ed8ae8] self.assertFalse(_approved("python_executable = /usr/bin/python3"))
+scripts/tests/wf_runtime/test_wfdrive_constants.py:34 [c679af2e0afa] self.assertEqual(wfdrive.PYTHON, "/usr/bin/python3")

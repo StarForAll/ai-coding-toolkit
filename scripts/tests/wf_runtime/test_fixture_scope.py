@@ -128,5 +128,92 @@ class FixtureScopeTest(unittest.TestCase):
                 scope.reset(target)
 
 
+class PruneResultsTest(unittest.TestCase):
+    """缓存轮转契约（design D5.2/D5.3）：marker 门控、scope 前缀隔离、keep-N、
+    exclude 保护、bootstrap 白名单与"未知顶层内容跳过"。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-prune-test-")
+        self.addCleanup(self.tmp.cleanup)
+        self.cache = Path(self.tmp.name) / "wf-test-run"
+        self.cache.mkdir()
+
+    def scope(self):
+        spec = importlib.util.spec_from_file_location(
+            "wf_fixture_scope_prune_test", FULL / "fixture_scope.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _make_run(self, name, owned=True, mtime=0):
+        import json as _json
+        import os as _os
+        directory = self.cache / name
+        directory.mkdir()
+        (directory / "lines").write_text("stub")
+        if owned:
+            marker = directory / ".wf-results-owner.json"
+            marker.write_text(_json.dumps(
+                {"owner": "wf-test-fixture-v1", "root": str(directory)}))
+            _os.utime(marker, (mtime, mtime))
+        return directory
+
+    def test_prunes_oldest_owned_beyond_keep_and_prefix_isolated(self):
+        scope = self.scope()
+        for i in range(5):
+            self._make_run(f"run-{100 + i}", mtime=i)
+        repro_dir = self._make_run("repro-green-1", mtime=1)
+        scope.prune_results(self.cache, "run", keep=2)
+        # 保留最新 2 个（mtime 3/4），删除最旧 3 个；repro-* 不被 run scope 越界回收
+        self.assertTrue((self.cache / "run-103").exists())
+        self.assertTrue((self.cache / "run-104").exists())
+        self.assertFalse((self.cache / "run-100").exists())
+        self.assertFalse((self.cache / "run-102").exists())
+        self.assertTrue(repro_dir.exists())
+
+    def test_unowned_and_excluded_directories_survive(self):
+        scope = self.scope()
+        unowned = self._make_run("run-200", owned=False)
+        excluded = self._make_run("run-201", mtime=1)
+        scope.prune_results(self.cache, "run", keep=0, exclude=[excluded])
+        # 无 marker：普通 prune 一律不删（bootstrap 才有资格，见下一个用例）
+        self.assertTrue(unowned.exists())
+        self.assertTrue(excluded.exists())
+
+    def test_bootstrap_only_removes_known_product_shapes(self):
+        scope = self.scope()
+        eligible = self._make_run("run-300", owned=False)
+        (eligible / "logs").mkdir()  # 已知子目录（无 marker）
+        unknown = self._make_run("run-301", owned=False)
+        (unknown / "flows").write_text("x")  # 顶层未知文件 → 跳过
+        deep = self._make_run("run-302", owned=False)
+        (deep / "home-suite").mkdir()  # 顶层未知目录 → 跳过
+        keep_marker = self._make_run("run-303", mtime=5)
+        scope.prune_results(self.cache, "run", keep=20, bootstrap=True)
+        self.assertFalse(eligible.exists())
+        self.assertTrue(unknown.exists())
+        self.assertTrue(deep.exists())
+        self.assertTrue(keep_marker.exists())
+
+    def test_invalid_root_and_scope_are_refused(self):
+        scope = self.scope()
+        outside = Path(self.tmp.name) / "elsewhere" / "wf-test-run"
+        outside.mkdir(parents=True)
+        # 临时目录之下但名字不是标准根：允许（validate 的边界），真正拒绝的是
+        # 非临时、非标准根路径与非法 scope。
+        with self.assertRaises(scope.FixtureError):
+            scope.prune_results(Path(self.tmp.name) / "wf-test-run", "both")
+        home_like = Path("/definitely/not/a/tmp/path")
+        with self.assertRaises(scope.FixtureError):
+            scope.prune_results(home_like, "run")
+
+    def test_repro_state_json_is_never_touched(self):
+        scope = self.scope()
+        state = self.cache / "repro-state.json"
+        state.write_text("{}")
+        scope.prune_results(self.cache, "repro", keep=0, bootstrap=True)
+        self.assertEqual(state.read_text(), "{}")
+
+
 if __name__ == "__main__":
     unittest.main()
