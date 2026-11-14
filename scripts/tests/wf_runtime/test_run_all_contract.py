@@ -122,7 +122,14 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(summary["suite_ran"], 1)
         self.assertEqual(summary["repro_ran"], 0)
         self.assertEqual(summary["flow_ran"], 0)
-        self.assertTrue(summary["template_reused"], "默认应复用 run 内夹具模板")
+        # `template_reused` 的口径已明确放宽为“本次 run 内共用同一夹具源”（run 内构建或
+        # 跨 run 缓存条目都算），跨 run 命中由 template_cache_hit 单独表达。
+        self.assertTrue(summary["template_reused"], "默认应共用同一夹具源")
+        self.assertIn(summary["template_source"], ("run-build", "cache"))
+        self.assertEqual(summary["schema_version"], 2)
+        self.assertEqual(summary["units_total"],
+                         summary["suite_ran"] + summary["flow_ran"] + summary["repro_ran"])
+        self.assertIn("budget", summary)
         self.assertGreaterEqual(summary["template_seconds"], 0)
 
     def test_template_can_be_disabled_for_determinism(self):

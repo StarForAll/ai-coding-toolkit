@@ -238,6 +238,7 @@ open(os.path.join(fake_root, "scripts/wf_release_common.py"), "w").write(
 # run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本
 open(os.path.join(fake, "run_one.sh"), "w").write(
     '#!/bin/bash\nset -uo pipefail\nrecord=$1\n'
+    'if [ "${R67_SKIP_SERIAL:-0}" = "1" ] && [ "${WF_NAMESPACE:-1}" = "0" ]; then exit 0; fi\n'
     'suite=${record%%:*}\nkind=$(printf "%s" "$record" | cut -d: -f2)\n'
     'expect=$(printf "%s" "$record" | cut -d: -f3)\nscript=${record##*:}\n'
     'case "$kind" in suite|candidate) ekind=suite ;; flow|extra) ekind=flow ;; *) ekind=suite ;; esac\n'
@@ -352,6 +353,24 @@ rec("4c 少一行 PASS → 红且指出期望/实际", "exit≠0 且 EXECUTION-F
     proc3.returncode != 0 and "cp1_tests" in proc3.stdout
     and "EXECUTION-FAILED: cp1_tests" in _budget_log
     and "expected=" + str(_cp1_expect) in _budget_log)
+
+# 4d 串行段完整性：把 cp1 标成 parallel:false，并让串行域（WF_NAMESPACE=0）的桩不写结果行。
+# 证明 results_gate 覆盖 PLAN_UNITS 全集（含串行段），不是只覆盖并行子集。
+_registry_path = os.path.join(fake, "units.json")
+_registry = json.load(open(_registry_path, encoding="utf-8"))
+for _entry in _registry["units"]:
+    if _entry["name"] == "cp1_tests":
+        _entry["parallel"] = False
+        _entry["notes"] = "r67 串行段完整性构造（临时）"
+json.dump(_registry, open(_registry_path, "w", encoding="utf-8"), ensure_ascii=False)
+_fake_results4 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+atexit.register(shutil.rmtree, _fake_results4, ignore_errors=True)
+proc4 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
+                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results4, "WF_JOBS": "4",
+                            "R67_SKIP_SERIAL": "1"})
+rec("4d 串行段漏跑结果 → MISSING-RESULTS", "exit≠0 且 MISSING-RESULTS 含 cp1_tests",
+    f"exit={proc4.returncode} missing={(proc4.stdout or '')[-200:]}",
+    proc4.returncode != 0 and "MISSING-RESULTS:cp1_tests" in proc4.stdout)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
