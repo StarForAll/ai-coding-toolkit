@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十一轮 R58：结构级/字段级分类 + 阈值消费者阻断。"""
 import datetime, hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import config as wf_config

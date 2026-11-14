@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十八轮 R65：R1–R6 修正（套件同步、兼容性、登记纪律）。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, tasks as wf_tasks

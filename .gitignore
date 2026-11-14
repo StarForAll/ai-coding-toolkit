@@ -8,6 +8,7 @@ thinking-effort-loaded.json
 # Local plugin development installs (never committed; see dsh-plugins/*/package.json)
 dsh-plugins/*/node_modules/
 
-# wf authoring source tree: 源树内 Python 字节码
-docs/workflows/wf/**/__pycache__/
+# 源树内 Python 字节码（一条规则覆盖整个仓库；运行器用 PYTHONPYCACHEPREFIX 落到仓库外）
+__pycache__/
+*.pyc
 .unipi

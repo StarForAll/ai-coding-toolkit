@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十八轮 R83：第五轮独立复审（A1/A2/A3/A5、B1/B2/B3）+ 其他 agent（1/2/3）的定点用例。"""
 import contextlib, hashlib, io, json, os, shutil, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

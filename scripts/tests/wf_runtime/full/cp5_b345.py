@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CP5 / B3 崩溃点、B4 dedupe 双扣、B5 spec 拆分（F1）。"""
 import hashlib, json, os, signal, subprocess, sys, time
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

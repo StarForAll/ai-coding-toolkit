@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十一轮 R46：单条非法路径只失效该条，整份规则仍参与门禁。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import spec as wf_spec

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十九轮 R84：第六轮复审（A3-9/A3-11、B2-1、B4-1）+ 其他 agent（1/2/3/4）的定点用例。"""
 import hashlib, json, os, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

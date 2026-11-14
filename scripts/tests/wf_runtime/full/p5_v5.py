@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """V5：调试计数与复盘（F1，初始化已完成）。"""
 import hashlib, json, os, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

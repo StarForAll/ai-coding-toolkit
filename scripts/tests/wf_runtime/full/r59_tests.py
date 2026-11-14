@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十二轮 R59：维护回执已提交即派生 persisted。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 def sync_journal():

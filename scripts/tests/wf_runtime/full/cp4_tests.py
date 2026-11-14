@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CP4（A1 前置核验 / A4 spec 模板 / A8 卸载偏离 / A19 spec 输出）回归用例。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import spec as wf_spec

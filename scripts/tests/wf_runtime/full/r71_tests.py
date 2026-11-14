@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十五轮 R71：交接实例核验、dispose 锁内重核、审查五轴齐全。"""
 import hashlib, json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

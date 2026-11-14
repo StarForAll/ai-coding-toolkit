@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十七轮 R82：第四轮独立复审 + 其他 agent 反例的定点用例。"""
 import hashlib, json, os, re, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

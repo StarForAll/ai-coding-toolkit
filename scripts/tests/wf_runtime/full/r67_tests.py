@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十轮 R67：写权入口实例/能力核验、baseline 状态与提案、清单声明、聚合脚本退出码。"""
-import atexit, hashlib, json, os, shutil, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
+import atexit, hashlib, importlib.util, json, os, shutil, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, cli as wf_cli
@@ -206,18 +205,29 @@ open(manifest_path, "w", encoding="utf-8").write(manifest_backup)
 rec("3d 恢复后可用", "有义务", bool(wf_gates.declared_step_specs(wf_cli.Context(F, ["--envelope", env_path]))), True)
 
 # ---- 4. 聚合脚本：失败必须传播 ----
-# 假环境按**真实 run_all 的契约**搭建：run_all 现在把选择交给 plan.py，
-# 所以 plan.py / suites.json / results_gate.py 必须在同一棵假树里，REPO_ROOT 也指向它。
+# 假环境按**真实 run_all 的契约**搭建：run_all 把选择交给 plan.py，
+# 所以 plan.py / 注册表 / results_gate.py 必须在同一棵假树里，REPO_ROOT 也指向它。
 fake_root = tempfile.mkdtemp(prefix="wf-r67-fake-repo-")
 atexit.register(shutil.rmtree, fake_root, ignore_errors=True)
 fake = os.path.join(fake_root, "scripts/tests/wf_runtime/full")
 os.makedirs(fake)
 real = wfdrive.REPO + "/scripts/tests/wf_runtime/full"
-shutil.copy(os.path.join(real, "run_all.sh"), fake)
-for _name in ("plan.py", "suites.json", "results_gate.py", "execution.py", "fixture_scope.py"):
-    shutil.copy(os.path.join(real, _name), fake)
-os.makedirs(os.path.join(fake, "repro"), exist_ok=True)
-shutil.copy(os.path.join(real, "repro", "groups.json"), os.path.join(fake, "repro", "groups.json"))
+# “假树需要哪些文件”只有一处来源：plan.py 的三桶清单（COPY/STUB/SPECIAL）。
+# 复制真实文件会改变假环境语义的条目（worker/夹具/repro 入口）一律桩化，不复制。
+_plan_spec = importlib.util.spec_from_file_location("wf_r67_real_plan", os.path.join(real, "plan.py"))
+_real_plan = importlib.util.module_from_spec(_plan_spec)
+_plan_spec.loader.exec_module(_real_plan)
+
+
+def _copy_into_fake(relative):
+    source = os.path.join(real, relative)
+    target = os.path.join(fake, relative)
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    shutil.copy(source, target)
+
+
+for _name in _real_plan.FAKE_TREE_SPECIAL + _real_plan.FAKE_TREE_COPY:
+    _copy_into_fake(_name)
 # 测试发行入口桩（dev 模式 run_all 会调用 ensure/check）
 open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
     'print("BUILT fake test release")\nraise SystemExit(0)\n')
@@ -238,7 +248,7 @@ open(os.path.join(fake, "wf_fixture.sh"), "w").write(
     '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
     ': > "$F/.wf/bin/wf.py"\n')
 open(os.path.join(fake, "f1_init.py"), "w").write("print('ok')\n")
-# 假套件/流程/extra 依 suites.json 清单生成：清单变动后假环境不会缺文件
+# 假套件/流程/extra 依注册表清单生成：清单变动后假环境不会缺文件
 _manifest = json.load(open(os.path.join(real, "suites.json"), encoding="utf-8"))
 # plan.py 的 modules 键存在性校验要求 REPO/docs/workflows/wf/<key> 存在：
 # 依清单生成桩路径（目录键建目录、文件键建空文件），假环境跟上 plan.py 的契约面。

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十七轮 R64：P3 改进项。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates
@@ -87,16 +86,9 @@ wf_gates.compute_P = original_compute
 unknown = [item for item in findings if item["id"] == "__unknown_steps__"]
 rec("P3-8 未知 step 留痕", "有 __unknown_steps__ 条目", bool(unknown), bool(unknown))
 
-# P3-1：源树无 pycache
-import shutil
-for base, dirs, files in list(os.walk(os.path.join(ROOT, "docs/workflows/wf"))):
-    if os.path.basename(base) == "__pycache__":
-        shutil.rmtree(base, ignore_errors=True)
-found = []
-for base, dirs, files in os.walk(os.path.join(ROOT, "docs/workflows/wf")):
-    if os.path.basename(base) == "__pycache__":
-        found.append(base)
-rec("P3-1 源树无 __pycache__", "空", found, not found)
+# P3-1（源树无 __pycache__）已迁移：运行器承载“运行期不污染源树”这条不变量
+# （run_all.sh 的 source_hygiene.py snapshot/check）。旧用例先 rmtree 再断言“没有”，
+# 恒真且会改写作者源树，因此删除而不是保留。
 
 # P3-3：改名同步 bump 包络
 rec("P3-3 同步与释放 bump 包络", "源码含 revision bump",

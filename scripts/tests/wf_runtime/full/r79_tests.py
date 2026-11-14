@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十四轮 R79：E 复审缺陷的定点用例（哈希公式、Check 结构、处置事实、裁定精确匹配、脱敏）。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

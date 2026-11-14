@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十轮 R76：回收候选语义、周期触发基数、存活探测的恢复闭环。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

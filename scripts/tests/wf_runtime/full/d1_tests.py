@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """D1 实跑：真实宿主身份（$DSH_SESSION_ID）+ 压缩边界 + wf 签发路径。"""
 import json, os, subprocess, sys, time
-sys.path.insert(0, "/tmp")
 F = os.environ.get("WF_FIX", "/tmp/wf-fixtures/d1")
 WF = os.path.join(F, ".wf/bin/wf.py")
 import wfdrive

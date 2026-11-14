@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十三轮 R49：链接把目标带进嵌套仓库时，读写两侧都要拒绝。"""
 import hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

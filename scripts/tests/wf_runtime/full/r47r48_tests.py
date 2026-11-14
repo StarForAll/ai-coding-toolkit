@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十二轮 R47–R48：spec 读取/写入的真实落点与嵌套仓库边界。"""
 import hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

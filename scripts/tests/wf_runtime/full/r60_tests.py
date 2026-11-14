@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十三轮 R60：查证须核提交树终态、按路径排序、待核进入门禁。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 def sync_journal():

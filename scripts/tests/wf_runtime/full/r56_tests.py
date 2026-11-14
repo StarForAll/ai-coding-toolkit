@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十九轮 R56：spec_verify_days 非法时阻断依赖它的判断。"""
 import datetime, hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

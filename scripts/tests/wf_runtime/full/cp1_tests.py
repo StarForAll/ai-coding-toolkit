@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CP1（A5/A10/A11/A12/A15/A18/A21/A22/A23）回归用例。"""
 import hashlib, json, os, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

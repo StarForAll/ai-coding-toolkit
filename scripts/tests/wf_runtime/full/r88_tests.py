@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五十五轮 R90：第十一轮复审 D1–D4 的定点用例（早期中断可恢复、实例固定、伪造 done 被拒、旧动作有出口）。"""
 import json, os, sys, hashlib
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

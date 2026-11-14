@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五轮 R25–R30 用例（R25/R27/R29 由第四轮用例覆盖，这里补 R28、R30 与 R29 的直接断言）。"""
 import datetime, hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

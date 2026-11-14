@@ -2,7 +2,6 @@
 """第五十七轮 R92：--platform 取代 --skill-root 的定点用例。"""
 import json, os, subprocess, sys, tempfile
 import wfdrive
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 RELEASE = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"

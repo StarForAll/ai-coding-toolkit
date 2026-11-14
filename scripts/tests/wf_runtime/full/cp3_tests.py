@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CP3（A6 提交范围 / A7 审查 attempt / A9 执行器 / A16 处理器表 / A17 rules_digest）回归用例。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import assets as wf_assets, cli as wf_cli, gates as wf_gates

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十七轮 R54：四项条件汇总后统一提议复杂度。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

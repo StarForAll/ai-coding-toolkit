@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十三轮 R69：前像结构与整批预检、审查导入冲突、卸载内容重核。"""
 import hashlib, json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

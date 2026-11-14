@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十六轮 R63：P2-6 日志/facts 秘密边界 + P2-7 副本来源登记。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import check as wf_check

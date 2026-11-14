@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第七轮 R35–R37 用例。"""
 import hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks, cli as wf_cli

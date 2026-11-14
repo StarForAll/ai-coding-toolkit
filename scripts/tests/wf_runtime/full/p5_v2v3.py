@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """V2（归档持久化派生）与 V3（维护组与后续任务共存），F1 夹具（已完成初始化任务）。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

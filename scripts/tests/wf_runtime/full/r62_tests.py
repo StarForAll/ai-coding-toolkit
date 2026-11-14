@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十五轮 R62：P1/P2 批量修正。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates, tasks as wf_tasks

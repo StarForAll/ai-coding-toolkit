@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CP2（A2 等价链 / A3 activation / A13 阈值 / A14 Trellis 三档）回归用例。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

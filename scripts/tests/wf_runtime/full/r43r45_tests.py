@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十轮 R43–R45 用例。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks, cli as wf_cli, gates as wf_gates

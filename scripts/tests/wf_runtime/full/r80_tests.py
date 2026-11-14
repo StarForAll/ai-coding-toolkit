@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十五轮 R80：第二轮独立复审（D02/D03/D04/D05/D07）的定点反例。"""
 import json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

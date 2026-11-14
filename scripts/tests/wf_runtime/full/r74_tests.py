@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十八轮 R74：写入目标白名单统一、activation 覆盖 start 路由、工作树枚举同源。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十四轮 R70：卸载既有偏离与确认期变化之分、真实审查失败必须落盘。"""
 import hashlib, json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

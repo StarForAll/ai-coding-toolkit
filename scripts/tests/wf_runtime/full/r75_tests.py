@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十九轮 R75：bind 实例一致性、报告重哈希、槽位完整性、巡检治理面、锁存活探测。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

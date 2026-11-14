@@ -2,7 +2,6 @@
 """F1 夹具：普通任务闭环（新会话 B）。"""
 import hashlib, json, os, sys
 
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

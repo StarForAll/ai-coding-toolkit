@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四十一轮 R77：巡检治理面的未知处理（未知不当零、非法配置、畸形条目、改名映射）。"""
 import json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

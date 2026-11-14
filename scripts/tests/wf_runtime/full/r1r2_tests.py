@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """R1（整批预校验 + 未完成动作接续）与 R2（confirm-executor 交互闸门）用例。"""
 import json, os, pty, shutil, subprocess, sys, time
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

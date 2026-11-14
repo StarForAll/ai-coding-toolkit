@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十四轮 R50：baseline-apply 与 spec 写入对同一目标作出一致边界判定。"""
 import hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第三十一轮 R68：审查判定输入、repair 预览漂移与锁、基线批准与前像、续做分类。"""
 import hashlib, json, os, re, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五十一轮 R86：第八轮复审（D-01..D-18 + 崩溃）的定点用例。"""
 import json, os, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

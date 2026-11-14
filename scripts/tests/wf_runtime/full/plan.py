@@ -27,6 +27,33 @@ DEFAULT_REPRO_JOBS = min(8, os.cpu_count() or 4)  # repro 用例层默认并行�
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
 TEST_RELEASE_FALLBACK = "0.1.0"
 REPRO_MODES = ("green", "red", "both", "none", "auto")
+# 假树清单（三桶，单一来源）：r67_tests 的假运行器树按它复制/桩化。
+# - COPY：纯工具 + plan.py 无条件依赖的数据，原样复制；
+# - STUB：复制真实文件会改变假环境语义（假树没有真夹具/真 worker 契约），由 r67 写桩；
+# - SPECIAL：run_all.sh 自身（复制，不做归类推导）。
+# G8（test_runner_hygiene）扫描 run_all.sh 的静态 `"$HERE/<相对路径>"` 引用：
+# 每个命中必须属于 COPY ∪ STUB ∪ SPECIAL ∪ 注册表每个可计划单元的 script。
+# 注意 `repro/groups.json` 由本文件的常量引用（不出现在 run_all.sh 的静态引用里），
+# G8 扫不到——它的正确性由 r67 冒烟保证。
+# 过渡状态：三桶机制先落地，注册表改名在 Step 2；本步桶内是当前文件名 suites.json，
+# Step 2 与 `git mv` 同提交改成 units.json。
+FAKE_TREE_COPY = (
+    "plan.py",
+    "suites.json",
+    "repro/groups.json",
+    "results_gate.py",
+    "execution.py",
+    "fixture_scope.py",
+    "prepare_candidate_repo.py",
+    "source_hygiene.py",
+)
+FAKE_TREE_STUB = (
+    "run_one.sh",
+    "wf_fixture.sh",
+    "f1_init.py",
+    "repro/run.sh",
+)
+FAKE_TREE_SPECIAL = ("run_all.sh",)
 # 串行集合的唯一来源是 suites.json 的 `"parallel": false` 字段（本文件不再持有平行常量）。
 # 历史注记：原 13 个强制串行条目（chmod 写入失败注入 + 保守遗留）已全部解除——
 # chmod 注入改由 wfdrive.deny_writes 的三探针等价契约承担（ro bind mount 在 user

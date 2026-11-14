@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """V1：宿主会话身份能力与固定绑定（F1v 夹具，capability 初值 unknown）。"""
 import json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX

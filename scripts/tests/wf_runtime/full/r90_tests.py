@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五十八轮 R93：平台清单即身份事实（无 --host-id）+ 多 agent 覆盖保护。"""
 import json, os, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import wfdrive

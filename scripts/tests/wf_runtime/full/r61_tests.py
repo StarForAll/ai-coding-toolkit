@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第二十四轮 R61：完整指纹核验 + 待核必进门禁。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 def sync_journal():

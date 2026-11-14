@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第十八轮 R55：批准决定的类型/对象/版本必须被消费。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 

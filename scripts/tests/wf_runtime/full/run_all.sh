@@ -129,6 +129,11 @@ trap 'trap "" INT TERM; "$PY" "$HERE/execution.py" --cancel-parent-children; exi
   exit 2
 }
 
+# ---- 源树卫生：运行前快照（唯一实现 source_hygiene.py）----------------------
+# 只对**新增**失败（本地存量以警告 + 清理命令呈现）；AC3 的绝对判据另行用 find 复核。
+HYGIENE_SNAPSHOT="$RESULTS_DIR/source-hygiene.before.json"
+"$PY" "$HERE/source_hygiene.py" snapshot "$REPO_ROOT" "$HYGIENE_SNAPSHOT" || exit 1
+
 TOTAL_STARTED=$(now_ms)
 build_seconds=0
 init_millis=0
@@ -605,6 +610,14 @@ if [ "$PRODUCT_BEFORE" != "$PRODUCT_AFTER" ]; then
   echo "PRODUCT-TREE-CHANGED: docs/workflows/wf-release 在运行期间被改写（测试不得写产品发行树）"
   echo "  before=$PRODUCT_BEFORE"
   echo "  after =$PRODUCT_AFTER"
+  unknown_fail=$((unknown_fail + 1))
+fi
+
+# ---- 源树卫生：运行后 delta 判定（新增 → 失败标签；存量只警告）---------------
+hygiene_rc=0
+"$PY" "$HERE/source_hygiene.py" check "$REPO_ROOT" --expect "$HYGIENE_SNAPSHOT" || hygiene_rc=$?
+if [ "$hygiene_rc" -ne 0 ]; then
+  echo "SOURCE-TREE-POLLUTED: 运行期在源树新增了字节码产物（明细见上）"
   unknown_fail=$((unknown_fail + 1))
 fi
 

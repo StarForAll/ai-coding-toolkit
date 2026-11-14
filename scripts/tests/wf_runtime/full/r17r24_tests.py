@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第四轮 R17–R24 用例（隔离夹具）。"""
 import hashlib, json, os, shutil, subprocess, sys
-sys.path.insert(0, "/tmp")
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 from wflib import tasks as wf_tasks

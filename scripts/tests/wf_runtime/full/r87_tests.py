@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五十四轮 R89：裁决 A 的落地——writer 单一父动作 + Finish 期受控回 check。"""
 import json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """第五十轮 R85：第七轮复审（R50-01..11）+ 其他 agent（P1-1/P1-3/P2-2..P2-5）的定点用例。"""
 import json, os, subprocess, sys, tempfile
-sys.path.insert(0, "/tmp")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)

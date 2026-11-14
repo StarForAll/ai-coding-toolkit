@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """F0（全新项目：无 Git/无基线）：自举 + Git 就绪。夹具由 install.py 从发行树安装。"""
 import hashlib, json, os, subprocess, sys
-sys.path.insert(0, "/tmp")
 
 import wfdrive
 F = wfdrive.FIX
