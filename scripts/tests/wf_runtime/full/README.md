@@ -92,17 +92,25 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
 
 ## 并行与子集
 
-- 默认 `min(8, cpu_count)` 并发（`WF_JOBS` 可覆盖；`--serial`/`WF_JOBS=1` 退回串行）：每个 worker 用 user namespace 私有 `/tmp`，只读挂共享发行仓库；`unshare` 不可用时自动退回串行。
-- 迭代期只跑相关套件：`WF_SUITES="r88_tests r89_tests" bash run_all.sh`（约 4.5s，跳过 f0/p5 流程）。
+- 默认 `min(8, cpu_count)` 并发（`WF_TOTAL_JOBS` 可覆盖，兼容 `WF_JOBS`；`--serial`/`WF_JOBS=1` 退回串行）：每个 worker 用 user namespace 私有 `/tmp`，只读挂共享发行仓库；`unshare` 不可用时自动退回串行。**flows/extra 与 suites 同池**（每个单元仍有私有夹具与私有 `/tmp`），`--serial` 时全部单元走宿主 `/tmp`、无 `unshare` 的串行域（AC1 的对拍面）。
+- 迭代期只跑相关单元：`WF_SUITES="r88_tests r89_tests" bash run_all.sh`（约 4.5s，跳过 f0/p5 流程）。
+- **注册表是 `units.json`（顶层 `units`）**：每个可计划单元声明 `expect`（期望用例数）/`fixture`/`script`；
+  `plan.py` 下发五段记录 `name:kind:expect:fixture:script`，worker 只按记录执行（`f0` 的脚本是
+  `p5_f0.py`，不按名字拼 `.py`）。少跑用例 → `execution.verdict` 的 observed≠expect → 整次红。
 - **串行集合已清空**（2026-11-14）：原 13 个强制串行套件全部转入并行池——chmod 写入失败
   注入改由 `wfdrive.deny_writes` 的三探针等价契约承担（chmod 层 + ro bind mount 层按探针
   结果选择，user namespace 内同样成立）；其余 11 个保守遗留项经五项审计（夹具来源/共享
-  路径/用户状态/pty·sleep/嵌套运行器）确认并行安全。今后确需串行的套件：`suites.json`
-  置 `"parallel": false` 并在 `notes` 登记理由（`plan.py::load_suites` 校验 notes 非空）。
-- `cp3/r1r2` 的 `--isolated-user` 由 `suites.json` 的 `isolated_user` 字段下发
-  （`plan.py` → `PLAN_ISOLATED_SUITES` → run_all/run_one 同一成员判定）。
+  路径/用户状态/pty·sleep/嵌套运行器）确认并行安全。今后确需串行的单元：`units.json`
+  置 `"parallel": false` 并在 `notes` 登记理由（`plan.py::load_units` 校验 notes 非空）。
+- `cp3/r1r2` 的 `--isolated-user` 由 `units.json` 的 `isolated_user` 字段下发
+  （`plan.py` → `PLAN_ISOLATED_UNITS` → `WF_ISOLATED_UNITS`，run_all/run_one 同一成员判定）。
 - 复用发行缓存：`--no-build`；会核对源摘要，过期即拒绝。
-- `summary.json` 分开记录 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason`，累计耗时与墙钟分开。
+- **repro 默认在主池之后串行**（决策：并发编排只值 3–6s 且引入抖动）；显式开关 `--repro-concurrent`
+  才让 repro 与主池并发，预算按 5/3 分配（`plan.py` 一处推导）。两条路径都记录 `pool_seconds`/`repro_seconds`。
+- `summary.json`（schema 2）分开记录 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason`、
+  `pool_seconds/repro_seconds/startup_seconds`、模板来源三键（`template_source/template_cache_hit/template_cache_key`）、
+  `pycache_root` 与 `budget`（60s 目标 / 65s 硬阈值，**只报告不硬失败**）。`suite_ran/flow_ran` 由
+  `lines` × 注册表 `kind` 一次派生；`template_reused` 表示“本次 run 内共用同一夹具源”。
 - `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
 - 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
 - 运行结束清理夹具和模板，保留结果/日志。结果目录也要求为空或由本工具创建。
@@ -114,6 +122,18 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   注入（默认 `~/.cache/wf-test-run`）——r67 假环境与契约测试指向临时根，不触碰真实用户缓存。
 - `--bootstrap`（仅手工执行，无自动调用点）额外回收"无主但顶层内容全部为运行器已知产物"
   的历史目录；未知顶层内容跳过并列出。prune 的 liveness 保障隐式依赖全局 flock 单运行器。
+- **模板跨 run 缓存**（`<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`）：
+  `key = <payload_digest12>-<pyver>-<deploy>[-<version>-<ref>]`，dev 的 ref 取 `dev:<git describe>`
+  （安装记录登记同一身份，提交变化即换 key）。发布序列：构建 `<key>.build` → 校验 → 挪旧条目 →
+  move 到 `<key>` → `template_check <key> --repoint-from <key>.build --expect-repoint-min 1` →
+  **最后**写 meta（`root=realpath(<key>)`；缺 meta = 条目无效）。命中要求 `meta.root` 与条目
+  realpath 一致、空态/身份校验通过、`source_hygiene --strict` 无任何 pyc/`__pycache__`；
+  克隆后 `--repoint-from <meta.root> --expect-repoint-min 1`，**0 改写 = 该单元失败**
+  （`TEMPLATE-REPOINT-MISMATCH`）。开关：`--no-template`（整套模板机制，含缓存）与
+  `--no-template-cache`（只关跨 run 缓存）。
+- **pyc 策略**：运行器统一下发 `PYTHONPYCACHEPREFIX`（默认 `$RESULTS_DIR/pycache`，`WF_PYCACHE` 可注入），
+  不再使用 `PYTHONDONTWRITEBYTECODE`。pyc 不落源树、不落夹具；`source_hygiene.py` 在 run 前后做
+  delta 对拍（新增即 `SOURCE-TREE-POLLUTED`），模板缓存条目用 strict 绝对判据。
 - 直接 `plan.py --list` 不再创建结果目录（旧逻辑每次泄漏一个无主 `run-<pid>` 目录）；
   显式给出 `WF_RESULTS_DIR` 时 plan.json 仍镜像写入。
 
@@ -128,6 +148,8 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
 - 数据侧 `/usr/bin/python3` 断言字面量（argv 验证命令、双解释器并存断言等）不动；
   白名单与守恒校验见任务 11-13-wf-runner-speed-quality 的 evidence/。
 - 路径字面量已全部改 `wfdrive.REPO`/`wfdrive.LIB` 派生（`WF_TEST_LIB` 优先=发行副本）。
+- 单元层手工运行时也要带 pyc 前缀，否则 `unittest discover` 会把 pyc 写进源树：
+  `PYTHONPYCACHEPREFIX=/tmp/wf-unit-pycache /softwares/python/bin/python3 -m unittest discover -s scripts/tests -t .`。
 
 `r68/r71` 的 9 个字段变体在 `scripts/tests/wf_review/test_report_variants.py` 测试；两个历史 suite 名称保留集成和恢复场景。完整覆盖由单元层与全流程层一起证明。
 
@@ -137,3 +159,6 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
 - 不要缓存祖先判定/提交列表：同进程调用方可能改 HEAD，会给出陈旧事实。
 - 2026-11-14（任务 11-13-wf-runner-speed-quality）：串行集合清空 + 默认并发 min(8,cpu)；
   full green 并行墙钟见该任务的 validation 记录（基线 204s @4 jobs / 上一任务 174.99s）。
+- 2026-11-14（任务 11-14-wf-runner-round2-contracts）：pyc 缓存 −35%/单元、模板跨 run 缓存
+  （单套件 13.4→6.1s）、flows/extra 入池；full 并行 **90.3/88.8s → 49.9/49.7s**，串行 267→259s。
+  热路径守护：`test_runner_budgets.py` 断言 `wf.py status` 5 次中位数 < 500ms（`WF_PERF_GUARD=0` 可关）。

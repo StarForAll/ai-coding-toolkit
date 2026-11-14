@@ -111,17 +111,26 @@
 
 | 层 | 开关 | 默认 | 说明 |
 |---|---|---|---|
-| 套件层 | `--serial` / `WF_JOBS` | 并行（min(8, cpu_count)） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回串行（确定性、排障）。实测 8 套件 68s → 29s |
+| 单元层（suite/flow/extra 同池） | `--serial` / `WF_TOTAL_JOBS`（兼容 `WF_JOBS`） | 并行（min(8, cpu_count)） | `unshare` + bind mount；`--serial` 或 `WF_JOBS=1` 退回宿主 `/tmp` + 无 `unshare` 的串行域（确定性、排障、AC1 对拍面） |
 | repro 用例层 | `WF_REPRO_JOBS` / `repro/run.sh --jobs` | run_all 为 min(8, cpu_count)，独立入口为 1 | 每用例独立 `mkdtemp`，父进程独占写 `repro-state.json`；`--jobs 4` 与 `--jobs 1` 结果逐项一致 |
 
 **串行集合（2026-11-14 清空，任务 11-13-wf-runner-speed-quality）**：原 13 个强制串行
 套件全部转入并行池——chmod 写入失败注入改由 `wfdrive.deny_writes` 三探针等价契约承担
 （chmod 层 + ro bind mount 层按探针结果选择，fail-closed；空目录注入由助手哨兵统一）；
 其余 11 个保守遗留项经五项审计（夹具来源/共享路径/用户状态/pty·sleep/嵌套运行器）确认
-并行安全。今后确需串行的套件：`suites.json` 置 `"parallel": false` 并在 `notes` 登记
-具体理由（`load_suites` 校验 notes 非空，防无理由串行回潮）。`--isolated-user` 特判
-（cp3/r1r2）由 `suites.json` 的 `isolated_user` 字段经 `PLAN_ISOLATED_SUITES` 下发，
-run_all/run_one 同一成员判定——套件特判不进 bash 分支。
+并行安全。今后确需串行的单元：`units.json` 置 `"parallel": false` 并在 `notes` 登记
+具体理由（`load_units` 校验 notes 非空，防无理由串行回潮）。`--isolated-user` 特判
+（cp3/r1r2）由 `units.json` 的 `isolated_user` 字段经 `PLAN_ISOLATED_UNITS` 下发为
+`WF_ISOLATED_UNITS`，run_all/run_one 同一成员判定——套件特判不进 bash 分支。
+
+**注册表与记录（2026-11-14 起）**：注册表是 `units.json`（顶层 `units`，schema 2），
+四类可计划单元（suite/flow/extra/candidate）同池，每条声明 `expect`/`fixture`/`script`；
+`plan.py` 是唯一计划源，输出五段记录 `name:kind:expect:fixture:script`（`PLAN_UNITS` /
+`PLAN_UNITS_PARALLEL` / `PLAN_UNITS_SERIAL`）。worker 只消费记录：`kind` 到
+`execution.py --kind` 的映射（suite|candidate→suite、flow|extra→flow）、`script` 来源、
+夹具分派（template/install）都只在 `run_one.sh` 一处。**不要按 `<name>.py` 拼脚本**
+（`f0` 的执行脚本是 `p5_f0.py`）。`--expected` 与 `execution.verdict` 的 observed 比较：
+少跑/多跑用例都会让整次运行变红。
 
 **结果缓存轮转（2026-11-14 起）**：run_all（`--scope run`）与独立 repro 入口
 （`--scope repro`）在 `prepare-results` 之后各自回收本前缀的带 marker 结果目录，保留
@@ -150,16 +159,30 @@ run_all/run_one 同一成员判定——套件特判不进 bash 分支。
 （`suites.json` 的 `modules`：精确文件键优先，其次最长目录前缀；未映射的改动单列，不猜），
 必须配合 `--list`，不自动执行。
 
-**夹具模板（run 内复用，不跨 run 缓存）**：`run_all` 在一个 run 内构建一次
-`wf_fixture.sh + f1_init.py` 的产物当**只读模板**，每个套件通过 `fixture_scope.clone` 复制到独立目录。复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须通过
-`template_check.py`：`.wf/bin/wf.py` 与安装记录都在、candidate 模式下 version/ref 仍等于本次候选。
+**夹具模板（run 内构建 + 跨 run 缓存，2026-11-14 起）**：`run_all` 构建一次
+`wf_fixture.sh + f1_init.py` 的产物当**只读模板**，每个单元通过 `fixture_scope.clone` 复制到独立目录。
+复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须
+`template_check.py <dir> --repoint-from <源> --expect-repoint-min 1`：`.wf/bin/wf.py` 与安装记录都在、
+candidate 模式下 version/ref 仍等于本次候选、记录里的旧前缀被改写成当前项目、且**至少改写 1 个文件**。
 **安装记录会按安装时的绝对路径登记技能根（`installation.json` 的 `assets[].root_ref`）**，
-`recovery.md` 里也有 `python3 <项目>/.wf/bin/wf.py` 的绝对路径——所以复制后必须
-`--repoint-from <模板>` 把这些前缀改写成当前项目（只改 `.json`/`.md` 文本里的该前缀），
-再校验“不残留模板路径”。不迁移的后果不是报错，而是后续 uninstall/reinstall 类入口
-去操作**模板目录**（共享可变状态、静默串味）。任何一项不满足 → 该套件失败（**不静默 pass**）。
-排障或需要逐套件重建时用 `WF_NO_TEMPLATE=1`。**不要跨 run 缓存模板**：源树、发行版本、
-时间戳与临时目录都可能变，跨 run 复用等于用旧状态冒充新状态。
+`recovery.md` 里也有 `python3 <项目>/.wf/bin/wf.py` 的绝对路径——不迁移的后果不是报错，而是后续
+uninstall/reinstall 类入口去操作**模板目录**（共享可变状态、静默串味）；改写 0 个说明记录与
+`meta.root` 不一致，该单元直接失败（`TEMPLATE-REPOINT-MISMATCH`）。
+
+跨 run 缓存载体是 `<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`
+（`key = <payload_digest12>-<pyver>-<deploy>[-<version>-<ref>]`；dev 的 ref 是 `dev:<git describe>`，
+与安装记录登记的 `source_commit`/`release_ref` 同源——提交变化即换 key，不能只按 payload 摘要复用）。
+发布序列：构建 `<key>.build` → 校验 → 挪旧条目 → move 到 `<key>` → `--repoint-from <key>.build
+--expect-repoint-min 1` → **最后**写 meta（`root=realpath(<key>)`）。**没有 meta 的条目一律无效**；
+命中要求 `meta.root == realpath(条目)`、空态/身份校验通过、条目内**零 pyc/`__pycache__`**
+（`source_hygiene.py check --strict`）。任一步失败 → 挪陈旧 + 重建，不静默复用。
+排障用 `--no-template`（整套模板机制，含缓存）或 `--no-template-cache`（只关跨 run 缓存）。
+模板缓存条目只读：任何重锚定都发生在克隆产物上。
+
+**pyc 策略（2026-11-14 起）**：运行器统一下发 `PYTHONPYCACHEPREFIX`（默认 `$RESULTS_DIR/pycache`，
+`WF_PYCACHE` 可注入），**不再** `PYTHONDONTWRITEBYTECODE`。pyc 不落源树、不落夹具；`source_hygiene.py`
+在 run 前后做 delta 对拍（新增即 `SOURCE-TREE-POLLUTED`，存量只警告 + 给清理命令），模板缓存条目用
+strict 绝对判据。手工跑单元层也要带前缀（见 §8 T0）。
 
 **运行中不要编辑 runner 文件**：`bash` 按偏移增量读取脚本，运行期间改 `run_all.sh`/`run_one.sh`/
 `repro/run.sh`/`plan.py` 会让运行中的实例读到错位内容，结果不可信（2026-11-13 实测：
@@ -183,7 +206,7 @@ bash .../run_all.sh --full --repro green                      # T2 收口，一�
 
 | 层 | 何时 | 命令 |
 |---|---|---|
-| T0 快速 | 每次编辑后（<10s） | `/softwares/python/bin/python3 -m unittest discover -s scripts/tests -t .`（已包含 `wf_runtime`/`wf_review`，**不再重复跑子目录**） |
+| T0 快速 | 每次编辑后（<10s） | `PYTHONPYCACHEPREFIX=/tmp/wf-unit-pycache /softwares/python/bin/python3 -m unittest discover -s scripts/tests -t .`（已包含 `wf_runtime`/`wf_review`，**不再重复跑子目录**；前缀保证 pyc 不落源树） |
 | T1 定向 | 改动命中模块时（<2min） | `bash scripts/tests/wf_runtime/full/run_all.sh --list --changed`（看建议，不执行）<br>`WF_TAGS=review bash .../run_all.sh` 或 `WF_SUITES="r68_tests r70_tests" bash .../run_all.sh`<br>`bash .../repro/run.sh --group review --mode green --no-build` |
 | T2 阶段收口 | 任务收口/合并前 | `bash scripts/tests/wf_runtime/full/run_all.sh --full --repro green`（59 套件 + 4 流程 + r72 + green repro）+ 单元层<br>`python3 scripts/build-wf-release.py --verify --verify-token-parity`<br>`python3 scripts/validate-wf-design.py`、`python3 scripts/check-doc-refs.py`、`./scripts/validate-skills.sh` |
 | T3 发行 | 发行前 | `bash .../run_all.sh --full --repro both`（red 只在这一层全量）<br>`python3 scripts/build-wf-release.py --version <X.Y.Z>`<br>`python3 scripts/tests/wf_runtime/full/prepare_candidate_repo.py --tree docs/workflows/wf-release --version <X.Y.Z> --out ~/.cache/wf-candidate-repo/<X.Y.Z>`<br>`bash .../run_all.sh --representative --repro green --repro-group install --fixture-deploy candidate --release-root <候选仓库根> --release-ref refs/tags/wf-v<X.Y.Z> --release-version <X.Y.Z>`<br>+ `build-wf-release.py --verify --verify-token-parity` |
@@ -337,7 +360,7 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 - `execution.run(argv, log_path, *, timeout, cwd=None, env=None)`：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
 - `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。**PASS 计数的唯一消费来源是结果 JSON 的 `assertion_result`**（run_all.sh 不在 shell 里复制行文法判定）；套件输出契约（三汇总行格式 + PASS/FAIL 行文法 + steps 终态）文档化在 execution.py 模块 docstring。
-- `fixture_scope reset|clone|remove|claim-results|prepare-results|lease|check-lease|prune-results`：临时目录归属、运行互斥与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。
+- `fixture_scope reset|clone|move|remove|claim-results|prepare-results|lease|check-lease|prune-results`：临时目录归属、运行互斥与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
 - `repro_select.input_fingerprint(case)`、`auto_modes(cases, groups_doc)`、`commit_state(results_dir)`：repro 新鲜度与唯一状态写者。
 
 ### 3. Contracts
@@ -346,7 +369,13 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 夹具只能是安全临时路径或专用测试缓存内目录。非空目录须有匹配其规范路径的所有权标记；符号链接、与项目/发行/结果重叠的夹具拒绝。结束清理自身夹具和模板，保留日志；不自动接管历史目录。`cp3/r1r2` 使用合成执行器确认集合和临时 HOME，不复制真人确认记录；夹具 Git 忽略测试生成的 check-logs，不依赖全局 Git 配置。
 
-`summary` 的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际。`init_seconds/suite_seconds` 是累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
+`summary`（schema 2）的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际；
+`pool_seconds`/`repro_seconds`/`startup_seconds` 是分段墙钟，`budget` 只报告（60s 目标 / 65s 硬阈值，任意机器硬失败会假红）。
+`suite_ran/flow_ran` 由 `lines` × 注册表 `kind` 一次派生（`suite|candidate`→suite_ran，`flow|extra`→flow_ran），
+计数不变式：`lines == suite_ran + flow_ran`、`units_total == suite_ran + flow_ran + repro_ran`、
+`repro_ran == repro 执行体的 REPRO_TOTAL`（repro 用例不写 `lines`，不与行数比较）。
+`template_reused` 的口径是“本次 run 内共用同一夹具源”（run 内构建或缓存条目都算），跨 run 命中看
+`template_cache_hit`/`template_source`。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
 repro schema 2 每个用例分别记录 green/red 的 `fingerprint/verified_at`。输入包含完整源树、脚本、helper、目标、清单和执行协议摘要。green 不能更新 red；局部执行不能刷新其他 case。旧 schema 1 只作 legacy 留存并要求 both；损坏或未知 schema 明确拒绝覆盖。未知/不存在目标不得生成可复用的 red 证据。运行前冻结、运行后与状态提交前重核摘要。
 
@@ -375,6 +404,8 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
 - `test_execution`：非零退出和双流日志、阻塞读取/子孙进程超时、真实只读挂载与结果回传、文本适配拒绝假绿。
 - `test_fixture_scope`：哨兵不变、符号链接/重叠拒绝、根运行互斥、归属后重建及结果清理。
 - `test_results_gate`：矛盾 rc/status、无效时间、缺行/重行、shell 列表引用和 repro 模式一致性。
+- `test_runner_hygiene`：G1 `/tmp` 导入注入零命中、G2 pyc 策略、G3 `.gitignore`、G8 假树静态引用全部归类、G9 缺根容错。
+- `test_runner_budgets`：`wf.py status`（pyc 预热）5 次中位数 < 500ms（唯一阈值；`WF_PERF_GUARD=0` 显式关闭）。
 - `WF_SLOW_TESTS=1` 的运行器/模板契约；候选代表闭环；full green 并行和串行逐项对拍。
 - `/proc` 会话 leader 不可见时，用 `setsid --wait /softwares/python/bin/python3 -B -m unittest discover -s scripts/tests -t .` 建立可验证会话，不改产品锚点规则。
 
