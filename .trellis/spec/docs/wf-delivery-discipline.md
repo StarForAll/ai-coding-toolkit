@@ -132,6 +132,15 @@
 （`f0` 的执行脚本是 `p5_f0.py`）。`--expected` 与 `execution.verdict` 的 observed 比较：
 少跑/多跑用例都会让整次运行变红。
 
+**结果锁与测试域（2026-11-15 起）**：锁序固定 fixture → 当前域结果锁 → release。结果锁是**域**锁：
+生产固定 `/tmp/wf-test-results-<uid>.lock`（一个 UID 一把，prune 不回收、不建 per-run sidecar），测试域为
+`<WF_TEST_SCOPE_ROOT>/locks/results-<uid>.lock`。显式 `WF_RESULTS_DIR` 的 plan 镜像只短期持锁写
+plan/owner marker；普通无显式结果的 `--list/--dry-run` 零锁零写。runner 管理的写入口（results/cache/meta/
+state/夹具根/pycache/HOME）必须落在 owned scope 内，越界写前拒绝；suite 自有固定 `/tmp` scratch 不在
+scope 保证里。namespace 单元覆盖 `/tmp` 前记录宿主 mount 域、覆盖后关闭继承的宿主 FD 副本并标
+`WF_UNIT_DOMAIN=unit`：生产锁 helper 域不符即拒绝，不把私有 `/tmp` 同名 inode 当宿主锁；显式 scope 的
+fake runner 可只在自己 scope 内建测试锁，但不能声称继承宿主锁。
+
 **结果缓存轮转（2026-11-14 起）**：run_all（`--scope run`）与独立 repro 入口
 （`--scope repro`）在 `prepare-results` 之后各自回收本前缀的带 marker 结果目录，保留
 最近 20；root 经 `WF_RESULTS_CACHE` 注入（默认 `~/.cache/wf-test-run`）——r67 假环境与
@@ -139,6 +148,11 @@
 但顶层内容全部为已知产物的历史目录；liveness 保障隐式依赖全局 flock 单运行器。
 直接 `plan.py --list` 不再创建结果目录；显式 `WF_RESULTS_DIR` 时 plan.json 仍镜像写入
 （`test_dry_run_only_prints_plan` 消费该行为）。
+
+**解释器身份（2026-11-15 起）**：tool/SUT 身份只由 `scripts/python_runtime_identity.py` 解析：
+`SHA256(UTF8(canonical_JSON))` 覆盖 normalized invocation 与 realpath(sys.executable/prefix/base_prefix)，
+调用文件与 binary 另按文件字节哈希；**不 walk prefix/site-packages**。身份进 build inputs，但原始路径只在
+进程内参与计算。SUT 驱动解释器的既有异解释器约束不变。
 
 **SUT 驱动解释器契约（2026-11-14 起，不得当纯清理）**：被测 `wf.py` 的驱动解释器
 默认保持**异于运行器的解释器**（`wfdrive.PYTHON` / `_harness.WF_PYTHON` 两处单点默认，
@@ -159,7 +173,7 @@
 （`units.json` 的 `modules`：精确文件键优先，其次最长目录前缀；未映射的改动单列，不猜），
 必须配合 `--list`，不自动执行。
 
-**夹具模板（run 内构建 + 跨 run 缓存，2026-11-14 起）**：`run_all` 构建一次
+**夹具模板（run 内构建 + 跨 run 缓存，2026-11-14 起；2026-11-15 收紧身份）**：`run_all` 构建一次
 `wf_fixture.sh + f1_init.py` 的产物当**只读模板**，每个单元通过 `fixture_scope.clone` 复制到独立目录。
 复制不会搬走记录里的绝对路径与外部暂存目录，所以复制后必须
 `template_check.py <dir> --repoint-from <源> --expect-repoint-min 1`：`.wf/bin/wf.py` 与安装记录都在、
@@ -169,15 +183,29 @@ candidate 模式下 version/ref 仍等于本次候选、记录里的旧前缀被
 uninstall/reinstall 类入口去操作**模板目录**（共享可变状态、静默串味）；改写 0 个说明记录与
 `meta.root` 不一致，该单元直接失败（`TEMPLATE-REPOINT-MISMATCH`）。
 
-跨 run 缓存载体是 `<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`
-（`key = <payload_digest12>-<pyver>-<deploy>[-<version>-<ref>]`；dev 的 ref 是 `dev:<git describe>`，
-与安装记录登记的 `source_commit`/`release_ref` 同源——提交变化即换 key，不能只按 payload 摘要复用）。
-发布序列：构建 `<key>.build` → 校验 → 挪旧条目 → move 到 `<key>` → `--repoint-from <key>.build
---expect-repoint-min 1` → **最后**写 meta（`root=realpath(<key>)`）。**没有 meta 的条目一律无效**；
-命中要求 `meta.root == realpath(条目)`、空态/身份校验通过、条目内**零 pyc/`__pycache__`**
-（`source_hygiene.py check --strict`）。任一步失败 → 挪陈旧 + 重建，不静默复用。
+跨 run 缓存载体是 `<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`，唯一实现在
+`full/template_cache.py`。`key = <inputs_digest12>-<slot>`：inputs 是 `sha256` 规范 JSON（登记资产、
+dev-manifest、build/测试/runtime helper 字节、tool 与 SUT 路径字符串身份 + binary 字节、full 受控子树、
+协议 schema，dev 另含完整 HEAD、candidate 另含 release subject）；slot 是 `py<major.minor>-<deploy>
+[-<version>-<ref>]` 的 urlsafe-base64（可逆，不靠 sanitize）。纯 touch 不变、dirty 即 miss；
+**dev HEAD 不可读时固定走 run-owned 模板**（不读写跨 run 槽，也不签 unknown）。
+发布走有界 journal：staging → journal → 备份/安装 → repoint → 摘要/meta → 验证 → 提交；repoint 会改写
+记录路径，摘要只能在它之后算。只有摘要已记录且验证通过的新代才前滚，否则按冻结旧代回滚；两代都不可
+验证时 fail closed 保留现场。meta 是 schema 1，命中要 `meta.root/key/inputs_digest/实际 tree digest`
+全 match 并过空态/身份校验与 `source_hygiene --strict`；缺 meta 或旧无版本 meta 只算 miss。
+只迁移同槽位且 owner/root/身份完整的 legacy key（`<digest12>-<pyver>-<deploy>[-<version>-<ref>]`），
+其他版本/无主目录不自动清理。同槽位单条意味着共用 cache 的 dev 双 checkout/worktree 不同 HEAD/dirty
+输入、candidate 同 version/ref 异内容都会交替 miss 重建；槽数量仍随版本/deploy 增长，没有全 cache 上限。
 排障用 `--no-template`（整套模板机制，含缓存）或 `--no-template-cache`（只关跨 run 缓存）。
 模板缓存条目只读：任何重锚定都发生在克隆产物上。
+
+**发行消费期与阶段（2026-11-15 起）**：run_all 的入口先经 `runner_protocol.py` 剥离并校验
+`--_wf-internal <lease|controlled|execute>` frame，用户 argv 里的保留 `--_wf-*` 一律拒绝。public 只做一次
+禁写 pyc 的 preflight（list/dry-run 在此结束），lease 内唯一一次 final plan 并冻结 `plan.json` 字节 + token，
+controlled 持 release 独占锁（根外固定 `<root>.lock`；ensure/恢复独占、check 共享只读、竞争明确 busy 退出 75）
+或跑完整 candidate validator 后写 `release-context.json`，execute 先核祖先/三把锁/两处冻结字节再执行。
+`--check` 遇未完成 journal 返回 recovery-required（只读）；恢复入口是 ensure。runner 消费期保持独占到
+全部 worker/repro 结束，外部 ensure/check 因此可能暂时 busy。模板/发行两 cache 共用同一 journal/恢复协议。
 
 **pyc 策略（2026-11-14 起）**：运行器统一下发 `PYTHONPYCACHEPREFIX`（默认 `$RESULTS_DIR/pycache`，
 `WF_PYCACHE` 可注入），**不再** `PYTHONDONTWRITEBYTECODE`。pyc 不落源树、不落夹具；`source_hygiene.py`
@@ -358,10 +386,11 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 ### 2. Signatures
 
-- `execution.run(argv, log_path, *, timeout, cwd=None, env=None)`：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
+- `execution.run(argv, log_path, *, timeout, cwd=None, env=None, pass_fds=())`（`pass_fds` 是 controller 的显式 FD 白名单）：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
 - `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。**PASS 计数的唯一消费来源是结果 JSON 的 `assertion_result`**（run_all.sh 不在 shell 里复制行文法判定）；套件输出契约（三汇总行格式 + PASS/FAIL 行文法 + steps 终态）文档化在 execution.py 模块 docstring。
-- `fixture_scope reset|clone|move|remove|claim-results|prepare-results|lease|check-lease|prune-results`：临时目录归属、运行互斥与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
-- `repro_select.input_fingerprint(case)`、`auto_modes(cases, groups_doc)`、`commit_state(results_dir)`：repro 新鲜度与唯一状态写者。
+- `fixture_scope reset|clone|move|remove|claim-results|prepare-results|lease|lease-results|lease-domain|check-lease|check-results-lease|create-scope|check-scope|prune-results`：临时目录/scope 归属、锁域与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
+- `repro_select execution_context()`、`red_subject(case, groups_doc, context=None)`、`input_fingerprint(case, groups_doc, context=None)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle)`（gate/writer 共用的纯校验）、`commit_state(results_dir, bundle, expected_sha, expected_size)`（唯一 writer：先验租约/context/bundle，candidate 再跑最终 validator）、`write_bundle(path, document)`。
+- `wf_test_release --ensure|--check|--lease|--verify-lease`（`--no-lock` 供已持同一 root 锁的调用方）与 `scripts/release_lock.py`：canonical root 固定 sidecar inode、非阻塞独占/共享 flock、busy 退出 75、`/proc` 祖先/FD/flock/mount 域核验。
 
 ### 3. Contracts
 
@@ -377,7 +406,15 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 `template_reused` 的口径是“本次 run 内共用同一夹具源”（run 内构建或缓存条目都算），跨 run 命中看
 `template_cache_hit`/`template_source`。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
-repro schema 2 每个用例分别记录 green/red 的 `fingerprint/verified_at`。输入包含完整源树、脚本、helper、目标、清单和执行协议摘要。green 不能更新 red；局部执行不能刷新其他 case。旧 schema 1 只作 legacy 留存并要求 both；损坏或未知 schema 明确拒绝覆盖。未知/不存在目标不得生成可复用的 red 证据。运行前冻结、运行后与状态提交前重核摘要。
+repro state schema 3，每个用例的 `green` 与 `red` 相位独立：green 记 `execution_fingerprint`，
+red 另记 `red_subject` + 产生它的 dev execution fingerprint。identity 拆两件——`red_subject` 是内容主体
+（case/脚本/helper/协议/source/targets/build 输入/tool/SUT/平台/release 内容），`execution_fingerprint`
+是本 case 输入 + 完整执行 context。candidate auto 只对 candidate-clean 用例要求同 subject **且**同
+release 内容/version/ref/runtime 的 dev red，否则拒绝（出口是 dev 同内容 red/both）；candidate green 不续签
+red。未知 targets 与旧 schema 1/2 只算 both/legacy，不推导；损坏/未知 schema 不覆盖。冻结来源只有
+`inputs.json`（schema 1，原子写一次），env 只传路径；worker 只写自己结果，gate 只读结构报告不写 state，
+唯一全局 writer 是 R 启动的 `commit-state` 子进程，S/库/CLI 都先验真实租约（candidate 加最终 validator）。
+运行前冻结、运行后与提交前重核同一 bundle 与输入。
 
 ### 4. Validation & Error Matrix
 
@@ -405,6 +442,10 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
 - `test_fixture_scope`：哨兵不变、符号链接/重叠拒绝、根运行互斥、归属后重建及结果清理。
 - `test_results_gate`：矛盾 rc/status、无效时间、缺行/重行、shell 列表引用和 repro 模式一致性。
 - `test_runner_hygiene`：G1 `/tmp` 导入注入零命中、G2 pyc 策略、G3 `.gitignore`、G8 假树静态引用全部归类、G9 缺根容错。
+- 本任务的边界套件：`test_python_runtime_identity`（路径身份/字节/dedup）、`test_test_release`（输入身份/树核验）、
+  `test_release_lock`（ensure×ensure、ensure×check、共享 check、journal 各窗口、fail closed、lease 继承）、
+  `test_template_cache`（键/命中/迁移/恢复）、`test_runner_protocol`（frame 编解码与拒绝面）、
+  `test_execute_gate`（祖先/租约/token）、`test_fixture_scope` 的 scope/结果锁段。
 - `test_runner_budgets`：`wf.py status`（pyc 预热）5 次中位数 < 500ms（唯一阈值；`WF_PERF_GUARD=0` 显式关闭）。
 - `WF_SLOW_TESTS=1` 的运行器/模板契约；候选代表闭环；full green 并行和串行逐项对拍。
 - `/proc` 会话 leader 不可见时，用 `setsid --wait /softwares/python/bin/python3 -B -m unittest discover -s scripts/tests -t .` 建立可验证会话，不改产品锚点规则。

@@ -228,13 +228,23 @@ def _copy_into_fake(relative):
 
 for _name in _real_plan.FAKE_TREE_SPECIAL + _real_plan.FAKE_TREE_COPY:
     _copy_into_fake(_name)
-# 测试发行入口桩（dev 模式 run_all 会调用 ensure/check）
+# 测试发行入口桩（release_context 只借用它的 ensure/check 子命令；锁由 release_lock 负责）
 open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
     'print("BUILT fake test release")\nraise SystemExit(0)\n')
+# release 锁桩：假环境不付真实 flock，但保留 acquire/write_env/verify 的形状。
+open(os.path.join(fake_root, "scripts/release_lock.py"), "w").write(
+    'import os\n\n\nclass Busy(Exception):\n    pass\n\n\nclass LockError(Exception):\n    pass\n\n\n'
+    'def acquire(root, exclusive=True):\n'
+    '    return os.open(root + ".lock", os.O_CREAT | os.O_RDWR, 0o600)\n\n\n'
+    'def write_env(fd, root):\n    pass\n\n\n'
+    'def verify_lease(root=None):\n    return True\n\n\n'
+    'def release(fd):\n    pass\n')
 # 产品树摘要桩（run_all 用它做前后比对）
 open(os.path.join(fake_root, "scripts/wf_release_common.py"), "w").write(
     'REPO_ROOT = "/tmp/r67_fake_repo"\n\n\ndef tree_digest(root):\n'
-    '    return "sha256:" + "0" * 64\n')
+    '    return "sha256:" + "0" * 64\n\n\ndef release_subject(tree, version, ref):\n'
+    '    return {"subject": {"tree": tree_digest(tree), "version": version, "ref": ref},\n'
+    '            "digest": "sha256:" + "1" * 64}\n')
 # run_all 的并行路径会调用 run_one.sh：假环境也要有可运行版本
 open(os.path.join(fake, "run_one.sh"), "w").write(
     '#!/bin/bash\nset -uo pipefail\nrecord=$1\n'
@@ -303,16 +313,19 @@ open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys;
 # 假环境必须显式清空，否则内层 run_all 会被当成子集模式
 # 假环境不跑夹具模板（模板会调用 template_check.py，而这里只验证门禁逻辑）；
 # 复制 run_all.sh 的套件必须显式关掉模板，否则会因缺少 template_check.py 而整段失败。
-_fake_fix = tempfile.mkdtemp(prefix="wf-r67-fake-fixture-")
-_fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
-_fake_results2 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+# 假运行器独占自己的 owned 测试 scope：管理写入口（results/cache/fixture/pycache）全在 scope 内，
+# 不触碰真实用户锁与缓存，也不冒充宿主继承锁（任务 design §4.2/4.3）。
+_fake_scope = subprocess.run([sys.executable, os.path.join(real, "fixture_scope.py"), "create-scope"],
+                             capture_output=True, text=True, check=True).stdout.strip()
+atexit.register(shutil.rmtree, _fake_scope, ignore_errors=True)
+_fake_cache = tempfile.mkdtemp(prefix="wf-r67-fake-cache-", dir=_fake_scope)
+_fake_fix = tempfile.mkdtemp(prefix="wf-r67-fake-fixture-", dir=_fake_scope)
+_fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
+_fake_results2 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
 for _path in (_fake_fix, _fake_results1, _fake_results2):
     atexit.register(shutil.rmtree, _path, ignore_errors=True)
-# 假运行器也接入 prune-results（复制的 run_all.sh 会执行缓存轮转）：
-# WF_RESULTS_CACHE 指向假缓存根——绝不触碰真实用户缓存（任务 design D5.2）。
-_fake_cache = tempfile.mkdtemp(prefix="wf-r67-fake-cache-")
-atexit.register(shutil.rmtree, _fake_cache, ignore_errors=True)
-_fake_env = {**os.environ, "WF_FIX": _fake_fix, "WF_RESULTS_CACHE": _fake_cache,
+_fake_env = {**os.environ, "WF_TEST_SCOPE_ROOT": _fake_scope, "WF_FIX": _fake_fix,
+             "WF_RESULTS_CACHE": _fake_cache, "WF_TEST_RUN_CACHE": os.path.join(_fake_scope, "state"),
              "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
              # 显式再钉一次缓存开关：`WF_NO_TEMPLATE=1` 蕴含关闭缓存，但不能依赖实现漂移。
              "WF_NO_TEMPLATE_CACHE": "1",
@@ -339,7 +352,7 @@ rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode} stderr={(pro
 open(os.path.join(fake, "cp1_tests.py"), "w").write(
     "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, _cp1_expect))
     + "print('saved %d / %d')\n" % (_cp1_expect - 1, _cp1_expect - 1))
-_fake_results3 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+_fake_results3 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
 atexit.register(shutil.rmtree, _fake_results3, ignore_errors=True)
 proc3 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                        env={**_fake_env, "WF_RESULTS_DIR": _fake_results3})
@@ -363,7 +376,7 @@ for _entry in _registry["units"]:
         _entry["parallel"] = False
         _entry["notes"] = "r67 串行段完整性构造（临时）"
 json.dump(_registry, open(_registry_path, "w", encoding="utf-8"), ensure_ascii=False)
-_fake_results4 = tempfile.mkdtemp(prefix="wf-r67-fake-results-")
+_fake_results4 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
 atexit.register(shutil.rmtree, _fake_results4, ignore_errors=True)
 proc4 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                        env={**_fake_env, "WF_RESULTS_DIR": _fake_results4, "WF_JOBS": "4",

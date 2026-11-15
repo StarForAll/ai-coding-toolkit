@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
-"""Expose only shared results and read-only inputs inside a private worker /tmp."""
+"""Expose only shared results and read-only inputs inside a private worker /tmp.
+
+Mount namespace 边界（design §4.3 / AC14）：
+- 覆盖 `/tmp` 之前记录宿主 mount 域（`/proc/self/ns/mnt`）与仍有效的宿主 FD 事实；
+- 覆盖之后**只关闭本 worker 继承的宿主结果/发行 FD 副本**（不 unlock，父仍持有的
+  open-file-description 不受影响），并显式清除相应 locator 与内部 frame 变量——同名 `/tmp` 路径
+  不再代表宿主锁；
+- 挂载给该单元的结果输出路径是父委派的写入范围，不据此重取任何宿主锁；
+- 设置 unit 执行域标记：生产 results/release 锁 helper 在域不符时先拒绝，不建私有伪宿主锁。
+  显式测试 scope 单元可以只在自己的 scope 内建本地测试锁（fake harness），但不能声称继承宿主锁。
+"""
 from __future__ import annotations
 
 import os
@@ -7,12 +17,36 @@ from pathlib import Path
 import subprocess
 import sys
 
+HOST_LOCATORS = (
+    'WF_FIXTURE_LEASE_FD', 'WF_FIXTURE_LEASE_PID',
+    'WF_RESULTS_LOCK_FD', 'WF_RESULTS_LOCK_PID', 'WF_RESULTS_LOCK_DOMAIN', 'WF_RESULTS_LOCK_MNT',
+    'WF_TEST_RELEASE_LEASE_FD', 'WF_TEST_RELEASE_LEASE_PID', 'WF_TEST_RELEASE_ROOT',
+    'WF_TEST_RELEASE_LEASE_MNT',
+    'WF_RUNNER_ENTRY_PID', 'WF_RUNNER_CONTROL_PID',
+    'WF_FRAME_ENTRY_PID', 'WF_FRAME_RESULTS_ROOT', 'WF_FRAME_RESULTS_EXPLICIT',
+    'WF_FRAME_SCOPE_ROOT', 'WF_FRAME_PLAN_FILE', 'WF_FRAME_PLAN_SHA256', 'WF_FRAME_PLAN_SIZE',
+    'WF_FRAME_CONTEXT_FILE', 'WF_FRAME_CONTEXT_SHA256', 'WF_FRAME_CONTEXT_SIZE',
+    'WF_TEST_SCOPE_ROOT',
+)
+
 
 def bind(source, target, readonly=False):
     target.mkdir(parents=True, exist_ok=True)
     subprocess.run(['mount', '--bind', str(source), str(target)], check=True)
     if readonly:
         subprocess.run(['mount', '-o', 'remount,bind,ro', str(target)], check=True)
+
+
+def close_host_descriptors():
+    """关闭本 worker 继承的宿主 FD 副本；只 close 自己的 ofd，不动父的锁。"""
+    for key in ('WF_RESULTS_LOCK_FD', 'WF_TEST_RELEASE_LEASE_FD'):
+        value = os.environ.get(key)
+        if value is None:
+            continue
+        try:
+            os.close(int(value))
+        except (ValueError, OSError):
+            pass
 
 
 def main():
@@ -28,6 +62,7 @@ def main():
         except ValueError:
             template_relative = None
     shared = Path('/mnt/wf-test-runner')
+    host_mnt = os.readlink('/proc/self/ns/mnt')
     try:
         subprocess.run(['mount', '-t', 'tmpfs', 'tmpfs', '/mnt'], check=True)
         bind(results, shared / 'results')
@@ -51,12 +86,15 @@ def main():
     except (OSError, subprocess.CalledProcessError) as exc:
         print(f'NAMESPACE-FAILED: {exc}', file=sys.stderr)
         return 1
+    close_host_descriptors()
+    for key in HOST_LOCATORS:
+        os.environ.pop(key, None)
+    os.environ['WF_UNIT_DOMAIN'] = 'unit'
+    os.environ['WF_HOST_MNT_ID'] = host_mnt
     os.environ['WF_NAMESPACE_READY'] = '1'
     # The host runner keeps the global lease. A private worker lease lets its
     # subprocesses verify a lock owned in this user namespace, without reading
     # host process descriptors that user namespaces deliberately protect.
-    for key in ('WF_FIXTURE_LEASE_FD', 'WF_FIXTURE_LEASE_PID'):
-        os.environ.pop(key, None)
     import fixture_scope
     fixture_scope.lock_run(sys.argv[1:])
 

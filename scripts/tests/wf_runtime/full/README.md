@@ -104,7 +104,7 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   置 `"parallel": false` 并在 `notes` 登记理由（`plan.py::load_units` 校验 notes 非空）。
 - `cp3/r1r2` 的 `--isolated-user` 由 `units.json` 的 `isolated_user` 字段下发
   （`plan.py` → `PLAN_ISOLATED_UNITS` → `WF_ISOLATED_UNITS`，run_all/run_one 同一成员判定）。
-- 复用发行缓存：`--no-build`；会核对源摘要，过期即拒绝。
+- 复用发行缓存：`--no-build`；会核对 build inputs 与实际发行树摘要，过期即拒绝。
 - **repro 默认在主池之后串行**（决策：并发编排只值 3–6s 且引入抖动）；显式开关 `--repro-concurrent`
   才让 repro 与主池并发，预算按 5/3 分配（`plan.py` 一处推导）。两条路径都记录 `pool_seconds`/`repro_seconds`。
 - `summary.json`（schema 2）分开记录 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason`、
@@ -113,7 +113,26 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   `lines` × 注册表 `kind` 一次派生；`template_reused` 表示“本次 run 内共用同一夹具源”。
 - `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
 - 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
+- **阶段与 frame**：入口先是 `public`（记原始 results 显式性、一次禁写 pyc 的 preflight；list/dry-run 在此结束），
+  然后 `exec` 进 `lease`（fixture→当前域结果锁、claim/prepare、唯一一次 final plan 并写 `plan.json` 字节 + token），
+  controller 新 session 起 `controlled`（取并保持 release 独占锁、ensure/核验、原子写 `release-context.json`），
+  最后 `exec` 成 `execute`（第三次脚本重入、最终 consumer：核祖先/三把锁/两处冻结字节后才执行，不再 plan/ensure）。
+  内部 frame 由 `runner_protocol.py` 唯一编解码，语法 `--_wf-internal <lease|controlled|execute> <固定键> -- <用户参数>`；
+  用户 argv 出现保留 `--_wf-*` 即拒绝。异常和取消由 controller 统一等后代退出后清理。
+- **结果锁域**：生产域固定 `/tmp/wf-test-results-<uid>.lock`（一个 UID 一把，不为每个 run/目录建 sidecar，
+  prune 不回收）。显式镜像只短期持结果锁写 plan/owner marker；普通无显式结果的 list/dry-run 不取锁。
+  锁序固定 fixture → results → release。
+- **测试域 `WF_TEST_SCOPE_ROOT`**：`fixture_scope.py create-scope` 建 owned scope，结果/cache/meta/state/夹具根/pycache/HOME
+  等 runner 管理写入口必须落在 scope 内（越界写前拒绝）；它**不是**任意 syscall 沙箱——suite 自己的固定 `/tmp` scratch
+  仍按既有并行私有 tmpfs / 宿主串行语义。测试结果锁为 `<scope>/locks/results-<uid>.lock`；真实 full fixture 慢测的
+  既有独占前提不取消。
+- **namespace 边界**：覆盖 `/tmp` 前记录宿主 mount 域，覆盖后关闭本 worker 继承的宿主结果/release FD 副本（不 unlock），
+  清 locator 并标 `WF_UNIT_DOMAIN=unit`；生产锁 helper 在域不符时拒绝，不把私有 `/tmp` 同名 inode 当宿主锁。
+  显式 scope 的 fake runner 可在自己 scope 内建测试锁，但不能声称继承宿主锁。
 - 运行结束清理夹具和模板，保留结果/日志。结果目录也要求为空或由本工具创建。
+- **测试发行消费期**：`<root>.lock` 是根外固定 inode，ensure/恢复/发布独占、check 共享只读；runner 在同一 PID
+  保持独占到全部 worker/repro 结束，外部 ensure/check 得到明确 busy（退出 75）。`--check` 遇到未完成 journal
+  返回 recovery-required（只读，不恢复）；恢复入口是 ensure。
 
 ## 结果缓存轮转
 
@@ -122,20 +141,28 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   注入（默认 `~/.cache/wf-test-run`）——r67 假环境与契约测试指向临时根，不触碰真实用户缓存。
 - `--bootstrap`（仅手工执行，无自动调用点）额外回收"无主但顶层内容全部为运行器已知产物"
   的历史目录；未知顶层内容跳过并列出。prune 的 liveness 保障隐式依赖全局 flock 单运行器。
-- **模板跨 run 缓存**（`<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`）：
-  `key = <payload_digest12>-<pyver>-<deploy>[-<version>-<ref>]`，dev 的 ref 取 `dev:<git describe>`
-  （安装记录登记同一身份，提交变化即换 key）。发布序列：构建 `<key>.build` → 校验 → 挪旧条目 →
-  move 到 `<key>` → `template_check <key> --repoint-from <key>.build --expect-repoint-min 1` →
-  **最后**写 meta（`root=realpath(<key>)`；缺 meta = 条目无效）。命中要求 `meta.root` 与条目
-  realpath 一致、空态/身份校验通过、`source_hygiene --strict` 无任何 pyc/`__pycache__`；
+- **模板跨 run 缓存**（`<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`，实现见
+  `template_cache.py`）。身份 = `sha256` 规范 JSON：登记资产、dev-manifest、build/测试/runtime
+  helper 字节、tool 与 SUT **路径字符串身份 + binary 字节**、full 受控子树、协议 schema、
+  dev 完整 HEAD 或候选 release subject；`key = <inputs_digest12>-<slot>`，slot 是
+  `py<major.minor>-<deploy>[-<version>-<ref>]` 的 urlsafe-base64 编码（可逆、无分隔符碰撞）。
+  纯 `touch` 不变，dirty 字节即 miss；**dev HEAD 不可读时固定退回 run-owned 模板**，不读写跨 run 槽。
+  发布走有界 journal（staging → journal → backup/安装 → repoint → 摘要/meta → 验证 → 提交）：
+  repoint 会改写记录路径，摘要只能在 repoint 之后算；带摘要且验证通过的新代才前滚，否则按冻结旧代回滚，
+  两代都不可验证时 fail closed 保留现场。meta 是 schema 1，命中要求 `meta.root`、`meta.key`、
+  `inputs_digest`、实际 tree digest 全 match，并过空态/身份校验与 `source_hygiene --strict`；
+  缺 meta / 旧无版本 meta 只算 miss。只迁移同 Python/deploy/release 槽位且 owner/root/身份完整的
+  legacy key（<digest12>-<pyver>-<deploy>[-<version>-<ref>]）；其他版本、无主与归属不明目录不自动清理。
+  「同槽位单条」意味着：共用 cache 的 dev 双 checkout/worktree 在不同 HEAD/dirty 输入下交替使用会反复
+  miss/重建（candidate 同 version/ref 异内容同样），槽数量仍随版本/deploy 组合增长，没有全 cache 上限。
   克隆后 `--repoint-from <meta.root> --expect-repoint-min 1`，**0 改写 = 该单元失败**
   （`TEMPLATE-REPOINT-MISMATCH`）。开关：`--no-template`（整套模板机制，含缓存）与
   `--no-template-cache`（只关跨 run 缓存）。
 - **pyc 策略**：运行器统一下发 `PYTHONPYCACHEPREFIX`（默认 `$RESULTS_DIR/pycache`，`WF_PYCACHE` 可注入），
   不再使用 `PYTHONDONTWRITEBYTECODE`。pyc 不落源树、不落夹具；`source_hygiene.py` 在 run 前后做
   delta 对拍（新增即 `SOURCE-TREE-POLLUTED`），模板缓存条目用 strict 绝对判据。
-- 直接 `plan.py --list` 不再创建结果目录（旧逻辑每次泄漏一个无主 `run-<pid>` 目录）；
-  显式给出 `WF_RESULTS_DIR` 时 plan.json 仍镜像写入。
+- 直接 `plan.py --list` 不再创建结果目录；`run_all.sh --list/--dry-run` 默认零写入（无 lease/结果/日志/pycache/prune）。
+  只有**显式** `WF_RESULTS_DIR` 才写 plan.json + owner marker，并在当前域结果锁下短期完成。
 
 ## 解释器契约
 

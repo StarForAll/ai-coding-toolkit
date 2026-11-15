@@ -13,7 +13,8 @@
   2. `saved <total> cases; <good> passed`；
   3. `saved <total> cases`（此时要求 passed 行计数 == total）；
 - steps 型输出：逐行 `[<步骤>] exit=<rc> code=WF_OK`，尾行 `TASK_ID <id>`；
-- repro 型输出：尾行 `PASS green|red: <detail>`。
+- repro 型输出：`PASS green|red: <detail>`；detail 可以跨行（随后跟着原因块），
+  因此按**任一行**匹配判定，不要求它是尾行。
 
 新增套件输出格式时改 verdict（唯一实现），不要在调用点新增判定。
 """
@@ -82,7 +83,7 @@ def write_json(path, payload):
             temporary.unlink(missing_ok=True)
 
 
-def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False):
+def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pass_fds=()):
     """Run one process group; timeout/cancellation applies even during pipe reads."""
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError('command timeout must be positive and finite')
@@ -107,7 +108,8 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False):
                 process = subprocess.Popen(result['argv'], cwd=cwd, env=env,
                                            stdout=None if inherit_output else stream,
                                            stderr=None if inherit_output else subprocess.STDOUT,
-                                           start_new_session=True)
+                                           start_new_session=True,
+                                           pass_fds=tuple(int(fd) for fd in pass_fds))
                 result['rc'] = process.wait(timeout=timeout)
                 result['status'] = 'passed' if result['rc'] == 0 else 'failed'
             except subprocess.TimeoutExpired:
@@ -168,7 +170,8 @@ def verdict(log_path, rc, kind, expected=None):
             evidence = 0
         observed = evidence
     elif kind == 'repro':
-        evidence = int(bool(re.fullmatch(r'PASS (?:green|red): .+', tail)))
+        # detail 之后还可能跟着多行原因块：只要出现过 PASS 相位行就算有证据。
+        evidence = int(any(re.match(r'PASS (?:green|red): .+', line) for line in lines))
     elif kind == 'raw':
         evidence = 1
     ok = rc == 0 and failures == 0 and evidence > 0
@@ -230,6 +233,7 @@ def main(argv=None):
     parser.add_argument('--runner-control', action='store_true',
                         help='inherit console output and clean runner fixtures on cancellation')
     parser.add_argument('--timeout', type=float, default=float(os.environ.get('WF_COMMAND_TIMEOUT', 180)))
+    parser.add_argument('--pass-fds', default='', help='逗号分隔的 FD 白名单（显式继承，不依赖 Popen 默认）')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.cancel_parent_children:
@@ -243,7 +247,9 @@ def main(argv=None):
     user_root = isolated_user(args.log) if args.isolated_user else None
     try:
         env = {**os.environ, 'HOME': str(user_root)} if user_root else None
-        result = run(command, args.log, timeout=args.timeout, env=env, inherit_output=args.runner_control)
+        pass_fds = [item for item in (args.pass_fds or '').split(',') if item]
+        result = run(command, args.log, timeout=args.timeout, env=env,
+                     inherit_output=args.runner_control, pass_fds=pass_fds)
     finally:
         if user_root:
             import fixture_scope

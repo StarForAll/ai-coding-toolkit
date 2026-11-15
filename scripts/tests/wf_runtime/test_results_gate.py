@@ -63,33 +63,40 @@ class GateTest(unittest.TestCase):
         self.assertEqual(shell.returncode, 0, shell.stderr)
         self.assertEqual(shell.stdout, "missing_one missing_two")
 
-    def test_repro_gate_requires_frozen_inputs_and_consistent_phases(self):
+    def test_repro_gate_validates_frozen_bundle_without_writing_state(self):
+        import hashlib
+        import json
+
         repro = Path(self.dir) / "repro"
         repro.mkdir()
-        (repro / "selection.tsv").write_text("case-a\tboth\n")
-        (repro / "inputs.json").write_text('{"case-a":"fingerprint-a"}')
-        (repro / ".wf-results-owner.json").write_text('{"owner":"wf-test-fixture-v1"}')
-        (repro / 'logs').mkdir()
-        for phase in ('green', 'red'):
-            (repro / 'logs' / f'case-a.{phase}.log').write_text(f'PASS {phase}: target verified\n')
+        context = {"deploy": "dev", "release_subject": "sha256:r", "runtime": {"tool": "t"},
+                   "platform": "linux"}
+        bundle = {"schema_version": 1, "execution_context": context, "mode": "both",
+                  "cases": {"case-a": {"mode": "both", "execution_fingerprint": "fp",
+                                       "red_subject_digest": "sha256:s", "inputs": {"script": "s"}}}}
+        data = json.dumps(bundle).encode()
+        (repro / "inputs.json").write_bytes(data)
+        sha = hashlib.sha256(data).hexdigest()
+        (repro / "logs").mkdir()
+        for phase in ("green", "red"):
+            (repro / "logs" / f"case-a.{phase}.log").write_text(f"PASS {phase}: target verified\n")
         result = repro / "case-a.json"
-        result.write_text(
-            '{"case":"case-a","mode":"both","green":"pass","red":"pass",'
-            '"verified":true,"fingerprint":"fingerprint-a","green_seconds":0.1,"red_seconds":0.2,'
-            '"phases":{"green":{"rc":0,"status":"passed"},"red":{"rc":0,"status":"passed"}}}')
-        import importlib.util
-        sys.path.insert(0, str(FULL / "repro"))
-        import repro_select
+        record = {"case": "case-a", "mode": "both", "green": "pass", "red": "pass", "verified": True,
+                  "execution_fingerprint": "fp", "bundle_sha256": sha,
+                  "green_seconds": 0.1, "red_seconds": 0.2,
+                  "phases": {"green": {"rc": 0, "status": "passed"},
+                             "red": {"rc": 0, "status": "passed"}}}
+        result.write_text(json.dumps(record))
         spec = importlib.util.spec_from_file_location("wf_results_gate_repro", FULL / "results_gate.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        with mock.patch.object(repro_select, "commit_state", return_value=("state", [], [])):
-            self.assertEqual(module.repro_gate(repro), 0)
-        result.write_text(
-            '{"case":"case-a","mode":"both","green":"pass","red":"fail",'
-            '"verified":true,"fingerprint":"fingerprint-a","green_seconds":0.1,"red_seconds":0.2}')
-        with mock.patch.object(repro_select, "commit_state", return_value=("state", [], [])):
-            self.assertEqual(module.repro_gate(repro), 1)
+        self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), sha, str(len(data))), 0)
+        self.assertFalse((repro / "repro-state.json").exists(), "gate 不得写 state")
+        record["red"] = "fail"
+        record["verified"] = False
+        result.write_text(json.dumps(record))
+        self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), sha, str(len(data))), 1)
+        self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), "0" * 64, str(len(data))), 1)
 
     def test_complete_result_set_is_ok(self):
         self.write(line("a"), line("b"))

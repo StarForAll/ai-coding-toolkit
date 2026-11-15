@@ -88,6 +88,18 @@ class RunAllContractTest(unittest.TestCase):
                     proc.kill()
                 proc.communicate(timeout=5)
 
+    def test_default_list_creates_no_lease_results_or_cache(self):
+        cache = tempfile.mkdtemp(prefix="wf-run-all-nowrite-")
+        self.addCleanup(lambda: __import__("shutil").rmtree(cache, ignore_errors=True))
+        env = {**os.environ, "WF_RESULTS_CACHE": cache, "WF_TEST_RUN_CACHE": os.path.join(cache, "state")}
+        env.pop("WF_RESULTS_DIR", None)
+        result = subprocess.run(["bash", str(RUN_ALL), "--list"], capture_output=True, text=True,
+                                env=env, cwd=str(REPO), timeout=120)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "")
+        self.assertEqual(sorted(os.listdir(cache)), [], "plan-only 不得创建结果/cache/pycache")
+        self.assertFalse(Path(cache, "template").exists())
+
     def test_conflicting_modes_exit_nonzero(self):
         result = run(["--full", "--subset"])
         self.assertNotEqual(result.returncode, 0)
@@ -107,6 +119,8 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual([unit["name"] for unit in plan["units"]], ["r70_tests"])
         self.assertEqual(plan["units"][0]["kind"], "suite")
         self.assertEqual(plan["repro_enabled"], 0)
+        self.assertEqual(sorted(os.listdir(results)), [".wf-results-owner.json", "plan.json"],
+                         "显式镜像只允许 plan 与 owner marker")
 
     def test_subset_runs_exactly_one_unit(self):
         results = tempfile.mkdtemp(prefix="wf-run-all-subset-")
@@ -159,6 +173,25 @@ class RunAllContractTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("TEST-RELEASE-STALE", result.stdout)
 
+    def test_candidate_dirty_worktree_fails_the_start_barrier(self):
+        with tempfile.TemporaryDirectory(prefix='wf-candidate-dirty-') as root:
+            manifest = json.loads((REPO / 'docs/workflows/wf-release/wf-release.json').read_text())
+            version = manifest['version']
+            candidate = Path(root) / 'candidate'
+            prepare = subprocess.run([
+                sys.executable, str(RUN_ALL.parent / 'prepare_candidate_repo.py'),
+                '--tree', str(REPO / 'docs/workflows/wf-release'), '--version', version,
+                '--out', str(candidate)], capture_output=True, text=True)
+            self.assertEqual(prepare.returncode, 0, prepare.stdout + prepare.stderr)
+            (candidate / 'install.py').write_text(
+                (candidate / 'install.py').read_text() + '\n', encoding='utf-8')
+            result = run(['--representative', '--fixture-deploy', 'candidate',
+                          '--release-root', str(candidate), '--release-version', version,
+                          '--release-ref', f'refs/tags/wf-v{version}', '--repro', 'none'],
+                         {'WF_RESULTS_DIR': str(Path(root) / 'results')})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('CANDIDATE-REPO-INVALID', result.stdout + result.stderr)
+
     def test_candidate_mode_requires_a_valid_candidate_repo(self):
         results = tempfile.mkdtemp(prefix="wf-run-all-candidate-")
         self.addCleanup(lambda: __import__("shutil").rmtree(results, ignore_errors=True))
@@ -170,6 +203,38 @@ class RunAllContractTest(unittest.TestCase):
                      {"WF_RESULTS_DIR": results})
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("CANDIDATE-REPO-INVALID", result.stdout)
+
+    def test_candidate_auto_requires_and_then_uses_matching_dev_red(self):
+        """AC7 真实正反例：无 dev red 时拒绝，同内容/version/ref 的 dev red 后执行 candidate green。"""
+        with tempfile.TemporaryDirectory(prefix='wf-candidate-auto-') as root:
+            manifest = json.loads((REPO / 'docs/workflows/wf-release/wf-release.json').read_text())
+            version = manifest['version']
+            candidate = Path(root) / 'candidate'
+            prepare = subprocess.run([
+                sys.executable, str(RUN_ALL.parent / 'prepare_candidate_repo.py'),
+                '--tree', str(REPO / 'docs/workflows/wf-release'), '--version', version,
+                '--out', str(candidate)], capture_output=True, text=True)
+            self.assertEqual(prepare.returncode, 0, prepare.stdout + prepare.stderr)
+            state = Path(root) / 'state'
+            (Path(root) / 'cache').mkdir()
+            base = {'WF_RESULTS_CACHE': str(Path(root) / 'cache'), 'WF_TEST_RUN_CACHE': str(state)}
+            candidate_args = ['--representative', '--fixture-deploy', 'candidate',
+                              '--release-root', str(candidate), '--release-version', version,
+                              '--release-ref', f'refs/tags/wf-v{version}',
+                              '--repro', 'auto', '--repro-group', 'install']
+            missing = run(candidate_args, {**base, 'WF_RESULTS_DIR': str(Path(root) / 'results-a')})
+            self.assertNotEqual(missing.returncode, 0)
+            self.assertIn('缺少同名主体的有效 dev red', missing.stdout + missing.stderr)
+            scope = RUN_ALL.parent / 'fixture_scope.py'
+            red = subprocess.run(
+                [sys.executable, str(scope), 'lease-results', '--', 'bash', str(RUN_ALL.parent / 'repro/run.sh'),
+                 '--mode', 'both', '--group', 'install', '--results-dir', str(Path(root) / 'red')],
+                capture_output=True, text=True, env={**os.environ, **base, 'WF_TEST_RELEASE_VERSION': version},
+                cwd=str(REPO), timeout=600)
+            self.assertEqual(red.returncode, 0, red.stdout[-2000:] + red.stderr[-2000:])
+            positive = run(candidate_args, {**base, 'WF_RESULTS_DIR': str(Path(root) / 'results-b')})
+            self.assertEqual(positive.returncode, 0, positive.stdout[-2000:] + positive.stderr[-2000:])
+            self.assertIn('repro 用例：3/3', positive.stdout)
 
 
 if __name__ == "__main__":

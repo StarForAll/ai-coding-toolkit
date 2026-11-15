@@ -33,9 +33,35 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --list       # 列出用例
 ```
 
 默认 both 模式退出码 0 才表示"每条用例的 green 与 red 都成立"；机器可读汇总为
-`REPRO_TOTAL= / REPRO_PASSED= / REPRO_FAILED= / REPRO_FAILING:`，供上层脚本消费。
-`run_all.sh` 已改为委托本脚本（不再另写一套循环）。
+`REPRO_TOTAL= / REPRO_PASSED= / REPRO_FAILED= / REPRO_GREEN_SECONDS= / REPRO_RED_SECONDS=`，
+另有结构性事实 `REPRO_STRUCTURAL_OK= / REPRO_ELIGIBLE= / REPRO_BUNDLE_SHA256=`。`run_all.sh`
+委托本脚本，并**一律**用 `--_wf-inherited-release` frame 交接已核发行身份（默认构建与
+`--no-build` 都一样），内层不再 `ensure`/`check`/`check --json`。
 
 CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重建产品发行树。通过本入口运行，避免直接执行单条脚本时借用旧发行。
 
-`--mode auto` 使用 schema 2 的逐用例 green/red 输入摘要。green 不会刷新 red 证据，helper 改动后局部运行不会刷新其他用例。未知目标与旧 schema 1 缓存要求 both；损坏/未知 schema 缓存明确拒绝覆盖。运行前冻结输入，运行后及状态提交前重核。结果目录无主或符号链接时拒绝清理；日志、模式、退出状态和计划不一致时计失败。
+## 双身份、冻结 bundle 与唯一 writer
+
+- 身份分成两件：`execution_fingerprint`（case 输入 + 本次 tool/SUT、平台、部署、真实 release 根身份与
+  candidate tag commit）与 `red_subject`（断言/注入脚本、helper、协议、source/targets/build 输入、tool/SUT、
+  平台与 release **内容主体**；不含 deploy 标签与根路径）。green 只记前者，red proof 两者都记。
+- `--mode auto`：dev 找同名主体的有效 dev red，否则 both；candidate 只对 candidate-clean 用例要求同主体
+  **且**同 release 内容/version/ref/runtime 的 dev red，缺失即拒绝（出口是先在 dev 用同一内容跑 red/both）。
+  candidate green 从不续签 red。未知 targets、旧 schema 1/2 状态都只算 both/legacy，不推导、不复用。
+- 冻结来源只有一个 `inputs.json`（schema 1：execution_context + cases{mode,fingerprint,subject,inputs}），
+  原子写一次；env 只传 `WF_REPRO_INPUTS_FILE`。worker/gate/writer 都读这一份并核摘要与长度。
+- 拓扑：R 编排 → W（只写自己结果）→ 只读 G（结构报告，**不写 state**）→ R 启动唯一 S（`commit-state`
+  子进程）。S 与直接 CLI/库调用都先验真实 fixture/result（dev 再 release）租约，candidate 在最终 barrier
+  重跑完整 validator；全局 context/bundle 变化整批不提交，普通 failed case 只挡自己。
+- 状态 schema 3：`green` 与 `red` 相位独立；旧 1/2 只作 legacy 保留，未知/损坏不覆盖。
+
+## 租约、测试域与 namespace
+
+- R 先取 fixture → 当前域结果锁 → dev release 独占锁（均同 PID exec 持有）；独立入口才初始化发行，
+  继承入口只 verify 并派生 locator。结果锁是**域**锁：生产 `/tmp/wf-test-results-<uid>.lock`，
+  测试域 `<scope>/locks/results-<uid>.lock`，不为每 run 建 sidecar。
+- 设 `WF_TEST_SCOPE_ROOT` 时，repro 的结果/pycache/state 必须在 scope 内；`--list` 在一切租约、
+  pycache 与状态读取之前纯选择退出。
+- namespace 单元会关掉本 worker 的宿主 FD 副本并标 `WF_UNIT_DOMAIN=unit`：伪造的私有 `/tmp` 同名锁不会被
+  当宿主锁；只有显式 scope 单元可以在自己 scope 内建测试锁。结果目录无主或符号链接时拒绝清理；
+  日志、模式、退出状态与冻结 bundle 不一致都计失败。

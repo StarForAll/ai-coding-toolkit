@@ -13,6 +13,9 @@ import tempfile
 
 REPO = Path(__file__).resolve().parents[4]
 OWNER = 'wf-test-fixture-v1'
+SCOPE_OWNER = 'wf-runner-test-scope-v1'
+SCOPE_MARKER = '.wf-scope.json'
+PRODUCTION_RESULTS_LOCK = '/tmp/wf-test-results-%d.lock' % os.getuid()
 
 
 class FixtureError(Exception):
@@ -326,6 +329,198 @@ def lock_run(command):
     os.execvp(command[0], command)
 
 
+
+# ---- 显式测试域（owned scope）------------------------------------------------
+
+
+def create_test_scope(parent=None):
+    """建立本 UID 拥有的 owned 临时 scope：规范绝对路径、无 symlink、固定 marker。"""
+    root = Path(tempfile.mkdtemp(prefix='wf-test-scope-', dir=parent))
+    if root != root.resolve():
+        raise FixtureError(f'scope path resolved through a symlink: {root}')
+    write_marker(root / SCOPE_MARKER, {'schema_version': 1, 'owner': SCOPE_OWNER,
+                                       'root': str(root), 'uid': os.getuid()})
+    (root / 'locks').mkdir()
+    return root
+
+
+def read_scope(root):
+    """读出并校验 scope marker；损坏/越界一律抛（不 fallback 生产域）。"""
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise FixtureError(f'scope root is not a real directory: {root}')
+    if str(root) != str(root.resolve()):
+        raise FixtureError(f'scope path contains a symlink: {root}')
+    try:
+        record = json.loads((root / SCOPE_MARKER).read_text())
+    except (OSError, ValueError) as exc:
+        raise FixtureError(f'scope marker is missing or unreadable: {root}') from exc
+    if record != {'schema_version': 1, 'owner': SCOPE_OWNER, 'root': str(root), 'uid': os.getuid()}:
+        raise FixtureError(f'scope marker does not describe this root/uid: {root}')
+    return root
+
+
+def current_scope():
+    value = os.environ.get('WF_TEST_SCOPE_ROOT')
+    if not value:
+        return None
+    return read_scope(value)
+
+
+def results_domain():
+    """结果锁域：生产用固定 production 字符串，测试域用 scope 的真实路径。"""
+    scope = current_scope()
+    return 'production' if scope is None else 'scope:' + str(scope)
+
+
+def results_lock_path():
+    scope = current_scope()
+    return Path(PRODUCTION_RESULTS_LOCK) if scope is None else scope / 'locks' / f'results-{os.getuid()}.lock'
+
+
+def ensure_in_scope(*targets):
+    """runner 管理写入口必须在 owned scope 内（生产域不做限制）。"""
+    scope = current_scope()
+    if scope is None:
+        return
+    for target in targets:
+        if not target:
+            continue
+        path = Path(target)
+        candidate = path if path.is_absolute() else Path.cwd() / path
+        if str(candidate) != str(candidate.resolve()) and candidate.exists():
+            candidate = candidate.resolve()
+        if candidate != scope and scope not in candidate.parents:
+            raise FixtureError(f'runner-managed path escapes the test scope: {candidate} (scope {scope})')
+
+
+def _open_results_lock():
+    scope = current_scope()
+    if scope is not None:
+        (scope / 'locks').mkdir(exist_ok=True)
+    path = results_lock_path()
+    if path.is_symlink():
+        raise FixtureError(f'results lock must not be a symlink: {path}')
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    stat = os.fstat(fd)
+    if not path.is_file() or stat.st_uid != os.getuid():
+        os.close(fd)
+        raise FixtureError(f'results lock is not a regular file owned by us: {path}')
+    return fd, path
+
+
+def acquire_results_lock():
+    """同域独占、非阻塞；竞争明确 busy。返回 fd。"""
+    fd, path = _open_results_lock()
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(fd)
+        raise FixtureError(f'results domain is busy: {path}（同域另一个 run/镜像正持有锁）') from exc
+    os.environ['WF_RESULTS_LOCK_FD'] = str(fd)
+    os.environ['WF_RESULTS_LOCK_PID'] = str(os.getpid())
+    os.environ['WF_RESULTS_LOCK_DOMAIN'] = results_domain()
+    os.environ['WF_RESULTS_LOCK_MNT'] = os.readlink('/proc/self/ns/mnt')
+    os.set_inheritable(fd, True)
+    return fd
+
+
+def verify_results_lock():
+    """核继承来的结果锁：祖先、FD target、inode、kernel flock、mount/scope 域。"""
+    try:
+        pid = int(os.environ['WF_RESULTS_LOCK_PID'])
+        fd = int(os.environ['WF_RESULTS_LOCK_FD'])
+        domain = os.environ.get('WF_RESULTS_LOCK_DOMAIN') or ''
+        if domain == 'production':
+            expected = Path(PRODUCTION_RESULTS_LOCK)
+        elif domain.startswith('scope:'):
+            expected = Path(domain[len('scope:'):]) / 'locks' / f'results-{os.getuid()}.lock'
+        else:
+            raise ValueError(f'unknown results lock domain: {domain!r}')
+        # 继承优先：祖先若是生产域锁，嵌套的测试 scope 也沿用同一把，不再自建第二把。
+        if os.readlink(f'/proc/{pid}/fd/{fd}') != str(expected):
+            raise ValueError('results descriptor points at another path')
+        current_mnt = os.readlink('/proc/self/ns/mnt')
+        if os.environ.get('WF_RESULTS_LOCK_MNT') != current_mnt:
+            raise ValueError('results lock was taken in another mount namespace')
+        if os.readlink(f'/proc/{pid}/ns/mnt') != current_mnt:
+            raise ValueError('results lock holder is in another mount namespace')
+        handle = os.open(f'/proc/{pid}/fd/{fd}', os.O_RDONLY)
+        try:
+            held = os.fstat(handle)
+        finally:
+            os.close(handle)
+        current = os.stat(expected)
+        if (held.st_dev, held.st_ino) != (current.st_dev, current.st_ino):
+            raise ValueError('results descriptor is not the canonical lock inode')
+        with open(f'/proc/{pid}/fdinfo/{fd}', encoding='utf-8') as stream:
+            info = stream.read()
+        if not any('FLOCK' in line and 'WRITE' in line and f' {pid} ' in line
+                   for line in info.splitlines() if line.startswith('lock:')):
+            raise ValueError('results flock is not held by the declared ancestor')
+        current_pid = os.getpid()
+        while current_pid not in (pid, 0, 1):
+            with open(f'/proc/{current_pid}/status', encoding='utf-8') as stream:
+                status = stream.read()
+            current_pid = int(next(line.split()[1] for line in status.splitlines()
+                                   if line.startswith('PPid:')))
+        if current_pid != pid:
+            raise ValueError('results lock owner is not an ancestor')
+        return True
+    except (KeyError, ValueError, OSError, StopIteration) as exc:
+        raise FixtureError(f'invalid inherited results lock: {exc}') from exc
+
+
+def _lease_fixture():
+    inherited = os.environ.get('WF_FIXTURE_LEASE_FD')
+    if inherited:
+        verify_lease()
+        return
+    lock_path = Path('/tmp') / f'wf-test-fixtures-{os.getuid()}.lock'
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(fd)
+        raise FixtureError('another wf harness owns the shared fixture lease') from exc
+    os.environ['WF_FIXTURE_LEASE_FD'] = str(fd)
+    os.environ['WF_FIXTURE_LEASE_PID'] = str(os.getpid())
+    os.set_inheritable(fd, True)
+
+
+def _unit_scope_ok():
+    if os.environ.get('WF_UNIT_DOMAIN') != 'unit':
+        return True
+    try:
+        return current_scope() is not None
+    except FixtureError:
+        return False
+
+
+def lease_domain(command):
+    """只取 results 域锁（plan 镜像：不申请 fixture，不反向锁序）。"""
+    if not _unit_scope_ok():
+        raise FixtureError(
+            'unit domain: 没有继承宿主结果锁也没有 owned test scope；不创建私有 /tmp 伪宿主锁')
+    if os.environ.get('WF_RESULTS_LOCK_FD'):
+        verify_results_lock()
+    else:
+        acquire_results_lock()
+    os.execvp(command[0], command)
+
+
+def lease_results(command):
+    """持有 fixture → results 锁后 exec（已经继承并验证过的锁不重复申请）。"""
+    _lease_fixture()
+    if not _unit_scope_ok():
+        raise FixtureError(
+            'unit domain: 没有继承宿主结果锁也没有 owned test scope；不创建私有 /tmp 伪宿主锁')
+    if os.environ.get('WF_RESULTS_LOCK_FD'):
+        verify_results_lock()
+    else:
+        acquire_results_lock()
+    os.execvp(command[0], command)
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='operation', required=True)
@@ -346,6 +541,14 @@ def main(argv=None):
     p = sub.add_parser('lease')
     p.add_argument('command', nargs=argparse.REMAINDER)
     sub.add_parser('check-lease')
+    sub.add_parser('create-scope')
+    sub.add_parser('check-results-lease')
+    lease_domain_parser = sub.add_parser('lease-domain')
+    lease_domain_parser.add_argument('command', nargs=argparse.REMAINDER)
+    lease_results_parser = sub.add_parser('lease-results')
+    lease_results_parser.add_argument('command', nargs=argparse.REMAINDER)
+    ensure_scope = sub.add_parser('check-scope')
+    ensure_scope.add_argument('paths', nargs='+')
     prune = sub.add_parser('prune-results')
     prune.add_argument('root')
     prune.add_argument('--scope', choices=('run', 'repro'), required=True)
@@ -360,8 +563,24 @@ def main(argv=None):
             if not command:
                 raise FixtureError('lease command is required')
             lock_run(command)
+        elif args.operation == 'lease-domain':
+            command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            if not command:
+                raise FixtureError('lease-domain command is required')
+            lease_domain(command)
+        elif args.operation == 'lease-results':
+            command = args.command[1:] if args.command[:1] == ['--'] else args.command
+            if not command:
+                raise FixtureError('lease-results command is required')
+            lease_results(command)
         elif args.operation == 'check-lease':
             verify_lease()
+        elif args.operation == 'check-results-lease':
+            verify_results_lock()
+        elif args.operation == 'create-scope':
+            print(create_test_scope())
+        elif args.operation == 'check-scope':
+            ensure_in_scope(*args.paths)
         elif not os.environ.get('WF_FIXTURE_LEASE_FD'):
             lock_run([sys.executable, __file__, *sys.argv[1:]])
         else:

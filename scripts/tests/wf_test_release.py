@@ -4,30 +4,43 @@
 为什么需要它：`build-wf-release.py` 的 CLI 只写产品树 `docs/workflows/wf-release/`；
 执行测试（T1/T2）要的是**与产品树解耦**的发行副本，否则每轮测试都会改写产品发行物。
 
-契约（方案稿 §4.4）：
+契约（design §3.1–§3.2 / AC1–AC4、AC11、AC15）：
 - 输出根默认 `~/.cache/wf-test-release/<version>`，`--root` 可覆盖，但必须在仓库/源码/产品树之外；
 - 输出根必须是空目录，或带**输出根之外**的所有权标记 `<out>.owner`（标记不能进发行树，否则字节复现失败）；
-- 先在同级临时目录构建 + 重放比对成功，再原子替换；失败保留旧产物；
-- 写 `<out>.meta.json`（输出根外）：version / release_ref / source_tree_digest / manifest_digest / built_at；
-- `--check`（配合 `--no-build`）核对 meta 与当前源树摘要，不一致就拒绝。
+- 每个 canonical root 一个固定 sidecar 锁 inode `<out>.lock`（根外、不随 tree 替换、不 unlink、拒绝符号链接）；
+  所有公开 CLI 与库调用都经过**同一把锁**：`--ensure`/恢复/发布是非阻塞独占 flock，`--check` 是共享 flock；
+  竞争返回明确 busy（退出码 75），不改 cache、不无限等候；读取方在 runner 消费期由 wrapper 持同一独占 fd；
+- build inputs 是完整内容身份（资产/manifest/builder/helper/tool 身份/版本/schema）；meta schema 2 记录
+  build_inputs 与实际 output tree digest，check 逐字节核实际发行树，不只信 meta 或 mtime；旧 schema 只算 miss；
+- 先把输入冻结、在独立 staging 双构建比对，再走 journal→backup/安装→验证→提交→清理；
+  中断后先恢复（新代可验证则前滚，否则按冻结的旧字节回滚），两代都不可验证时 fail closed 保留现场；
+- `--lease` 是 runner 的持锁消费入口：同一 PID 持独占 fd 后 `exec` 进入最终消费阶段；`--verify-lease`
+  按 `/proc` 祖先/FD/flock/mount 域核验继承来的 lease（环境标记只定位对象，不是授权证据）；
+- `--check`（配合 `--no-build`）核 meta 与当前输入，不一致就拒绝；发现未完成 journal 返回 recovery-required。
 
 用法：
     python3 scripts/tests/wf_test_release.py --ensure [--version X.Y.Z] [--root DIR]
     python3 scripts/tests/wf_test_release.py --check  [--root DIR]
+    python3 scripts/tests/wf_test_release.py --lease --root DIR --version X.Y.Z [--no-build] -- bash cmd
+    python3 scripts/tests/wf_test_release.py --verify-lease --root DIR
 """
 from __future__ import annotations
 
 import argparse
 import datetime
+import fcntl
+import hashlib
 import json
 import os
 import shutil
 import sys
 import tempfile
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import wf_release_common as common  # noqa: E402
+import release_lock as lock  # noqa: E402
 
 REPO_ROOT = common.REPO_ROOT
 SOURCE_ROOT = common.SOURCE_ROOT
@@ -35,12 +48,19 @@ PRODUCT_RELEASE = os.path.join(REPO_ROOT, "docs", "workflows", "wf-release")
 DEV_PLACEHOLDER = "0.0.0-dev"
 TEST_VERSION_FALLBACK = "0.1.0"
 OWNER_TAG = "wf-test-release"
-META_SCHEMA = 1
+META_SCHEMA = 2
+LEGACY_META_SCHEMA = 1
+JOURNAL_SCHEMA = 1
 CACHE_ROOT = os.path.join(os.path.expanduser("~"), ".cache", "wf-test-release")
+BUSY_EXIT = 75
 
 
 class TestReleaseError(Exception):
     """可预期的拒绝（非零退出，不打印 traceback）。"""
+
+
+class TestReleaseBusy(TestReleaseError):
+    """锁被占用：调用方明确 busy，可稍后重试。"""
 
 
 def ref_for(version):
@@ -80,12 +100,24 @@ def default_root(version):
     return os.path.join(os.environ.get("WF_TEST_RELEASE_CACHE") or CACHE_ROOT, version)
 
 
+def _canonical(root):
+    return os.path.realpath(root)
+
+
 def owner_path(root):
-    return os.path.realpath(root) + ".owner"
+    return _canonical(root) + ".owner"
 
 
 def meta_path(root):
-    return os.path.realpath(root) + ".meta.json"
+    return _canonical(root) + ".meta.json"
+
+
+def lock_path(root):
+    return _canonical(root) + ".lock"
+
+
+def journal_path(root):
+    return _canonical(root) + ".journal.json"
 
 
 def _forbidden_roots():
@@ -101,7 +133,7 @@ def check_output_root(root):
         raise TestReleaseError("output root is empty")
     if os.path.islink(root):
         raise TestReleaseError(f"output root must not be a symlink: {root}")
-    real = os.path.realpath(root)
+    real = _canonical(root)
     if real == os.sep:
         raise TestReleaseError("output root must not be filesystem root")
     if real == os.path.realpath(os.path.expanduser("~")):
@@ -114,25 +146,46 @@ def check_output_root(root):
     return real
 
 
-def read_owner(root):
-    path = owner_path(root)
-    if not os.path.isfile(path):
-        return None
+# ---- canonical-root 锁（唯一实现在 scripts/release_lock.py）-----------------
+
+
+def lock_path(root):
+    return lock.lock_path(root)
+
+
+def acquire_lock(root, exclusive=True):
+    """非阻塞获取锁；竞争抛 TestReleaseBusy（明确 busy，不改 cache）。"""
     try:
-        with open(path, encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, ValueError):
-        return None
+        return lock.acquire(root, exclusive=exclusive)
+    except lock.Busy as exc:
+        raise TestReleaseBusy(str(exc)) from exc
+    except lock.LockError as exc:
+        raise TestReleaseError(str(exc)) from exc
 
 
-def write_json_atomic(path, payload):
+def release_lock(fd):
+    lock.release(fd)
+
+
+def verify_lease(root=None):
+    """祖先进程仍持本 root 的独占 flock 且 mount 域一致（委托 release_lock）。"""
+    try:
+        return lock.verify_lease(root)
+    except lock.LockError as exc:
+        raise TestReleaseError(str(exc)) from exc
+
+
+# ---- 原子写 / 读取 ---------------------------------------------------------
+
+
+def write_json_atomic(path, payload, text=None):
     directory = os.path.dirname(path) or "."
     os.makedirs(directory, exist_ok=True)
     handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory,
                                          prefix=".tmp-", delete=False, suffix=".json")
     try:
-        json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
+        handle.write(text if text is not None else json.dumps(
+            payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
         handle.flush()
         os.fsync(handle.fileno())
     finally:
@@ -140,15 +193,55 @@ def write_json_atomic(path, payload):
     os.replace(handle.name, path)
 
 
-def read_meta(root):
-    path = meta_path(root)
-    if not os.path.isfile(path):
-        return None
+def write_text_atomic(path, text):
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory,
+                                         prefix=".tmp-", delete=False)
+    try:
+        handle.write(text)
+        handle.flush()
+        os.fsync(handle.fileno())
+    finally:
+        handle.close()
+    os.replace(handle.name, path)
+
+
+def read_json(path):
     try:
         with open(path, encoding="utf-8") as handle:
             return json.load(handle)
     except (OSError, ValueError):
         return None
+
+
+def read_text_or_none(path):
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return None
+
+
+def _sha256_text(text):
+    return "sha256:" + hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _tree_digest_or_none(root):
+    try:
+        return common.tree_digest(root)
+    except (OSError, common.ReleaseError):
+        return None
+
+
+def read_owner(root):
+    owner = read_json(owner_path(root))
+    return owner if isinstance(owner, dict) else None
+
+
+def read_meta(root):
+    meta = read_json(meta_path(root))
+    return meta if isinstance(meta, dict) else None
 
 
 def _assert_owned_or_empty(real):
@@ -166,62 +259,204 @@ def _assert_owned_or_empty(real):
             "拒绝覆盖非本工具产物（请换一个 --root 或手工清理）")
 
 
-def check_meta(root=None, version=None, dev_manifest=None):
-    """核对 meta 与当前源树/版本；返回 meta。任何不一致都抛 TestReleaseError。"""
+# ---- 核验 ------------------------------------------------------------------
+
+
+def _verify_tree_against_meta(real, meta, expected_version):
+    """逐文件核实际发行树：manifest 摘要 + output tree digest（不只信 meta）。"""
+    manifest_file = os.path.join(real, "wf-release.json")
+    if not os.path.isfile(manifest_file):
+        raise TestReleaseError(f"测试发行缺少 wf-release.json：{real}")
+    manifest = read_json(manifest_file)
+    if not manifest:
+        raise TestReleaseError(f"测试发行清单不可解析：{manifest_file}")
+    if common.manifest_digest(manifest) != meta.get("manifest_digest"):
+        raise TestReleaseError("测试发行清单摘要与 meta 不一致（副本被改动）")
+    if manifest.get("version") != expected_version:
+        raise TestReleaseError(
+            f"测试发行清单版本不一致：manifest={manifest.get('version')} expected={expected_version}")
+    current = _tree_digest_or_none(real)
+    if current is None:
+        raise TestReleaseError(f"测试发行树不可读：{real}")
+    if meta.get("output_tree_digest") != current:
+        raise TestReleaseError(
+            f"测试发行树摘要与 meta 不一致（实际文件被改动）：meta={meta.get('output_tree_digest')} current={current}")
+
+
+def _hit_meta(real, expected_version, inputs):
+    """只有 schema 2、输入与版本完全一致且实际树可验证的 meta 才算命中。"""
+    meta = read_meta(real)
+    if not meta or not os.path.isdir(real):
+        return None
+    if meta.get("schema_version") != META_SCHEMA:
+        return None                      # 旧 schema 只算 miss（重建），不冒充命中
+    if meta.get("version") != expected_version or meta.get("release_ref") != ref_for(expected_version):
+        return None
+    if meta.get("build_inputs") != inputs:
+        return None
+    try:
+        _verify_tree_against_meta(real, meta, expected_version)
+    except TestReleaseError:
+        return None
+    return meta
+
+
+def check_meta_locked(root=None, version=None, dev_manifest=None):
+    """只读核验（调用方已持共享/独占锁）：meta、inputs、实际树逐项核对。"""
     dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
     expected_version = version or resolve_version(None, dev_manifest)
     real = check_output_root(root or default_root(expected_version))
+    if os.path.isfile(journal_path(real)):
+        raise TestReleaseError(
+            f"未完成的发布 journal：{journal_path(real)}（recovery-required：在可获独占锁时用 --ensure 恢复）")
     if not os.path.isdir(real):
         raise TestReleaseError(f"测试发行副本不存在：{real}（重建或去掉 --no-build）")
     meta = read_meta(real)
     if not meta:
         raise TestReleaseError(f"测试发行 meta 缺失：{meta_path(real)}（重建或去掉 --no-build）")
+    if meta.get("schema_version") != META_SCHEMA:
+        raise TestReleaseError(
+            f"测试发行 meta schema 过期：meta={meta.get('schema_version')} expected={META_SCHEMA}（重建或去掉 --no-build）")
     if meta.get("version") != expected_version:
         raise TestReleaseError(
             f"测试发行版本过期：meta={meta.get('version')} expected={expected_version}（测试发行副本过期，重建或去掉 --no-build）")
     if meta.get("release_ref") != ref_for(expected_version):
         raise TestReleaseError(
             f"测试发行引用过期：meta={meta.get('release_ref')} expected={ref_for(expected_version)}")
-    current = common.source_tree_digest()
-    if meta.get("source_tree_digest") != current:
+    current_inputs = common.test_release_inputs_digest(expected_version)
+    if meta.get("build_inputs") != current_inputs:
         raise TestReleaseError(
-            f"测试发行源树摘要过期：meta={meta.get('source_tree_digest')} current={current}；"
+            f"测试发行输入身份过期：meta={meta.get('build_inputs')} current={current_inputs}；"
             "测试发行副本过期，重建或去掉 --no-build")
-    manifest_file = os.path.join(real, "wf-release.json")
-    if not os.path.isfile(manifest_file):
-        raise TestReleaseError(f"测试发行缺少 wf-release.json：{real}")
-    with open(manifest_file, encoding="utf-8") as handle:
-        manifest = json.load(handle)
-    if common.manifest_digest(manifest) != meta.get("manifest_digest"):
-        raise TestReleaseError("测试发行清单摘要与 meta 不一致（副本被改动）")
-    if manifest.get("version") != expected_version:
+    if meta.get("source_tree_digest") != common.source_tree_digest():
         raise TestReleaseError(
-            f"测试发行清单版本不一致：manifest={manifest.get('version')} expected={expected_version}")
+            f"测试发行源树摘要过期：meta={meta.get('source_tree_digest')}；"
+            "测试发行副本过期，重建或去掉 --no-build")
+    _verify_tree_against_meta(real, meta, expected_version)
     return meta
 
 
-def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
-    """确保缓存根有一份与当前源树一致的测试发行；返回 (root, meta)。"""
+def check_meta(root=None, version=None, dev_manifest=None):
+    """公开 check：共享锁内只读核验（runner 持独占消费期会明确 busy）。"""
     dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
     version = version or resolve_version(None, dev_manifest)
     real = check_output_root(root or default_root(version))
-    if not rebuild:
-        return real, check_meta(real, version, dev_manifest)
-    current = common.source_tree_digest()
-    existing = read_meta(real)
-    if (existing and existing.get("version") == version
-            and existing.get("source_tree_digest") == current
-            and os.path.isdir(real)):
-        try:
-            return real, check_meta(real, version, dev_manifest)
-        except TestReleaseError:
-            pass  # meta 在但副本被改动：重建
-    _assert_owned_or_empty(real)
-    parent = os.path.dirname(real) or "."
-    os.makedirs(parent, exist_ok=True)
-    staging = tempfile.mkdtemp(prefix=".wf-test-release-", dir=parent)
+    fd = acquire_lock(real, exclusive=False)
     try:
-        builder = _load_builder()
+        return check_meta_locked(real, version, dev_manifest)
+    finally:
+        release_lock(fd)
+
+
+# ---- journal 发布/恢复 -----------------------------------------------------
+
+
+def _journal_for(real, transaction):
+    return {
+        "schema_version": JOURNAL_SCHEMA,
+        "transaction": transaction,
+        "root": real,
+        "old": None,
+        "new": None,
+    }
+
+
+def _capture_old(real):
+    """冻结旧代（如实测字节与归属）；首次发布记录 old-absent。"""
+    if not os.path.isdir(real) or not any(os.listdir(real)):
+        return {"present": False}
+    digest = _tree_digest_or_none(real)
+    if digest is None:
+        raise TestReleaseError(f"旧代不可读，拒绝在不可验证的旧代上发布：{real}")
+    meta_text = read_text_or_none(meta_path(real))
+    owner_text = read_text_or_none(owner_path(real))
+    if meta_text is None or owner_text is None:
+        raise TestReleaseError(f"旧代缺少 meta/owner，拒绝在不完整旧代上发布：{real}")
+    return {"present": True, "digest": digest, "meta": meta_text, "owner": owner_text}
+
+
+def _restore_old(real, journal):
+    """按 journal 冻结的旧字节回滚；验证不过就保留现场并失败。"""
+    old = journal.get("old") or {}
+    if not old.get("present"):
+        # 首次发布：只撤销本事务的不完整新代，不误删 unrelated 路径。
+        backup = (journal.get("new") or {}).get("backup")
+        if backup and os.path.isdir(backup):
+            shutil.rmtree(backup, ignore_errors=True)
+        staging = (journal.get("new") or {}).get("staging")
+        if staging and os.path.isdir(staging):
+            shutil.rmtree(staging, ignore_errors=True)
+        return "rolled-back-absent"
+    backup = (journal.get("new") or {}).get("backup")
+    if not backup or not os.path.isdir(backup):
+        raise TestReleaseError(
+            f"无法恢复：journal 声明的旧代备份缺失（{backup}）；保留现场 {journal_path(real)}")
+    if _tree_digest_or_none(backup) != old.get("digest"):
+        raise TestReleaseError("无法恢复：旧代备份字节与 journal 不符；保留现场")
+    if os.path.isdir(real):
+        shutil.rmtree(real)
+    os.rename(backup, real)
+    write_text_atomic(meta_path(real), old["meta"])
+    write_text_atomic(owner_path(real), old["owner"])
+    if _tree_digest_or_none(real) != old.get("digest"):
+        raise TestReleaseError("恢复后旧代仍不可验证；保留现场")
+    return "rolled-back"
+
+
+def recover_locked(real):
+    """独占锁内处理未完成 journal：新代可验证则前滚，否则回滚旧代。返回状态字符串。"""
+    journal = read_json(journal_path(real))
+    if journal is None:
+        raise TestReleaseError(f"journal 不可解析：{journal_path(real)}（保留现场）")
+    if journal.get("schema_version") != JOURNAL_SCHEMA or journal.get("root") != real:
+        raise TestReleaseError(f"journal schema/root 不符：{journal_path(real)}（保留现场）")
+    new = journal.get("new") or {}
+    staging = new.get("staging")
+    # 前滚：staging 或 root 已经等于预期新代字节
+    for candidate in (staging, real):
+        if candidate and os.path.isdir(candidate) and _tree_digest_or_none(candidate) == new.get("digest"):
+            if candidate != real:
+                backup = new.get("backup")
+                if os.path.isdir(real):
+                    if not backup:
+                        raise TestReleaseError("journal 缺少 backup 路径，无法安装新代")
+                    if os.path.isdir(backup):
+                        shutil.rmtree(backup)
+                    os.rename(real, backup)
+                os.rename(candidate, real)
+            write_text_atomic(meta_path(real), new["meta"])
+            write_text_atomic(owner_path(real), new["owner"])
+            if _tree_digest_or_none(real) != new.get("digest"):
+                raise TestReleaseError("前滚后新代仍不可验证；保留现场")
+            _finish_transaction(real, journal)
+            return "rolled-forward"
+    status = _restore_old(real, journal)
+    _finish_transaction(real, journal, keep_backup=False)
+    return status
+
+
+def _finish_transaction(real, journal, keep_backup=False):
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup")):
+        if path and os.path.isdir(path):
+            if keep_backup:
+                continue
+            shutil.rmtree(path, ignore_errors=True)
+    os.unlink(journal_path(real))
+
+
+def _publish_locked(real, version, dev_manifest, inputs):
+    """独占锁内发布：冻结输入 → staging 双构建 → journal → 备份/安装 → 验证 → 提交。"""
+    builder = _load_builder()
+    transaction = uuid.uuid4().hex
+    staging = real + f".staging-{transaction}"
+    backup = real + f".backup-{transaction}"
+    journal = _journal_for(real, transaction)
+    journal["old"] = _capture_old(real)
+    try:
+        os.makedirs(os.path.dirname(real) or ".", exist_ok=True)
+        shutil.rmtree(staging, ignore_errors=True)
+        os.makedirs(staging)
         first = os.path.join(staging, "first")
         second = os.path.join(staging, "second")
         builder.build(version, first, dev_manifest)
@@ -229,33 +464,55 @@ def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
         problems = builder.diff_tree(first, second)
         if problems:
             raise TestReleaseError(f"测试发行字节复现失败：{problems[:5]}")
+        if common.test_release_inputs_digest(version) != inputs:
+            raise TestReleaseError("测试发行输入在构建期间变化；拒绝把混合产物发布成稳定输入")
         built_manifest = os.path.join(first, "wf-release.json")
-        if not os.path.isfile(built_manifest):
+        manifest_on_disk = read_json(built_manifest)
+        if not manifest_on_disk:
             raise TestReleaseError("测试发行缺少 wf-release.json")
-        with open(built_manifest, encoding="utf-8") as handle:
-            manifest_on_disk = json.load(handle)
+        _make_tagged_repo(first, version)
+        digest = common.tree_digest(first)
         meta = {
             "schema_version": META_SCHEMA,
             "version": version,
             "release_ref": ref_for(version),
-            "source_tree_digest": current,
+            "build_inputs": inputs,
+            "output_tree_digest": digest,
             "manifest_digest": common.manifest_digest(manifest_on_disk),
+            "source_tree_digest": common.source_tree_digest(),
             "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "root": real,
         }
+        owner = {"schema_version": 1, "owner": OWNER_TAG, "root": real, "version": version}
+        journal["new"] = {
+            "digest": digest,
+            "staging": first,
+            "backup": backup,
+            "meta": json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            "owner": json.dumps(owner, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        }
+        write_json_atomic(journal_path(real), journal)
         if os.path.isdir(real):
-            shutil.rmtree(real)
-        elif os.path.exists(real):
-            os.unlink(real)
-        shutil.move(first, real)
+            os.rename(real, backup)
+        os.rename(first, real)
         shutil.rmtree(second, ignore_errors=True)
-        _make_tagged_repo(real, version)
-        write_json_atomic(meta_path(real), meta)
-        write_json_atomic(owner_path(real), {"schema_version": 1, "owner": OWNER_TAG, "root": real,
-                                             "version": version})
+        write_text_atomic(meta_path(real), journal["new"]["meta"])
+        write_text_atomic(owner_path(real), journal["new"]["owner"])
+        if common.tree_digest(real) != digest:
+            raise TestReleaseError("发布后发行树字节与冻结摘要不符")
+        _verify_tree_against_meta(real, meta, version)
+        _finish_transaction(real, journal)
         return real, meta
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
+    except Exception:
+        # 尽力立即回滚；回滚不了就保留 journal 现场（下次 ensure 先恢复）。
+        try:
+            if os.path.isfile(journal_path(real)):
+                recover_locked(real)
+            else:
+                shutil.rmtree(staging, ignore_errors=True)
+        except TestReleaseError:
+            pass
+        raise
 
 
 def _make_tagged_repo(root, version):
@@ -272,20 +529,110 @@ def _make_tagged_repo(root, version):
                        capture_output=True)
 
 
+def _cleanup_stale(real):
+    """恢复之后才清理本工具拥有的历史残留（stale/未走完的 staging/backup）。只按前缀收。"""
+    parent = os.path.dirname(real) or "."
+    base = os.path.basename(real)
+    try:
+        names = os.listdir(parent)
+    except OSError:
+        return
+    for name in names:
+        if name.startswith(base + ".staging-") or name.startswith(base + ".backup-"):
+            path = os.path.join(parent, name)
+            if os.path.isdir(path):
+                shutil.rmtree(path, ignore_errors=True)
+
+
+def ensure_release_locked(root=None, version=None, dev_manifest=None, rebuild=True):
+    """独占锁内确保缓存根有一份与当前输入一致的测试发行；返回 (root, meta)。"""
+    dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
+    version = version or resolve_version(None, dev_manifest)
+    real = check_output_root(root or default_root(version))
+    if os.path.isfile(journal_path(real)):
+        recover_locked(real)
+    if not rebuild:
+        return real, check_meta_locked(real, version, dev_manifest)
+    inputs = common.test_release_inputs_digest(version)
+    _cleanup_stale(real)
+    hit = _hit_meta(real, version, inputs)
+    if hit is not None:
+        return real, hit
+    _assert_owned_or_empty(real)
+    return _publish_locked(real, version, dev_manifest, inputs)
+
+
+def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
+    """公开 ensure：独占锁内恢复/发布；竞争明确 busy。"""
+    dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
+    version = version or resolve_version(None, dev_manifest)
+    real = check_output_root(root or default_root(version))
+    fd = acquire_lock(real, exclusive=True)
+    try:
+        return ensure_release_locked(real, version, dev_manifest, rebuild)
+    finally:
+        release_lock(fd)
+
+
+# ---- runner 消费期 lease ---------------------------------------------------
+
+
+def lease_run(root, version, command, rebuild=True, dev_manifest=None):
+    """同一 PID 取得并保持独占 fd，`exec` 进入最终消费阶段（不释放、不重取、不降级）。"""
+    dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
+    real = check_output_root(root)
+    fd = acquire_lock(real, exclusive=True)
+    ensure_release_locked(real, version, dev_manifest, rebuild)
+    lock.write_env(fd, real)
+    os.execvp(command[0], command)
+
+
+def _print_error(exc):
+    if isinstance(exc, TestReleaseBusy):
+        print(f"BUSY  {exc}", file=sys.stderr)
+        return BUSY_EXIT
+    print(f"FAIL  {exc}", file=sys.stderr)
+    return 1
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 测试发行构建（缓存根，不写产品树）")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--ensure", action="store_true", help="构建/复用缓存根里的测试发行")
-    group.add_argument("--check", action="store_true", help="只核对 meta 与当前源树")
+    group.add_argument("--check", action="store_true", help="只核对 meta 与当前输入（共享锁）")
+    group.add_argument("--lease", action="store_true", help="持独占锁后 exec 进入消费命令")
+    group.add_argument("--verify-lease", action="store_true", help="核验继承来的消费期 lease")
     parser.add_argument("--version", default=None, help="X.Y.Z（默认按 dev-manifest/测试常量解析）")
     parser.add_argument("--root", default=None, help="输出根（默认 ~/.cache/wf-test-release/<version>）")
+    parser.add_argument("--no-build", action="store_true", help="--lease 时不重建，只做新鲜度核验")
+    parser.add_argument("--no-lock", action="store_true",
+                        help="调用方已持同一把 root 锁（locked 实现不加锁，不自撞）")
     parser.add_argument("--json", action="store_true", help="输出机器可读结果")
+    parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
+        if args.verify_lease:
+            verify_lease(args.root)
+            print("OK  lease", flush=True)
+            return 0
         dev_manifest = common.load_dev_manifest()
         version = resolve_version(args.version, dev_manifest)
         root = check_output_root(args.root or default_root(version))
-        if args.check:
+        if args.lease:
+            command = args.command[1:] if args.command[:1] == ["--"] else args.command
+            if not command:
+                parser.error("--lease requires a command after --")
+            lease_run(root, version, command, rebuild=not args.no_build, dev_manifest=dev_manifest)
+            return 0
+        if args.no_lock:
+            # 调用方已持同一把 root 锁：只走 locked 实现，不重复开锁。
+            if args.check:
+                meta = check_meta_locked(root, version, dev_manifest)
+                status = "OK"
+            else:
+                root, meta = ensure_release_locked(root, version, dev_manifest)
+                status = "BUILT"
+        elif args.check:
             meta = check_meta(root, version, dev_manifest)
             status = "OK"
         else:
@@ -294,16 +641,16 @@ def main(argv=None):
         if args.json:
             print(json.dumps({"status": status, "root": root, "version": meta["version"],
                               "release_ref": meta["release_ref"],
-                              "source_tree_digest": meta["source_tree_digest"]},
+                              "build_inputs": meta.get("build_inputs"),
+                              "output_tree_digest": meta.get("output_tree_digest")},
                              ensure_ascii=False, sort_keys=True))
         else:
             print(f"{status}  test-release {meta['version']}  {root}")
             print(f"  release_ref: {meta['release_ref']}")
-            print(f"  source_tree_digest: {meta['source_tree_digest']}")
+            print(f"  build_inputs: {meta.get('build_inputs')}")
         return 0
     except TestReleaseError as exc:
-        print(f"FAIL  {exc}", file=sys.stderr)
-        return 1
+        return _print_error(exc)
     except (common.ReleaseError, SystemExit) as exc:  # build() 的版本一致性拒绝
         print(f"FAIL  {exc}", file=sys.stderr)
         return 1

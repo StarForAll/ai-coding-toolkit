@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """_worker.py — 单个 repro 用例的执行单元（由 `repro/run.sh` 调度）。
 
-职责边界：
+职责边界（design §5.2 / AC8）：
+- 只读父进程冻结的**唯一** `inputs.json` bundle（env 只给路径），不读第二份 JSON，不回退 current；
 - 只写自己的 `results/<case>.json` 与 `logs/<case>.<mode>.log`，**不碰 `repro-state.json`**
-  （状态只由父进程在汇总校验通过后原子更新）；
-- 单用例超时结束整个进程组，并记失败（不留下挂起进程）；
-- red 面只有“目标断言变红”才算通过：前置失败、注入后仍绿都记失败并把原因写进结果。
+  （全局状态只由父进程启动的唯一 writer 子进程提交）；
+- 结果记 bundle digest、相位与 execution fingerprint；case 缺失/模式不符/输入变化均拒绝；
+- red 面只有“目标断言变红”才算通过：前置失败、注入后仍绿都记失败并写原因。
 
 用法：`python3 _worker.py <case> <green|both|red>`
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -33,8 +35,16 @@ def results_dir():
     return root
 
 
+def load_bundle():
+    path = os.environ.get("WF_REPRO_INPUTS_FILE")
+    if not path:
+        raise SystemExit("WF_REPRO_INPUTS_FILE is not set（bundle 是唯一冻结来源）")
+    with open(path, "rb") as handle:
+        data = handle.read()
+    return json.loads(data), hashlib.sha256(data).hexdigest()
+
+
 def run_phase(case, phase):
-    """跑一个面（green/red），返回 dict(passed, seconds, detail, rc)。"""
     log_dir = os.path.join(results_dir(), "logs")
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, f"{case}.{phase}.log")
@@ -59,17 +69,26 @@ def main(argv):
     case, mode = argv
     if mode not in ("green", "red", "both") or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", case):
         return 2
-    current = repro_select.input_fingerprint(case)
-    frozen = json.loads(os.environ.get("REPRO_INPUTS_JSON", "{}"))
-    fingerprint = frozen.get(case, current)
+    bundle, bundle_sha = load_bundle()
+    frozen = (bundle.get("cases") or {}).get(case)
+    if not frozen:
+        print(f"FAIL {case}: case missing from frozen bundle")
+        return 1
+    if frozen.get("mode") != mode:
+        print(f"FAIL {case}: mode {mode} != frozen {frozen.get('mode')}")
+        return 1
+    if bundle.get("execution_context") != repro_select.execution_context():
+        print(f"FAIL {case}: execution context changed before execution")
+        return 1
+    fingerprint = frozen["execution_fingerprint"]
+    current = repro_select.input_fingerprint(case, repro_select.load_groups())
     if fingerprint != current:
         print(f"FAIL {case}: inputs changed before execution")
         return 1
     os.makedirs(results_dir(), exist_ok=True)
     record = {"case": case, "mode": mode, "green": "skip", "red": "skip",
-              "green_seconds": 0.0, "red_seconds": 0.0, "detail": "", "verified": False}
-    record["fingerprint"] = fingerprint
-    record["phases"] = {}
+              "green_seconds": 0.0, "red_seconds": 0.0, "detail": "", "verified": False,
+              "execution_fingerprint": fingerprint, "bundle_sha256": bundle_sha, "phases": {}}
     details = []
     ok = True
     if mode in ("green", "both"):
@@ -86,7 +105,7 @@ def main(argv):
         record["red_seconds"] = red["seconds"]
         ok = ok and red["passed"]
         details.append(f"red: {red['detail']}")
-    if repro_select.input_fingerprint(case) != fingerprint:
+    if repro_select.input_fingerprint(case, repro_select.load_groups()) != fingerprint:
         ok = False
         details.append("inputs changed during execution; evidence rejected")
     record["verified"] = bool(ok)

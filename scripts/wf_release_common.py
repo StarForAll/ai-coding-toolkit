@@ -283,6 +283,168 @@ def compatibility_block(dev_manifest):
     }
 
 
+def _helper_identity(role, invocation, python=None):
+    """tool/SUT 身份（唯一解析点在 python_runtime_identity）——不序列化原始路径。"""
+    scripts = os.path.dirname(os.path.abspath(__file__))
+    if scripts not in sys.path:
+        sys.path.insert(0, scripts)
+    import python_runtime_identity as runtime_identity
+
+    return runtime_identity.resolve(role, invocation, python)
+
+
+def _content_manifest(paths):
+    """相对路径序 + 逐文件字节摘要（必要文件缺失即报错，不签发 None）。"""
+    entries = []
+    for path in sorted(paths):
+        if not os.path.isfile(path):
+            raise ReleaseError(f"build input is missing: {path}")
+        entries.append({"path": path, "digest": wf_records.file_digest(path)})
+    return entries
+
+
+def _canonical_digest(payload):
+    import hashlib
+    import json
+
+    return "sha256:" + hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+# 协议/缓存 schema：改变输入形状时必须递增，否则旧 cache 会被当成同输入。
+INPUT_PROTOCOL_SCHEMA = 2
+
+
+def _scripts_root():
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _build_tool_files():
+    scripts = _scripts_root()
+    return [
+        os.path.join(scripts, "build-wf-release.py"),
+        os.path.join(scripts, "wf_release_common.py"),
+        os.path.join(scripts, "python_runtime_identity.py"),
+        os.path.join(scripts, "wf-dev-deploy.py"),
+        os.path.join(scripts, "tests", "wf_test_release.py"),
+    ]
+
+
+def test_release_inputs_digest(version, source_root=SOURCE_ROOT):
+    """测试发行 build inputs：登记资产 + dev-manifest + build/helper 工具 + tool 身份 + 版本/schema。
+
+    同一内容稳定；任何工具或资产字节变化（含 dirty 工作区）都改变身份。dev HEAD **不**进本函数
+    ——HEAD 属于模板身份（`fixture_template_inputs_digest`），发行内容本身与提交无关。
+    """
+    manifest_path = os.path.join(source_root, "dev-manifest.json")
+    dev_manifest = load_dev_manifest(source_root)
+    assets = [{"path": entry["source_path"], "digest": entry["digest"], "kind": entry["kind"]}
+              for entry in expand_assets(dev_manifest, source_root)]
+    helper = _helper_identity("tool", os.path.join(_scripts_root(), "tests", "wf_test_release.py"))
+    payload = {
+        "schema": INPUT_PROTOCOL_SCHEMA,
+        "kind": "test-release",
+        "version": version,
+        "assets": assets,
+        "dev_manifest": wf_records.file_digest(manifest_path),
+        "tools": _content_manifest(_build_tool_files()),
+        "tool_identity": helper,
+    }
+    return _canonical_digest(payload)
+
+
+def full_runner_files(full_root=None):
+    """受控 full runner 子树（模板输入；测试脚本变化也可能重建模板，代价有意接受）。"""
+    root = full_root or os.path.join(_scripts_root(), "tests", "wf_runtime", "full")
+    found = []
+    for base, dirs, names in os.walk(root):
+        dirs[:] = sorted(name for name in dirs if name != "__pycache__")
+        for name in sorted(names):
+            if name.endswith(".pyc") or name in ("groups.json",):
+                continue
+            absolute = os.path.join(base, name)
+            found.append(os.path.join(root, absolute[len(root) + 1:]))
+    return found
+
+
+def fixture_template_inputs_digest(deploy, version=None, ref=None, release_subject_digest=None,
+                                   source_root=SOURCE_ROOT):
+    """模板 build inputs：发行 build inputs + full 子树 + 部署/运行时 helper + tool/SUT 身份。
+
+    dev 另绑定完整 HEAD；candidate 另绑定实际 release subject。两者都用同一批观测构造，
+    不把 deploy 标签当内容证据。
+    """
+    scripts = _scripts_root()
+    full_root = os.path.join(scripts, "tests", "wf_runtime", "full")
+    tool = _helper_identity("tool", os.path.join(scripts, "tests", "wf_test_release.py"))
+    sut = _helper_identity("sut", os.path.join(full_root, "f1_init.py"))
+    payload = {
+        "schema": INPUT_PROTOCOL_SCHEMA,
+        "kind": "fixture-template",
+        "deploy": deploy,
+        "release_inputs": test_release_inputs_digest(version or "", source_root),
+        "full_runner": _content_manifest(full_runner_files(full_root)),
+        "runtime_helpers": _content_manifest([
+            os.path.join(scripts, "python_runtime_identity.py"),
+            os.path.join(scripts, "wf-dev-deploy.py"),
+            os.path.join(full_root, "fixture_scope.py"),
+            os.path.join(full_root, "template_check.py"),
+        ]),
+        "tool_identity": tool,
+        "sut_identity": sut,
+    }
+    if deploy == "dev":
+        payload["dev_head"] = git_head() or ""
+    else:
+        payload["candidate"] = {"version": version or "", "ref": ref or "",
+                                "release_subject": release_subject_digest or ""}
+    return _canonical_digest(payload)
+
+
+def release_subject(tree, version, ref, source_root=SOURCE_ROOT):
+    """实际发行内容主体：tree 内容摘要 + manifest 摘要 + version/ref（排除 .git/pyc）。"""
+    manifest_path = os.path.join(tree, "wf-release.json")
+    if not os.path.isfile(manifest_path):
+        raise ReleaseError(f"release manifest is missing: {manifest_path}")
+    import json
+
+    with open(manifest_path, "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    payload = {
+        "tree": tree_digest(tree),
+        "manifest": manifest_digest(manifest),
+        "version": version,
+        "ref": ref,
+    }
+    return {"subject": payload, "digest": _canonical_digest(payload)}
+
+
+def _encode_part(value):
+    import base64
+
+    return base64.urlsafe_b64encode(value.encode("utf-8")).decode("ascii").rstrip("=") or "x"
+
+
+def template_cache_slot(py_version, deploy, version=None, ref=None):
+    """槽位：Python major.minor + deploy；candidate 再加 version/ref。
+
+    每段用 urlsafe-base64 编码（可逆、无分隔符碰撞），不靠简单 sanitize。
+    """
+    if deploy not in ("dev", "candidate"):
+        raise ReleaseError(f"unknown deploy: {deploy!r}")
+    parts = [f"py{py_version}", deploy]
+    if deploy == "candidate":
+        parts += [version or "", ref or ""]
+    return "-".join(_encode_part(part) for part in parts)
+
+
+def template_cache_key(inputs_digest, py_version, deploy, version=None, ref=None):
+    """交叉 run 模板条目的目录名：内容身份前 12 位 + 槽位。"""
+    if not inputs_digest.startswith("sha256:") or len(inputs_digest) != 71:
+        raise ReleaseError(f"inputs digest must be sha256: {inputs_digest!r}")
+    return inputs_digest[7:19] + "-" + template_cache_slot(py_version, deploy, version, ref)
+
+
 def tree_digest(root):
     """目录树摘要（相对路径序 + 逐文件 sha256；跳过 `.git`/`__pycache__`）。
 

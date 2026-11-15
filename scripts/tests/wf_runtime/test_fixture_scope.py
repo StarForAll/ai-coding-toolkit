@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fixture cleanup must refuse unowned paths before changing their contents."""
 import importlib.util
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -213,6 +214,108 @@ class PruneResultsTest(unittest.TestCase):
         state.write_text("{}")
         scope.prune_results(self.cache, "repro", keep=0, bootstrap=True)
         self.assertEqual(state.read_text(), "{}")
+
+
+class TestScopeTest(unittest.TestCase):
+    """显式测试域（AC13）：owned scope、管理 locator 越界拒绝、结果锁域与继承。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-scope-test-")
+        self.addCleanup(self.tmp.cleanup)
+        self.base = Path(self.tmp.name)
+        self._saved = {key: os.environ.get(key) for key in
+                       ("WF_TEST_SCOPE_ROOT", "WF_RESULTS_LOCK_FD", "WF_RESULTS_LOCK_PID",
+                        "WF_RESULTS_LOCK_DOMAIN", "WF_RESULTS_LOCK_MNT",
+                        "WF_FIXTURE_LEASE_FD", "WF_FIXTURE_LEASE_PID")}
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        for key, value in self._saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def scope(self):
+        spec = importlib.util.spec_from_file_location("wf_fixture_scope_scope_test",
+                                                      FULL / "fixture_scope.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def make_scope(self):
+        scope = self.scope()
+        root = scope.create_test_scope(str(self.base))
+        os.environ["WF_TEST_SCOPE_ROOT"] = str(root)
+        return scope, root
+
+    def test_scope_marker_is_fixed_and_validated(self):
+        scope, root = self.make_scope()
+        self.assertEqual(scope.read_scope(root), root)
+        self.assertEqual(scope.results_domain(), "scope:" + str(root))
+        self.assertEqual(scope.results_lock_path(), root / "locks" / f"results-{os.getuid()}.lock")
+        marker = root / scope.SCOPE_MARKER
+        record = json.loads(marker.read_text())
+        record["uid"] = 0
+        marker.write_text(json.dumps(record))
+        with self.assertRaises(scope.FixtureError):
+            scope.read_scope(root)
+        marker.unlink()
+        with self.assertRaises(scope.FixtureError):
+            scope.read_scope(root)
+
+    def test_production_domain_uses_fixed_uid_lock(self):
+        scope = self.scope()
+        os.environ.pop("WF_TEST_SCOPE_ROOT", None)
+        self.assertEqual(scope.results_domain(), "production")
+        self.assertEqual(str(scope.results_lock_path()), f"/tmp/wf-test-results-{os.getuid()}.lock")
+
+    def test_runner_managed_paths_must_stay_inside_the_scope(self):
+        scope, root = self.make_scope()
+        scope.ensure_in_scope(str(root / "results"), str(root / "cache" / "x"))
+        self.assertEqual(scope.ensure_in_scope(str(root)), None, "scope 自身合法")
+        outside = self.base / "outside"
+        outside.mkdir()
+        with self.assertRaises(scope.FixtureError):
+            scope.ensure_in_scope(str(outside))
+        # 项目外但 scope 内的兄弟目录仍是合法 escape/probe 目标（scope 不等于 project）。
+        (root / "outside").mkdir()
+        self.assertEqual(scope.ensure_in_scope(str(root / "outside")), None)
+        os.environ.pop("WF_TEST_SCOPE_ROOT", None)
+        scope.ensure_in_scope(str(outside))
+
+    def test_results_lock_is_exclusive_and_domain_bound(self):
+        scope, _root = self.make_scope()
+        scope.acquire_results_lock()
+        with self.assertRaises(scope.FixtureError):
+            scope.acquire_results_lock()
+        self.assertTrue(scope.verify_results_lock())
+        os.environ["WF_RESULTS_LOCK_DOMAIN"] = "scope:/elsewhere"
+        with self.assertRaises(scope.FixtureError):
+            scope.verify_results_lock()
+
+    def test_forged_results_lease_is_rejected(self):
+        scope, _root = self.make_scope()
+        os.environ.update({"WF_RESULTS_LOCK_FD": "0", "WF_RESULTS_LOCK_PID": str(os.getpid()),
+                           "WF_RESULTS_LOCK_DOMAIN": scope.results_domain(),
+                           "WF_RESULTS_LOCK_MNT": os.readlink("/proc/self/ns/mnt")})
+        with self.assertRaises(scope.FixtureError):
+            scope.verify_results_lock()
+
+    def test_lease_results_execs_with_verifiable_locks(self):
+        scope, root = self.make_scope()
+        result = subprocess.run(
+            [sys.executable, str(FULL / "fixture_scope.py"), "lease-results", "--",
+             sys.executable, "-c",
+             "import os,subprocess,sys;"
+             "subprocess.run([sys.executable, os.path.join(os.environ['FULL'], 'fixture_scope.py'),"
+             " 'check-results-lease'], check=True);"
+             "subprocess.run([sys.executable, os.path.join(os.environ['FULL'], 'fixture_scope.py'),"
+             " 'check-lease'], check=True);print('OK')"],
+            env={**os.environ, "FULL": str(FULL)}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("OK", result.stdout)
+        self.assertTrue((root / "locks" / f"results-{os.getuid()}.lock").is_file())
 
 
 if __name__ == "__main__":

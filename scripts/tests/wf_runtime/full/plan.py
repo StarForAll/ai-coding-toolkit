@@ -57,6 +57,10 @@ FAKE_TREE_COPY = (
     "prepare_candidate_repo.py",
     "source_hygiene.py",
     "template_check.py",
+    "template_cache.py",
+    "runner_protocol.py",
+    "release_context.py",
+    "execute_gate.py",
 )
 FAKE_TREE_STUB = (
     "run_one.sh",
@@ -203,6 +207,8 @@ def parse_args(argv):
     parser.add_argument("--changed-files", default=None,
                         help="显式给出改动文件列表（空格分隔；CI 用，免 git）")
     parser.add_argument("--format", default="sh", choices=("sh", "json"))
+    parser.add_argument("--plan-file", default=None,
+                        help="不再计算计划：读取已冻结的 final plan 字节并输出 sh 赋值")
     parser.add_argument("-h", "--help", action="store_true")
     return parser.parse_args(argv)
 
@@ -681,8 +687,17 @@ def main(argv=None):
         print(USAGE)
         return 0
     try:
+        if "--plan-file" in argv:
+            path = argv[argv.index("--plan-file") + 1]
+            with open(path, encoding="utf-8") as handle:
+                frozen = json.load(handle)
+            emit(frozen, "sh")
+            return 0
         result = plan(argv)
-    except PlanError as exc:
+    except (PlanError, OSError, ValueError) as exc:
+        if not isinstance(exc, PlanError):
+            print(f"PLAN-ERROR: frozen plan is unreadable: {exc}", file=sys.stderr)
+            return 2
         if exc.code == 0:
             print(USAGE)
             return 0
@@ -690,9 +705,9 @@ def main(argv=None):
         return exc.code
     fmt = parse_args(argv).format
     if result["list_only"]:
-        # sh 模式下把人类可读摘要送 stderr：stdout 必须保持“可 eval 的赋值”，
-        # 否则 run_all.sh 的 `eval "$plan_out"` 会把摘要当成命令执行。
-        print(describe(result), file=sys.stderr if fmt == "sh" else sys.stdout)
+        # 人类可读摘要一律送 stderr：stdout 必须保持“可 eval 的赋值”（sh）或**单一 JSON**（json），
+        # 否则 run_all.sh 的 eval 与消费者解析都会被摘要污染。
+        print(describe(result), file=sys.stderr)
         emit(result, fmt)
         # plan.json 只在“显式给出结果目录”时镜像写入：run_all 全路径（含 --dry-run/
         # 契约测试）都先 export WF_RESULTS_DIR 并 claim 目录，行为不变；直接 `--list`

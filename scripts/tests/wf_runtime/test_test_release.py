@@ -14,6 +14,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -71,6 +72,94 @@ class OutputBoundaryTest(unittest.TestCase):
             test_release.ensure_release(root, "0.1.0", {"version": "0.0.0-dev"})
 
 
+class InputIdentityTest(unittest.TestCase):
+    """cache 输入身份（AC1/V1）：资产、manifest、工具、dirty 字节与 dev HEAD 都必须参与。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-input-identity-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.source = self.root / "source"
+        (self.source / "payload" / "lib" / "wflib").mkdir(parents=True)
+        (self.source / "payload" / "lib" / "wflib" / "a.py").write_text("a\n", encoding="utf-8")
+        (self.source / "dev-manifest.json").write_text(
+            '{"assets": [{"source_path": "payload/lib/wflib/a.py"}]}\n', encoding="utf-8")
+        self.tools = self.root / "tools.py"
+        self.tools.write_text("tool\n", encoding="utf-8")
+
+    def digest(self):
+        return common.test_release_inputs_digest("0.1.0", str(self.source))
+
+    def test_same_inputs_are_stable_and_touch_does_not_invalidate(self):
+        first = self.digest()
+        os.utime(self.source / "payload" / "lib" / "wflib" / "a.py", (1, 1))
+        self.assertEqual(first, self.digest())
+
+    def test_asset_and_manifest_bytes_change_the_digest(self):
+        first = self.digest()
+        (self.source / "payload" / "lib" / "wflib" / "a.py").write_text("dirty\n", encoding="utf-8")
+        changed_asset = self.digest()
+        self.assertNotEqual(first, changed_asset)
+        (self.source / "dev-manifest.json").write_text(
+            '{"assets": [{"source_path": "payload/lib/wflib/a.py"}]}\n\n', encoding="utf-8")
+        self.assertNotEqual(changed_asset, self.digest())
+
+    def test_build_tool_bytes_change_the_digest(self):
+        with mock.patch.object(common, "_build_tool_files", return_value=[str(self.tools)]):
+            before = self.digest()
+            self.tools.write_text("tool changed\n", encoding="utf-8")
+            self.assertNotEqual(before, self.digest())
+
+    def test_missing_input_is_refused(self):
+        (self.source / "payload" / "lib" / "wflib" / "a.py").unlink()
+        with self.assertRaises(common.ReleaseError):
+            self.digest()
+
+    def test_template_inputs_bind_dev_head_but_candidate_binds_release_subject(self):
+        with mock.patch.object(common, "_helper_identity", return_value={"role": "x"}):
+            with mock.patch.object(common, "git_head", return_value="head-a"):
+                first = common.fixture_template_inputs_digest("dev", str(self.source))
+            with mock.patch.object(common, "git_head", return_value="head-b"):
+                self.assertNotEqual(first, common.fixture_template_inputs_digest("dev", str(self.source)))
+            with mock.patch.object(common, "git_head", return_value="head-a"):
+                self.assertEqual(
+                    common.fixture_template_inputs_digest(
+                        "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "subject-a", str(self.source)),
+                    common.fixture_template_inputs_digest(
+                        "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "subject-a", str(self.source)))
+                self.assertNotEqual(
+                    common.fixture_template_inputs_digest(
+                        "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "subject-a", str(self.source)),
+                    common.fixture_template_inputs_digest(
+                        "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "subject-b", str(self.source)))
+            # HEAD 不可读：显式空串落进输入（不签发 unknown），同一状态仍稳定
+            with mock.patch.object(common, "git_head", return_value=None):
+                self.assertEqual(common.fixture_template_inputs_digest("dev", str(self.source)),
+                                 common.fixture_template_inputs_digest("dev", str(self.source)))
+
+    def test_input_identity_stays_within_the_cost_budget(self):
+        """身份核验是公共 barrier 级工作：不能靠逐目录 walk 变成秒级成本。"""
+        import time
+
+        started = time.monotonic()
+        common.test_release_inputs_digest("0.1.0")
+        common.fixture_template_inputs_digest("dev", "0.1.0")
+        self.assertLess(time.monotonic() - started, 3.0, "身份解析超出 3 秒预算")
+
+    def test_template_slot_is_injective_and_keeps_candidate_parts(self):
+        first = common.template_cache_slot("3.11", "candidate", "0.1.2", "refs/tags/wf-v0.1.2")
+        second = common.template_cache_slot("3.11", "candidate", "0.1.2", "refs/tags/wf-v0.1.3")
+        self.assertNotEqual(first, second)
+        for value in (first, second):
+            self.assertRegex(value, r"^[A-Za-z0-9_-]+$")
+        self.assertNotEqual(common.template_cache_slot("3.11", "dev"),
+                            common.template_cache_slot("3.12", "dev"))
+        key = common.template_cache_key("sha256:" + "a" * 64, "3.11", "dev")
+        self.assertTrue(key.startswith("a" * 12 + "-"))
+        with self.assertRaises(common.ReleaseError):
+            common.template_cache_key("not-a-digest", "3.11", "dev")
+
+
 class EnsureAndCheckTest(unittest.TestCase):
     def setUp(self):
         self.cache = tempfile.mkdtemp(prefix="wf-test-release-cache-")
@@ -123,6 +212,21 @@ class EnsureAndCheckTest(unittest.TestCase):
             json.dump(manifest, handle)
         with self.assertRaises(test_release.TestReleaseError):
             test_release.check_meta(self.root, "0.1.0", self.dev)
+
+    def test_meta_carries_build_inputs_and_output_tree_digest(self):
+        _, meta = test_release.ensure_release(self.root, "0.1.0", self.dev)
+        self.assertEqual(meta["schema_version"], 2)
+        self.assertEqual(meta["build_inputs"], common.test_release_inputs_digest("0.1.0"))
+        self.assertEqual(meta["output_tree_digest"], common.tree_digest(self.root))
+        self.assertFalse(os.path.exists(self.root + ".journal.json"), "提交后 journal 必须清掉")
+
+    def test_check_refuses_tampered_release_tree(self):
+        test_release.ensure_release(self.root, "0.1.0", self.dev)
+        target = Path(self.root) / "wf-release.json"
+        target.write_text(target.read_text() + "\n", encoding="utf-8")
+        with self.assertRaises(test_release.TestReleaseError) as caught:
+            test_release.check_meta(self.root, "0.1.0", self.dev)
+        self.assertIn("树摘要", str(caught.exception))
 
     def test_rebuild_is_reused_when_source_unchanged(self):
         test_release.ensure_release(self.root, "0.1.0", self.dev)
