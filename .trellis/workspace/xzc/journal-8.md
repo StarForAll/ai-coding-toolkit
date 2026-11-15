@@ -1135,3 +1135,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 409: wf 运行器身份/锁与 repro 证明边界
+<!-- trellis-session: v=2 fp=3e327a39ee4e41bc -->
+
+**Date**: 2026-11-15
+**Task**: wf 运行器身份/锁与 repro 证明边界
+**Branch**: `main`
+
+### Summary
+
+实现 python_runtime_identity 与发行/模板 build inputs；测试发行/模板 cache 改 canonical 锁+journal+schema 2/1；run_all 三段 frame 与 final plan token、result 锁分域与 scope、namespace 单元域；repro 拆 red subject/execution fingerprint 保留 candidate auto、唯一 inputs bundle、只读 gate 与唯一 writer、state schema 3、inherited release frame；同步 r67/单测/README/spec。验证：T0 961 OK、契约 12 OK、full green 并行/串行 149 项 0 失败逐项对拍、candidate auto 正反例、发行/设计/文档/技能校验 rc 0。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cbc83d77` | fix(test): wf 运行器身份证据、锁域与 repro 证明边界收口 |
+
+### Status
+
+[OK] **Completed**
