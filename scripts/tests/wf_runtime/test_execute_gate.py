@@ -58,10 +58,14 @@ class Base(unittest.TestCase):
         return hashlib.sha256(data).hexdigest(), len(data)
 
     def context(self, deploy="dev", **overrides):
-        payload = {"schema_version": 1, "deploy": deploy,
+        payload = {"schema_version": 2, "deploy": deploy,
                    "release_root": "/tmp/candidate" if deploy == "candidate" else "/tmp/release",
                    "version": "0.1.2", "ref": "refs/tags/wf-v0.1.2",
                    "release_subject": "sha256:subject", "tree_digest": "sha256:tree",
+                   "runtime": {"tool": {"role": "tool", "path_identity": "sha256:t",
+                                        "binary_digest": "sha256:tb"},
+                               "sut": {"role": "sut", "path_identity": "sha256:s",
+                                       "binary_digest": "sha256:sb"}},
                    "candidate": ({"commit": "c" * 40, "tree_digest": "sha256:tree"}
                                  if deploy == "candidate" else None)}
         payload.update(overrides)

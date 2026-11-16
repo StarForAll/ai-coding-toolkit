@@ -1,0 +1,941 @@
+{
+  "groups": {
+    "archive": [
+      "abandon-boundary",
+      "maintenance-disposition-s1",
+      "project-key-archived-evidence",
+      "task-dir-ascii",
+      "task-dir-canonical",
+      "task-replace",
+      "task-replace-preview",
+      "task-rework",
+      "task-rework-handover",
+      "transfer-target-task-field"
+    ],
+    "identity": [
+      "auto-identity-gates",
+      "auto-identity-zero-input",
+      "bind-instance-mismatch",
+      "bind-resume-under-lock",
+      "bind-run",
+      "envelope-cache-and-short",
+      "executor-approval-chain",
+      "executor-project-key-unusable",
+      "executor-tuple-mismatch",
+      "executor-version-change",
+      "f5-4-generation-bool",
+      "git-readiness-no-head",
+      "identity-platform-fact",
+      "r4-1-source-mismatch",
+      "ready-view",
+      "reason-code-table"
+    ],
+    "install": [
+      "branch-source-preview",
+      "install-generation-bumps",
+      "install-lock-foreign-object",
+      "install-lock-realpath",
+      "install-receipt-metadata",
+      "install-receipt-relative",
+      "reinstall-preserves-data",
+      "release-identity-commit",
+      "uninstall-records-maintenance"
+    ],
+    "review": [
+      "baseline-apply-generated",
+      "complexity-bootstrap-exempt",
+      "complexity-human-carrier",
+      "inspect-declares-omitted",
+      "repair-controlled-apply",
+      "review-copies-installed",
+      "review-count-reject",
+      "review-excluded-scope-covers",
+      "review-filename-identity",
+      "review-identity-c6",
+      "review-report-boundary",
+      "review-unavailable"
+    ],
+    "writer": [
+      "gate-run",
+      "handover-two-stage",
+      "stale-writer-facts",
+      "stop-preview-readonly",
+      "stop-under-lock",
+      "stop-unstarted-surface",
+      "terminate-stop-request"
+    ]
+  },
+  "repro": {
+    "abandon-boundary": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "auto-identity-gates": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "auto-identity-zero-input": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "baseline-apply-generated": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "bind-instance-mismatch": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "bind-resume-under-lock": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "bind-run": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "branch-source-preview": {
+      "candidate_clean": true,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "complexity-bootstrap-exempt": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "complexity-human-carrier": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "d21-executor-set-move": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "d21-executor-set-multi-clone": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "d21-executor-set-purge-reconfirm": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "d21-executor-set-venv-rebuild": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "definition-static-check": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "dep-edges": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "enable-disabled-branch": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "envelope-cache-and-short": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "executor-approval-chain": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "executor-project-key-unusable": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "executor-tuple-mismatch": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "executor-version-change": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "external-change-boundary": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "f5-4-generation-bool": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "f7-1-touch-paths": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "f7-3-scope-single-source": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "gate-run": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "git-readiness-no-head": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "handover-two-stage": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "help-covers-write-commands": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "history-anchor-unreachable": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "identity-platform-fact": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "inspect-declares-omitted": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "install-generation-bumps": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "install-lock-foreign-object": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "install-lock-realpath": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "install-receipt-metadata": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "install-receipt-relative": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "maintenance-disposition-s1": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "project-key-archived-evidence": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "r4-1-source-mismatch": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "ready-view": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "reason-code-table": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "identity"
+      ],
+      "metadata": false
+    },
+    "record-missing-in-worktree": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "reinstall-preserves-data": {
+      "candidate_clean": true,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "release-identity-commit": {
+      "candidate_clean": true,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "repair-controlled-apply": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-copies-installed": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-count-reject": {
+      "candidate_clean": false,
+      "groups": [
+        "review"
+      ],
+      "metadata": true
+    },
+    "review-excluded-scope-covers": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-filename-identity": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-identity-c6": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-report-boundary": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-unavailable": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "run-advance-creates-task": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "run-create-once": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "run-finish": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "run-pause-and-advance": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "run-resume": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "run-terminate": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "skill-frontmatter-selfcheck": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-broken-type": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-empty-check": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-empty-stop": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-empty-write": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-missing-check": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-missing-stop": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "snapshot-missing-write": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "spec-three-part-index": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "stale-writer-facts": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "startup-checks-anchor-assets": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "stop-preview-readonly": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "stop-under-lock": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "stop-unstarted-surface": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "task-dir-ascii": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-dir-canonical": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-replace": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-replace-preview": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-rework": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-rework-handover": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "task-start-surface": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    },
+    "terminate-stop-request": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "writer"
+      ],
+      "metadata": false
+    },
+    "transfer-target-task-field": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "archive"
+      ],
+      "metadata": false
+    },
+    "uninstall-records-maintenance": {
+      "candidate_clean": false,
+      "groups": [
+        "install"
+      ],
+      "metadata": true
+    },
+    "wf-repair-handoff": {
+      "candidate_clean": "<missing>",
+      "groups": [],
+      "metadata": false
+    }
+  },
+  "schema_version": 1,
+  "units": {
+    "cp1_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp1_tests.py"
+    },
+    "cp2_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp2_tests.py"
+    },
+    "cp3_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp3_tests.py"
+    },
+    "cp4_a8": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp4_a8.py"
+    },
+    "cp4_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp4_tests.py"
+    },
+    "cp5_b12": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp5_b12.py"
+    },
+    "cp5_b345": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "cp5_b345.py"
+    },
+    "d1_tests": {
+      "candidate_clean": false,
+      "kind": "manual",
+      "script": "d1_tests.py"
+    },
+    "d1_wf_tests": {
+      "candidate_clean": false,
+      "kind": "manual",
+      "script": "d1_wf_tests.py"
+    },
+    "f0": {
+      "candidate_clean": "<missing>",
+      "kind": "flow",
+      "script": "p5_f0.py"
+    },
+    "f1_candidate_smoke": {
+      "candidate_clean": true,
+      "kind": "candidate",
+      "script": "f1_candidate_smoke.py"
+    },
+    "f1_ordinary": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "f1_ordinary.py"
+    },
+    "p5_spec": {
+      "candidate_clean": "<missing>",
+      "kind": "flow",
+      "script": "p5_spec.py"
+    },
+    "p5_v1": {
+      "candidate_clean": false,
+      "kind": "suite",
+      "script": "p5_v1.py"
+    },
+    "p5_v2v3": {
+      "candidate_clean": "<missing>",
+      "kind": "flow",
+      "script": "p5_v2v3.py"
+    },
+    "p5_v5": {
+      "candidate_clean": "<missing>",
+      "kind": "flow",
+      "script": "p5_v5.py"
+    },
+    "r17r24_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r17r24_tests.py"
+    },
+    "r1r2_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r1r2_tests.py"
+    },
+    "r25r30_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r25r30_tests.py"
+    },
+    "r31r34_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r31r34_tests.py"
+    },
+    "r35_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r35_tests.py"
+    },
+    "r35r37_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r35r37_tests.py"
+    },
+    "r38r39_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r38r39_tests.py"
+    },
+    "r40r42_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r40r42_tests.py"
+    },
+    "r43r45_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r43r45_tests.py"
+    },
+    "r46_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r46_tests.py"
+    },
+    "r47r48_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r47r48_tests.py"
+    },
+    "r49_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r49_tests.py"
+    },
+    "r50_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r50_tests.py"
+    },
+    "r51r52_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r51r52_tests.py"
+    },
+    "r53_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r53_tests.py"
+    },
+    "r54_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r54_tests.py"
+    },
+    "r55_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r55_tests.py"
+    },
+    "r56_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r56_tests.py"
+    },
+    "r57_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r57_tests.py"
+    },
+    "r58_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r58_tests.py"
+    },
+    "r59_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r59_tests.py"
+    },
+    "r60_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r60_tests.py"
+    },
+    "r61_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r61_tests.py"
+    },
+    "r62_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r62_tests.py"
+    },
+    "r63_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r63_tests.py"
+    },
+    "r64_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r64_tests.py"
+    },
+    "r65_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r65_tests.py"
+    },
+    "r66_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r66_tests.py"
+    },
+    "r67_tests": {
+      "candidate_clean": false,
+      "kind": "suite",
+      "script": "r67_tests.py"
+    },
+    "r68_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r68_tests.py"
+    },
+    "r69_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r69_tests.py"
+    },
+    "r70_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r70_tests.py"
+    },
+    "r71_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r71_tests.py"
+    },
+    "r72_tests": {
+      "candidate_clean": false,
+      "kind": "extra",
+      "script": "r72_tests.py"
+    },
+    "r74_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r74_tests.py"
+    },
+    "r75_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r75_tests.py"
+    },
+    "r76_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r76_tests.py"
+    },
+    "r77_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r77_tests.py"
+    },
+    "r79_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r79_tests.py"
+    },
+    "r7r15_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r7r15_tests.py"
+    },
+    "r80_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r80_tests.py"
+    },
+    "r81_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r81_tests.py"
+    },
+    "r82_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r82_tests.py"
+    },
+    "r83_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r83_tests.py"
+    },
+    "r84_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r84_tests.py"
+    },
+    "r85_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r85_tests.py"
+    },
+    "r86_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r86_tests.py"
+    },
+    "r87_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r87_tests.py"
+    },
+    "r88_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r88_tests.py"
+    },
+    "r89_tests": {
+      "candidate_clean": true,
+      "kind": "suite",
+      "script": "r89_tests.py"
+    },
+    "r90_tests": {
+      "candidate_clean": false,
+      "kind": "suite",
+      "script": "r90_tests.py"
+    }
+  }
+}

@@ -11,11 +11,15 @@ PYTHON = os.environ.get("WF_TEST_PYTHON") or "/usr/bin/python3"
 # 工具侧解释器（启动 install.py / wf-dev-deploy.py）：与运行器同解释器，与 SUT 驱动面
 # 不共用默认——install.py::runtime_support 用 sys.executable 自检，不受锚点耦合影响。
 TOOL_PYTHON = sys.executable
-# 仓库根与 wflib 路径（替代散落各套件的硬编码绝对路径；WF_TEST_LIB 优先=发行副本）。
+# 仓库根与 wflib 路径（替代散落各套件的硬编码绝对路径）。
 # wfdrive.py 位于 <repo>/scripts/tests/wf_runtime/full/，故上溯 5 层 dirname。
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
-LIB = os.environ.get("WF_TEST_LIB") or os.path.join(REPO, "docs", "workflows", "wf", "payload", "lib")
+# 库来源的唯一 resolver（candidate 禁止回退源码）：本模块只消费结果。
+sys.path.insert(0, os.path.join(REPO, "scripts", "tests", "wf_runtime", "full"))
+import library_source  # noqa: E402
+
+LIB, LIB_SOURCE = library_source.resolve(env=os.environ)
 TS = "2026-11-03T00:00:00.000000Z"
 
 

@@ -465,10 +465,11 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
 - `test_fixture_scope`：哨兵不变、符号链接/重叠拒绝、根运行互斥、归属后重建及结果清理。
 - `test_results_gate`：矛盾 rc/status、无效时间、缺行/重行、shell 列表引用和 repro 模式一致性。
 - `test_runner_hygiene`：G1 `/tmp` 导入注入零命中、G2 pyc 策略、G3 `.gitignore`、G8 假树静态引用全部归类、G9 缺根容错。
-- AC18 的分层断言：正式断言只覆盖"资产落点本身是指向项目外的符号链接"（`WF_ASSET_DECISION`、整批零写入）；
-  "技能根目录（如 `.claude/skills`）指向项目外"时产品当前返回 `WF_OK` 并写穿——以
-  `test_known_gap_install_writes_through_a_symlinked_skill_root` 登记为可复跑证据（逃逸目标仍在 case 的
-  `WF_FIX` owned scope 内，不污染宿主）；修复须同时覆盖 `uninstall.py` 的同判据并走发行重建，属产品侧另行立项。
+- AC18/AC19 的分层断言：资产落点与技能根/祖先都会按"项目→基址→资产"两层包含关系整批拒绝
+  （`WF_ASSET_DECISION`、项目外零写入）；`test_asset_boundaries.py` 用同一参数化矩阵覆盖
+  `install.py`/`uninstall.py`/`wf-dev-deploy.py`，`test_run_all_contract.py` 用真实 CLI 覆盖资产落点与
+  技能根两个向量；uninstall 确认后锁内重新解析根、dev-deploy 预览/首装/追加平台/no-op 均有直接证据。
+  install/uninstall 保持单文件标准库自包含，dev-deploy 只消费本地完整计划，三方同判据、发行树由构建器重建。
 - 契约"无残留"类断言的实现要求：检测残留进程必须**同时**看 `/proc/<pid>/cmdline` 与 `environ`
   （unit worker 的 argv 是 `bash run_one.sh <record>`，scope 只出现在 `WF_TEST_SCOPE_ROOT` 环境里），
   并要有"只带 environ 引用的子进程也会被抓到"的自证用例，否则该断言可能恒空。
@@ -483,7 +484,13 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
 - 2026-11-16 补口：`prepare-results` 重置 `stages`/`plan-calls`（复用目录仍 4/2 行）、case 级共享
   `CaseBudget`（递减 + 耗尽归因）、candidate 不建 dev 发行（release CLI 0 次）、独立 repro=1、
   writer barrier 扫描=1、残留进程检测器自证、teardown 无 FD、template 两个恢复窗口、
-  发布器 staging 父目录回收、AC18 的"资产落点"正式断言 + "技能根符号链接"known-gap。
+  发布器 staging 父目录回收、AC18/AC19 的"资产落点"与"技能根符号链接"正式断言（三方入口）、
+  证据相位/运行身份/摘要发布/清理与命令监督（C→G→S→W）的故障注入套件。
+- 2026-11-16 证据隔离收口：`source_coverage.py --baseline-out` + `candidate-audit.json` 逐 ID 记录
+  candidate 实跑（56/59 suite 通过并提升 `candidate_clean`，3 个保留 dev-only 并记录失败断言）；
+  `repro_select.HELPERS`/`helper_set=core-v2` 把库来源、scope/layout、候选/上下文/摘要/主 shell helper
+  纳入证明输入；`runner_cleanup.py` 聚合命令级 cleanup 并在 unknown 时保留夹具现场；
+  scope 校验前禁写 pyc、`--list`/`--dry-run` 零 pycache/零结果写入。
 - 本任务的边界套件：`test_python_runtime_identity`（路径身份/字节/dedup）、`test_test_release`（输入身份/树核验）、
   `test_release_lock`（ensure×ensure、ensure×check、共享 check、journal 各窗口、fail closed、lease 继承）、
   `test_template_cache`（键/命中/迁移/恢复）、`test_runner_protocol`（frame 编解码与拒绝面）、

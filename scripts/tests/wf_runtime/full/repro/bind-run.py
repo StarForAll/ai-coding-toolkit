@@ -40,6 +40,24 @@ STEP = {
 }
 
 
+def session_key(sid):
+    """会话侧车 key：与 wflib.session.session_key 同算法（provider + identity）。"""
+    payload = {"provider": "host", "identity": {"host_id": "dsh", "session_id": sid}}
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":"),
+                   ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def runtime_record(project, sid):
+    """按会话 key 精确读取运行态侧车；目录里存在旧会话文件时也不得按 readdir 顺序取。"""
+    path = os.path.join(project, ".wf/.runtime/sessions", session_key(sid) + ".json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
 def _definition():
     doc = {"format_version": 1, "workflow_id": "one-step", "content_version": 1,
            "purpose": "一步流程", "applicability": "已有基线", "inputs": {},
@@ -98,15 +116,17 @@ def check():
     if ((facts.get("binding") or {}).get("object") or {}).get("kind") != "run":
         problems.append(f"绑定对象不是实例：{facts.get('binding')}")
 
-    # ② 运行态 current_task 取游标所指任务
-    runtime_dir = os.path.join(project, ".wf/.runtime/sessions")
-    runtime = [json.load(open(os.path.join(runtime_dir, name)))
-               for name in os.listdir(runtime_dir) if name.endswith(".json")]
-    mine = [item for item in runtime if (item.get("object") or {}).get("id") == run_id]
-    if not mine:
-        problems.append("未写本会话的运行态")
-    elif mine[0].get("current_task") != task_id:
-        problems.append(f"运行态 current_task 不是游标任务：{mine[0].get('current_task')}")
+    # ② 运行态 current_task 取游标所指任务。必须按**本会话 key** 精确读取侧车：
+    # 目录里可能同时存在旧会话（sess-BR1）与新会话（sess-BR2）文件，readdir 顺序不是语义，
+    # 取任意 object.id 匹配的文件会把旧会话的正确 current_task 误当成本会话证据。
+    runtime = runtime_record(project, SECOND)
+    if runtime is None:
+        problems.append(f"未写本会话的运行态：{session_key(SECOND)}")
+    else:
+        if (runtime.get("object") or {}).get("id") != run_id:
+            problems.append(f"运行态对象不是本次实例：{runtime.get('object')}")
+        if runtime.get("current_task") != task_id:
+            problems.append(f"运行态 current_task 不是游标任务：{runtime.get('current_task')}")
 
     # ③ 新会话解除暂停后可直接推进（等待当前任务，而不是被绑定挡下）
     rc, payload = run(["run", "resume", "--run", run_id], SECOND)

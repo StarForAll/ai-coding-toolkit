@@ -727,6 +727,19 @@ def add_platforms(args, commit, manifest, writes, skill_roots, branch_findings=N
                 installation = json.load(handle)
             with open(writer_path, "r", encoding="utf-8") as handle:
                 writer = json.load(handle)
+            # 项目→基址→资产的第一层/第二层边界必须在任何冲突读取与写入前复核：
+            # 历史域外 root_ref 明确拒绝（不序列化成合法绝对根，也不跟随它清理外部）。
+            root_problems = registered_root_problems(args.target, installation)
+            if root_problems:
+                return blocked("WF_ASSET_DECISION",
+                               "安装记录中的技能根域外/不可解析：整批拒绝，不改历史记录、不删除外部对象",
+                               {"problems": root_problems[:20]}, args.json)
+            # 锁内重算计划：锁外传入的 writes 只能作为输入，不能作为写入许可。
+            writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
+            if plan_problems:
+                return blocked("WF_ASSET_DECISION",
+                               "锁内复核发现资产越界：整批拒绝，不写任何文件",
+                               {"problems": plan_problems[:20]}, args.json)
             if installation.get("source_commit") != commit:
                 return blocked("WF_ASSET_DECISION",
                                "已安装的发行引用与本次不同：追加平台只允许同引用；升级走 wf.py upgrade（第三轮）",
@@ -1028,6 +1041,12 @@ def main(argv=None):
 
     try:
         with lock:
+            # 锁内全批复核（首装）：路径/落点/类别必须在 mkdir .wf 与任何写入之前重新成立。
+            writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
+            if plan_problems:
+                return blocked("WF_ASSET_DECISION",
+                               "锁内复核发现资产越界：整批拒绝，不写任何文件",
+                               {"problems": plan_problems[:20]}, args.json)
             operation_id = f"install-{uuid.uuid4().hex}"
             os.makedirs(os.path.join(args.target, ".wf"), exist_ok=True)
             writer = {
@@ -1162,11 +1181,80 @@ def safe_relative(relative):
     return True
 
 
+def _resolve_location(path):
+    """规范落点：解析现有祖先符号链接与 `..`，尚不存在的末段按组件拼接。
+
+    不以“目标是否已存在”决定是否解析——否则先建好 symlink 再重跑就能绕过边界。
+    """
+    raw = os.path.abspath(str(path))
+    current = os.sep
+    for part in [item for item in raw.split(os.sep) if item]:
+        if part == ".":
+            continue
+        if part == "..":
+            current = os.path.dirname(current)
+            continue
+        nxt = os.path.join(current, part)
+        if os.path.islink(nxt):
+            if not os.path.exists(nxt):
+                raise ValueError(f"path component is a broken symlink: {nxt}")
+            current = os.path.realpath(nxt)
+        else:
+            current = nxt
+    return os.path.normpath(current)
+
+
+def _contains(base, path):
+    return path == base or path.startswith(base + os.sep)
+
+
+def boundary_problem(project_root, base, destination):
+    """两层包含关系：项目→基址、基址/项目→资产实际落点（任一失败即整批拒绝）。"""
+    try:
+        project = _resolve_location(project_root)
+        base_real = _resolve_location(base)
+        dest_real = _resolve_location(destination)
+    except ValueError as exc:
+        return {"reason": "path contains a broken symlink", "detail": str(exc),
+                "base": str(base), "path": str(destination)}
+    if not _contains(project, base_real):
+        return {"reason": "asset base resolves outside the project root",
+                "base": str(base), "resolved": base_real, "project": project}
+    if not _contains(base_real, dest_real):
+        return {"reason": "target resolves outside its base", "base": str(base),
+                "path": str(destination), "resolved": dest_real}
+    if not _contains(project, dest_real):
+        return {"reason": "target resolves outside the project root", "path": str(destination),
+                "resolved": dest_real, "project": project}
+    return None
+
+
 def inside(base, path):
-    """真实落点必须仍在基址内（防符号链接逃逸）。"""
+    """兼容旧调用：真实落点必须仍在基址内（防符号链接逃逸）。"""
     base_real = os.path.realpath(str(base))
     path_real = os.path.realpath(str(path))
     return path_real == base_real or path_real.startswith(base_real + os.sep)
+
+
+def registered_root_problems(target, installation):
+    """历史 root_ref：项目内相对/绝对根可用；域外绝对根明确拒绝（不改历史记录、不删外部）。"""
+    problems = []
+    project = _resolve_location(target)
+    for root_ref in installation.get("roots") or []:
+        if not isinstance(root_ref, str) or not root_ref:
+            problems.append({"reason": "skill root reference invalid", "root": root_ref})
+            continue
+        base = root_ref if os.path.isabs(root_ref) else os.path.join(os.path.abspath(target), root_ref)
+        try:
+            resolved = _resolve_location(base)
+        except ValueError as exc:
+            problems.append({"reason": "skill root has a broken symlink", "root": root_ref,
+                             "detail": str(exc)})
+            continue
+        if not _contains(project, resolved):
+            problems.append({"reason": "registered skill root resolves outside the project root",
+                             "root": root_ref, "resolved": resolved, "project": project})
+    return problems
 
 
 def plan_writes(target, skill_roots, manifest):
@@ -1192,9 +1280,10 @@ def plan_writes(target, skill_roots, manifest):
         bases = [target_of(target)] if target_class == "project_wf" else list(skill_roots)
         for base in bases:
             destination = os.path.join(base, *relative.split("/"))
-            if not inside(base, destination):
-                problems.append({"reason": "target resolves outside its base", "base": str(base),
-                                 "path": relative})
+            problem = boundary_problem(target, base, destination)
+            if problem:
+                problem = dict(problem, path=relative, target_class=target_class)
+                problems.append(problem)
                 continue
             writes.append((base, asset, relative))
     if problems:

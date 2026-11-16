@@ -17,9 +17,15 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import shlex
 from pathlib import Path
 import sys
+
+# 模块级导入依赖：坏 bundle/不可读路径也必须给出**稳定归因**，不能在 except 子句里
+# NameError 二次崩溃（正常路径与显式路径共用同一解析过程）。
+sys.path.insert(0, str(Path(__file__).resolve().parent / "repro"))
+import repro_select  # noqa: E402
 
 
 def gate(path, expected):
@@ -70,27 +76,30 @@ def repro_gate(root, bundle_path=None, expected_sha=None, expected_size=None):
     """**只读**结构校验：不写 state、不恢复缓存；输出结构报告与机器汇总。
 
     writer 是父 shell 启动的独立子进程；本函数报告的结构是否成立决定可否启动它。
-    bundle 是唯一冻结来源，与 R 传入的初始 digest/长度比对。
+    bundle 是唯一冻结来源，与 R 传入的初始 digest/长度比对。默认 bundle 与显式
+    `--bundle` 走同一解析过程（不依赖环境变量才能工作）。
     """
     root = Path(root)
     bundle_file = Path(bundle_path or os.environ.get('WF_REPRO_INPUTS_FILE') or (root / 'inputs.json'))
     try:
         data = bundle_file.read_bytes()
     except OSError as exc:
-        raise ValueError(f'bundle unreadable: {exc}') from exc
+        print(f'REPRO-RESULTS-INVALID: bundle unreadable: {exc}', file=sys.stderr)
+        print(f'REPRO_STRUCTURAL_OK=0')
+        return 1
     sha = hashlib.sha256(data).hexdigest()
     structural = True
     if expected_sha and sha != expected_sha:
         print('REPRO-BUNDLE-CHANGED: digest', file=sys.stderr)
         structural = False
-    if expected_size and len(data) != int(expected_size):
+    if expected_size is not None and str(len(data)) != str(expected_size):
         print('REPRO-BUNDLE-CHANGED: size', file=sys.stderr)
         structural = False
     try:
         bundle = json.loads(data)
+        if not isinstance(bundle, dict):
+            raise ValueError('bundle must be a JSON object')
         bundle['__sha256'] = sha
-        sys.path.insert(0, str(Path(__file__).parent / 'repro'))
-        import repro_select
         report = repro_select.validate_repro(str(root), bundle)
     except (ValueError, TypeError, KeyError, repro_select.SelectError) as exc:
         print(f'REPRO-RESULTS-INVALID: {exc}', file=sys.stderr)
@@ -105,7 +114,13 @@ def repro_gate(root, bundle_path=None, expected_sha=None, expected_size=None):
     print(f'REPRO_PASSED={len(passed)}')
     print(f'REPRO_FAILED={failed}')
     for phase in ('green', 'red'):
-        seconds = sum(record.get(phase + '_seconds', 0) for record in report['records'].values())
+        seconds = 0
+        for record in report['records'].values():
+            value = record.get(phase + '_seconds', 0)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value) or value < 0:
+                structural = False
+                continue
+            seconds += value
         print(f'REPRO_{phase.upper()}_SECONDS={int(seconds)}')
     print('REPRO_BUNDLE_SHA256=' + sha)
     print('REPRO_BUNDLE_SIZE=' + str(len(data)))

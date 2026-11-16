@@ -105,6 +105,92 @@ class BootstrapTest(unittest.TestCase):
         with self.assertRaises(candidate.CandidateError):
             candidate.ensure(self.tree, "9.9", self.out)
 
+    def test_input_a_candidate_b_is_never_reused(self):
+        """输入树/候选内容不一致（A→B）不得误报 REUSED，也不能借 meta 升级。"""
+        candidate.ensure(self.tree, "9.9.9", self.out)
+        with open(os.path.join(self.tree, "wf-release", "task-flow.md"), "w",
+                  encoding="utf-8") as handle:
+            handle.write("# other content\n")
+        with self.assertRaises(candidate.CandidateError):
+            candidate.check(self.tree, "9.9.9", self.out)
+        root, meta, status = candidate.ensure(self.tree, "9.9.9", self.out)
+        self.assertEqual(status, "BUILT")
+        self.assertEqual(meta["input_tree_digest"], candidate.common.tree_digest(self.tree))
+
+    def test_tag_head_and_meta_drift_are_refused(self):
+        candidate.ensure(self.tree, "9.9.9", self.out)
+        with open(self.out + ".meta.json", encoding="utf-8") as handle:
+            meta = json.load(handle)
+        for field, value in (("commit", "0" * 40), ("tree_digest", "sha256:" + "0" * 64),
+                             ("schema_version", 1), ("tag", "wf-v0.0.0")):
+            with self.subTest(field=field):
+                tampered = dict(meta)
+                tampered[field] = value
+                with open(self.out + ".meta.json", "w", encoding="utf-8") as handle:
+                    json.dump(tampered, handle)
+                with self.assertRaises(candidate.CandidateError):
+                    candidate.check(self.tree, "9.9.9", self.out)
+        with open(self.out + ".meta.json", "w", encoding="utf-8") as handle:
+            json.dump(meta, handle)
+        # HEAD 与 tag 提交不一致（额外提交但未改 tag）
+        candidate.git(self.out, "commit", "--allow-empty", "-qm", "drift")
+        with self.assertRaises(candidate.CandidateError):
+            candidate.check(self.tree, "9.9.9", self.out)
+
+    def test_unowned_output_is_never_adopted_or_overwritten(self):
+        os.makedirs(self.out)
+        with open(os.path.join(self.out, "keep"), "w", encoding="utf-8") as handle:
+            handle.write("mine\n")
+        with self.assertRaises(candidate.CandidateError):
+            candidate.ensure(self.tree, "9.9.9", self.out)
+        self.assertTrue(os.path.isfile(os.path.join(self.out, "keep")))
+
+    def test_failed_rebuild_keeps_the_valid_previous_generation(self):
+        candidate.ensure(self.tree, "9.9.9", self.out)
+        before = candidate.verify_candidate(self.tree, "9.9.9", self.out)
+        # 让新代构建失败：产物内容与输入树不一致（在 copy 后注入，模拟发布验证失败）。
+        original_copy = candidate.copy_tree
+
+        def broken_copy(tree, dest):
+            original_copy(tree, dest)
+            with open(os.path.join(dest, "extra.md"), "w", encoding="utf-8") as handle:
+                handle.write("unexpected\n")
+
+        with open(os.path.join(self.tree, "wf-release", "task-flow.md"), "w",
+                  encoding="utf-8") as handle:
+            handle.write("# changed input\n")
+        candidate.copy_tree = broken_copy
+        try:
+            with self.assertRaises(candidate.CandidateError):
+                candidate.ensure(self.tree, "9.9.9", self.out)
+        finally:
+            candidate.copy_tree = original_copy
+        # 旧代仍在，并可通过旧输入树完整验证（恢复能力未丢）。
+        with open(os.path.join(self.tree, "wf-release", "task-flow.md"), "w",
+                  encoding="utf-8") as handle:
+            handle.write("# flow\n")
+        after = candidate.verify_candidate(self.tree, "9.9.9", self.out)
+        self.assertEqual(after["commit"], before["commit"])
+        self.assertEqual(after["tree_digest"], before["tree_digest"])
+
+    def test_check_does_not_refresh_the_git_index(self):
+        candidate.ensure(self.tree, "9.9.9", self.out)
+        index = Path(self.out) / ".git" / "index"
+        before = (index.stat().st_ino, index.stat().st_mtime_ns, index.stat().st_size)
+        candidate.check(self.tree, "9.9.9", self.out)
+        after = (index.stat().st_ino, index.stat().st_mtime_ns, index.stat().st_size)
+        self.assertEqual(after, before, "check 必须使用 GIT_OPTIONAL_LOCKS=0，不刷新索引")
+
+    def test_reuse_is_read_only_and_stable(self):
+        candidate.ensure(self.tree, "9.9.9", self.out)
+        before = (os.stat(self.out + ".meta.json").st_mtime_ns,
+                  candidate.common.tree_digest(self.out))
+        root, meta, status = candidate.ensure(self.tree, "9.9.9", self.out)
+        self.assertEqual(status, "REUSED")
+        after = (os.stat(self.out + ".meta.json").st_mtime_ns,
+                 candidate.common.tree_digest(self.out))
+        self.assertEqual(after, before, "复用不得改写候选或刷新证明")
+
 
 if __name__ == "__main__":
     unittest.main()

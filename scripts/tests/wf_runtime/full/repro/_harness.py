@@ -35,22 +35,14 @@ def release_tag(ref=None):
 
 
 def test_lib():
-    """wflib 来源：夹具项目 `.wf/lib` → `WF_TEST_LIB` → 源码 payload/lib（仅 dev 回退）。
+    """wflib 来源：夹具项目 `.wf/lib` → `WF_TEST_LIB` → 源码 payload/lib（仅 dev）。
 
-    前两个都是“安装产物/发行副本”；源码回退只用于 stage 注入类用例，
-    这类用例的 `candidate_clean` 必须是 false（见 repro/groups.json）。
+    唯一 resolver 在 `full/library_source.py`：candidate 部署禁止源码回退；stage 注入类
+    白盒用例的 `candidate_clean` 必须是 false（见 repro/groups.json）。
     """
-    candidates = []
-    fix = os.environ.get("WF_FIX")
-    if fix:
-        candidates.append(os.path.join(fix, ".wf", "lib"))
-    if os.environ.get("WF_TEST_LIB"):
-        candidates.append(os.environ["WF_TEST_LIB"])
-    candidates.append(os.path.join(PAYLOAD, "lib"))
-    for candidate in candidates:
-        if candidate and os.path.isdir(os.path.join(candidate, "wflib")):
-            return candidate
-    return os.path.join(PAYLOAD, "lib")
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    import library_source
+    return library_source.resolve(env=os.environ)[0]
 
 
 _STAGED = []

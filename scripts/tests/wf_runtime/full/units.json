@@ -10,7 +10,7 @@
         "writer"
       ],
       "representative": true,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "cp2_tests",
@@ -21,7 +21,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "cp3_tests",
@@ -33,7 +33,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false,
+      "candidate_clean": true,
       "isolated_user": true,
       "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（plan.py 下发 PLAN_ISOLATED_SUITES，run_all/run_one 同一成员判定）"
     },
@@ -47,7 +47,7 @@
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "cp4_a8",
@@ -57,7 +57,7 @@
         "uninstall"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "cp5_b345",
@@ -68,7 +68,7 @@
         "capability"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "cp5_b12",
@@ -79,7 +79,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r1r2_tests",
@@ -90,7 +90,7 @@
         "executor"
       ],
       "representative": false,
-      "candidate_clean": false,
+      "candidate_clean": true,
       "isolated_user": true,
       "notes": "执行器确认写用户配置：经 execution.py --isolated-user 用合成 HOME（同 cp3_tests）"
     },
@@ -103,8 +103,8 @@
         "writer"
       ],
       "representative": true,
-      "candidate_clean": false,
-      "notes": "大状态机广覆盖；硬编码源码 payload/lib → candidate_clean=false"
+      "candidate_clean": true,
+      "notes": "大状态机广覆盖；经 wfdrive.LIB 使用安装库（candidate 审计通过）"
     },
     {
       "name": "r17r24_tests",
@@ -115,7 +115,7 @@
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r25r30_tests",
@@ -126,7 +126,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r31r34_tests",
@@ -137,7 +137,7 @@
         "task-lifecycle"
       ],
       "representative": true,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r35_tests",
@@ -148,7 +148,7 @@
         "install"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r35r37_tests",
@@ -159,7 +159,7 @@
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r38r39_tests",
@@ -170,7 +170,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r40r42_tests",
@@ -181,7 +181,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r43r45_tests",
@@ -192,7 +192,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r46_tests",
@@ -203,7 +203,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r47r48_tests",
@@ -214,7 +214,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r49_tests",
@@ -225,7 +225,7 @@
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r50_tests",
@@ -236,7 +236,7 @@
         "spec"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r51r52_tests",
@@ -247,7 +247,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r53_tests",
@@ -258,7 +258,7 @@
         "artifact"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r54_tests",
@@ -269,7 +269,7 @@
         "plan"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r55_tests",
@@ -280,7 +280,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r56_tests",
@@ -291,7 +291,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r57_tests",
@@ -302,7 +302,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r58_tests",
@@ -313,7 +313,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r59_tests",
@@ -324,7 +324,7 @@
         "archive"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r60_tests",
@@ -335,7 +335,7 @@
         "scope"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r61_tests",
@@ -346,7 +346,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r62_tests",
@@ -356,7 +356,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r63_tests",
@@ -367,7 +367,7 @@
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r64_tests",
@@ -377,7 +377,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r65_tests",
@@ -388,7 +388,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r66_tests",
@@ -399,7 +399,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r67_tests",
@@ -411,7 +411,8 @@
         "runner"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": false,
+      "notes": "fake-tree runner contract audit：构造假 runner 树验证门禁/协议，不是安装项目行为用例；candidate 部署不是其目标"
     },
     {
       "name": "r68_tests",
@@ -423,8 +424,8 @@
         "baseline"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "notes": "审查/修复/基线；硬编码源码 payload/lib → candidate_clean=false"
+      "candidate_clean": true,
+      "notes": "审查/修复/基线；经 wfdrive.LIB 使用安装库（candidate 审计通过）"
     },
     {
       "name": "r69_tests",
@@ -436,7 +437,7 @@
         "install"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r70_tests",
@@ -448,7 +449,7 @@
         "install"
       ],
       "representative": true,
-      "candidate_clean": false,
+      "candidate_clean": true,
       "notes": "审查判定输入面；与 test_review_coverage/test_report_boundary 部分重叠（Phase 2 映射）"
     },
     {
@@ -461,7 +462,7 @@
         "instance"
       ],
       "representative": true,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r74_tests",
@@ -473,7 +474,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r75_tests",
@@ -485,7 +486,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r76_tests",
@@ -496,7 +497,7 @@
         "instance"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r77_tests",
@@ -507,7 +508,7 @@
         "config"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r79_tests",
@@ -518,7 +519,7 @@
         "security"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r80_tests",
@@ -529,7 +530,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r81_tests",
@@ -540,7 +541,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r82_tests",
@@ -551,7 +552,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r83_tests",
@@ -562,7 +563,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r84_tests",
@@ -573,7 +574,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r85_tests",
@@ -584,7 +585,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r86_tests",
@@ -595,7 +596,7 @@
         "gate"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r87_tests",
@@ -606,7 +607,7 @@
         "writer"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r88_tests",
@@ -617,7 +618,7 @@
         "instance"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r89_tests",
@@ -628,7 +629,7 @@
         "identity"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r90_tests",
@@ -650,7 +651,7 @@
         "archive"
       ],
       "representative": true,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "p5_v1",

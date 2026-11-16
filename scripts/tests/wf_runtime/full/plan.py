@@ -22,7 +22,18 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 UNITS_JSON = os.path.join(HERE, "units.json")
 LEGACY_SUITES_JSON = os.path.join(HERE, "suites.json")
 GROUPS_JSON = os.path.join(HERE, "repro", "groups.json")
-DEFAULT_FIX = f"/tmp/wf-fixtures/run-{os.getpid()}"
+
+
+def _repo_root():
+    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
+
+
+# 作者侧路径/scope 唯一所有者（假树必须复制它，不提供“缺 helper 就跳过校验”的兼容）。
+sys.path.insert(0, os.path.join(_repo_root(), "scripts"))
+import wf_test_paths  # noqa: E402
+
+DEFAULT_FIX = os.path.join(  # 无 scope 时的历史默认（scope 下由 wf_test_paths 派生）
+    "/tmp", "wf-fixtures", f"run-{os.getpid()}")
 DEFAULT_JOBS = min(8, os.cpu_count() or 4)   # 执行单元默认并行数（不超过物理核，防少核机器超订）
 DEFAULT_REPRO_JOBS = min(8, os.cpu_count() or 4)  # repro 用例层默认并行数（同上）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
@@ -51,6 +62,7 @@ FAKE_TREE_COPY = (
     "plan.py",
     "units.json",
     "repro/groups.json",
+    "repro/repro_select.py",
     "results_gate.py",
     "execution.py",
     "fixture_scope.py",
@@ -61,6 +73,9 @@ FAKE_TREE_COPY = (
     "runner_protocol.py",
     "release_context.py",
     "execute_gate.py",
+    "results_summary.py",
+    "library_source.py",
+    "runner_cleanup.py",
 )
 FAKE_TREE_STUB = (
     "run_one.sh",
@@ -144,10 +159,6 @@ def load_units(path=UNITS_JSON):
 def load_groups(path=GROUPS_JSON):
     with open(path, encoding="utf-8") as handle:
         return json.load(handle)
-
-
-def _repo_root():
-    return os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 
 
 def _dev_manifest_version():
@@ -548,10 +559,14 @@ def plan(argv=None, env=None):
         no_template_cache = True   # WF_NO_TEMPLATE = 关闭整套模板机制（含缓存）
 
     # ---- 测试发行（仅 dev）-----------------------------------------------
+    try:
+        # 管理路径的唯一规则：scope 下的默认值从 scope 派生；显式域外路径在计划期拒绝。
+        layout = wf_test_paths.resolve_layout("run", os.getpid(), env=env)
+    except wf_test_paths.PathError as exc:
+        raise PlanError(f"scope 路径校验失败（首次写前拒绝）：{exc}")
     if fixture_deploy == "dev":
         version = resolve_test_release_version(env=env)
-        cache = env.get("WF_TEST_RELEASE_CACHE") or os.path.join(os.path.expanduser("~"), ".cache",
-                                                                 "wf-test-release")
+        cache = env.get("WF_TEST_RELEASE_CACHE") or str(layout["test_release"])
         test_release_root = os.path.join(cache, version)
         test_release_ref = f"refs/tags/wf-v{version}"
     else:
@@ -566,15 +581,15 @@ def plan(argv=None, env=None):
     # PLAN_ISOLATED_UNITS 做成员判定——套件特判不进 bash 分支）。
     isolated_units = [entry["name"] for entry in unit_entries if entry.get("isolated_user")]
 
-    results_dir = env.get("WF_RESULTS_DIR") or os.path.join(
-        os.path.expanduser("~"), ".cache", "wf-test-run", f"run-{os.getpid()}")
+    results_dir = env.get("WF_RESULTS_DIR") or str(layout["results_dir"])
+    fix = env.get("WF_FIX") or str(layout["fixture"])
     list_only = bool(args.list or args.dry_run)
     return {
         "mode": mode,
         "full_mode": 1 if mode == "full" else 0,
         "parallel": 1 if jobs > 1 else 0,
         "jobs": jobs,
-        "fix": env.get("WF_FIX") or DEFAULT_FIX,
+        "fix": fix,
         "units": [{"name": entry["name"], "kind": entry["kind"],
                    "expect": entry.get("expect"), "fixture": entry.get("fixture", "template"),
                    "script": entry.get("script", entry["name"] + ".py")}
@@ -646,17 +661,14 @@ def describe(result):
 def note_plan_call(result, argv):
     """计划调用计数（design §5.2 的合同计数）：只在本进程真的计算了计划时记一行。
 
-    写入位置优先级：`WF_PLAN_LOG`（preflight 的 bootstrap 文件）→ `$WF_RESULTS_DIR/plan-calls`。
-    两端都不存在或不可写时静默跳过（计数是证据，不是门禁）。
+    唯一写入位置是 `WF_PLAN_LOG`（claim 之后由 lease 阶段指向结果目录）；没有该定位就不写，
+    绝不为了计数创建 bootstrap 文件或让 list/dry-run 产生副作用。
     """
     if "--plan-file" in argv:
         return
     path = os.environ.get("WF_PLAN_LOG")
     if not path:
-        results = os.environ.get("WF_RESULTS_DIR")
-        if not results:
-            return
-        path = os.path.join(results, "plan-calls")
+        return
     directory = os.path.dirname(path) or "."
     if not os.path.isdir(directory):
         return

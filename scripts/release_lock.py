@@ -18,6 +18,9 @@ import fcntl
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import wf_test_paths  # noqa: E402  （scope 下锁路径同样必须在首次创建前核验）
+
 
 class LockError(Exception):
     """可预期的拒绝。"""
@@ -33,6 +36,10 @@ def lock_path(root):
 
 def open_lock(root):
     path = lock_path(root)
+    try:
+        wf_test_paths.require_in_scope(root, path)
+    except wf_test_paths.PathError as exc:
+        raise LockError(str(exc)) from exc
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     if os.path.islink(path):
         raise LockError(f"release lock must not be a symlink: {path}")

@@ -26,6 +26,7 @@ import datetime
 import glob
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -36,12 +37,23 @@ FULL = os.path.dirname(HERE)
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 GROUPS_JSON = os.path.join(HERE, "groups.json")
 HELPERS = ("_harness.py", "_release.py", "_review_flow.py", "_review_launch.py",
-           "_snapshot.py", "_executor_set.py", "_worker.py")
+           "_snapshot.py", "_executor_set.py", "_worker.py",
+           # 公共 helper 必须全部进入证明身份：这些文件改变行为（库来源、scope/layout、
+           # 候选最终校验、发行上下文、结果/摘要判定、主 runner shell）时，旧 red/green
+           # 证明必须失去资格，而不是按“版本号相同”继续复用。
+           "../library_source.py", "../prepare_candidate_repo.py", "../release_context.py",
+           "../results_gate.py", "../results_summary.py", "../fixture_scope.py",
+           "../execute_gate.py", "../run_all.sh", "../../../../wf_test_paths.py")
 RUNNER_FILES = ("repro_select.py", "run.sh")
-STATE_SCHEMA = 3
-BUNDLE_SCHEMA = 2
-CONTEXT_SCHEMA = 1
+# 协议成组升级：bundle/state/context 一次性换代，旧证明只作 legacy（不静默兼容）。
+STATE_SCHEMA = 4
+BUNDLE_SCHEMA = 3
+CONTEXT_SCHEMA = 2
+RELEASE_CONTEXT_SCHEMA = 2
 PHASES = {"green": ("green",), "red": ("red",), "both": ("green", "red")}
+
+sys.path.insert(0, os.path.join(REPO, "scripts"))
+import wf_test_paths  # noqa: E402
 
 
 class SelectError(Exception):
@@ -134,21 +146,34 @@ def targets_digest(case, meta):
     return digest(values)
 
 
+def _identity_projection(resolved):
+    """完整运行身份的对外投影：只留摘要与 role/version 诊断，不转存环境/路径值。"""
+    return {"role": resolved["role"],
+            "path_identity": resolved["path_identity"],
+            "binary_digest": resolved["binary"]["digest"],
+            "invocation_digest": resolved["invocation_file"]["digest"],
+            "implementation": resolved["implementation"],
+            "version": resolved["version"]}
+
+
 def _runtime_identity():
+    """tool/SUT 的完整身份（调用文件字节 + 解释器二进制字节 + 路径身份 + 实现/版本）。
+
+    任一项解析不出即拒绝本次运行（不签发空身份，也不用“版本号相同”冒充相同运行时）。
+    """
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     try:
         import python_runtime_identity as identity
-    except ImportError:  # 假环境
-        return {}
-    runner = os.path.join(HERE, "_worker.py")
-    sut = os.path.join(FULL, "f1_init.py")
+    except ImportError as exc:  # 假环境缺少 helper 是配置错误，不是可跳过条件
+        raise SelectError(f"runtime identity helper is unavailable: {exc}") from exc
+    resolver = identity.Resolver()
     try:
-        return {"tool": identity.resolve("tool", runner)["path_identity"],
-                "sut": identity.resolve("sut", sut)["path_identity"],
-                "implementation": sys.implementation.name,
-                "version": "%d.%d.%d" % sys.version_info[:3]}
-    except identity.IdentityError:
-        return {}
+        return {"tool": _identity_projection(
+                    resolver.resolve("tool", os.path.join(HERE, "_worker.py"))),
+                "sut": _identity_projection(
+                    resolver.resolve("sut", os.path.join(FULL, "f1_init.py")))}
+    except identity.IdentityError as exc:
+        raise SelectError(f"runtime identity is unresolved: {exc}") from exc
 
 
 def release_context():
@@ -161,8 +186,12 @@ def release_context():
                 context = json.load(handle)
         except (OSError, ValueError) as exc:
             raise SelectError(f"release context unreadable: {path}") from exc
-        if context.get("schema_version") != CONTEXT_SCHEMA or not context.get("release_subject"):
-            raise SelectError("release context schema/subject invalid")
+        if context.get("schema_version") != RELEASE_CONTEXT_SCHEMA:
+            raise SelectError(
+                f"release context schema must be {RELEASE_CONTEXT_SCHEMA}; "
+                "old contexts are not accepted (re-run the runner)")
+        if not context.get("release_subject") or not isinstance(context.get("runtime"), dict):
+            raise SelectError("release context schema/subject/runtime invalid")
         return context
     root = os.environ.get("WF_RELEASE_TREE")
     version = os.environ.get("WF_RELEASE_VERSION") or ""
@@ -176,10 +205,12 @@ def release_context():
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     import wf_release_common as common
     subject = common.release_subject(root, version, ref)
-    return {"schema_version": CONTEXT_SCHEMA, "deploy": os.environ.get("WF_FIXTURE_DEPLOY", "dev"),
+    return {"schema_version": RELEASE_CONTEXT_SCHEMA,
+            "deploy": os.environ.get("WF_FIXTURE_DEPLOY", "dev"),
             "release_root": os.path.realpath(root), "version": version, "ref": ref,
             "release_subject": subject["digest"], "tree_digest": subject["subject"]["tree"],
             "manifest_digest": subject["subject"]["manifest"],
+            "runtime": _runtime_identity(),
             "candidate": ({"commit": None} if os.environ.get("WF_FIXTURE_DEPLOY") == "candidate" else None)}
 
 
@@ -187,7 +218,7 @@ def execution_context():
     """本次真实执行身份（green 结果与 proof 用）。生产一次，随 bundle 冻结。"""
     context = release_context()
     return {
-        "schema_version": 1,
+        "schema_version": CONTEXT_SCHEMA,
         "deploy": context.get("deploy") or os.environ.get("WF_FIXTURE_DEPLOY", "dev"),
         "release_subject": context["release_subject"],
         "release_root_identity": digest({"root": context.get("release_root"),
@@ -201,7 +232,8 @@ def execution_context():
 
 def public_inputs():
     """公共输入的**唯一**产生点：source/helpers/executor/runner 一次算齐并冻结进 bundle。"""
-    return {"source": source_digest(),
+    return {"helper_set": "core-v2",
+            "source": source_digest(),
             "helpers": helpers_digest(),
             "executor": file_digest(os.path.join(FULL, "execution.py")),
             "runner": {name: file_digest(os.path.join(HERE, name)) for name in RUNNER_FILES}}
@@ -327,8 +359,11 @@ def bundle_document(selection):
 
 
 def state_path():
-    cache = os.environ.get("WF_TEST_RUN_CACHE") or os.path.join(os.path.expanduser("~"),
-                                                               ".cache", "wf-test-run")
+    cache = os.environ.get("WF_TEST_RUN_CACHE")
+    if not cache:
+        cache = (str(wf_test_paths.resolve_layout()["state"])
+                 if wf_test_paths.current_scope() is not None
+                 else os.path.join(os.path.expanduser("~"), ".cache", "wf-test-run"))
     return os.path.join(cache, "repro-state.json")
 
 
@@ -343,8 +378,8 @@ def read_state():
         raise SelectError(f"repro state is unreadable; refusing to replace it: {path}") from exc
     if not isinstance(state, dict) or not isinstance(state.get("cases"), dict):
         raise SelectError(f"repro state has an invalid shape; refusing to replace it: {path}")
-    if state.get("schema_version") in (1, 2):
-        # 旧内容保留但不算证明：不推导 context/subject。
+    if state.get("schema_version") in (1, 2, 3):
+        # 旧内容保留但不算证明：旧 green/red 一律只作 legacy，不推导 context/subject。
         state = {"schema_version": STATE_SCHEMA,
                  "cases": {name: {"legacy": record} for name, record in state["cases"].items()}}
     elif state.get("schema_version") != STATE_SCHEMA:
@@ -354,6 +389,10 @@ def read_state():
 
 def write_state(state):
     path = state_path()
+    try:
+        wf_test_paths.require_in_scope(path)
+    except wf_test_paths.PathError as exc:
+        raise SelectError(f'repro state path escapes the test scope: {exc}') from exc
     os.makedirs(os.path.dirname(path), exist_ok=True)
     handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=os.path.dirname(path),
                                          prefix=".state-", delete=False, suffix=".json")
@@ -398,12 +437,24 @@ def validate_bundle(bundle):
             f"bundle schema invalid: {bundle.get('schema_version') if isinstance(bundle, dict) else None}"
             f"（只接受 schema {BUNDLE_SCHEMA}；bundle 是每 run 产物，不迁移旧 schema）")
     context = bundle.get("execution_context") or {}
+    if context.get("schema_version") != CONTEXT_SCHEMA:
+        raise SelectError(
+            f"bundle execution context schema must be {CONTEXT_SCHEMA}（旧上下文不迁移、不混读）")
     for key in ("deploy", "release_subject", "runtime", "platform"):
         if not context.get(key):
             raise SelectError(f"bundle execution context missing {key}")
+    runtime = context.get("runtime") or {}
+    for role in ("tool", "sut"):
+        projection = runtime.get(role)
+        if not isinstance(projection, dict) or not projection.get("path_identity") \
+                or not projection.get("binary_digest") or not projection.get("version"):
+            raise SelectError(f"bundle runtime identity is incomplete for role {role}")
     public = bundle.get("public_inputs")
     if not isinstance(public, dict):
         raise SelectError("bundle has no public_inputs")
+    if public.get("helper_set") != "core-v2":
+        raise SelectError(
+            "bundle public_inputs helper set is stale（公共 helper 身份已换代；重新运行以重新冻结）")
     for key in ("source", "helpers", "executor"):
         if not public.get(key):
             raise SelectError(f"bundle public_inputs missing {key}")
@@ -449,8 +500,11 @@ def validate_repro(root, bundle):
                 raise SelectError("contradictory case/mode/phase result")
             for phase in ("green", "red"):
                 seconds = record.get(phase + "_seconds", 0)
-                if not isinstance(seconds, (int, float)) or seconds < 0:
+                if (not isinstance(seconds, (int, float)) or isinstance(seconds, bool)
+                        or not math.isfinite(seconds) or seconds < 0):
                     raise SelectError("invalid duration")
+                if phase not in phases and record.get(phase, "skip") != "skip":
+                    raise SelectError(f"{phase} is not part of mode {mode} but carries a result")
             if record["verified"]:
                 sys.path.insert(0, FULL)
                 import execution
@@ -458,7 +512,8 @@ def validate_repro(root, bundle):
                     actual = (record.get("phases") or {}).get(phase) or {}
                     log = os.path.join(root, "logs", f"{case}.{phase}.log")
                     if (actual.get("rc") != 0 or actual.get("status") != "passed"
-                            or not execution.verdict(log, actual["rc"], "repro")["ok"]):
+                            or not execution.verdict(log, actual["rc"], "repro",
+                                                     phase=phase)["ok"]):
                         raise SelectError("phase evidence contradicts execution or log")
             records[case] = record
         except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -559,7 +614,8 @@ def write_bundle(path, document):
     finally:
         handle.close()
     os.replace(handle.name, path)
-    data = open(path, "rb").read()
+    with open(path, "rb") as handle:
+        data = handle.read()
     return hashlib.sha256(data).hexdigest(), len(data)
 
 

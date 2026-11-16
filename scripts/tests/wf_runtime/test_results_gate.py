@@ -68,11 +68,17 @@ class GateTest(unittest.TestCase):
     def test_repro_gate_validates_frozen_bundle_without_writing_state(self):
         repro = Path(self.dir) / "repro"
         repro.mkdir()
-        context = {"deploy": "dev", "release_subject": "sha256:r", "runtime": {"tool": "t"},
+        context = {"schema_version": 2, "deploy": "dev", "release_subject": "sha256:r",
+                   "runtime": {"tool": {"role": "tool", "path_identity": "sha256:t",
+                                        "binary_digest": "sha256:tb", "invocation_digest": "sha256:ti",
+                                        "implementation": "cpython", "version": "3.14.7"},
+                               "sut": {"role": "sut", "path_identity": "sha256:s",
+                                       "binary_digest": "sha256:sb", "invocation_digest": "sha256:si",
+                                       "implementation": "cpython", "version": "3.11.9"}},
                    "platform": "linux"}
-        public = {"source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
+        public = {"helper_set": "core-v2", "source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
                   "runner": {"repro_select.py": "sha256:sel", "run.sh": "sha256:run"}}
-        bundle = {"schema_version": 2, "execution_context": context, "public_inputs": public,
+        bundle = {"schema_version": 3, "execution_context": context, "public_inputs": public,
                   "mode": "both",
                   "cases": {"case-a": {"mode": "both", "execution_fingerprint": "fp",
                                        "red_subject_digest": "sha256:s",
@@ -95,6 +101,14 @@ class GateTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), sha, str(len(data))), 0)
+        # 成功场景下默认路径与显式路径必须等价（AC11）。
+        saved = os.environ.pop("WF_REPRO_INPUTS_FILE", None)
+        try:
+            self.assertEqual(module.repro_gate(str(repro)), 0,
+                             "默认 bundle 路径必须与显式路径同样可用")
+        finally:
+            if saved is not None:
+                os.environ["WF_REPRO_INPUTS_FILE"] = saved
         self.assertFalse((repro / "repro-state.json").exists(), "gate 不得写 state")
         record["red"] = "fail"
         record["verified"] = False
@@ -105,8 +119,9 @@ class GateTest(unittest.TestCase):
     def test_schema_one_bundle_is_refused(self):
         repro = Path(self.dir) / "repro"
         repro.mkdir()
-        bundle = {"schema_version": 1,
-                  "execution_context": {"deploy": "dev", "release_subject": "sha256:r",
+        bundle = {"schema_version": 2,
+                  "execution_context": {"schema_version": 1, "deploy": "dev",
+                                        "release_subject": "sha256:r",
                                         "runtime": {"tool": "t"}, "platform": "linux"},
                   "mode": "green",
                   "cases": {"case-a": {"mode": "green", "execution_fingerprint": "fp",
@@ -124,11 +139,17 @@ class GateTest(unittest.TestCase):
         repro.mkdir()
         sys.path.insert(0, str(FULL / "repro"))
         import repro_select
-        context = {"deploy": "dev", "release_subject": "sha256:r", "runtime": {"tool": "t"},
+        context = {"schema_version": 2, "deploy": "dev", "release_subject": "sha256:r",
+                   "runtime": {"tool": {"role": "tool", "path_identity": "sha256:t",
+                                        "binary_digest": "sha256:tb", "invocation_digest": "sha256:ti",
+                                        "implementation": "cpython", "version": "3.14.7"},
+                               "sut": {"role": "sut", "path_identity": "sha256:s",
+                                       "binary_digest": "sha256:sb", "invocation_digest": "sha256:si",
+                                       "implementation": "cpython", "version": "3.11.9"}},
                    "platform": "linux"}
-        public = {"source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
+        public = {"helper_set": "core-v2", "source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
                   "runner": {"run.sh": "sha256:run"}}
-        bundle = {"schema_version": 2, "execution_context": context, "public_inputs": public,
+        bundle = {"schema_version": 3, "execution_context": context, "public_inputs": public,
                   "mode": "green",
                   "cases": {"case-a": {"mode": "green", "execution_fingerprint": "fp",
                                        "red_subject_digest": "sha256:s",

@@ -12,13 +12,16 @@ import sys
 import tempfile
 
 REPO = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO / 'scripts'))
+import wf_test_paths  # noqa: E402  （作者侧路径/scope 唯一所有者；本模块只委托）
+
 OWNER = 'wf-test-fixture-v1'
-SCOPE_OWNER = 'wf-runner-test-scope-v1'
-SCOPE_MARKER = '.wf-scope.json'
-PRODUCTION_RESULTS_LOCK = '/tmp/wf-test-results-%d.lock' % os.getuid()
+SCOPE_OWNER = wf_test_paths.SCOPE_OWNER
+SCOPE_MARKER = wf_test_paths.SCOPE_MARKER
+PRODUCTION_RESULTS_LOCK = wf_test_paths.PRODUCTION_RESULTS_LOCK
 
 
-class FixtureError(Exception):
+class FixtureError(wf_test_paths.PathError):
     """Refused a fixture operation before touching its contents."""
 
 
@@ -98,11 +101,13 @@ def prepare_results(root):
             owned_root = root / path.name[1:-len('.wf-owner.json')]
             if not owned_root.exists():
                 path.unlink()
-        elif (path.is_file() or path.is_symlink()) and path.name not in ('.wf-results-owner.json', '.runner.log', '.runner.json') and (
+        elif (path.is_file() or path.is_symlink()) and path.name not in ('.wf-results-owner.json', '.runner.log') and (
                 path.name == 'plan.json' or path.suffix in ('.json', '.out', '.log', '.timing')
                 or path.name in ('selection.tsv', 'lines', 'stages', 'plan-calls', 'plan.err')):
             # stages/plan-calls 与 lines 同属"每 run 证据"：复用显式结果目录时必须从本轮重新计数，
             # 否则一次 run 的"4 阶段/2 次计划"会跨轮累积（实测 4→8、2→4）。
+            # `.runner.json` 是外层 C 的每 run 控制结果；保留旧值会让下一轮在 C 写回前
+            # 失败时把上一轮 cleanup=unknown 误聚合成本轮证据。
             path.unlink()
     (root / 'logs').mkdir(exist_ok=True)
     return root
@@ -143,10 +148,20 @@ def remove(root, forbidden=()):
         return False
     try:
         record = json.loads(owner.read_text())
-    except (OSError, ValueError) as exc:
-        raise FixtureError(f'refusing to remove an unowned fixture: {root}') from exc
+    except (OSError, ValueError):
+        record = None
     if record != {'owner': OWNER, 'root': str(root)}:
-        raise FixtureError(f'refusing to remove an unowned fixture: {root}')
+        # 空的无主目录可以回收（删除空目录不丢数据，且调用方指定的就是 runner 管理路径）；
+        # 非空无主目录仍然拒绝——那是别人的数据。
+        try:
+            empty = root.is_dir() and not any(root.iterdir())
+        except OSError as exc:
+            raise FixtureError(f'refusing to remove an unowned fixture: {root}: {exc}') from exc
+        if not empty:
+            raise FixtureError(f'refusing to remove an unowned fixture: {root}')
+        root.rmdir()
+        owner.unlink(missing_ok=True)
+        return True
     shutil.rmtree(root)
     owner.unlink(missing_ok=True)
     return True
@@ -246,6 +261,10 @@ def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
     root = _validate_cache_root(root)
     if scope not in ('run', 'repro'):
         raise FixtureError(f'--scope 只接受 run|repro（收到 {scope!r}）')
+    if not root.exists():
+        # 缓存根尚未建立（冷启动）：没有可回收条目，不是错误，也不创建目录。
+        print('PRUNED=0 KEPT=0', file=sys.stderr)
+        return 0
     prefix = {'run': 'run-', 'repro': 'repro-'}[scope]
     exclude = {Path(item).absolute() for item in exclude}
     candidates = []
@@ -333,40 +352,31 @@ def lock_run(command):
 
 
 # ---- 显式测试域（owned scope）------------------------------------------------
+# 路径解析、scope marker 与“管理路径必须在 scope 内”的唯一实现都在
+# `scripts/wf_test_paths.py`；这里保留同名委托接口（历史调用方/假树契约不变）。
 
 
 def create_test_scope(parent=None):
-    """建立本 UID 拥有的 owned 临时 scope：规范绝对路径、无 symlink、固定 marker。"""
-    root = Path(tempfile.mkdtemp(prefix='wf-test-scope-', dir=parent))
-    if root != root.resolve():
-        raise FixtureError(f'scope path resolved through a symlink: {root}')
-    write_marker(root / SCOPE_MARKER, {'schema_version': 1, 'owner': SCOPE_OWNER,
-                                       'root': str(root), 'uid': os.getuid()})
-    (root / 'locks').mkdir()
-    return root
+    """建立本 UID 拥有的 owned 临时 scope（唯一实现：wf_test_paths.create_test_scope）。"""
+    try:
+        return wf_test_paths.create_test_scope(parent)
+    except wf_test_paths.PathError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 def read_scope(root):
     """读出并校验 scope marker；损坏/越界一律抛（不 fallback 生产域）。"""
-    root = Path(root)
-    if root.is_symlink() or not root.is_dir():
-        raise FixtureError(f'scope root is not a real directory: {root}')
-    if str(root) != str(root.resolve()):
-        raise FixtureError(f'scope path contains a symlink: {root}')
     try:
-        record = json.loads((root / SCOPE_MARKER).read_text())
-    except (OSError, ValueError) as exc:
-        raise FixtureError(f'scope marker is missing or unreadable: {root}') from exc
-    if record != {'schema_version': 1, 'owner': SCOPE_OWNER, 'root': str(root), 'uid': os.getuid()}:
-        raise FixtureError(f'scope marker does not describe this root/uid: {root}')
-    return root
+        return wf_test_paths.read_scope(root)
+    except wf_test_paths.PathError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 def current_scope():
-    value = os.environ.get('WF_TEST_SCOPE_ROOT')
-    if not value:
-        return None
-    return read_scope(value)
+    try:
+        return wf_test_paths.current_scope()
+    except wf_test_paths.PathError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 def results_domain():
@@ -381,19 +391,15 @@ def results_lock_path():
 
 
 def ensure_in_scope(*targets):
-    """runner 管理写入口必须在 owned scope 内（生产域不做限制）。"""
-    scope = current_scope()
-    if scope is None:
-        return
-    for target in targets:
-        if not target:
-            continue
-        path = Path(target)
-        candidate = path if path.is_absolute() else Path.cwd() / path
-        if str(candidate) != str(candidate.resolve()) and candidate.exists():
-            candidate = candidate.resolve()
-        if candidate != scope and scope not in candidate.parents:
-            raise FixtureError(f'runner-managed path escapes the test scope: {candidate} (scope {scope})')
+    """runner 管理写入口必须在 owned scope 内（生产域不做限制）。
+
+    委托 `wf_test_paths.require_in_scope`：按**路径组件**判定，尚不存在的 `..`、
+    父链接、相似前缀与坏链都不能借用字符串前缀通过。
+    """
+    try:
+        wf_test_paths.require_in_scope(*targets)
+    except wf_test_paths.PathError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 def _open_results_lock():

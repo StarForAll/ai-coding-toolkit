@@ -61,6 +61,16 @@ class FixtureScopeTest(unittest.TestCase):
         self.assertTrue((target / "logs").is_dir())
         self.assertTrue((target / ".wf-results-owner.json").is_file())
 
+    def test_reused_results_drop_stale_runner_control_record(self):
+        scope = self.scope()
+        results = self.root / 'results'
+        scope.claim_results(results)
+        (results / '.runner.json').write_text('{"status": "failed", "supervision": '
+                                              '{"cleanup_state": "unknown"}}')
+        scope.prepare_results(results)
+        self.assertFalse((results / '.runner.json').exists(),
+                         "上一轮的 .runner.json 不得跨轮污染 cleanup 聚合")
+
     def test_dangling_log_link_is_removed_without_creating_its_target(self):
         scope = self.scope()
         results = self.root / 'results'
@@ -120,6 +130,19 @@ class FixtureScopeTest(unittest.TestCase):
         with self.assertRaises(scope.FixtureError):
             scope.reset(target, forbidden=[target / "keep"])
         self.assertEqual(sentinel.read_text(), "keep")
+
+    def test_empty_unowned_directory_is_reclaimable_but_data_is_not(self):
+        scope = self.scope()
+        empty = self.root / 'fixture'
+        empty.mkdir()
+        self.assertTrue(scope.remove(empty), "调用方预建的空目录可以回收")
+        self.assertFalse(empty.exists())
+        valuable = self.root / 'valuable'
+        valuable.mkdir()
+        (valuable / 'keep').write_text('keep')
+        with self.assertRaises(scope.FixtureError):
+            scope.remove(valuable)
+        self.assertEqual((valuable / 'keep').read_text(), 'keep')
 
     def test_repository_and_temp_root_are_refused(self):
         scope = self.scope()

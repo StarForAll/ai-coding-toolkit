@@ -35,6 +35,7 @@ RUN_ALL = FULL / "run_all.sh"
 REPRO_RUN = FULL / "repro" / "run.sh"
 sys.path.insert(0, str(FULL))
 import fixture_scope  # noqa: E402
+import host_snapshot  # noqa: E402
 
 SLOW = os.environ.get("WF_SLOW_TESTS") == "1"
 CLASS_DEADLINE_SECONDS = 900.0
@@ -58,7 +59,13 @@ def fingerprint(path):
 
 
 def production_snapshot():
+    """逐调用轻量定位证据：存在性 + 顶层 inode/mtime（不是终态证明）。"""
     return {str(path): fingerprint(path) for path in PRODUCTION_PATHS}
+
+
+def production_manifest():
+    """类级终态证据：只读树清单（相对路径/类型/权限/字节摘要/链接目标）。"""
+    return {str(path): host_snapshot.manifest(path) for path in PRODUCTION_PATHS}
 
 
 def lines(path):
@@ -143,6 +150,7 @@ class RunAllContractTest(unittest.TestCase):
             raise AssertionError("pool/test-release 不是空的")
         if (cls.scope / "pool" / "results-cache" / "template").exists():
             raise AssertionError("pool/results-cache/template 不是空的")
+        cls.production_before = production_manifest()
         cls.class_started = time.monotonic()
         cls.cost = {"schema_version": 1, "scope": str(cls.scope), "class_seconds": 0.0,
                     "cases": {}, "teardown_seconds": 0.0, "class_deadline_remaining": None,
@@ -154,6 +162,11 @@ class RunAllContractTest(unittest.TestCase):
         started = time.monotonic()
         leftovers = cls._scope_processes()
         open_in_scope = cls._own_descriptors_in_scope()
+        cls.production_after = production_manifest()
+        host_differences = {path: host_snapshot.compare(cls.production_before[path],
+                                                        cls.production_after[path])
+                            for path in cls.production_before}
+        cls.cost["host_protection"] = host_differences
         remaining = CLASS_DEADLINE_SECONDS - (time.monotonic() - cls.class_started)
         cls.cost["teardown_seconds"] = round(time.monotonic() - started, 2)
         cls.cost["class_seconds"] = round(time.monotonic() - cls.class_started, 2)
@@ -185,6 +198,10 @@ class RunAllContractTest(unittest.TestCase):
             raise AssertionError(f"tearDownClass 仍有 {len(leftovers)} 个引用 scope 的进程残留")
         if open_in_scope:
             raise AssertionError(f"tearDownClass 仍有 {len(open_in_scope)} 个指向 scope 的 FD 残留")
+        changed = {path: diff for path, diff in host_differences.items() if diff["changed"]}
+        if changed:
+            raise AssertionError("宿主缓存/生产结果锁的终态与类入口清单不一致："
+                                 + json.dumps(changed, ensure_ascii=False, sort_keys=True))
 
     @classmethod
     def _own_descriptors_in_scope(cls):
@@ -673,13 +690,28 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(production_snapshot(), before,
                          "取消不得触碰生产结果锁/用户 cache")
 
+    def test_cleanup_unknown_preserves_the_fixture_site(self):
+        """AC08：命令级 cleanup unknown 时保留夹具现场，不删除、不重试、不签成功。"""
+        case = self.case("cleanup-unknown")
+        result, _, env = self.run_runner(
+            case, [], {"WF_SUITES": "r70_tests", "WF_JOBS": "1",
+                       "WF_TEST_FAULT_INJECTION": "1", "WF_UNIT_FAULT": "kill"})
+        self.assertNotEqual(result.returncode, 0, result.stdout[-2000:])
+        self.assertIn("CLEANUP-UNKNOWN", result.stdout)
+        self.assertIn("GATE-FAIL", result.stdout)
+        results = Path(env["WF_RESULTS_DIR"])
+        summary = json.loads((results / "summary.json").read_text())
+        self.assertEqual(summary["cleanup_state"], "unknown")
+        plan = json.loads((results / "plan.json").read_text())
+        self.assertTrue(Path(plan["fix"]).exists(),
+                        "命令级清理未知时必须保留夹具现场，不得删除")
+
     # ---- AC18：SUT 级 escape（只覆盖“资产落点越界”这一向量）------------------
     def test_install_refuses_a_symlink_asset_target_outside_the_project(self):
-        """AC18：**资产落点本身**是指向项目外的符号链接 → 整批拒绝，项目外零写入。
+        """AC18/AC19：**资产落点本身**是指向项目外的符号链接 → 整批拒绝，项目外零写入。
 
-        向量 = `proj/.wf/bin/wf.py -> outside/evil.py`（destination symlink）；产品在这里用
-        `plan_writes()/inside()` 的真实落点校验拒绝。注意本测试**不**覆盖"技能根目录是指向项目外
-        的符号链接"这一向量——那条目前会写穿（见下面的 known-gap 测试）。
+        向量 = `proj/.wf/bin/wf.py -> outside/evil.py`（destination symlink）；这里直接走
+        安装产物的真实 CLI，`plan_writes()` 的项目→基址→资产两层校验负责拒绝。
         """
         case = self.case("sut-escape")
         env = case.env()
@@ -711,24 +743,14 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(entries(outside), ["evil.py"], "outside 兄弟目录不得被写入任何内容")
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "sentinel\n", "项目外文件不得被改写")
 
-    def test_known_gap_install_writes_through_a_symlinked_skill_root(self):
-        """已知产品缺口（可复跑证据）：技能根是指向项目外的符号链接时，install.py 会写穿。
+    def test_install_refuses_a_symlinked_skill_root_outside_the_project(self):
+        """AC19：技能根（或其它祖先）指向项目外 → install.py 整批拒绝，不写穿。
 
-        几何关系（刻意不污染宿主）：
-        - `proj` 与 `outside` 都是 **本 case 的 `WF_FIX`（owned scope）下的兄弟目录**；
-        - 逃逸目标仍在 owned scope 内，只是位于"项目"之外——所以本用例证明的是
-          "SUT 未拦住项目边界外的写入"，不是"测试污染了宿主"；
-        - 用例结束由 teardown 回收 scope，且每次调用前后另有生产快照断言（AC4）。
-
-        现状与未来修复：
-        - 现在 `install.py` 返回 `WF_OK` 并把 assets 写进 `outside/`（本次实测 13 个 skill 目录）；
-        - 根因在 `resolve_skill_roots()` 不校验技能根的真实落点，`plan_writes()` 的
-          `inside(base, destination)` 对已经 realpath 过的 base 判"在内"；
-        - 修复时必须**同时覆盖 `uninstall.py` 的同判据**（两者共享"资产越界"语义），
-          并按发行流程重建 `wf-release`（字节复现 + token parity）。
-        产品修复后本测试会转红——届时把 AC18 的"技能根"向量补成正式断言并更新本用例。
+        几何关系（刻意不污染宿主）：`proj` 与 `outside` 都是本 case 的 `WF_FIX`
+        （owned scope）下兄弟目录；逃逸目标仍在 owned scope 内，只是位于“项目”之外。
+        产品修复前此处会写进 `outside/` 13 个技能目录；现在必须返回拒绝码且外部不变。
         """
-        case = self.case("sut-skill-root-gap")
+        case = self.case("sut-skill-root-boundary")
         env = case.env()
         ensure = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "tests" / "wf_test_release.py"), "--ensure",
@@ -742,6 +764,7 @@ class RunAllContractTest(unittest.TestCase):
         outside = Path(env["WF_FIX"]) / "outside-skills"
         project.mkdir(parents=True)
         outside.mkdir(parents=True)
+        (outside / "sentinel.txt").write_text("keep\n", encoding="utf-8")
         (project / ".claude").mkdir()
         os.symlink(outside, project / ".claude" / "skills")
         gap = subprocess.run(
@@ -750,13 +773,11 @@ class RunAllContractTest(unittest.TestCase):
              "--platform", "claude", "--confirm", "--json"],
             capture_output=True, text=True, env={**os.environ, **env}, cwd=str(REPO),
             timeout=case.budget.timeout(CALL_TIMEOUT))
-        payload = json.loads(gap.stdout) if gap.stdout.strip().startswith("{") else {}
-        self.assertEqual(gap.returncode, 0,
-                         "已知缺口：产品当前放行技能根符号链接（修复后此处应转红并更新 AC18）")
-        self.assertEqual(payload.get("code"), "WF_OK")
-        self.assertNotEqual(entries(outside), [],
-                            "已知缺口：写入确实落在项目外的兄弟目录（仍在 owned scope 内）")
-
+        self.assertNotEqual(gap.returncode, 0, gap.stdout + gap.stderr)
+        self.assertRegex(gap.stdout, r"WF_(ASSET_DECISION|PATH_INVALID)",
+                         "技能根越界必须用受控错误码整批拒绝")
+        self.assertEqual(entries(outside), ["sentinel.txt"], "项目外目标不得被写入任何内容")
+        self.assertEqual((outside / "sentinel.txt").read_text(encoding="utf-8"), "keep\n")
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,8 +37,19 @@ import fixture_scope  # noqa: E402
 import release_lock  # noqa: E402
 
 
+RUNTIME = {
+    "tool": {"role": "tool", "path_identity": "sha256:tool-path",
+             "binary_digest": "sha256:tool-bin", "invocation_digest": "sha256:tool-inv",
+             "implementation": "cpython", "version": "3.14.7"},
+    "sut": {"role": "sut", "path_identity": "sha256:sut-path",
+            "binary_digest": "sha256:sut-bin", "invocation_digest": "sha256:sut-inv",
+            "implementation": "cpython", "version": "3.11.9"},
+}
+
+
 def context_for(deploy="dev", subject="sha256:release"):
-    return {"schema_version": 1, "deploy": deploy, "release_subject": subject,
+    return {"schema_version": 2, "deploy": deploy, "release_subject": subject,
+            "runtime": RUNTIME,
             "release_root": "/tmp/fake-release", "version": "0.1.2", "ref": "refs/tags/wf-v0.1.2",
             "tree_digest": "sha256:tree", "manifest_digest": "sha256:manifest",
             "candidate": ({"commit": "c" * 40, "tree_digest": "sha256:tree"} if deploy == "candidate" else None)}
@@ -268,6 +279,15 @@ class AutoModeTest(Base):
 
     def test_legacy_state_is_preserved_but_never_reused(self):
         case = "review-count-reject"
+        for schema in (1, 2, 3):
+            with self.subTest(schema=schema):
+                legacy = {"schema_version": schema,
+                          "cases": {case: {"green": {"fingerprint": "old"},
+                                           "red": {"subject": "old", "fingerprint": "old"}}}}
+                Path(select.state_path()).write_text(json.dumps(legacy))
+                self.assertEqual(select.auto_modes(
+                    {case: {"red_subject_digest": "x", "local_inputs": {"targets": "t"}}},
+                    select.load_groups())[case], "both")
         legacy = {"schema_version": 2, "cases": {case: {"green": {"fingerprint": "old"}}}}
         Path(select.state_path()).write_text(json.dumps(legacy))
         self.assertEqual(select.auto_modes(
@@ -350,10 +370,10 @@ class CommitTest(Base):
 
 
 RELEASE_CONTEXT_DOC = {
-    "schema_version": 1, "deploy": "dev", "release_root": "/tmp/fake-release",
+    "schema_version": 2, "deploy": "dev", "release_root": "/tmp/fake-release",
     "version": "0.1.2", "ref": "refs/tags/wf-v0.1.2",
     "release_subject": "sha256:release", "tree_digest": "sha256:tree",
-    "manifest_digest": "sha256:manifest", "candidate": None,
+    "manifest_digest": "sha256:manifest", "runtime": RUNTIME, "candidate": None,
 }
 
 
@@ -412,14 +432,47 @@ class ScanCountTest(unittest.TestCase):
         self.assertEqual(counts["release"], 1, "worker 只比对一次 execution context")
 
 
+class PublicHelperIdentityTest(Base):
+    def test_helper_set_covers_core_proof_inputs(self):
+        for name in ("../library_source.py", "../prepare_candidate_repo.py",
+                     "../release_context.py", "../results_gate.py", "../results_summary.py",
+                     "../fixture_scope.py", "../execute_gate.py", "../run_all.sh",
+                     "../../../../wf_test_paths.py"):
+            self.assertIn(name, select.HELPERS, f"{name} 必须进入公共 helper 身份")
+        selection = select.select(["review"], only="review-count-reject",
+                                  fixture_deploy="dev", mode="green")
+        document = select.bundle_document(selection)
+        self.assertEqual(document["public_inputs"]["helper_set"], "core-v2")
+
+    def test_stale_helper_set_bundle_is_refused(self):
+        selection = select.select(["review"], only="review-count-reject",
+                                  fixture_deploy="dev", mode="green")
+        document = select.bundle_document(selection)
+        document["public_inputs"].pop("helper_set")
+        with self.assertRaises(select.SelectError) as caught:
+            select.validate_bundle(document)
+        self.assertIn("helper set", str(caught.exception))
+
+    def test_core_helper_change_moves_the_subject(self):
+        case = "review-count-reject"
+        public = select.public_inputs()
+        groups = select.load_groups()
+        local = select.local_inputs(case, groups)
+        context = select.execution_context()
+        first = select.red_subject(case, local, public, context)
+        changed = dict(public)
+        changed["helpers"] = "sha256:changed-helper"
+        self.assertNotEqual(first, select.red_subject(case, local, changed, context))
+
+
 class BundleSchemaTest(Base):
-    def test_schema_two_bundle_carries_public_and_local_inputs(self):
+    def test_schema_three_bundle_carries_public_and_local_inputs(self):
         selection = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                   mode="green")
         document = select.bundle_document(selection)
-        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(document["schema_version"], 3)
         self.assertEqual(sorted(document["public_inputs"]),
-                         ["executor", "helpers", "runner", "source"])
+                         ["executor", "helper_set", "helpers", "runner", "source"])
         self.assertEqual(sorted(document["cases"]["review-count-reject"]["local_inputs"]),
                          ["case_meta", "script", "targets"])
 
@@ -427,7 +480,7 @@ class BundleSchemaTest(Base):
         selection = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                   mode="green")
         document = select.bundle_document(selection)
-        legacy = {"schema_version": 1,
+        legacy = {"schema_version": 2,
                   "execution_context": document["execution_context"],
                   "mode": "green",
                   "cases": {case: {"mode": "green",
@@ -437,7 +490,7 @@ class BundleSchemaTest(Base):
                             for case, record in document["cases"].items()}}
         with self.assertRaises(select.SelectError) as caught:
             select.validate_bundle(legacy)
-        self.assertIn("schema 2", str(caught.exception))
+        self.assertIn("schema 3", str(caught.exception))
 
     def test_tampered_public_inputs_are_refused_at_the_writer_barrier(self):
         selection, path, sha, size = self.bundle("review-count-reject", "both")

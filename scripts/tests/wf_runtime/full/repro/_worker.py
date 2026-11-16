@@ -49,14 +49,19 @@ def run_phase(case, phase):
     os.makedirs(log_dir, exist_ok=True)
     log_path = os.path.join(log_dir, f"{case}.{phase}.log")
     temporary = tempfile.mkdtemp(prefix=f'{case}-{phase}-', dir=log_dir)
+    env = {**os.environ, 'TMPDIR': temporary}
+    # green 进程清除继承的注入开关：外部环境不能让 green 静默走注入分支；
+    # red 由 harness 按显式相位设置（每相位独立，不依赖父 shell 残留）。
+    env.pop('WF_REPRO_INJECT', None)
+    if phase == 'red':
+        env['WF_REPRO_INJECT'] = '1'
     try:
         execution_result = execution.run([PY, os.path.join(HERE, case + ".py"), "--expect", phase],
-                                         log_path, timeout=TIMEOUT,
-                                         env={**os.environ, 'TMPDIR': temporary})
+                                         log_path, timeout=TIMEOUT, env=env)
     finally:
         if os.environ.get('WF_REPRO_KEEP') != '1':
             shutil.rmtree(temporary)
-    check = execution.verdict(log_path, execution_result["rc"], "repro")
+    check = execution.verdict(log_path, execution_result["rc"], "repro", phase=phase)
     return {"passed": check["ok"], "seconds": execution_result["seconds"],
             "rc": execution_result["rc"], "detail": execution_result["reason"] or check["tail"],
             "execution": execution_result}

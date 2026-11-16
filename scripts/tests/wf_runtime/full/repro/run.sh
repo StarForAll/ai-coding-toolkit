@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # 修复的可证伪用例：一键（CI 可用）运行器。详细用法：repro/run.sh -h
 set -uo pipefail
+# 与 run_all 同一纪律：路径/scope 校验前禁写 pyc，并丢弃外部注入的 pycache 前缀。
+# inherited frame 重入继承父阶段已批准的 pycache，不再重置。
+if [ "${1:-}" != "--_wf-inherited-release" ]; then
+  export PYTHONDONTWRITEBYTECODE=1
+  unset PYTHONPYCACHEPREFIX
+fi
 # usage 是唯一文本来源（heredoc），不按行号回头注释提取——头注释不再承载正文。
 usage() { cat <<'EOF'
 每个用例有两个面：`--expect green`（当前树成立）与 `--expect red`（注入原缺陷后必须变红）。
@@ -29,6 +35,7 @@ REPO="$(cd "$FULL/../../../.." && pwd)"
 # 项目声明解释器（AGENTS.md §4 的回退链约定；shell 入口无 sys.executable）
 PY="${PY:-/softwares/python/bin/python3}"
 SCOPE="$FULL/fixture_scope.py"
+PATHS="$REPO/scripts/wf_test_paths.py"
 PROTOCOL="$FULL/runner_protocol.py"
 # 测试专用注入点：默认取仓库内真实入口；契约测试指向计数 shim（只包一层 argv 记录）。
 RELEASE_CLI="${WF_TEST_RELEASE_CLI:-$REPO/scripts/tests/wf_test_release.py}"
@@ -109,8 +116,13 @@ if len(data) != int(size):
 if hashlib.sha256(data).hexdigest() != sha:
     raise SystemExit('context digest mismatch')
 context = json.loads(data)
-if context.get('schema_version') != 1:
-    raise SystemExit('context schema mismatch')
+if context.get('schema_version') != 2:
+    raise SystemExit('context schema mismatch (schema 2 required)')
+runtime = context.get('runtime') or {}
+for role in ('tool', 'sut'):
+    projection = runtime.get(role) or {}
+    if not projection.get('path_identity') or not projection.get('binary_digest'):
+        raise SystemExit('context runtime identity incomplete: ' + role)
 print(context['deploy']); print(context['release_root']); print(context['version']); print(context['ref'])
 print(context.get('release_subject') or ''); print(context.get('tree_digest') or '')
 PY
@@ -134,8 +146,7 @@ PY
   fi
   export WF_RELEASE_CONTEXT="$CONTEXT_FILE" WF_FIXTURE_DEPLOY="$DEPLOY"
 else
-  export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-${TMPDIR:-/tmp}/wf-pycache-repro-bootstrap}"
-  unset PYTHONDONTWRITEBYTECODE
+  # pycache 仅在 scope/layout 校验通过后启用（见下方 layout 之后的设置）。
   case "$DEPLOY" in
     dev)
       if [ "${WF_REPRO_LEASE_READY:-0}" = "1" ] && [ -n "$RELEASE_ROOT" ]; then
@@ -210,18 +221,25 @@ else
 fi
 
 # ---- 结果目录与选择 ----------------------------------------------------------------
-if [ -z "$RESULTS" ]; then
-  if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
-    RESULTS="$WF_TEST_SCOPE_ROOT/repro-$MODE-$$"
-  else
-    RESULTS="${WF_REPRO_RESULTS_DIR:-$HOME/.cache/wf-test-run/repro-$MODE-$$}"
-  fi
+# 管理路径的唯一规则（wf_test_paths）：scope 下默认值从 scope 派生；显式值在首次写前校验。
+if ! layout_out=$("$PY" "$PATHS" layout --kind repro --pid "$$" --mode "$MODE" --format sh); then
+  exit 2
 fi
+eval "$layout_out" || { echo "LAYOUT-EVAL-FAILED" >&2; exit 2; }
+export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$LAYOUT_PYCACHE_BOOTSTRAP}"
+unset PYTHONDONTWRITEBYTECODE
+if [ -z "$RESULTS" ]; then
+  RESULTS="${WF_REPRO_RESULTS_DIR:-$LAYOUT_RESULTS_DIR}"
+fi
+if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+  "$PY" "$SCOPE" check-scope "$RESULTS" || exit 2
+fi
+export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$LAYOUT_STATE}"
+export WF_TEST_RELEASE_CACHE="${WF_TEST_RELEASE_CACHE:-$LAYOUT_TEST_RELEASE_CACHE}"
 if [ -n "${WF_TEST_SCOPE_ROOT:-}" ] && [ "$INHERITED" != "inherited" ]; then
-  # state/HOME 派生写入同样必须落在 owned scope 内（design §3.4）。
-  export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$WF_TEST_SCOPE_ROOT/state}"
-  "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" \
-    ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} ${WF_TEST_RUN_CACHE:+"$WF_TEST_RUN_CACHE"} || exit 2
+  # state/结果派生写入同样必须落在 owned scope 内（design §3.4）。
+  "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" "$WF_TEST_RUN_CACHE" \
+    ${WF_TEST_RELEASE_CACHE:+"$WF_TEST_RELEASE_CACHE"} ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} || exit 2
 fi
 # 结果缓存轮转：独立 repro 入口只回收本 scope（repro-*）的带 marker 目录；root 可经
 # WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
@@ -236,8 +254,11 @@ WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" 
 export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$RESULTS/pycache}"
 mkdir -p "$PYTHONPYCACHEPREFIX" "$RESULTS/logs"
 export WF_REPRO_RESULTS="$RESULTS" PY
-trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 143' TERM
-trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 130' INT
+# 取消：写一次性取消请求让每个 worker 的 C（execution.py）自行收口 G/S；不再递归强杀监督进程。
+export WF_CANCEL_FILE="${WF_CANCEL_FILE:-$RESULTS/cancel-request}"
+rm -f "$WF_CANCEL_FILE" 2>/dev/null || true
+trap 'trap "" INT TERM HUP; printf "cancelled by shell trap\n" > "$WF_CANCEL_FILE" 2>/dev/null || true; exit 143' TERM
+trap 'trap "" INT TERM HUP; printf "cancelled by shell trap\n" > "$WF_CANCEL_FILE" 2>/dev/null || true; exit 130' INT
 
 # ---- 冻结唯一 bundle（schema 2，原子写一次）----------------------------------------
 selection=$("$PY" "$HERE/repro_select.py" plan --fixture-deploy "$DEPLOY" --mode "$MODE" --format sh \

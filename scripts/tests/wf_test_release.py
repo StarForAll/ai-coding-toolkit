@@ -41,6 +41,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import wf_release_common as common  # noqa: E402
 import release_lock as lock  # noqa: E402
+import wf_test_paths  # noqa: E402
 
 REPO_ROOT = common.REPO_ROOT
 SOURCE_ROOT = common.SOURCE_ROOT
@@ -97,7 +98,11 @@ def resolve_version(explicit=None, dev_manifest=None):
 
 
 def default_root(version):
-    return os.path.join(os.environ.get("WF_TEST_RELEASE_CACHE") or CACHE_ROOT, version)
+    cache = os.environ.get("WF_TEST_RELEASE_CACHE")
+    if not cache and wf_test_paths.current_scope() is not None:
+        # scope 下默认缓存根同样派生自 scope（不得回落到用户 cache）。
+        cache = str(wf_test_paths.resolve_layout()["test_release"])
+    return os.path.join(cache or CACHE_ROOT, version)
 
 
 def _canonical(root):
@@ -128,11 +133,20 @@ def _forbidden_roots():
 
 
 def check_output_root(root):
-    """输出根安全边界：不越界、不符号链接、不与仓库/源码/产品树重叠。"""
+    """输出根安全边界：不越界、不符号链接、不与仓库/源码/产品树重叠。
+
+    显式测试 scope 下还必须在首次写入前核验输出根**及其派生 sidecar/锁/staging** 都在
+    scope 内——低层 CLI 不能因为“父进程已经检查过”就跳过本入口将创建的路径。
+    """
     if not root:
         raise TestReleaseError("output root is empty")
     if os.path.islink(root):
         raise TestReleaseError(f"output root must not be a symlink: {root}")
+    try:
+        wf_test_paths.require_in_scope(root, owner_path(root), meta_path(root), lock_path(root),
+                                       journal_path(root), os.path.dirname(_canonical(root)))
+    except wf_test_paths.PathError as exc:
+        raise TestReleaseError(str(exc)) from exc
     real = _canonical(root)
     if real == os.sep:
         raise TestReleaseError("output root must not be filesystem root")

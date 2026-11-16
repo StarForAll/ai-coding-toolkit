@@ -179,11 +179,13 @@ class FixtureDeployTest(unittest.TestCase):
             with self.assertRaises(plan.PlanError):
                 plan.plan(self.candidate_args(extra=["--repro", mode]), make())
 
-    def test_candidate_representative_falls_back_to_candidate_smoke(self):
+    def test_candidate_representative_uses_candidate_clean_suites(self):
         result = plan.plan(["--representative"] + self.candidate_args(), make())
         self.assertEqual(result["fixture_deploy"], "candidate")
-        self.assertEqual(names(result), ["f1_candidate_smoke", "f0", "p5_spec"])
-        self.assertEqual(result["candidate_smoke"], 1)
+        self.assertEqual(names(result), ["cp1_tests", "r7r15_tests", "r31r34_tests",
+                                         "r70_tests", "r71_tests", "f1_ordinary",
+                                         "f0", "p5_spec"])
+        self.assertEqual(result["candidate_smoke"], 0)
         # 没有 candidate_clean 组的组被排除，不静默拒绝整个 representative 模式
         self.assertIn("install", result["repro_groups"])
 
@@ -194,9 +196,12 @@ class FixtureDeployTest(unittest.TestCase):
                       make())
         self.assertIn("review", str(caught.exception))
 
-    def test_candidate_full_refuses_when_no_candidate_clean_suite(self):
-        with self.assertRaises(plan.PlanError):
-            plan.plan(["--full"] + self.candidate_args(), make())
+    def test_candidate_full_uses_the_audited_candidate_clean_suites(self):
+        result = plan.plan(["--full"] + self.candidate_args(), make())
+        suites = [unit for unit in result["units"] if unit["kind"] == "suite"]
+        self.assertEqual(len(suites), 56, "候选全量只跑经 candidate-audit 核实的 suite")
+        self.assertTrue(all(unit["name"] not in ("r67_tests", "r90_tests", "p5_v1")
+                            for unit in suites))
 
 
 class TagSelectionTest(unittest.TestCase):

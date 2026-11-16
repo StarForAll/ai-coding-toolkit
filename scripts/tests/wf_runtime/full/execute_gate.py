@@ -30,7 +30,7 @@ import fixture_scope  # noqa: E402
 import plan as plan_mod  # noqa: E402
 import runner_protocol  # noqa: E402
 
-CONTEXT_SCHEMA = 1
+CONTEXT_SCHEMA = 2
 
 
 class GateError(Exception):
@@ -100,6 +100,11 @@ def _verify_context(context_file, context_sha, context_size, frozen):
         raise GateError(f"release-context schema 不符：{context.get('schema_version')}")
     if not context.get("release_subject"):
         raise GateError("release-context 缺 release subject（未完成身份核验）")
+    runtime = context.get("runtime") or {}
+    for role in ("tool", "sut"):
+        projection = runtime.get(role) or {}
+        if not projection.get("path_identity") or not projection.get("binary_digest"):
+            raise GateError(f"release-context runtime 身份不完整：{role}")
     deploy = frozen["fixture_deploy"]
     if context.get("deploy") != deploy:
         raise GateError(f"context deploy={context.get('deploy')} 与 plan deploy={deploy} 不符")

@@ -238,7 +238,13 @@ import argparse as _argparse
 
 
 _RULES_DIGEST = "sha256:" + "a" * 64
-_MANIFEST = {"compatibility": {"rules_digest": _RULES_DIGEST}}
+# add_platforms 在锁内按 manifest 重算完整计划（不信任调用方传入的 writes），
+# 因此合成 manifest 必须像真实发行清单一样登记该技能资产。
+_MANIFEST = {"compatibility": {"rules_digest": _RULES_DIGEST},
+             "assets": [{"target_class": "skill_root",
+                         "target_relative": "wf-start/SKILL.md",
+                         "source_path": "skills/wf-start/SKILL.md",
+                         "digest": "sha256:y", "executable": False}]}
 
 
 def _mk_platform_env(name):

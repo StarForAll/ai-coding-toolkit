@@ -105,17 +105,101 @@ def resolve_skill_roots(target, platforms):
             roots.append(root)
     return roots, unknown
 
+def _resolve_location(path):
+    """规范落点：解析现有祖先符号链接与 `..`，尚不存在的末段按组件拼接。"""
+    raw = os.path.abspath(str(path))
+    current = os.sep
+    for part in [item for item in raw.split(os.sep) if item]:
+        if part == ".":
+            continue
+        if part == "..":
+            current = os.path.dirname(current)
+            continue
+        nxt = os.path.join(current, part)
+        if os.path.islink(nxt):
+            if not os.path.exists(nxt):
+                raise ValueError(f"path component is a broken symlink: {nxt}")
+            current = os.path.realpath(nxt)
+        else:
+            current = nxt
+    return os.path.normpath(current)
+
+
+def _contains(base, path):
+    return path == base or path.startswith(base + os.sep)
+
+
+def boundary_problem(target, base, destination):
+    """项目→基址→资产的两层包含关系（与 install/uninstall 同判据）。"""
+    try:
+        project = _resolve_location(target)
+        base_real = _resolve_location(base)
+        dest_real = _resolve_location(destination)
+    except ValueError as exc:
+        return {"reason": "path contains a broken symlink", "base": str(base),
+                "path": str(destination), "detail": str(exc)}
+    if not _contains(project, base_real):
+        return {"reason": "asset base resolves outside the project root", "base": str(base),
+                "resolved": base_real, "project": project}
+    if not _contains(base_real, dest_real):
+        return {"reason": "target resolves outside its base", "base": str(base),
+                "path": str(destination), "resolved": dest_real}
+    if not _contains(project, dest_real):
+        return {"reason": "target resolves outside the project root", "path": str(destination),
+                "resolved": dest_real, "project": project}
+    return None
+
+
+def validate_registered_roots(target, installation):
+    """历史 root 记录：项目内可用；项目外/坏链明确拒绝（不序列化成合法绝对根）。"""
+    problems = []
+    project = _resolve_location(target)
+    for root in installation.get("roots") or []:
+        if not isinstance(root, str) or not root:
+            problems.append({"reason": "skill root reference invalid", "root": root})
+            continue
+        base = root if os.path.isabs(root) else os.path.join(os.path.abspath(target), root)
+        try:
+            resolved = _resolve_location(base)
+        except ValueError as exc:
+            problems.append({"reason": "skill root has a broken symlink", "root": root,
+                             "detail": str(exc)})
+            continue
+        if not _contains(project, resolved):
+            problems.append({"reason": "registered skill root resolves outside the project root",
+                             "root": root, "resolved": resolved, "project": project})
+    return problems
+
+
 def plan_deployment(target, skill_roots, manifest):
-    writes = []
+    """展开完整部署计划并整批复核边界；返回 (writes, problems)。"""
+    writes, problems = [], []
+    for root in skill_roots:
+        problem = boundary_problem(target, root, root)
+        if problem:
+            problems.append(dict(problem, reason="skill root " + problem["reason"]))
     for asset in manifest["assets"]:
         if asset["target_class"] == "project_wf":
+            destination = os.path.join(os.path.abspath(target), *asset["target_relative"].split("/"))
+            problem = boundary_problem(target, os.path.abspath(target), destination)
+            if problem:
+                problems.append(problem)
+                continue
             writes.append({"target_relative": asset["target_relative"], "source_path": asset["source_path"],
                            "root": "project", "digest": asset["digest"]})
         elif asset["target_class"] == "skill_root":
             for root in skill_roots:
-                writes.append({"target_relative": asset["target_relative"], "source_path": asset["source_path"],
+                destination = os.path.join(root, *asset["target_relative"].split("/"))
+                problem = boundary_problem(target, root, destination)
+                if problem:
+                    problems.append(problem)
+                    continue
+                writes.append({"target_relative": asset["target_relative"],
+                               "source_path": asset["source_path"],
                                "root": root, "digest": asset["digest"]})
-    return writes
+    if problems:
+        return [], problems
+    return writes, problems
 
 
 def is_inside(target, path):
@@ -125,7 +209,11 @@ def is_inside(target, path):
 
 
 def root_record(target, root):
-    return os.path.relpath(root, target).replace(os.sep, "/") if is_inside(target, root) else os.path.abspath(root)
+    """只序列化通过校验的项目内根；域外根不是“合法绝对根”（拒绝而不是照抄）。"""
+    problem = boundary_problem(target, root, root)
+    if problem:
+        raise ValueError(f"refusing to record a skill root outside the project: {problem}")
+    return os.path.relpath(root, target).replace(os.sep, "/")
 
 
 def managed_segment():
@@ -254,7 +342,11 @@ def deploy(args):
                     f"未知平台：{unknown_platforms}；支持 {sorted(PLATFORMS)}", args.json)
     dev_manifest = common.load_dev_manifest()
     manifest = common.build_manifest(DEV_VERSION, dev_manifest)
-    writes = plan_deployment(target, skill_roots, manifest)
+    writes, plan_problems = plan_deployment(target, skill_roots, manifest)
+    if plan_problems:
+        return fail("WF_ASSET_DECISION",
+                    "技能根/资产落点越界或不可解析：整批拒绝，不写任何文件",
+                    args.json, {"problems": plan_problems[:20]})
 
     clues = trellis_clues(target)
 
@@ -293,7 +385,7 @@ def deploy(args):
     existing = wf_records.load_json(writer_path)
     if existing is not None:
         # 已安装：只允许"追加平台"（同发行引用）；资产与项目数据不动
-        return add_platforms(target, args, writes, manifest)
+        return add_platforms(target, args, manifest)
 
     try:
         handle = wf_lock.acquire(target, holder_hint="dev-deploy")
@@ -306,6 +398,12 @@ def deploy(args):
 
     head_before = wf_scope.head(target)
     try:
+        # 锁内重算完整计划：mkdir .wf / writer 初始记录 / 技能根 mkdir / 资产写入之前复核。
+        writes, plan_problems = plan_deployment(target, skill_roots, manifest)
+        if plan_problems:
+            return fail("WF_ASSET_DECISION",
+                        "锁内复核发现技能根/资产落点越界：整批拒绝，不写任何文件",
+                        args.json, {"problems": plan_problems[:20]})
         os.makedirs(join(target, ".wf"), exist_ok=True)
         operation_id = f"dev-deploy-{uuid.uuid4().hex}"
         writer_record = wf_writer.initial_record()
@@ -428,7 +526,7 @@ def skill_roots_for(target, platforms):
     return roots
 
 
-def add_platforms(target, args, writes, manifest):
+def add_platforms(target, args, manifest):
     """已安装项目追加平台（与发行入口 install.py::add_platforms 同语义）。
 
     2026-11-05 第二轮修正（复审 R1，与 install.py A1 同源）：
@@ -481,14 +579,29 @@ def add_platforms(target, args, writes, manifest):
                          "requested_ref": current_ref, "requested_commit": current_commit,
                          "requested_rules_digest": current_rules,
                          "note": "规则摘要按已投放资产的内容计算；同一 HEAD 下的 dirty 内容变化也会体现"})
+        # —— 锁内的完整计划：历史根校验 → 重算根/落点 → 再读内容与冲突 ——
+        root_problems = validate_registered_roots(target, installation)
+        if root_problems:
+            return fail("WF_ASSET_DECISION",
+                        "安装记录中的技能根域外/不可解析：整批拒绝，不改历史记录、不清理外部对象",
+                        args.json, {"problems": root_problems[:20]})
         current = [item for item in installation.get("platforms") or [] if isinstance(item, str)]
         wanted = sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)})
         added = [name for name in wanted if name not in current]
         roots = list(installation.get("roots") or [])
-        new_roots = [root for root in skill_roots_for(target, wanted)
-                     if os.path.relpath(root, target).replace(os.sep, "/") not in roots]
+        rollout_roots = skill_roots_for(target, wanted)
+        planned_writes, plan_problems = plan_deployment(target, rollout_roots, manifest)
+        if plan_problems:
+            return fail("WF_ASSET_DECISION",
+                        "追加平台的技能根/资产落点越界或不可解析：整批拒绝，不写任何文件",
+                        args.json, {"problems": plan_problems[:20]})
+        try:
+            new_roots = [root for root in rollout_roots
+                         if root_record(target, root) not in roots]
+        except ValueError as exc:
+            return fail("WF_ASSET_DECISION", str(exc), args.json)
         planned = []
-        for entry in writes:
+        for entry in planned_writes:
             if entry["root"] == "project":
                 continue  # .wf 资产不动
             if entry["root"] not in new_roots:
@@ -537,7 +650,7 @@ def add_platforms(target, args, writes, manifest):
                 deployed.append(item["destination"])
             installation["platforms"] = sorted(set(current) | set(wanted))
             installation["roots"] = sorted(set(roots) | {
-                os.path.relpath(root, target).replace(os.sep, "/") for root in new_roots})
+                root_record(target, root) for root in new_roots})
             for item in planned:
                 key = (item["root"], item["target_relative"])
                 if key in registered:

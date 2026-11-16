@@ -33,7 +33,7 @@ import fixture_scope  # noqa: E402
 import runner_protocol  # noqa: E402
 
 PY = os.environ.get("PY") or sys.executable
-CONTEXT_SCHEMA = 1
+CONTEXT_SCHEMA = 2
 CONTEXT_NAME = "release-context.json"
 
 
@@ -48,17 +48,31 @@ def _common():
     return common
 
 
+def _identity_projection(resolved):
+    """完整运行身份的对外投影：只留摘要与 role/version 诊断，不转存路径/环境值。"""
+    return {"role": resolved["role"],
+            "path_identity": resolved["path_identity"],
+            "binary_digest": resolved["binary"]["digest"],
+            "invocation_digest": resolved["invocation_file"]["digest"],
+            "implementation": resolved["implementation"],
+            "version": resolved["version"]}
+
+
 def _runtime_identity():
+    """tool/SUT 完整身份；解析不出即失败（不签发空身份）。"""
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     try:
         import python_runtime_identity as identity
-
-        runner = os.path.join(HERE, "run_all.sh")
-        sut = os.path.join(HERE, "f1_init.py")
-        return {"tool": identity.resolve("tool", runner)["path_identity"],
-                "sut": identity.resolve("sut", sut)["path_identity"]}
-    except Exception:  # 假环境没有该 helper 时留空，不冒充身份
-        return {}
+    except ImportError as exc:
+        raise ContextError(f"runtime identity helper is unavailable: {exc}") from exc
+    resolver = identity.Resolver()
+    try:
+        return {"tool": _identity_projection(
+                    resolver.resolve("tool", os.path.join(HERE, "run_all.sh"))),
+                "sut": _identity_projection(
+                    resolver.resolve("sut", os.path.join(HERE, "f1_init.py")))}
+    except identity.IdentityError as exc:
+        raise ContextError(f"runtime identity is unresolved: {exc}") from exc
 
 
 def write_context_atomic(path, payload):
@@ -195,6 +209,10 @@ def main(argv=None):
                 tree_digest = common.tree_digest(root)
             except Exception:
                 pass
+        try:
+            runtime = _runtime_identity()
+        except ContextError:
+            raise
         context = {
             "schema_version": CONTEXT_SCHEMA,
             "deploy": args.deploy,
@@ -204,7 +222,7 @@ def main(argv=None):
             "release_subject": subject,
             "manifest_digest": manifest_digest,
             "tree_digest": tree_digest,
-            "runtime": _runtime_identity(),
+            "runtime": runtime,
             "candidate": candidate,
             # 成本账目（design §3.3）：本次是 built/reused/checked——summary 只搬运不改判。
             "release_build": release_build,

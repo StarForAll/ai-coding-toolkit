@@ -228,6 +228,13 @@ def _copy_into_fake(relative):
 
 for _name in _real_plan.FAKE_TREE_SPECIAL + _real_plan.FAKE_TREE_COPY:
     _copy_into_fake(_name)
+# 作者侧路径/scope helper：假树里的 plan.py / fixture_scope.py 无条件导入它，
+# 缺文件必须当场失败（不提供“缺 helper 就跳过校验”的兼容分支）。
+shutil.copy(os.path.join(wfdrive.REPO, "scripts", "wf_test_paths.py"),
+            os.path.join(fake_root, "scripts", "wf_test_paths.py"))
+# 完整运行身份（release-context / repro context 共用）：假树也必须能解析，不静默降级。
+shutil.copy(os.path.join(wfdrive.REPO, "scripts", "python_runtime_identity.py"),
+            os.path.join(fake_root, "scripts", "python_runtime_identity.py"))
 # 测试发行入口桩（release_context 只借用它的 ensure/check 子命令；锁由 release_lock 负责）。
 # 它必须遵守真实 CLI 的 `--json` 状态契约：release_context 会解析 status（built|reused|checked）。
 open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
@@ -307,10 +314,9 @@ open(os.path.join(fake, "repro", "run.sh"), "w").write(
     'echo "repro 用例：1/1"\n'
     'exit 0\n')
 os.chmod(os.path.join(fake, "repro", "run.sh"), 0o755)
-# 测试发行副本桩：run_f0 会调用 $RELEASE_REPO/install.py
-release_cache = os.path.join(fake_root, "release-cache")
-os.makedirs(os.path.join(release_cache, "0.1.0"))
-open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys; sys.exit(0)\n")
+# 测试发行副本桩：run_f0 会调用 $RELEASE_REPO/install.py。
+# 位置必须在 fake scope 内：runner 的管理路径（含 WF_TEST_RELEASE_CACHE）在 scope 下
+# 统一由 wf_test_paths 校验，域外路径会在首次写前被拒。
 # 外层可能以 `WF_SUITES=... bash run_all.sh` 启动（命令前缀会导出到子进程），
 # 假环境必须显式清空，否则内层 run_all 会被当成子集模式
 # 假环境不跑夹具模板（模板会调用 template_check.py，而这里只验证门禁逻辑）；
@@ -320,6 +326,9 @@ open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys;
 _fake_scope = subprocess.run([sys.executable, os.path.join(real, "fixture_scope.py"), "create-scope"],
                              capture_output=True, text=True, check=True).stdout.strip()
 atexit.register(shutil.rmtree, _fake_scope, ignore_errors=True)
+release_cache = os.path.join(_fake_scope, "release-cache")
+os.makedirs(os.path.join(release_cache, "0.1.0"))
+open(os.path.join(release_cache, "0.1.0", "install.py"), "w").write("import sys; sys.exit(0)\n")
 _fake_cache = tempfile.mkdtemp(prefix="wf-r67-fake-cache-", dir=_fake_scope)
 _fake_fix = tempfile.mkdtemp(prefix="wf-r67-fake-fixture-", dir=_fake_scope)
 _fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
@@ -351,7 +360,8 @@ proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output
                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results1})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
 rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
-    f"exit={proc.returncode} summary={_summary[-1] if _summary else None} stderr={(proc.stderr or '')[-180:]}",
+    f"exit={proc.returncode} summary={_summary[-1] if _summary else None} "
+    f"stdout={(proc.stdout or '')[-800:]} stderr={(proc.stderr or '')[-800:]}",
     proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
 _cp1_expect = int(next(item["expect"] for item in _manifest["units"] if item["name"] == "cp1_tests"))
 open(os.path.join(fake, "cp1_tests.py"), "w").write(
@@ -362,7 +372,9 @@ proc2 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_outpu
 if proc2.returncode != 0:
     print("4b fake 输出尾部:", "\n".join(proc2.stdout.splitlines()[-6:])[:500],
           "stderr:", (proc2.stderr or "")[-500:])
-rec("4b 无失败时零退出", "exit=0", f"exit={proc2.returncode} stderr={(proc2.stderr or '')[-180:]}", proc2.returncode == 0)
+rec("4b 无失败时零退出", "exit=0",
+    f"exit={proc2.returncode} stdout={(proc2.stdout or '')[-800:]} "
+    f"stderr={(proc2.stderr or '')[-800:]}", proc2.returncode == 0)
 
 # 4c 期望用例数预算：桩少输出一行 [PASS]（汇总行同步改成 expect-1，内部自洽）→
 # execution.verdict 的 observed != expect 必须让它变红；错误行要指出单元名与期望/实际。

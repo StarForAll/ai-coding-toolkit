@@ -186,6 +186,11 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
 
 ## 隔离 scope、成本账目与证据计数（2026-11-15）
 
+- **宿主保护的终态证据**：类入口/出口对 `~/.cache/wf-test-release`、`~/.cache/wf-test-run`、
+  `~/.cache/wf-candidate-repo` 与生产结果锁做只读树清单（相对路径/类型/权限/regular 文件字节摘要/
+  链接目标；不跟随树外链接、不记录内容），缺失、空目录与正常目录区分。每次调用仍保留轻量
+  inode/mtime 定位证据，但不再是终态证明（`host_snapshot.py`，含深层改写/改权限/换链接/增删/
+  不可读的自证用例）。
 - **契约测试的单 scope 口径**（`scripts/tests/wf_runtime/test_run_all_contract.py`，`WF_SLOW_TESTS=1`）：
   整个 class 只建一个 owned scope（`fixture_scope.py create-scope`）+ 空 pool 布局
   `pool/results-cache`、`pool/test-release`；每个逻辑 case 有自己的 `state`（同一 case 的多次调用
@@ -201,9 +206,9 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   teardown 与剩余 deadline 写进 `<scope>/evidence/class-cost.json`；`WF_CONTRACT_KEEP_SCOPE=1` 保留现场。
 - **阶段与计划计数文件**（证据，不是门禁）：`run_all` 在每个阶段入口向 `$WF_RESULTS_DIR/stages` 追加名字；
   `public` 阶段在 claim 之前不能写结果目录，由 `lease` 阶段在 claim/prepare 之后补记，因此一次真实 run
-  是 `public,lease,controlled,execute` 四行。`plan.py` 每真正计算一次计划就向 `WF_PLAN_LOG`（preflight 的
-  bootstrap 文件）或 `$WF_RESULTS_DIR/plan-calls` 追加一行；preflight 的计数在 claim 后并入结果目录，
-  一次真实 run 合计 2 行（preflight + final）。
+  是 `public,lease,controlled,execute` 四行。计划计数不再创建 bootstrap 文件：preflight 的阶段行只留在
+  内存里，`lease` claim/prepare 之后与 final plan 一起写 `$WF_RESULTS_DIR/plan-calls`，一次真实 run
+  合计 2 行；`--list`/`--dry-run` 全程零写入。
 - **调用计数注入点**（默认值不变，仅测试使用；不劫持 PATH）：`WF_TEST_RELEASE_CLI`（测试发行 CLI，
   `release_context.py` 与 `repro/run.sh` 都消费）、`WF_CANDIDATE_VALIDATOR`（候选校验，
   `release_context.py`、`repro/run.sh`、repro 最终 writer barrier 都消费）、`WF_GIT_BIN`
@@ -274,17 +279,72 @@ python3 scripts/tests/wf_runtime/full/fixture_scope.py remove <精确的 owned �
 即回收（2026-11-16 起父目录也会被清掉，不再留空壳）；历史残留由下一次 ensure 的
 `_cleanup_stale()` 按前缀回收，也可按上面的"显式路径"逐条删除（不做 glob/`rm -rf`）。
 
-## 已知边界：SUT 对项目外符号链接的写入
+## 产品技能根边界（项目 → 基址 → 资产）
 
-- **已拦住**：资产落点本身是指向项目外的符号链接（`proj/.wf/bin/wf.py -> outside/x`）→
-  `WF_ASSET_DECISION`（`target resolves outside its base`），整批零写入。
-- **未拦住（产品侧缺口）**：技能根目录（如 `proj/.claude/skills`）是指向项目外的符号链接时，
-  `install.py` 返回 `WF_OK` 并把 assets 写进项目外目录（实测 13 个 skill 目录）。根因：
-  `resolve_skill_roots()` 不校验技能根真实落点，`plan_writes()/inside()` 对已 realpath 的 base 判"在内"。
-  修复必须**同时覆盖 `uninstall.py` 的同判据**，并走发行重建（字节复现 + token parity）；
-  本仓库的 runner 任务不改产品 payload，故以
-  `test_run_all_contract.py::RunAllContractTest::test_known_gap_install_writes_through_a_symlinked_skill_root`
-  作为可复跑证据（逃逸目标仍在该 case 的 `WF_FIX` owned scope 内，不污染宿主）。
+三个入口（`payload/install.py`、`payload/bin/uninstall.py`、`scripts/wf-dev-deploy.py`）用同一判据：
+登记基址的实际位置必须在真实项目根内，资产实际落点还必须同时在该基址与项目根内；尚不存在路径
+按最近现有祖先解析 `..` 与符号链接，坏链直接拒绝。
+
+- 资产落点本身是指向项目外的符号链接 → `WF_ASSET_DECISION`，整批零写入；
+- 技能根目录（如 `proj/.claude/skills`）或其它祖先指向项目外 → 同样整批拒绝；产品修复后
+  `test_asset_boundaries.py` 与 `test_run_all_contract.py::test_install_refuses_a_symlinked_skill_root_outside_the_project`
+  是正式负断言，不再是 known-gap；
+- uninstall 的历史绝对 root_ref 若仍在项目内允许，项目外记录拒绝且不删除外部对象；确认后 apply
+  在同一锁内重新解析根并整批复核选中集合；
+- dev-deploy 的首装、追加平台、预览与锁内重算共用 `plan_deployment` 的完整计划，`root_record`
+  只序列化通过校验的项目内根。
+
+## 证据相位、运行身份与成功出口
+
+- **相位**：`execution.verdict(kind='repro')` 必须显式给 `green|red`；日志里只有相反相位的
+  `PASS <phase>:`、空日志、矛盾 PASS/FAIL 或非零退出都不能签发证明。worker、gate、writer 用同一判定。
+- **运行身份**：`repro_select._runtime_identity()` 与 `release_context.py` 都用
+  `python_runtime_identity.Resolver` 的完整投影（路径身份 + 调用文件字节 + 解释器二进制字节 +
+  实现/版本）；同路径二进制或 SUT 版本变化会改变 red subject，旧证明失去资格。
+  bundle/state/release-context 成组升级（bundle 3、state 4、execution context 2、release context 2）；
+  schema 1/2/3 的 state 只作 legacy 保留，不作新协议证明。
+- **公共 helper 身份**：`repro_select.HELPERS` 同时登记 repro 目录内的 7 个 helper 和
+  `library_source.py`、`prepare_candidate_repo.py`、`release_context.py`、`results_gate.py`、
+  `results_summary.py`、`fixture_scope.py`、`execute_gate.py`、`run_all.sh`、`wf_test_paths.py`；
+  `public_inputs.helper_set=core-v2`，旧集合的 bundle 在 gate/writer 被拒绝。修改这些文件会让
+  red subject/fingerprint 变化，旧证明必须重新跑。
+- **零写入**：`public` 在 layout/scope 校验前统一禁写 pyc（`PYTHONDONTWRITEBYTECODE=1`）并丢弃
+  外部注入的 pycache 前缀；`--list`/`--dry-run` 全程不启用 pycache、不写结果目录（显式 dry-run
+  仅 plan.json + owner marker）。显式域外 `WF_PYCACHE` 在首次写前被拒，实测域外目录保持不存在。
+- **成功出口**：`results_summary.py` 从冻结 plan/context 与实际结果行派生计数，原子
+  write→fsync→replace→读回；创建/写/同步/替换/读回任一步失败都非零且不打印 `GATE-OK`。
+  owned 夹具/模板清理在发布摘要之前确认，失败同样阻断成功。`runner_cleanup.py` 先聚合每个
+  命令结果 JSON 的 `supervision.cleanup_state`：任一 `unknown`/`failed` 时 **保留夹具现场**
+  （不删除、不重试），summary 记 `cleanup_state=unknown` 并仍以非零退出。
+- **候选来源审计**：`candidate-audit.json` 由 `candidate_audit.py` 可复现生成，记录 59 个
+  suite 在 candidate 0.1.0 上的真实运行（逐 ID 的 `rc` 命令退出、`suite_rc` 目标进程退出、
+  `expected/observed`、失败断言、脚本摘要）。56 个通过的 suite 已把 `candidate_clean` 置为 true；
+  `r67_tests` 是 fake-tree runner 技术审计（模拟环境中的 candidate plan/scope 错误，不作为断言失败）；
+  `r90_tests`（R93 追加平台资产不一致）与 `p5_v1`（`[V1] 追加平台…: FAIL — False`）保留 dev-only，
+  覆盖表引用其具体失败断言。
+  `source_coverage.py` 的逐 ID 行同时记录脚本摘要、真实来源层、可安装执行性、不可迁移理由/
+  已安装断言；集合差集由 `coverage-baseline.json` 守护。
+
+## 命令监督（C → G → S → W）与取消
+
+`execution.py run()` 为每个命令建立固定拓扑：调用方 C → 专用 guardian G → 执行 supervisor S →
+目标 W。G/S 都是 subreaper；S 正常退出后由 G 接管其真实残留后代，任何 S 故障（普通异常、`os._exit`、
+SIGKILL、卡住）都判为设施失败而不是成功。控制面是两条匿名 socketpair 上的有界长度帧
+（READY/START/STARTED/CANCEL/CANCELLED_ACK/DONE），W 不继承控制 FD。
+
+- shell trap 不再递归强杀监督进程：它只写一次 `WF_CANCEL_FILE`（`$RESULTS_DIR/cancel-request`），
+  每个 owned `execution.py` 调用在事件循环里读到后经私有通道取消，`run_one.sh` 在启动新单元前检查
+  同一请求并停止调度；
+- 正常取消由 S 清理，S 卡住时 G 在有界宽限后终止 S 并接管；G 猝死时 S 看到 EOF 仍须清理，但
+  C 只报告 `cleanup=unknown` 与设施失败，不声称已释放锁；
+- 最后有效监督方丢失/宿主断电仍是明确的能力边界：保留现场、报告最后观测身份与恢复步骤，
+  不自动删锁或重跑。
+- 故障注入（`WF_SUPERVISOR_FAULT`/`WF_GUARDIAN_FAULT`/`WF_SUPERVISOR_READY_DELAY`/delay/grace 覆盖）
+  只在 `WF_TEST_FAULT_INJECTION=1` 下生效；普通环境变量不能改变生产监督行为。`WF_UNIT_FAULT`
+  是 run_one 的单元级测试注入点，同样受该开关约束。
+- `prepare_results` 会重置每 run 的 `.runner.json`；`runner_cleanup.py` 只聚合本轮控制结果，
+  上一轮 `cleanup_state=unknown` 不会跨轮粘连。
+- candidate `check` 的 git 调用带 `GIT_OPTIONAL_LOCKS=0`，不刷新 `.git/index`；测试直接断言 index 不变。
 
 ## 解释器契约
 
@@ -310,4 +370,9 @@ python3 scripts/tests/wf_runtime/full/fixture_scope.py remove <精确的 owned �
   full green 并行墙钟见该任务的 validation 记录（基线 204s @4 jobs / 上一任务 174.99s）。
 - 2026-11-14（任务 11-14-wf-runner-round2-contracts）：pyc 缓存 −35%/单元、模板跨 run 缓存
   （单套件 13.4→6.1s）、flows/extra 入池；full 并行 **90.3/88.8s → 49.9/49.7s**，串行 267→259s。
+- 2026-11-16（本任务）：保留证据的 cold 并行 full green **72.74s**（ext4）vs 上一任务存档 cold
+  **52.8s**（`11-15-wf-runner-boundaries-followup/validation-2026-11-15.md`），+37.8%；历史 tmpfs
+  66.28s 留存作量级参考（存储/负载未做同轮 A/B）。ext4 串行 417.25s 是全新冷 scope，不能与存档
+  reused 的 268.2s 直接比较。新增命令监督（C→G→S→W）、公共 helper 身份、cleanup 聚合与审计测试
+  是主要成本。无硬失败门槛，按审查口径接受偏差。
   热路径守护：`test_runner_budgets.py` 断言 `wf.py status` 5 次中位数 < 500ms（`WF_PERF_GUARD=0` 可关）。

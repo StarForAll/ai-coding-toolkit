@@ -5,6 +5,10 @@
 # 部署来源与发行参数通过环境（WF_FIXTURE_DEPLOY / WF_RELEASE_* / WF_INSTALL_REF）传进来。
 set -uo pipefail
 record=${1:?}
+# 取消请求（shell trap 写入）在启动新单元前检查：停止调度，不写结果行。
+if [ -n "${WF_CANCEL_FILE:-}" ] && [ -f "$WF_CANCEL_FILE" ]; then
+  exit 143
+fi
 IFS=':' read -r unit kind expect fixture script <<< "$record"
 : "${FIX:?}" "${HERE:?}" "${PY:?}" "${SHARED_RELEASE:?}" "${RESULTS_DIR:?}"
 # pyc 一律落在结果目录（run_all 已导出；独立调用时兜底），不落源树/夹具。
@@ -114,6 +118,10 @@ isolated_args() {
 }
 user_args=($(isolated_args))
 started=$(now_ms)
+# 测试专用：只让本单元的监督器故障，不污染外层 runner 的 C/G。生产环境无开关时不生效。
+if [ -n "${WF_UNIT_FAULT:-}" ] && [ "${WF_TEST_FAULT_INJECTION:-0}" = "1" ]; then
+  export WF_GUARDIAN_FAULT="$WF_UNIT_FAULT"
+fi
 WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$unit" --kind "$executor_kind" \
   --expected "$expect" --log "$RESULTS_DIR/$unit.test.log" \
   --result "$RESULTS_DIR/$unit.test.log.json" ${user_args[@]+"${user_args[@]}"} \

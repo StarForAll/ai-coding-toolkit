@@ -28,15 +28,18 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
 sys.path.insert(0, os.path.join(REPO_ROOT, "scripts"))
 
 import wf_release_common as common  # noqa: E402
+import wf_test_paths  # noqa: E402  （scope 下候选根与派生 sidecar 必须在首次写入前核验）
+import release_lock  # noqa: E402  （候选根的固定 sidecar 锁：同一 canonical root 的 verify/publish 事务）
 
 DEFAULT_TREE = os.path.join(REPO_ROOT, "docs", "workflows", "wf-release")
-META_SCHEMA = 1
+META_SCHEMA = 2
 OWNER_TAG = "wf-candidate-repo"
 
 
@@ -80,8 +83,11 @@ def read_json(path):
 
 
 def git(repo, *args, check=True):
+    # `git status --porcelain` 默认会刷新 .git/index（stat 缓存），这与“check 只读”矛盾。
+    # GIT_OPTIONAL_LOCKS=0 禁止这类可选索引写入；verify/check 不改变候选仓库字节。
+    env = {**os.environ, "GIT_OPTIONAL_LOCKS": "0"}
     return subprocess.run(["git", "-c", "safe.directory=*", *args], cwd=repo,
-                          capture_output=True, text=True, check=check)
+                          capture_output=True, text=True, check=check, env=env)
 
 
 def check_out_path(out):
@@ -89,6 +95,12 @@ def check_out_path(out):
         raise CandidateError("--out is required")
     if os.path.islink(out):
         raise CandidateError(f"--out must not be a symlink: {out}")
+    try:
+        # 候选根、meta/owner sidecar 与 staging 父目录都必须落在 owned scope 内。
+        wf_test_paths.require_in_scope(out, meta_path(out), owner_path(out),
+                                       os.path.dirname(os.path.realpath(out)))
+    except wf_test_paths.PathError as exc:
+        raise CandidateError(str(exc)) from exc
     real = os.path.realpath(out)
     if real == os.sep or real == os.path.realpath(os.path.expanduser("~")):
         raise CandidateError(f"--out must not be {real}")
@@ -108,8 +120,12 @@ def copy_tree(tree, dest):
     shutil.copytree(tree, dest, ignore=ignore)
 
 
+def _owner_of(out):
+    return read_json(owner_path(out))
+
+
 def verify_repo(out, version):
-    """校验候选仓库根：tag/干净/版本/结构；返回 (commit, tree_digest)。"""
+    """候选仓库根的**基础**结构：结构文件、tag、干净工作树、清单版本。"""
     real = check_out_path(out)
     if not os.path.isdir(real):
         raise CandidateError(f"候选仓库根不存在：{real}（重建或去掉 --no-build）")
@@ -134,7 +150,102 @@ def verify_repo(out, version):
     if manifest.get("version") != version:
         raise CandidateError(
             f"候选版本与 tag 不一致：wf-release.json version={manifest.get('version')!r} tag={version!r}")
-    return commit, common.tree_digest(real)
+    head = git(real, "rev-parse", "HEAD", check=False)
+    if head.returncode != 0 or not head.stdout.strip():
+        raise CandidateError(f"候选仓库根无法解析 HEAD：{real}")
+    return {"commit": commit, "head": head.stdout.strip(),
+            "tree_digest": common.tree_digest(real),
+            "manifest": manifest}
+
+
+def verify_candidate(tree, version, out):
+    """ensure 命中、check 与发布后验证共用的**完整**候选身份校验。
+
+    一致面：输入树实际摘要 = 候选实际摘要 = meta.tree_digest；meta 版本/ref/tag/commit
+    与实际 tag/HEAD 对应；owner 记录本工具所有；工作树干净；清单版本与 tag 一致。
+    任一不符返回可归因的拒绝——干净工作树只证明“与当前 HEAD 一致”，不能代替内容核对。
+    """
+    real = check_out_path(out)
+    if not os.path.isdir(real):
+        raise CandidateError(f"候选仓库根不存在：{real}")
+    owner = _owner_of(real)
+    if not owner or owner.get("owner") != OWNER_TAG or owner.get("root") != real:
+        raise CandidateError(
+            f"--out 已存在且不是 {OWNER_TAG} 产物：{real}（拒绝覆盖无主目录）")
+    meta = read_json(meta_path(real))
+    if not meta:
+        raise CandidateError(f"候选 meta 缺失：{meta_path(real)}（重建或去掉 --no-build）")
+    if meta.get("schema_version") != META_SCHEMA:
+        raise CandidateError(
+            f"候选 meta schema={meta.get('schema_version')!r}（只接受 {META_SCHEMA}；重建）")
+    if meta.get("version") != version:
+        raise CandidateError(f"候选 meta 版本过期：meta={meta.get('version')} expected={version}")
+    facts = verify_repo(real, version)
+    tree = os.path.realpath(tree or DEFAULT_TREE)
+    if not os.path.isdir(tree):
+        raise CandidateError(f"--tree 不存在：{tree}")
+    input_digest = common.tree_digest(tree)
+    for label, expected, actual in (
+            ("输入树与候选内容", input_digest, facts["tree_digest"]),
+            ("meta tree_digest 与候选内容", meta.get("tree_digest"), facts["tree_digest"]),
+            ("meta input_tree_digest 与当前输入树", meta.get("input_tree_digest"), input_digest),
+            ("meta commit 与 tag 提交", meta.get("commit"), facts["commit"]),
+            ("meta commit 与 HEAD", meta.get("commit"), facts["head"]),
+            ("meta ref 与 tag", meta.get("ref"), tag_ref(version)),
+            ("meta tag 与版本", meta.get("tag"), f"wf-v{version}"),
+            ("meta 版本与请求", meta.get("version"), version)):
+        if expected != actual:
+            raise CandidateError(f"候选身份不一致（{label}）：{expected!r} != {actual!r}")
+    return {"root": real, "version": version, "ref": tag_ref(version), "tag": f"wf-v{version}",
+            "commit": facts["commit"], "head": facts["head"],
+            "tree_digest": facts["tree_digest"], "input_tree_digest": input_digest,
+            "built_at": meta.get("built_at"),
+            "source_tree_digest": meta.get("source_tree_digest")}
+
+
+def _publish_staged(staging, real, version, meta, owner_payload):
+    """原子发布：先验证新代，再替换；失败恢复旧代与旧 sidecar。"""
+    old_meta = None
+    old_owner = None
+    try:
+        old_meta = Path(meta_path(real)).read_bytes()
+    except OSError:
+        pass
+    try:
+        old_owner = Path(owner_path(real)).read_bytes()
+    except OSError:
+        pass
+    backup = None
+    try:
+        if os.path.isdir(real):
+            backup = os.path.join(staging, "backup")
+            os.rename(real, backup)
+        elif os.path.exists(real):
+            os.unlink(real)
+        shutil.move(os.path.join(staging, "repo"), real)
+        write_json_atomic(meta_path(real), meta)
+        write_json_atomic(owner_path(real), owner_payload)
+    except BaseException:
+        shutil.rmtree(real, ignore_errors=True) if os.path.isdir(real) else None
+        if backup and os.path.isdir(backup):
+            os.rename(backup, real)
+        if old_meta is not None:
+            Path(meta_path(real)).write_bytes(old_meta)
+        if old_owner is not None:
+            Path(owner_path(real)).write_bytes(old_owner)
+        raise
+    finally:
+        if backup and os.path.isdir(backup):
+            shutil.rmtree(backup, ignore_errors=True)
+
+
+def _candidate_lock(real, exclusive):
+    try:
+        return release_lock.acquire(real, exclusive=exclusive)
+    except release_lock.Busy as exc:
+        raise CandidateError(f"候选仓库根正被另一个事务持有：{exc}") from exc
+    except release_lock.LockError as exc:
+        raise CandidateError(f"候选仓库根锁不可用：{exc}") from exc
 
 
 def ensure(tree, version, out):
@@ -151,22 +262,32 @@ def ensure(tree, version, out):
             f"--tree 的 wf-release.json version={manifest.get('version')!r} 与 --version {version!r} 不一致"
             "（先用 build-wf-release.py --version <X.Y.Z> 构建候选树）")
     real = check_out_path(out)
-    current_tree = common.tree_digest(tree)
-    meta = read_json(meta_path(real))
-    if (meta and meta.get("version") == version and meta.get("tree_digest") == current_tree
-            and os.path.isdir(real)):
-        try:
-            commit, digest = verify_repo(real, version)
-            return real, {"schema_version": META_SCHEMA, "version": version,
-                          "tag": f"wf-v{version}", "ref": tag_ref(version), "commit": commit,
-                          "tree_digest": digest, "built_at": meta.get("built_at")}, "REUSED"
-        except CandidateError:
-            pass  # 仓库被改动：重建
-    if os.path.exists(real):
-        owner = read_json(owner_path(real))
-        if not owner or owner.get("owner") != OWNER_TAG:
+    input_digest = common.tree_digest(tree)
+    lock_fd = _candidate_lock(real, exclusive=True)
+    try:
+        return _ensure_locked(tree, version, real, input_digest)
+    finally:
+        release_lock.release(lock_fd)
+
+
+def _ensure_locked(tree, version, real, input_digest):
+    if os.path.isdir(real):
+        # 已有输出：只有本工具拥有且完整身份一致时才复用；无主目录一律拒绝覆盖。
+        if _owner_of(real) is None or (_owner_of(real) or {}).get("owner") != OWNER_TAG:
             raise CandidateError(
                 f"--out 已存在且不是 {OWNER_TAG} 产物：{real}（换一个 --out 或手工清理）")
+        try:
+            facts = verify_candidate(tree, version, real)
+            return real, {"schema_version": META_SCHEMA, "version": version,
+                          "tag": facts["tag"], "ref": facts["ref"], "commit": facts["commit"],
+                          "tree_digest": facts["tree_digest"],
+                          "input_tree_digest": input_digest,
+                          "source_tree_digest": facts.get("source_tree_digest"),
+                          "built_at": facts.get("built_at")}, "REUSED"
+        except CandidateError:
+            pass  # 陈旧/被改动：重建（下面会再完整验证新代）
+    elif os.path.exists(real):
+        raise CandidateError(f"--out 已存在且不是目录：{real}")
     parent = os.path.dirname(real) or "."
     os.makedirs(parent, exist_ok=True)
     staging = tempfile.mkdtemp(prefix=".wf-candidate-", dir=parent)
@@ -177,42 +298,29 @@ def ensure(tree, version, out):
                     ["config", "user.name", "wf-candidate"], ["add", "-A"],
                     ["commit", "-qm", f"wf release {version}"], ["tag", f"wf-v{version}"]):
             git(repo, *cmd)
-        commit, digest = verify_repo(repo, version)
-        if os.path.isdir(real):
-            shutil.rmtree(real)
-        elif os.path.exists(real):
-            os.unlink(real)
-        shutil.move(repo, real)
+        facts = verify_repo(repo, version)
+        if facts["tree_digest"] != input_digest:
+            raise CandidateError("新候选内容与输入树不一致（拒绝发布）")
         meta = {"schema_version": META_SCHEMA, "version": version, "tag": f"wf-v{version}",
-                "ref": tag_ref(version), "commit": commit, "tree_digest": digest,
+                "ref": tag_ref(version), "commit": facts["commit"], "head": facts["head"],
+                "tree_digest": facts["tree_digest"], "input_tree_digest": input_digest,
                 "source_tree_digest": common.source_tree_digest(),
                 "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")}
-        write_json_atomic(meta_path(real), meta)
-        write_json_atomic(owner_path(real), {"schema_version": 1, "owner": OWNER_TAG, "root": real,
-                                             "version": version})
+        owner_payload = {"schema_version": 1, "owner": OWNER_TAG, "root": real,
+                         "version": version}
+        _publish_staged(staging, real, version, meta, owner_payload)
+        # 发布后验证：读回 meta 与实际内容/输入树全部一致才签 BUILT。
+        verify_candidate(tree, version, real)
         return real, meta, "BUILT"
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
 
 def check(tree, version, out):
+    """只读校验：不创建/改写任何文件（含锁 sidecar），供 --no-build/最终 barrier 使用。"""
     real = check_out_path(out)
-    meta = read_json(meta_path(real))
-    if not meta:
-        raise CandidateError(f"候选 meta 缺失：{meta_path(real)}（重建或去掉 --no-build）")
-    if meta.get("version") != version:
-        raise CandidateError(f"候选 meta 版本过期：meta={meta.get('version')} expected={version}")
-    commit, digest = verify_repo(real, version)
-    if meta.get("tree_digest") != digest:
-        raise CandidateError(
-            f"候选仓库树摘要与 meta 不一致（候选被改动）：meta={meta.get('tree_digest')} current={digest}")
-    if meta.get("commit") != commit:
-        raise CandidateError(f"候选 tag 提交与 meta 不一致：meta={meta.get('commit')} current={commit}")
-    tree = os.path.realpath(tree or DEFAULT_TREE)
-    if os.path.isdir(tree) and meta.get("tree_digest") != common.tree_digest(tree):
-        raise CandidateError(
-            "候选仓库与当前候选树不一致（先重建候选仓库）："
-            f"repo={meta.get('tree_digest')} tree={common.tree_digest(tree)}")
+    facts = verify_candidate(tree, version, real)
+    meta = read_json(meta_path(facts["root"]))
     return meta, "OK"
 
 

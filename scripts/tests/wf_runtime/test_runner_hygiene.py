@@ -62,11 +62,17 @@ class BytecodePolicyTest(unittest.TestCase):
         text = RUN_ALL.read_text(encoding="utf-8")
         self.assertIn("PYTHONPYCACHEPREFIX", text)
 
-    def test_bytecode_writing_is_not_disabled(self):
-        for relative in ("run_all.sh", "run_one.sh", "repro/run.sh"):
+    def test_bytecode_writing_is_only_disabled_in_the_pre_validation_window(self):
+        """路径校验/list 阶段可临时禁写 pyc，但必须显式恢复；真实执行仍走 pycache 前缀。"""
+        for relative in ("run_all.sh", "repro/run.sh"):
             text = (FULL / relative).read_text(encoding="utf-8")
-            self.assertNotIn("export PYTHONDONTWRITEBYTECODE", text,
-                             f"{relative} 不得再关闭字节码写入（策略已改为重定向到结果目录）")
+            if "export PYTHONDONTWRITEBYTECODE" in text:
+                self.assertIn("unset PYTHONDONTWRITEBYTECODE", text,
+                              f"{relative} 的 pyc 禁写必须是可恢复窗口，不能永久关闭")
+                self.assertIn("PYTHONPYCACHEPREFIX", text,
+                              f"{relative} 真实执行仍需重定向 pycache")
+        text = (FULL / "run_one.sh").read_text(encoding="utf-8")
+        self.assertNotIn("export PYTHONDONTWRITEBYTECODE", text)
 
 
 class GitignoreTest(unittest.TestCase):

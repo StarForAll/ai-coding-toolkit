@@ -3,6 +3,13 @@
 # 选择与冲突判定在 `plan.py`（唯一 plan()）；本脚本只用它的计划执行，避免两份选择逻辑。
 # 详细用法：run_all.sh --help
 set -uo pipefail
+# 路径/scope 校验完成之前一律禁写 pyc，并丢弃外部注入的 pycache 前缀：
+# public/preflight/--list/--dry-run 不得在任何位置（含域外 WF_PYCACHE）产生写入。
+# 内部 frame 重入（lease/controlled/execute）继承父阶段已批准的 pycache，不得清除。
+if [ "${1:-}" != "--_wf-internal" ]; then
+  export PYTHONDONTWRITEBYTECODE=1
+  unset PYTHONPYCACHEPREFIX
+fi
 # usage 是唯一文本来源（heredoc），不按行号回头注释提取——头注释不再承载正文。
 usage() { cat <<'EOF'
 模式：
@@ -35,6 +42,8 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 PY=/softwares/python/bin/python3
 REPO_ROOT=$(cd "$HERE/../../../.." && pwd)
 SCOPE_HELPER="$HERE/fixture_scope.py"
+# 管理路径/scope 的唯一所有者（作者侧）；shell 只消费它派生并校验过的值。
+PATH_HELPER="$REPO_ROOT/scripts/wf_test_paths.py"
 
 # ---- 内部 frame：先整体剥离/校验，再处理用户 argv（非法不 fallback）------------
 # public 没有前缀；lease/controlled/execute 是同一脚本的三次重入，只有两次计划。
@@ -64,28 +73,26 @@ verify_inherited_locks() {
 case "$STAGE" in
   public)
     case "${1:-}" in -h|--help) usage; exit 0 ;; esac
-    # 字节码缓存策略（D3.1）：pyc 一律落在仓库与夹具之外。计划前用 bootstrap 前缀——
-    # 结果目录尚未 claim，先写 pyc 会让“非空无主目录”被 fixture_scope 拒绝；claim/prepare
-    # 之后改指结果目录（随 run 轮转，可经 WF_PYCACHE 注入）。
-    export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-${TMPDIR:-/tmp}/wf-pycache-bootstrap}"
-    unset PYTHONDONTWRITEBYTECODE
+    # pycache 只在 layout/scope 校验通过后启用；此前的 helper/preflight/list 全程禁写。
     # 显式性在此刻按原始环境记录一次，内部 frame 原样传递，重入不重新猜。
     if [ -n "${WF_RESULTS_DIR:-}" ]; then RESULTS_EXPLICIT=1; else RESULTS_EXPLICIT=0; fi
-    if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
-      # 测试域：结果/夹具/cache/state 默认也在 scope 内（越界写前拒绝，默认值不得自己越界）。
-      WF_RESULTS_DIR=${WF_RESULTS_DIR:-$WF_TEST_SCOPE_ROOT/run-$$}
-      export WF_FIX="${WF_FIX:-$WF_TEST_SCOPE_ROOT/fixtures/run-$$}"
-      export WF_RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
-      export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$WF_TEST_SCOPE_ROOT/state}"
-    else
-      WF_RESULTS_DIR=${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}
+    # 管理路径的唯一规则（wf_test_paths）：scope 下默认值从 scope 派生，显式域外值在
+    # 首次写前拒绝；无 scope 时保持历史默认。layout 只派生/校验，不写任何文件。
+    if ! layout_out=$("$PY" "$PATH_HELPER" layout --kind run --pid "$$" --format sh); then
+      exit 2
     fi
+    eval "$layout_out" || { echo "LAYOUT-EVAL-FAILED" >&2; exit 2; }
+    WF_RESULTS_DIR=${WF_RESULTS_DIR:-$LAYOUT_RESULTS_DIR}
+    export WF_FIX="${WF_FIX:-$LAYOUT_FIX}"
+    export WF_RESULTS_CACHE="${WF_RESULTS_CACHE:-$LAYOUT_RESULTS_CACHE}"
+    export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$LAYOUT_STATE}"
+    export WF_TEST_RELEASE_CACHE="${WF_TEST_RELEASE_CACHE:-$LAYOUT_TEST_RELEASE_CACHE}"
     WF_RESULTS_DIR=$("$PY" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$WF_RESULTS_DIR")
     export WF_RESULTS_DIR
     # 唯一一次 preflight：禁写 pyc、不给 WF_RESULTS_DIR（list/dry-run 全程零写入）。
-    # 计划调用计数先落 bootstrap 文件（结果目录尚不存在），claim 后并入结果目录。
-    PLAN_LOG_BOOTSTRAP="${TMPDIR:-/tmp}/wf-plan-calls-$$"
-    export WF_PLAN_LOG="$PLAN_LOG_BOOTSTRAP"
+    # 计划调用计数不落任何文件：preflight 的阶段行在内存里暂存，claim 之后与 final plan
+    # 一起写入结果目录（不再创建再删除 bootstrap 文件来冒充零写入）。
+    unset WF_PLAN_LOG
     preflight_out=$(PYTHONDONTWRITEBYTECODE=1 WF_RESULTS_DIR= "$PY" "$HERE/plan.py" --format sh -- "$@")
     plan_rc=$?
     if [ "$plan_rc" -ne 0 ]; then
@@ -95,27 +102,30 @@ case "$STAGE" in
       echo "PLAN-EVAL-FAILED" >&2
       exit 2
     fi
+    export WF_PREFLIGHT_PLAN_LINE="${PLAN_MODE:-} ${PLAN_LIST_ONLY:-}"
     if [ "${PLAN_LIST_ONLY:-0}" = "1" ] || [ "${WF_NO_RUN:-0}" = "1" ]; then
       # 显式结果目录：只写 plan.json 与必要 owner marker，并在当前域固定结果锁下短期完成。
       if [ "$RESULTS_EXPLICIT" = "1" ] && [ "${PLAN_LIST_ONLY:-0}" = "1" ]; then
-        rm -f "$PLAN_LOG_BOOTSTRAP" 2>/dev/null || true
         exec "$PY" "$SCOPE_HELPER" lease-domain -- bash -c '
           "$1" "$2" claim-results "$3" || exit 1
           "$1" "$4" --format json -- "${@:5}" >/dev/null || exit 2' \
           lease-mirror "$PY" "$SCOPE_HELPER" "$WF_RESULTS_DIR" "$HERE/plan.py" -- "$@"
       fi
-      rm -f "$PLAN_LOG_BOOTSTRAP" 2>/dev/null || true
       exit 0
     fi
     # 测试域：runner 管理的写入口必须落在 owned scope 内（越界写前拒绝）。
     if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
       "$PY" "$SCOPE_HELPER" check-scope "$WF_TEST_SCOPE_ROOT" "$WF_RESULTS_DIR" \
         ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} ${WF_TEST_RUN_CACHE:+"$WF_TEST_RUN_CACHE"} \
+        ${WF_TEST_RELEASE_CACHE:+"$WF_TEST_RELEASE_CACHE"} \
         ${WF_PYCACHE:+"$WF_PYCACHE"} ${WF_FIX:+"$WF_FIX"} || exit 2
       SCOPE_FIELD="$WF_TEST_SCOPE_ROOT"
     else
       SCOPE_FIELD="-"
     fi
+    # 路径验证已通过：启用批准的 pycache 前缀（scope 下为 scope 内 bootstrap）。
+    export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$LAYOUT_PYCACHE_BOOTSTRAP}"
+    unset PYTHONDONTWRITEBYTECODE
     FRAME=()
     lease_frame=$("$PY" "$HERE/runner_protocol.py" encode --stage lease -- \
       --entry-pid "$$" --results-root "$WF_RESULTS_DIR" \
@@ -132,9 +142,10 @@ case "$STAGE" in
     "$PY" "$SCOPE_HELPER" prepare-results "$WF_RESULTS_DIR" || exit 1
     note_stage public
     note_stage lease
-    if [ -n "${WF_PLAN_LOG:-}" ] && [ -s "$WF_PLAN_LOG" ] && [ "$WF_PLAN_LOG" != "$WF_RESULTS_DIR/plan-calls" ]; then
-      cat "$WF_PLAN_LOG" >> "$WF_RESULTS_DIR/plan-calls" 2>/dev/null || true
-      rm -f "$WF_PLAN_LOG" 2>/dev/null || true
+    # 计划调用计数：preflight 的一行来自内存（public 阶段不落任何文件），final plan 由
+    # plan.py 自己追加到同一文件；复用结果目录时这两个文件都已在 prepare-results 清空。
+    if [ -n "${WF_PREFLIGHT_PLAN_LINE:-}" ]; then
+      printf '%s\n' "$WF_PREFLIGHT_PLAN_LINE" >> "$WF_RESULTS_DIR/plan-calls"
     fi
     export WF_PLAN_LOG="$WF_RESULTS_DIR/plan-calls"
     export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$WF_RESULTS_DIR/pycache}"
@@ -258,15 +269,37 @@ WF_TEMPLATE=""
 WF_TEMPLATE_READY=0
 # run 内模板（结果目录里）由本 run 拥有、结束即删；跨 run 缓存条目绝不在此删除。
 RUN_TEMPLATE=""
+# 取消协议：shell 不再递归强杀监督进程（那会绕过 G 的最终核验）；它只写一次性取消请求，
+# 每个 owned `execution.py` 调用（C）在自己的事件循环里读到后经私有通道取消 G/S，
+# 并等到 G 的最终 DONE+退出才返回。run_one 在启动新单元前检查同一请求，停止调度。
+CANCEL_REQUEST="$RESULTS_DIR/cancel-request"
+rm -f "$CANCEL_REQUEST" 2>/dev/null || true
+export WF_CANCEL_FILE="$CANCEL_REQUEST"
+CLEANUP_DONE=0
+CLEANUP_FAILED=0
 cleanup_fixtures() {
+  local rc=0
   for fixture_path in "$FIX" "$LEGACY_FIXTURE_ROOT" ${RUN_TEMPLATE:+"$RUN_TEMPLATE"}; do
     [ -n "$fixture_path" ] || continue
-    "$PY" "$SCOPE_HELPER" remove "$fixture_path" >/dev/null 2>&1 || true
+    [ -e "$fixture_path" ] || continue
+    "$PY" "$SCOPE_HELPER" remove "$fixture_path" >/dev/null 2>>"$RESULTS_DIR/cleanup.err" || rc=1
   done
+  return "$rc"
 }
-trap cleanup_fixtures EXIT
-trap 'trap "" INT TERM; "$PY" "$HERE/execution.py" --cancel-parent-children; exit 143' TERM
-trap 'trap "" INT TERM; "$PY" "$HERE/execution.py" --cancel-parent-children; exit 130' INT
+on_exit_cleanup() {
+  if [ "$CLEANUP_DONE" != "1" ]; then
+    cleanup_fixtures >/dev/null 2>&1 || true
+  fi
+}
+trap on_exit_cleanup EXIT
+# 早期阶段（public/lease/controlled 被直接 TERM）不需要递归清理；ctrl 阶段由 C 收口。
+request_cancel() {
+  trap '' INT TERM HUP
+  printf 'cancelled by shell trap\n' > "$CANCEL_REQUEST" 2>/dev/null || true
+}
+trap 'request_cancel; exit 143' TERM
+trap 'request_cancel; exit 130' INT
+trap 'request_cancel; exit 129' HUP
 
 # ---- 源树卫生：运行前快照（唯一实现 source_hygiene.py）----------------------
 # 只对**新增**失败（本地存量以警告 + 清理命令呈现）；AC3 的绝对判据另行用 find 复核。
@@ -616,6 +649,10 @@ else
   JOBS=1
   # 串行域 = 宿主 /tmp + 无 unshare（与今天 --serial 的可观测语义一致，是 AC1 的对拍面）。
   for rec in "${UNIT_RECORDS[@]}"; do
+    if [ -f "$CANCEL_REQUEST" ]; then
+      echo "CANCEL-REQUESTED: 停止调度剩余单元"
+      break
+    fi
     WF_NAMESPACE=0 bash "$HERE/run_one.sh" "$rec"
   done
 fi
@@ -626,8 +663,25 @@ fi
 
 # ---- 完整性判定（唯一实现 results_gate.py）：两段都结束后对名字全集判一次 ---
 sort -t$'\t' -k1 "$RESULTS_MARK" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
-gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "$ALL_NAMES")
-eval "$gate_out"
+gate_rc=0
+gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "$ALL_NAMES") || gate_rc=$?
+if [ -z "$gate_out" ]; then
+  # gate helper 崩溃/无输出：按“未验证”失败，不留下未绑定变量把脚本打断。
+  echo "RESULTS-GATE-FAILED: rc=$gate_rc（结果行未判定）"
+  gate_out="GATE_MALFORMED=0
+GATE_UNIQUE=0
+GATE_MISSING=
+GATE_DUPLICATE=
+GATE_UNEXPECTED=
+GATE_BAD="
+  fail=$((fail + 1))
+fi
+eval "$gate_out" || { echo "GATE-EVAL-FAILED"; fail=$((fail + 1)); }
+GATE_MALFORMED=${GATE_MALFORMED:-0}
+GATE_MISSING=${GATE_MISSING:-}
+GATE_DUPLICATE=${GATE_DUPLICATE:-}
+GATE_UNEXPECTED=${GATE_UNEXPECTED:-}
+GATE_BAD=${GATE_BAD:-}
 if [ "$GATE_MALFORMED" -ne 0 ]; then
   echo "MALFORMED-RESULTS: $GATE_MALFORMED 行"
 fi
@@ -760,25 +814,63 @@ if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_
   TEMPLATE_BUILD_SEQUENCES=1
 fi
 
-SUMMARY_JSON="$RESULTS_DIR/summary.json"
-WF_SUMMARY_JSON="$SUMMARY_JSON" \
-WF_SUMMARY_MODE="$PLAN_MODE" WF_SUMMARY_FULL_MODE="$PLAN_FULL_MODE" \
-WF_SUMMARY_DEPLOY="$PLAN_FIXTURE_DEPLOY" \
-WF_SUMMARY_SUITE_RAN="$suite_ran" WF_SUMMARY_FLOW_RAN="$flow_ran" WF_SUMMARY_UNITS="$units_total" \
-WF_SUMMARY_REPRO_RAN="$repro_ran" WF_SUMMARY_FAIL="$unknown_fail" \
-WF_SUMMARY_DEBT="$debt" WF_SUMMARY_BUILD="$build_seconds" WF_SUMMARY_TEMPLATE="$TEMPLATE_SECONDS" \
-WF_SUMMARY_INIT_MS="$init_millis" WF_SUMMARY_SUITE_MS="$suite_millis" \
-WF_SUMMARY_GREEN="$green_seconds" WF_SUMMARY_RED="$red_seconds" \
-WF_SUMMARY_TOTAL="$total_seconds" WF_SUMMARY_TOTAL_MS="$total_millis" WF_SUMMARY_EFFECTIVE_JOBS="$JOBS" WF_SUMMARY_EXECUTION_MODE="$EXECUTION_MODE" WF_SUMMARY_FALLBACK="$FALLBACK_REASON" WF_SUMMARY_REPRO_MODE="$PLAN_REPRO_MODE" \
-WF_SUMMARY_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
-WF_SUMMARY_POOL_SECONDS="$POOL_SECONDS" WF_SUMMARY_REPRO_SECONDS="$repro_seconds" \
-WF_SUMMARY_REPRO_CONCURRENT="$PLAN_REPRO_CONCURRENT" \
-WF_SUMMARY_PYCACHE_ROOT="$PYTHONPYCACHEPREFIX" \
-WF_SUMMARY_TEMPLATE_SOURCE="$TEMPLATE_SOURCE" \
-WF_SUMMARY_TEMPLATE_CACHE_HIT="$TEMPLATE_CACHE_HIT" \
-WF_SUMMARY_TEMPLATE_CACHE_KEY="$TEMPLATE_CACHE_KEY" \
-WF_SUMMARY_TEMPLATE_SEQUENCES="$TEMPLATE_BUILD_SEQUENCES" \
-WF_SUMMARY_JOBS="$PLAN_JOBS" WF_SUMMARY_REPRO_JOBS="$PLAN_REPRO_JOBS" \
+# ---- 取消请求在收口前出现：不得签成功 -----------------------------------------
+if [ -f "$CANCEL_REQUEST" ]; then
+  echo "CANCEL-REQUESTED: 运行被取消，跳过成功出口"
+  unknown_fail=$((unknown_fail + 1))
+fi
+
+# ---- 已拥有资源清理：必须在发布摘要与成功出口之前确认 ---------------------------
+# 先聚合每个命令的 cleanup 结论：命令级 unknown/failed 时保留现场，不删除夹具。
+cleanup_unknown_out=$("$PY" "$HERE/runner_cleanup.py" --results-dir "$RESULTS_DIR" --format sh) || true
+eval "$cleanup_unknown_out" || { echo "CLEANUP-STATE-EVAL-FAILED"; unknown_fail=$((unknown_fail + 1)); }
+if [ "${CLEANUP_UNKNOWN_COUNT:-0}" -gt 0 ]; then
+  echo "CLEANUP-UNKNOWN: 命令级清理未确认（${CLEANUP_UNKNOWN:-unknown}）；保留夹具/现场，不重试"
+  echo "恢复步骤：核对 EXECUTION-FAILED 里的 command/guardian/supervisor/target 身份，确认无存活持有者后再人工回收。"
+  unknown_fail=$((unknown_fail + 1))
+  CLEANUP_STATE=unknown
+  CLEANUP_DONE=1
+else
+  cleanup_rc=0
+  cleanup_fixtures || cleanup_rc=$?
+  if [ "$cleanup_rc" -ne 0 ]; then
+    echo "CLEANUP-FAILED: 本 run 拥有的夹具/模板未能回收（见 $RESULTS_DIR/cleanup.err）"
+    unknown_fail=$((unknown_fail + 1))
+  fi
+  CLEANUP_DONE=1
+  if [ "$cleanup_rc" -ne 0 ]; then CLEANUP_STATE=failed; else CLEANUP_STATE=cleaned; fi
+fi
+
+# ---- 失败计数拆分：lines 的 bad 行由 summary 从实际结果集派生 ------------------
+bad_lines=$(printf '%s' "$GATE_BAD" | wc -w)
+extra_failures=$(( unknown_fail - bad_lines ))
+[ "$extra_failures" -lt 0 ] && extra_failures=0
+
+# ---- 摘要：计数从实际结果集 × 注册 kind 派生，原子发布 + 读回，失败即非零 --------
+METRICS_JSON="$RESULTS_DIR/summary-metrics.json"
+WF_METRICS_JSON="$METRICS_JSON" \
+WF_METRICS_MODE="$PLAN_MODE" WF_METRICS_FULL_MODE="$PLAN_FULL_MODE" \
+WF_METRICS_DEPLOY="$PLAN_FIXTURE_DEPLOY" \
+WF_METRICS_REPRO_RAN="$repro_ran" WF_METRICS_REPRO_FAIL="$repro_fail" \
+WF_METRICS_DEBT="$debt" WF_METRICS_BUILD="$build_seconds" WF_METRICS_TEMPLATE="$TEMPLATE_SECONDS" \
+WF_METRICS_INIT_MS="$init_millis" WF_METRICS_SUITE_MS="$suite_millis" \
+WF_METRICS_GREEN="$green_seconds" WF_METRICS_RED="$red_seconds" \
+WF_METRICS_TOTAL_MS="$total_millis" WF_METRICS_EFFECTIVE_JOBS="$JOBS" \
+WF_METRICS_EXECUTION_MODE="$EXECUTION_MODE" WF_METRICS_FALLBACK="$FALLBACK_REASON" \
+WF_METRICS_REPRO_MODE="$PLAN_REPRO_MODE" WF_METRICS_REPRO_GROUPS="$PLAN_REPRO_GROUPS" \
+WF_METRICS_POOL_SECONDS="$POOL_SECONDS" WF_METRICS_REPRO_SECONDS="$repro_seconds" \
+WF_METRICS_REPRO_CONCURRENT="$PLAN_REPRO_CONCURRENT" \
+WF_METRICS_PYCACHE_ROOT="${PYTHONPYCACHEPREFIX:-}" \
+WF_METRICS_TEMPLATE_SOURCE="$TEMPLATE_SOURCE" \
+WF_METRICS_TEMPLATE_CACHE_HIT="$TEMPLATE_CACHE_HIT" \
+WF_METRICS_TEMPLATE_CACHE_KEY="$TEMPLATE_CACHE_KEY" \
+WF_METRICS_TEMPLATE_SEQUENCES="$TEMPLATE_BUILD_SEQUENCES" \
+WF_METRICS_JOBS="$PLAN_JOBS" WF_METRICS_REPRO_JOBS="$PLAN_REPRO_JOBS" \
+WF_METRICS_GATE_MALFORMED="$GATE_MALFORMED" WF_METRICS_GATE_MISSING="$(printf '%s' "$GATE_MISSING" | wc -w)" \
+WF_METRICS_GATE_DUPLICATE="$(printf '%s' "$GATE_DUPLICATE" | wc -w)" \
+WF_METRICS_GATE_UNEXPECTED="$(printf '%s' "$GATE_UNEXPECTED" | wc -w)" \
+WF_METRICS_EXTRA_FAILURES="$extra_failures" \
+WF_METRICS_CLEANUP_STATE="$CLEANUP_STATE" \
 "$PY" - <<'PY'
 import json, os
 
@@ -795,66 +887,75 @@ def release_build():
         return None
 
 
-groups = (os.environ.get("WF_SUMMARY_REPRO_GROUPS") or "").split()
-total_seconds = round(int(os.environ["WF_SUMMARY_TOTAL_MS"]) / 1000, 3)
-pool_seconds = int(os.environ.get("WF_SUMMARY_POOL_SECONDS") or 0)
-repro_seconds = int(os.environ.get("WF_SUMMARY_REPRO_SECONDS") or 0)
-payload = {
-    "schema_version": 2,
-    "mode": os.environ.get("WF_SUMMARY_MODE"),
-    "full_mode": int(os.environ.get("WF_SUMMARY_FULL_MODE") or 0),
-    "fixture_deploy": os.environ.get("WF_SUMMARY_DEPLOY"),
-    "suite_ran": int(os.environ.get("WF_SUMMARY_SUITE_RAN") or 0),
-    "flow_ran": int(os.environ.get("WF_SUMMARY_FLOW_RAN") or 0),
-    "repro_ran": int(os.environ.get("WF_SUMMARY_REPRO_RAN") or 0),
-    "units_total": int(os.environ.get("WF_SUMMARY_UNITS") or 0),
-    "repro_mode": os.environ.get("WF_SUMMARY_REPRO_MODE"),
-    "repro_groups": groups,
-    "jobs": int(os.environ.get("WF_SUMMARY_EFFECTIVE_JOBS") or 0),
-    "requested_jobs": int(os.environ.get("WF_SUMMARY_JOBS") or 0),
-    "effective_jobs": int(os.environ.get("WF_SUMMARY_EFFECTIVE_JOBS") or 0),
-    "execution_mode": os.environ.get("WF_SUMMARY_EXECUTION_MODE"),
-    "fallback_reason": os.environ.get("WF_SUMMARY_FALLBACK"),
-    "repro_jobs": int(os.environ.get("WF_SUMMARY_REPRO_JOBS") or 0),
-    # init/suite 是各套件累计（并行下总和可大于 total_seconds），totals 才是墙钟
-    "timing_note": "init_seconds/suite_seconds 为全部执行单元累计；total_seconds 为墙钟",
-    "fail": int(os.environ.get("WF_SUMMARY_FAIL") or 0),
-    "legacy_debt": int(os.environ.get("WF_SUMMARY_DEBT") or 0),
-    "build_seconds": int(os.environ.get("WF_SUMMARY_BUILD") or 0),
-    "template_seconds": int(os.environ.get("WF_SUMMARY_TEMPLATE") or 0),
-    "template_reused": bool(os.environ.get("WF_TEMPLATE_READY") == "1"),
-    "template_source": os.environ.get("WF_SUMMARY_TEMPLATE_SOURCE"),
-    "template_cache_hit": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_HIT") == "1",
-    "template_cache_key": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_KEY") or None,
-    # 成本账目：release 构建状态与模板缓存构建序列次数（只报告，不作为门禁）。
+def number(name, default=0):
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+    return int(value)
+
+
+metrics = {
+    "mode": os.environ.get("WF_METRICS_MODE"),
+    "full_mode": number("WF_METRICS_FULL_MODE"),
+    "fixture_deploy": os.environ.get("WF_METRICS_DEPLOY"),
+    "repro_ran": number("WF_METRICS_REPRO_RAN"),
+    "repro_fail": number("WF_METRICS_REPRO_FAIL"),
+    "legacy_debt": number("WF_METRICS_DEBT"),
+    "build_seconds": number("WF_METRICS_BUILD"),
+    "template_seconds": number("WF_METRICS_TEMPLATE"),
+    "init_millis": number("WF_METRICS_INIT_MS"),
+    "suite_millis": number("WF_METRICS_SUITE_MS"),
+    "green_seconds": number("WF_METRICS_GREEN"),
+    "red_seconds": number("WF_METRICS_RED"),
+    "total_seconds": round(number("WF_METRICS_TOTAL_MS") / 1000, 3),
+    "effective_jobs": number("WF_METRICS_EFFECTIVE_JOBS"),
+    "execution_mode": os.environ.get("WF_METRICS_EXECUTION_MODE"),
+    "fallback_reason": os.environ.get("WF_METRICS_FALLBACK"),
+    "repro_mode": os.environ.get("WF_METRICS_REPRO_MODE"),
+    "repro_groups": (os.environ.get("WF_METRICS_REPRO_GROUPS") or "").split(),
+    "pool_seconds": number("WF_METRICS_POOL_SECONDS"),
+    "repro_seconds": number("WF_METRICS_REPRO_SECONDS"),
+    "repro_concurrent": os.environ.get("WF_METRICS_REPRO_CONCURRENT") == "1",
+    "pycache_root": os.environ.get("WF_METRICS_PYCACHE_ROOT"),
+    "template_source": os.environ.get("WF_METRICS_TEMPLATE_SOURCE"),
+    "template_cache_hit": os.environ.get("WF_METRICS_TEMPLATE_CACHE_HIT") == "1",
+    "template_cache_key": os.environ.get("WF_METRICS_TEMPLATE_CACHE_KEY") or None,
+    "template_reused": os.environ.get("WF_TEMPLATE_READY") == "1",
+    "template_build_sequences": number("WF_METRICS_TEMPLATE_SEQUENCES"),
+    "jobs": number("WF_METRICS_JOBS"),
+    "requested_jobs": number("WF_METRICS_JOBS"),
+    "repro_jobs": number("WF_METRICS_REPRO_JOBS"),
     "release_build": release_build(),
-    "template_build_sequences": int(os.environ.get("WF_SUMMARY_TEMPLATE_SEQUENCES") or 0),
-    "pycache_root": os.environ.get("WF_SUMMARY_PYCACHE_ROOT"),
-    "init_seconds": round(int(os.environ.get("WF_SUMMARY_INIT_MS") or 0) / 1000, 2),
-    "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),
-    "green_seconds": int(os.environ.get("WF_SUMMARY_GREEN") or 0),
-    "red_seconds": int(os.environ.get("WF_SUMMARY_RED") or 0),
-    "total_seconds": total_seconds,
-    # 分段墙钟：主池与 repro 各自独立（默认串行，开关打开时可重叠）。startup 是其余开销。
-    "pool_seconds": pool_seconds,
-    "repro_seconds": repro_seconds,
-    "startup_seconds": max(0, int(total_seconds) - pool_seconds - repro_seconds),
-    "repro_concurrent": os.environ.get("WF_SUMMARY_REPRO_CONCURRENT") == "1",
-    # 预算只报告不硬失败（任意机器上墙钟硬阈值都会假红）；任务验收证据见 PRD AC1。
-    "budget": {
-        "full_seconds_target": 60,
-        "full_seconds_hard": 65,
-        "measured_seconds": total_seconds,
-        "over_target": total_seconds > 60,
-        "over_hard": total_seconds > 65,
-    },
+    "gate_malformed": number("WF_METRICS_GATE_MALFORMED"),
+    "gate_missing": number("WF_METRICS_GATE_MISSING"),
+    "gate_duplicate": number("WF_METRICS_GATE_DUPLICATE"),
+    "gate_unexpected": number("WF_METRICS_GATE_UNEXPECTED"),
+    "extra_failures": number("WF_METRICS_EXTRA_FAILURES"),
+    "cleanup_state": os.environ.get("WF_METRICS_CLEANUP_STATE") or "unknown",
 }
-path = os.environ["WF_SUMMARY_JSON"]
+path = os.environ["WF_METRICS_JSON"]
 with open(path, "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+    json.dump(metrics, handle, ensure_ascii=False, indent=2, sort_keys=True)
     handle.write("\n")
-print("summary: " + path)
 PY
+if [ $? -ne 0 ]; then
+  echo "SUMMARY-METRICS-FAILED: 无法采集摘要输入"
+  unknown_fail=$((unknown_fail + 1))
+fi
+
+summary_rc=0
+if [ -f "$RESULTS_DIR/plan.json" ] && [ -n "${WF_FRAME_CONTEXT_FILE:-}" ] && [ -f "$METRICS_JSON" ]; then
+  "$PY" "$HERE/results_summary.py" --results-dir "$RESULTS_DIR" \
+    --plan-file "$RESULTS_DIR/plan.json" --context-file "$WF_FRAME_CONTEXT_FILE" \
+    --lines "$RESULTS_MARK" --metrics "$METRICS_JSON" || summary_rc=$?
+else
+  echo "SUMMARY-INPUTS-MISSING: 缺少冻结 plan/context 或 metrics"
+  summary_rc=1
+fi
+if [ "$summary_rc" -ne 0 ]; then
+  echo "SUMMARY-FAILED: 摘要未成功发布（非零 $summary_rc）；不输出 GATE-OK"
+  unknown_fail=$((unknown_fail + 1))
+fi
 
 echo "---- 运行 $units_total 项（套件 $suite_ran，流程/extra $flow_ran，repro $repro_ran），失败 $fail 项（其中已登记债 $debt 项）----"
 echo "---- 计时 build=${build_seconds}s template=${TEMPLATE_SECONDS}s init=$((init_millis/1000))s suite=$((suite_millis/1000))s green=${green_seconds}s red=${red_seconds}s total=${total_seconds}s ----"

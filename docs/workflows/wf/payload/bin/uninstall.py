@@ -245,19 +245,51 @@ def _safe_relative(relative):
     return True
 
 
+def _resolve_location(path):
+    """规范落点：解析现有祖先符号链接与 `..`，尚不存在的末段按组件拼接。"""
+    raw = os.path.abspath(str(path))
+    current = os.sep
+    for part in [item for item in raw.split(os.sep) if item]:
+        if part == ".":
+            continue
+        if part == "..":
+            current = os.path.dirname(current)
+            continue
+        nxt = os.path.join(current, part)
+        if os.path.islink(nxt):
+            if not os.path.exists(nxt):
+                raise ValueError(f"path component is a broken symlink: {nxt}")
+            current = os.path.realpath(nxt)
+        else:
+            current = nxt
+    return os.path.normpath(current)
+
+
 def _inside(base, path):
     base_real = os.path.realpath(base)
     path_real = os.path.realpath(path)
     return path_real == base_real or path_real.startswith(base_real + os.sep)
 
 
+def _contains(base, path):
+    return path == base or path.startswith(base + os.sep)
+
+
 def collect_targets(root, installation, manifest):
-    """按清单精确登记返回 (project 路径, skill 根路径) 两组；任一越界条目不解释直接拒绝。"""
+    """按清单精确登记返回 (project 路径, skill 根路径) 两组；任一越界条目不解释直接拒绝。
+
+    两层包含关系与 install.py 同构：项目→基址、基址/项目→资产实际落点。历史绝对
+    root_ref 若仍在项目内则允许；项目外记录明确拒绝（不改历史记录、不删外部资产）。
+    """
     project = []
     skills = []
     problems = []
     roots = installation.get("roots") or []
     project_root = os.path.abspath(root)
+    try:
+        project_real = _resolve_location(project_root)
+    except ValueError as exc:
+        raise AssetBoundary([{"reason": "project root has a broken symlink", "detail": str(exc)}]) from exc
     for asset in manifest.get("assets") or []:
         if not isinstance(asset, dict):
             problems.append({"reason": "asset entry is not an object"})
@@ -274,8 +306,15 @@ def collect_targets(root, installation, manifest):
             continue
         if target_class == "project_wf":
             resolved = resolve(project_root, relative)
-            if not _inside(project_root, resolved):
-                problems.append({"reason": "asset resolves outside the project root", "path": relative})
+            try:
+                resolved_real = _resolve_location(resolved)
+            except ValueError as exc:
+                problems.append({"reason": "asset has a broken symlink", "path": relative,
+                                 "detail": str(exc)})
+                continue
+            if not _contains(project_real, resolved_real):
+                problems.append({"reason": "asset resolves outside the project root", "path": relative,
+                                 "resolved": resolved_real, "project": project_real})
                 continue
             project.append(relative)
         else:
@@ -284,10 +323,29 @@ def collect_targets(root, installation, manifest):
                     problems.append({"reason": "skill root reference invalid", "root": root_ref})
                     continue
                 base = root_ref if os.path.isabs(root_ref) else os.path.join(project_root, root_ref)
+                try:
+                    base_real = _resolve_location(base)
+                except ValueError as exc:
+                    problems.append({"reason": "skill root has a broken symlink", "root": root_ref,
+                                     "detail": str(exc)})
+                    continue
+                if not _contains(project_real, base_real):
+                    problems.append({"reason": "skill root resolves outside the project root",
+                                     "root": root_ref, "resolved": base_real,
+                                     "project": project_real})
+                    continue
                 candidate = os.path.join(base, *relative.split("/"))
-                if not _inside(base, candidate):
-                    problems.append({"reason": "asset resolves outside its skill root",
-                                     "path": relative, "root": root_ref})
+                try:
+                    candidate_real = _resolve_location(candidate)
+                except ValueError as exc:
+                    problems.append({"reason": "asset has a broken symlink", "path": relative,
+                                     "root": root_ref, "detail": str(exc)})
+                    continue
+                if not _contains(base_real, candidate_real) \
+                        or not _contains(project_real, candidate_real):
+                    problems.append({"reason": "asset resolves outside its skill root/project",
+                                     "path": relative, "root": root_ref,
+                                     "resolved": candidate_real})
                     continue
                 skills.append(candidate)
     if problems:
@@ -440,9 +498,20 @@ def main(argv=None):
                 return blocker("WF_WRITER_BUSY",
                                "旧写者进程仍存活：停止该会话后重新预览",
                                {"holder": live}, args.json)
-            # 确认后在同一把锁内复核预览事实：选中集合或写者状态变了即失效（机制稿 §10.3）
-            now_project = [rel for rel in project_targets if os.path.exists(resolve(root, rel))]
-            now_skills = [path for path in skill_targets if os.path.exists(path)]
+            # 确认后在同一把锁内重新解析根并整批复核：根身份/选中集合变了即失效（机制稿 §10.3）
+            try:
+                relisted_project, relisted_skills = collect_targets(root, installation, manifest)
+            except AssetBoundary as exc:
+                return blocker("WF_PREVIEW_STALE",
+                               "确认后重新解析根发现资产越界：预览失效，不删除任何文件",
+                               {"problems": exc.problems[:20]}, args.json)
+            if sorted(relisted_project + relisted_skills) != sorted(project_targets + skill_targets):
+                return blocker("WF_PREVIEW_STALE",
+                               "确认后技能根/资产落点与预览不一致：请重新预览",
+                               {"preview": sorted(project_targets + skill_targets),
+                                "current": sorted(relisted_project + relisted_skills)}, args.json)
+            now_project = [rel for rel in relisted_project if os.path.exists(resolve(root, rel))]
+            now_skills = [path for path in relisted_skills if os.path.exists(path)]
             now_writer = (read_json(os.path.join(root, ".wf/writer.json")) or {}).get("state")
             if sorted(now_project + now_skills) != sorted(preview["selected_paths"]) \
                     or now_writer != preview["writer_observation"]:

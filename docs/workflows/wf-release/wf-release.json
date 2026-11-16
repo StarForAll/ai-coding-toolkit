@@ -11,7 +11,7 @@
       "target_relative": ".wf/bin/repair.py"
     },
     {
-      "digest": "sha256:f84cb56ec30148ed06afad3d8324313f20480e2d049359ecec5f29e2fd7801f0",
+      "digest": "sha256:b6792122128bd87cd3fff8f0c125b9ca2f7bc2c9416a97a5cb5bcd342f0ad965",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -31,7 +31,7 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:d3ea7b19af37e4d0186b2d8d8bf010ec5b800a35edc9b6ce59b911bc50876903",
+      "digest": "sha256:10bc588caa6c4cc5d5772885f368d15ae6a0a2d1d93b7c69e290cc1e901eef87",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -801,7 +801,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:5bca64c1013e88a345d685a1cb417373bb2bf9f799f1cffa8ab86f0dddc9ce8c",
+    "rules_digest": "sha256:ba78d34ba3625c0a7ff63bc8304e27c87db2c9ef436d86c961a26f6807d74e5f",
     "systems": [
       "linux"
     ],
@@ -1565,5 +1565,5 @@
       }
     ]
   },
-  "version": "0.1.2"
+  "version": "0.1.0"
 }
