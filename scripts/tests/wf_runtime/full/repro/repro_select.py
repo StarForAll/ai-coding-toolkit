@@ -13,7 +13,10 @@ auto 规则：dev auto 找同 red subject 的有效 dev red，无则 both；cand
 用例要求同 red subject 且 release 内容/version/ref/runtime 全等，缺失即拒绝（出口是在 dev 用同一
 内容验证 red/both）。candidate green 从不续签 red。
 
-bundle schema 1 是唯一冻结来源（`inputs.json`），env 只传它的路径；TSV 只是派生兼容面。
+bundle schema 2 是唯一冻结来源（`inputs.json`），env 只传它的路径；TSV 只是派生兼容面。
+公共输入（source/helpers/executor/runner）在 freeze 计算一次并冻结进 bundle；worker 只重算
+case 局部输入，gate 不重算任何公共摘要，唯一 writer 在最终 barrier 各重算一次公共输入与
+execution context 并与冻结值比对。旧 schema bundle 一律拒绝（每 run 产物，不迁移）。
 gate 只读调用 `validate_repro()`；唯一全局 writer 是 `commit-state` 子进程。
 """
 from __future__ import annotations
@@ -36,7 +39,7 @@ HELPERS = ("_harness.py", "_release.py", "_review_flow.py", "_review_launch.py",
            "_snapshot.py", "_executor_set.py", "_worker.py")
 RUNNER_FILES = ("repro_select.py", "run.sh")
 STATE_SCHEMA = 3
-BUNDLE_SCHEMA = 1
+BUNDLE_SCHEMA = 2
 CONTEXT_SCHEMA = 1
 PHASES = {"green": ("green",), "red": ("red",), "both": ("green", "red")}
 
@@ -87,7 +90,21 @@ def file_digest(path):
         return None
 
 
+# 公共扫描计数（design §4.2）：只给测试读，不进 bundle/状态。
+SCAN_COUNTS = {"source": 0, "release": 0, "helpers": 0}
+
+
+def reset_scans():
+    for key in SCAN_COUNTS:
+        SCAN_COUNTS[key] = 0
+
+
+def scans():
+    return dict(SCAN_COUNTS)
+
+
 def helpers_digest():
+    SCAN_COUNTS["helpers"] += 1
     return digest({name: file_digest(os.path.join(HERE, name)) for name in HELPERS})
 
 
@@ -96,6 +113,7 @@ def script_digest(case):
 
 
 def source_digest():
+    SCAN_COUNTS["source"] += 1
     sys.path.insert(0, os.path.join(REPO, "scripts"))
     import wf_release_common
     return wf_release_common.source_tree_digest()
@@ -135,6 +153,7 @@ def _runtime_identity():
 
 def release_context():
     """已核发行身份：优先用父 runner 的 handoff，独立 repro 从 env 自算。"""
+    SCAN_COUNTS["release"] += 1
     path = os.environ.get("WF_RELEASE_CONTEXT")
     if path:
         try:
@@ -180,32 +199,39 @@ def execution_context():
     }
 
 
-def _case_inputs(case, groups_doc):
+def public_inputs():
+    """公共输入的**唯一**产生点：source/helpers/executor/runner 一次算齐并冻结进 bundle。"""
+    return {"source": source_digest(),
+            "helpers": helpers_digest(),
+            "executor": file_digest(os.path.join(FULL, "execution.py")),
+            "runner": {name: file_digest(os.path.join(HERE, name)) for name in RUNNER_FILES}}
+
+
+def local_inputs(case, groups_doc):
+    """case 局部输入：只含脚本/目标/用例元数据——worker 只需重算这部分。"""
     meta = (groups_doc.get("cases") or {}).get(case) or {}
-    inputs = {"script": script_digest(case), "targets": targets_digest(case, meta),
-              "source": source_digest(), "helpers": helpers_digest(),
-              "case_meta": meta, "executor": file_digest(os.path.join(FULL, "execution.py")),
-              "runner": {name: file_digest(os.path.join(HERE, name)) for name in RUNNER_FILES}}
-    if inputs["script"] is None:
+    local = {"script": script_digest(case), "targets": targets_digest(case, meta),
+             "case_meta": meta}
+    if local["script"] is None:
         raise SelectError(f"case script is unreadable: {case}")
-    return inputs
+    return local
 
 
-def red_subject(case, groups_doc, context=None):
-    """red 可迁移主体：内容 + 运行环境 + release 内容；排除 deploy/根与各自 Git commit。"""
-    context = context or execution_context()
-    payload = {"schema": STATE_SCHEMA, "case": case,
-               "inputs": _case_inputs(case, groups_doc),
+def red_subject(case, local, public, context):
+    """red 可迁移主体：case 局部输入 + 冻结的公共输入 + 运行环境 + release 内容。
+
+    deploy/根路径与各自 Git commit 仍被排除；公共输入不再逐 case 重算，只消费冻结值。
+    """
+    payload = {"schema": STATE_SCHEMA, "case": case, "local": local, "public": public,
                "runtime": context.get("runtime"), "platform": context.get("platform"),
                "release_subject": context.get("release_subject")}
     return digest(payload)
 
 
-def input_fingerprint(case, groups_doc, context=None):
-    """case 输入 + 本次完整 context（candidate green 的实际执行身份）。"""
-    context = context or execution_context()
-    return digest({"schema": STATE_SCHEMA, "case": case,
-                   "inputs": _case_inputs(case, groups_doc), "context": context})
+def input_fingerprint(case, local, public, context):
+    """case 局部输入 + 冻结公共输入 + 本次完整 context（case execution 身份）。"""
+    return digest({"schema": STATE_SCHEMA, "case": case, "local": local, "public": public,
+                   "context": context})
 
 
 def candidate_clean(meta):
@@ -263,15 +289,17 @@ def select(group_names=(), only="", fixture_deploy="dev", mode="both", groups_do
     groups_doc = groups_doc or load_groups()
     check_candidate_manifest(groups_doc)
     chosen, skipped = _chosen(group_names, only, fixture_deploy, groups_doc)
+    # freeze barrier：公共输入与执行上下文各算一次，随后逐 case 只算局部输入。
     context = execution_context()
     if context["deploy"] != fixture_deploy:
         raise SelectError(f"context deploy={context['deploy']} 与请求 {fixture_deploy} 不符")
+    public = public_inputs()
     cases = {}
     for case in chosen:
-        subject = red_subject(case, groups_doc, context)
-        cases[case] = {"execution_fingerprint": input_fingerprint(case, groups_doc, context),
-                       "red_subject_digest": subject,
-                       "inputs": _case_inputs(case, groups_doc)}
+        local = local_inputs(case, groups_doc)
+        cases[case] = {"execution_fingerprint": input_fingerprint(case, local, public, context),
+                       "red_subject_digest": red_subject(case, local, public, context),
+                       "local_inputs": local}
     if mode == "auto":
         modes = auto_modes(cases, groups_doc, fixture_deploy)
     elif mode in ("green", "red", "both"):
@@ -282,17 +310,18 @@ def select(group_names=(), only="", fixture_deploy="dev", mode="both", groups_do
         cases[case]["mode"] = value
     return {"cases": cases, "skipped_non_candidate": skipped, "mode": mode,
             "fixture_deploy": fixture_deploy, "groups": list(group_names), "only": only,
-            "execution_context": context}
+            "execution_context": context, "public_inputs": public}
 
 
 def bundle_document(selection):
     return {"schema_version": BUNDLE_SCHEMA,
             "execution_context": selection["execution_context"],
+            "public_inputs": selection["public_inputs"],
             "mode": selection["mode"],
             "cases": {case: {"mode": record["mode"],
                              "execution_fingerprint": record["execution_fingerprint"],
                              "red_subject_digest": record["red_subject_digest"],
-                             "inputs": record["inputs"]}
+                             "local_inputs": record["local_inputs"]}
                       for case, record in selection["cases"].items()},
             "skipped_non_candidate": selection["skipped_non_candidate"]}
 
@@ -346,7 +375,7 @@ def auto_modes(cases, groups_doc, fixture_deploy="dev"):
     for case, record in cases.items():
         proof = ((state.get("cases") or {}).get(case) or {}).get("red") or {}
         usable = (proof.get("subject") == record["red_subject_digest"]
-                  and record["inputs"]["targets"] is not None)
+                  and record["local_inputs"]["targets"] is not None)
         if usable and fixture_deploy != "dev":
             usable = bool(proof.get("fingerprint"))
         if usable:
@@ -365,20 +394,34 @@ def auto_modes(cases, groups_doc, fixture_deploy="dev"):
 
 def validate_bundle(bundle):
     if not isinstance(bundle, dict) or bundle.get("schema_version") != BUNDLE_SCHEMA:
-        raise SelectError("bundle schema invalid")
+        raise SelectError(
+            f"bundle schema invalid: {bundle.get('schema_version') if isinstance(bundle, dict) else None}"
+            f"（只接受 schema {BUNDLE_SCHEMA}；bundle 是每 run 产物，不迁移旧 schema）")
     context = bundle.get("execution_context") or {}
     for key in ("deploy", "release_subject", "runtime", "platform"):
         if not context.get(key):
             raise SelectError(f"bundle execution context missing {key}")
+    public = bundle.get("public_inputs")
+    if not isinstance(public, dict):
+        raise SelectError("bundle has no public_inputs")
+    for key in ("source", "helpers", "executor"):
+        if not public.get(key):
+            raise SelectError(f"bundle public_inputs missing {key}")
+    runner = public.get("runner")
+    if not isinstance(runner, dict) or not runner or not all(runner.values()):
+        raise SelectError("bundle public_inputs.runner is incomplete")
     cases = bundle.get("cases")
     if not isinstance(cases, dict) or not cases:
         raise SelectError("bundle has no cases")
     for case, record in cases.items():
         if not isinstance(record, dict) or record.get("mode") not in PHASES:
             raise SelectError(f"{case}: invalid mode in bundle")
-        for key in ("execution_fingerprint", "red_subject_digest", "inputs"):
+        for key in ("execution_fingerprint", "red_subject_digest"):
             if not record.get(key):
                 raise SelectError(f"{case}: bundle missing {key}")
+        local = record.get("local_inputs")
+        if not isinstance(local, dict) or not local.get("script"):
+            raise SelectError(f"{case}: bundle missing local_inputs")
     return context, cases
 
 
@@ -443,8 +486,9 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
         # candidate 不走 dev release flock，改在最终 barrier 重跑完整 validator（含 tag/clean/meta/tree）。
         import subprocess
 
-        check = subprocess.run([sys.executable, os.path.join(FULL, "prepare_candidate_repo.py"),
-                                "--check", "--out", release_root,
+        validator = (os.environ.get("WF_CANDIDATE_VALIDATOR")
+                     or os.path.join(FULL, "prepare_candidate_repo.py"))
+        check = subprocess.run([sys.executable, validator, "--check", "--out", release_root,
                                 "--version", os.environ.get("WF_RELEASE_VERSION", "")],
                                capture_output=True, text=True)
         if check.returncode != 0:
@@ -467,16 +511,23 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
         raise SelectError("malformed/missing repro results: " +
                           " ".join(report["malformed"] + report["missing"]))
     groups_doc = load_groups()
+    # final barrier：公共输入与执行上下文各重算**一次**（不随 case 数增长），与冻结值比对。
     context = bundle["execution_context"]
     if context != execution_context():
         raise SelectError("repro execution context changed since freeze (re-run required)")
+    public = public_inputs()
+    if public != bundle.get("public_inputs"):
+        raise SelectError("public inputs changed since freeze (re-run required)")
     state = read_state()
     updated, kept = [], []
     for case, record in report["records"].items():
         if not record.get("verified"):
             continue
         expected = report["expected"][case]
-        subject = red_subject(case, groups_doc, context)
+        local = local_inputs(case, groups_doc)
+        if local != expected["local_inputs"]:
+            raise SelectError(f"{case}: case local inputs changed since freeze")
+        subject = red_subject(case, local, public, context)
         if subject != expected["red_subject_digest"]:
             raise SelectError(f"{case}: case inputs changed since freeze")
         entry = state["cases"].get(case) or {}

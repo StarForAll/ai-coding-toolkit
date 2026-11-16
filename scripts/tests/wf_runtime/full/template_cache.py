@@ -250,22 +250,94 @@ def _capture_old(entry):
     return {"present": True, "digest": digest, "meta": meta_text}
 
 
-def _restore(entry, journal):
-    old = journal.get("old") or {}
+def _complete_entry(entry):
+    """entry 是否是一份带完整 meta/root 且树可验证的条目（不比对当前输入/身份）。"""
+    meta = _read_json(meta_path(entry))
+    if not meta or meta.get("schema_version") != META_SCHEMA or meta.get("root") != os.path.realpath(entry):
+        return False
+    return _tree(entry) == meta.get("output_tree_digest")
+
+
+def _recovery_action(entry, journal):
+    """恢复状态机（design §2，与测试发行 cache 同形）：返回 (action, target)，纯判定。
+
+    1 `roll-forward`        新代可验证（已装到 entry 或仍在 staging）→ 前滚；
+    2 `rolled-back`         旧条目仍在原位且字节等于 journal 冻结摘要 → 只清 staging/journal；
+    3 `roll-backup`         backup 字节等于 journal 冻结旧代 → 按冻结 meta 回滚；
+    4 `rolled-back-absent`  首次发布：只撤销本事务的不完整新代；
+    5 `fail-closed`         两代都不可验证 → 保留现场、非零退出。
+    """
     new = journal.get("new") or {}
-    if not old.get("present"):
-        for path in (new.get("staging"), new.get("backup"), entry):
-            if path and os.path.isdir(path):
-                shutil.rmtree(path, ignore_errors=True)
-        return "rolled-back-absent"
-    backup = new.get("backup")
-    if not backup or not os.path.isdir(backup) or _tree(backup) != old.get("digest"):
-        raise CacheError(f"无法恢复：旧条目备份缺失或字节不符（保留 {new.get('journal')}）")
+    old = journal.get("old") or {}
+    digest = new.get("digest")
+    if digest:
+        for candidate in (entry, new.get("staging")):
+            if candidate and os.path.isdir(candidate) and _tree(candidate) == digest:
+                return "roll-forward", candidate
+    if old.get("present"):
+        if _tree(entry) == old.get("digest"):
+            return "rolled-back", entry
+        backup = new.get("backup")
+        if backup and os.path.isdir(backup) and _tree(backup) == old.get("digest"):
+            return "roll-backup", backup
+    elif not _complete_entry(entry):
+        return "rolled-back-absent", entry
+    return "fail-closed", None
+
+
+def _roll_forward(entry, journal, candidate):
+    new = journal.get("new") or {}
+    if candidate != entry:
+        backup = new.get("backup")
+        if os.path.isdir(entry):
+            if not backup:
+                raise CacheError("journal 缺少 backup 路径")
+            if os.path.isdir(backup):
+                shutil.rmtree(backup)
+            os.rename(entry, backup)
+        os.rename(candidate, entry)
+    if new.get("meta") is None:
+        raise CacheError("journal 缺少新条目 meta，无法前滚（保留现场）")
+    _write_json(meta_path(entry), None, new["meta"])
+    if _tree(entry) != new.get("digest"):
+        raise CacheError("前滚后条目仍不可验证（保留现场）")
+    return "rolled-forward"
+
+
+def _roll_back_in_place(entry, journal):
+    """旧条目仍在原位：按 journal 冻结的 meta 原文复位，不重新序列化。"""
+    old = journal.get("old") or {}
+    if not old.get("meta"):
+        raise CacheError("journal 缺少旧条目 meta，无法确认旧条目原位完好（保留现场）")
+    _write_json(meta_path(entry), None, old["meta"])
+    if _tree(entry) != old.get("digest"):
+        raise CacheError("恢复后旧条目仍不可验证（保留现场）")
+    return "rolled-back"
+
+
+def _restore_from_backup(entry, journal, path):
+    old = journal.get("old") or {}
+    backup = (journal.get("new") or {}).get("backup")
+    if not backup or not os.path.isdir(backup):
+        raise CacheError(f"无法恢复：旧条目备份缺失（保留 {path}）")
+    if _tree(backup) != old.get("digest"):
+        raise CacheError(f"无法恢复：旧条目备份字节不符（保留 {path}）")
     if os.path.isdir(entry):
         shutil.rmtree(entry)
     os.rename(backup, entry)
     _write_json(meta_path(entry), None, old["meta"])
+    if _tree(entry) != old.get("digest"):
+        raise CacheError("恢复后旧条目仍不可验证（保留现场）")
     return "rolled-back"
+
+
+def _undo_first_publication(entry, journal):
+    """首次发布：只撤销本事务的不完整新代（staging/backup/不完整的 entry）。"""
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup"), entry):
+        if path and os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+    return "rolled-back-absent"
 
 
 def recover(entry, cache_root, key):
@@ -275,24 +347,19 @@ def recover(entry, cache_root, key):
         raise CacheError(f"journal 不可解析：{path}（保留现场）")
     if journal.get("schema_version") != JOURNAL_SCHEMA or journal.get("key") != key:
         raise CacheError(f"journal schema/key 不符：{path}（保留现场）")
-    new = journal.get("new") or {}
-    for candidate in ((new.get("staging"), entry) if new.get("digest") else ()):
-        if candidate and os.path.isdir(candidate) and _tree(candidate) == new.get("digest"):
-            if candidate != entry:
-                backup = new.get("backup")
-                if os.path.isdir(entry):
-                    if not backup:
-                        raise CacheError("journal 缺少 backup 路径")
-                    if os.path.isdir(backup):
-                        shutil.rmtree(backup)
-                    os.rename(entry, backup)
-                os.rename(candidate, entry)
-            _write_json(meta_path(entry), None, new["meta"])
-            if _tree(entry) != new.get("digest"):
-                raise CacheError("前滚后条目仍不可验证（保留现场）")
-            _finish(cache_root, key, journal)
-            return "rolled-forward"
-    status = _restore(entry, journal)
+    action, target = _recovery_action(entry, journal)
+    if action == "roll-forward":
+        status = _roll_forward(entry, journal, target)
+    elif action == "rolled-back":
+        status = _roll_back_in_place(entry, journal)
+    elif action == "roll-backup":
+        status = _restore_from_backup(entry, journal, path)
+    elif action == "rolled-back-absent":
+        status = _undo_first_publication(entry, journal)
+    else:
+        raise CacheError(
+            "无法恢复：当前条目与 journal 记录的旧代/新代均不可验证（两代都不完整）；"
+            f"保留现场 {path}")
     _finish(cache_root, key, journal)
     return status
 
@@ -315,6 +382,7 @@ def publish(args):
     if os.path.isfile(journal_path(args.cache_root, key)):
         status = recover(entry, args.cache_root, key)
         print(f"TEMPLATE-CACHE-RECOVERED: {status}", file=sys.stderr)
+    previous = _read_json(meta_path(entry)) or {}
     reason, _ = _valid_meta(entry, key, inputs) if os.path.isdir(entry) else ("不存在", None)
     if reason is None and not _check_identity(entry, args):
         print(os.path.realpath(entry))
@@ -360,6 +428,8 @@ def publish(args):
             "ref": args.ref or "",
             "root": os.path.realpath(entry),
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+            # 累计构建次数（additive 诊断字段，读取方不依赖）：等同槽位重建才增长。
+            "builds": int(previous.get("builds") or 0) + 1,
         }
         journal["new"]["digest"] = digest
         journal["new"]["meta"] = json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n"

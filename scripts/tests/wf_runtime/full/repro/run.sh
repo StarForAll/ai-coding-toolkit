@@ -30,6 +30,9 @@ REPO="$(cd "$FULL/../../../.." && pwd)"
 PY="${PY:-/softwares/python/bin/python3}"
 SCOPE="$FULL/fixture_scope.py"
 PROTOCOL="$FULL/runner_protocol.py"
+# 测试专用注入点：默认取仓库内真实入口；契约测试指向计数 shim（只包一层 argv 记录）。
+RELEASE_CLI="${WF_TEST_RELEASE_CLI:-$REPO/scripts/tests/wf_test_release.py}"
+CANDIDATE_VALIDATOR="${WF_CANDIDATE_VALIDATOR:-$FULL/prepare_candidate_repo.py}"
 case "${1:-}" in -h|--help) usage; exit 0 ;; esac
 
 # 内部 frame 先整体剥离/校验：用户参数里不允许再出现保留选项。
@@ -187,17 +190,17 @@ else
       exec "$PY" "$REPO/scripts/release_lock.py" --lease --root "$DEV_ROOT" -- bash "$0" "${forward[@]}"
     fi
     if [ "$BUILD" -eq 1 ]; then
-      "$PY" "$REPO/scripts/tests/wf_test_release.py" --ensure --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
+      "$PY" "$RELEASE_CLI" --ensure --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
         || { echo "BUILD-FAILED"; exit 1; }
     else
-      "$PY" "$REPO/scripts/tests/wf_test_release.py" --check --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
+      "$PY" "$RELEASE_CLI" --check --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
         || { echo "TEST-RELEASE-STALE: 测试发行副本缺失或过期（重建或去掉 --no-build）"; exit 1; }
     fi
     export WF_RELEASE_TREE="$DEV_ROOT" WF_RELEASE_REF="$DEV_REF" WF_RELEASE_VERSION="$DEV_VERSION"
     export WF_TEST_LIB="$DEV_ROOT/wf-release/lib"
     export WF_FIXTURE_DEPLOY=dev
   else
-    "$PY" "$FULL/prepare_candidate_repo.py" --check --out "$RELEASE_ROOT" --version "$RELEASE_VERSION" \
+    "$PY" "$CANDIDATE_VALIDATOR" --check --out "$RELEASE_ROOT" --version "$RELEASE_VERSION" \
       || { echo "CANDIDATE-REPO-INVALID"; exit 1; }
     export WF_RELEASE_TREE="$RELEASE_ROOT" WF_RELEASE_REF="$RELEASE_REF" WF_RELEASE_VERSION="$RELEASE_VERSION"
     export WF_RELEASE_META="${RELEASE_META:-$RELEASE_ROOT.meta.json}"
@@ -215,11 +218,18 @@ if [ -z "$RESULTS" ]; then
   fi
 fi
 if [ -n "${WF_TEST_SCOPE_ROOT:-}" ] && [ "$INHERITED" != "inherited" ]; then
-  "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" || exit 2
+  # state/HOME 派生写入同样必须落在 owned scope 内（design §3.4）。
+  export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$WF_TEST_SCOPE_ROOT/state}"
+  "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" \
+    ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} ${WF_TEST_RUN_CACHE:+"$WF_TEST_RUN_CACHE"} || exit 2
 fi
 # 结果缓存轮转：独立 repro 入口只回收本 scope（repro-*）的带 marker 目录；root 可经
 # WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
-RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+  RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
+else
+  RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+fi
 WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" \
   --scope repro --exclude "$RESULTS" || true
 "$PY" "$SCOPE" prepare-results "$RESULTS" || exit 1
@@ -229,7 +239,7 @@ export WF_REPRO_RESULTS="$RESULTS" PY
 trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 143' TERM
 trap 'trap "" INT TERM; "$PY" "$FULL/execution.py" --cancel-parent-children; exit 130' INT
 
-# ---- 冻结唯一 bundle（schema 1，原子写一次）----------------------------------------
+# ---- 冻结唯一 bundle（schema 2，原子写一次）----------------------------------------
 selection=$("$PY" "$HERE/repro_select.py" plan --fixture-deploy "$DEPLOY" --mode "$MODE" --format sh \
   --bundle "$RESULTS/inputs.json" "${group_args[@]}" ${ONLY:+--only "$ONLY"})
 rc=$?

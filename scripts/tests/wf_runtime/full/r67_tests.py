@@ -228,9 +228,11 @@ def _copy_into_fake(relative):
 
 for _name in _real_plan.FAKE_TREE_SPECIAL + _real_plan.FAKE_TREE_COPY:
     _copy_into_fake(_name)
-# 测试发行入口桩（release_context 只借用它的 ensure/check 子命令；锁由 release_lock 负责）
+# 测试发行入口桩（release_context 只借用它的 ensure/check 子命令；锁由 release_lock 负责）。
+# 它必须遵守真实 CLI 的 `--json` 状态契约：release_context 会解析 status（built|reused|checked）。
 open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
-    'print("BUILT fake test release")\nraise SystemExit(0)\n')
+    'import json\nprint(json.dumps({"status": "built", "builds": 1, "root": "fake", '
+    '"version": "0.1.0"}))\nraise SystemExit(0)\n')
 # release 锁桩：假环境不付真实 flock，但保留 acquire/write_env/verify 的形状。
 open(os.path.join(fake_root, "scripts/release_lock.py"), "w").write(
     'import os\n\n\nclass Busy(Exception):\n    pass\n\n\nclass LockError(Exception):\n    pass\n\n\n'
@@ -324,7 +326,22 @@ _fake_results1 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope
 _fake_results2 = tempfile.mkdtemp(prefix="wf-r67-fake-results-", dir=_fake_scope)
 for _path in (_fake_fix, _fake_results1, _fake_results2):
     atexit.register(shutil.rmtree, _path, ignore_errors=True)
-_fake_env = {**os.environ, "WF_TEST_SCOPE_ROOT": _fake_scope, "WF_FIX": _fake_fix,
+# 宿主 locator 一律不带进假运行器：串行单元会原样继承父进程环境（并行单元由 namespace
+# 负责清除），而内层 run_all 用的是自己的 scope——借外面的结果锁/租约/pycache 本身就是
+# 「冒充继承锁」，必须显式清空（与 namespace.HOST_LOCATORS 同口径）。
+# fixture 租约**不**清：嵌套运行器的继承语义就是同一条全局 flock（locking 由 lock_run 负责，
+# 清了会变成自撞 busy）。要清的是"本层 scope 的结果锁/发行锁/frame/pycache"这类**域内**定位。
+_HOST_LOCATORS = (
+    "WF_RESULTS_LOCK_FD", "WF_RESULTS_LOCK_PID", "WF_RESULTS_LOCK_DOMAIN", "WF_RESULTS_LOCK_MNT",
+    "WF_TEST_RELEASE_LEASE_FD", "WF_TEST_RELEASE_LEASE_PID", "WF_TEST_RELEASE_LEASE_MNT",
+    "WF_RUNNER_ENTRY_PID", "WF_RUNNER_CONTROL_PID",
+    "WF_FRAME_ENTRY_PID", "WF_FRAME_RESULTS_ROOT", "WF_FRAME_RESULTS_EXPLICIT",
+    "WF_FRAME_SCOPE_ROOT", "WF_FRAME_PLAN_FILE", "WF_FRAME_PLAN_SHA256", "WF_FRAME_PLAN_SIZE",
+    "WF_FRAME_CONTEXT_FILE", "WF_FRAME_CONTEXT_SHA256", "WF_FRAME_CONTEXT_SIZE",
+    "WF_TEST_SCOPE_ROOT", "WF_PLAN_LOG", "PYTHONPYCACHEPREFIX", "WF_PYCACHE",
+)
+_fake_base = {key: value for key, value in os.environ.items() if key not in _HOST_LOCATORS}
+_fake_env = {**_fake_base, "WF_TEST_SCOPE_ROOT": _fake_scope, "WF_FIX": _fake_fix,
              "WF_RESULTS_CACHE": _fake_cache, "WF_TEST_RUN_CACHE": os.path.join(_fake_scope, "state"),
              "WF_TEST_RELEASE_CACHE": release_cache, "WF_JOBS": "1", "WF_NO_TEMPLATE": "1",
              # 显式再钉一次缓存开关：`WF_NO_TEMPLATE=1` 蕴含关闭缓存，但不能依赖实现漂移。

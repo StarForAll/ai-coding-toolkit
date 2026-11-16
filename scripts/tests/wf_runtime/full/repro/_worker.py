@@ -62,6 +62,31 @@ def run_phase(case, phase):
             "execution": execution_result}
 
 
+def verify_frozen_case(bundle, case, mode):
+    """只核 case 局部输入与 context：公共输入消费 bundle 冻结值，不重扫 source/helpers。
+
+    返回 None（通过）或失败原因字符串。抽成纯函数，便于契约测试直跑并核对扫描计数。
+    """
+    frozen = (bundle.get("cases") or {}).get(case)
+    if not frozen:
+        return f"case missing from frozen bundle"
+    if frozen.get("mode") != mode:
+        return f"mode {mode} != frozen {frozen.get('mode')}"
+    context = bundle.get("execution_context")
+    if context != repro_select.execution_context():
+        return "execution context changed before execution"
+    public = bundle.get("public_inputs") or {}
+    try:
+        local = repro_select.local_inputs(case, repro_select.load_groups())
+    except repro_select.SelectError as exc:
+        return str(exc)
+    if local != frozen.get("local_inputs"):
+        return "inputs changed before execution"
+    if repro_select.input_fingerprint(case, local, public, context) != frozen["execution_fingerprint"]:
+        return "inputs changed before execution"
+    return None
+
+
 def main(argv):
     if len(argv) != 2:
         print("usage: _worker.py <case> <green|both|red>", file=sys.stderr)
@@ -70,21 +95,12 @@ def main(argv):
     if mode not in ("green", "red", "both") or not re.fullmatch(r"[a-z0-9][a-z0-9_-]*", case):
         return 2
     bundle, bundle_sha = load_bundle()
-    frozen = (bundle.get("cases") or {}).get(case)
-    if not frozen:
-        print(f"FAIL {case}: case missing from frozen bundle")
+    problem = verify_frozen_case(bundle, case, mode)
+    if problem:
+        print(f"FAIL {case}: {problem}")
         return 1
-    if frozen.get("mode") != mode:
-        print(f"FAIL {case}: mode {mode} != frozen {frozen.get('mode')}")
-        return 1
-    if bundle.get("execution_context") != repro_select.execution_context():
-        print(f"FAIL {case}: execution context changed before execution")
-        return 1
+    frozen = bundle["cases"][case]
     fingerprint = frozen["execution_fingerprint"]
-    current = repro_select.input_fingerprint(case, repro_select.load_groups())
-    if fingerprint != current:
-        print(f"FAIL {case}: inputs changed before execution")
-        return 1
     os.makedirs(results_dir(), exist_ok=True)
     record = {"case": case, "mode": mode, "green": "skip", "red": "skip",
               "green_seconds": 0.0, "red_seconds": 0.0, "detail": "", "verified": False,
@@ -105,9 +121,10 @@ def main(argv):
         record["red_seconds"] = red["seconds"]
         ok = ok and red["passed"]
         details.append(f"red: {red['detail']}")
-    if repro_select.input_fingerprint(case, repro_select.load_groups()) != fingerprint:
+    problem = verify_frozen_case(bundle, case, mode)
+    if problem:
         ok = False
-        details.append("inputs changed during execution; evidence rejected")
+        details.append(f"{problem}; evidence rejected")
     record["verified"] = bool(ok)
     record["duration"] = round(record["green_seconds"] + record["red_seconds"], 2)
     record["detail"] = "; ".join(details)

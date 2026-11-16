@@ -520,10 +520,15 @@ def build_manifest(version, dev_manifest, source_root=SOURCE_ROOT):
     return manifest
 
 
+def git_bin():
+    """Git 可执行入口：默认 `git`；`WF_GIT_BIN` 只给测试注入失败/计数 shim（不改语义）。"""
+    return os.environ.get("WF_GIT_BIN") or "git"
+
+
 def git_describe(repo=REPO_ROOT):
     try:
         result = subprocess.run(
-            ["git", "describe", "--always", "--dirty", "--tags"],
+            [git_bin(), "describe", "--always", "--dirty", "--tags"],
             cwd=repo,
             capture_output=True,
             text=True,
@@ -539,7 +544,7 @@ def git_describe(repo=REPO_ROOT):
 def git_head(repo=REPO_ROOT):
     try:
         result = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            [git_bin(), "rev-parse", "HEAD"],
             cwd=repo,
             capture_output=True,
             text=True,

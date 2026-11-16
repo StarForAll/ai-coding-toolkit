@@ -1,0 +1,76 @@
+{
+  "collected_at": "2026-11-16T10:58:00+08:00",
+  "t0": {
+    "command": "unittest discover -s scripts/tests -t .",
+    "tests": 997,
+    "skipped": 21,
+    "seconds": 13.7,
+    "rc": 0
+  },
+  "targeted": {
+    "modules": 7,
+    "tests": 142,
+    "seconds": 7.9,
+    "rc": 0
+  },
+  "contract": {
+    "tests": 20,
+    "seconds": 135.8,
+    "rc": 0,
+    "class_seconds": 135.75,
+    "teardown_seconds": 0.02,
+    "class_deadline_remaining": 764.25,
+    "longest_case_seconds": 22.61,
+    "cancel_log_wait_seconds": 2.31,
+    "cleanup_seconds": 0.03
+  },
+  "full_green": {
+    "cold-parallel": {
+      "rc": 0,
+      "elapsed": 52.8,
+      "fail": 0,
+      "units": 149,
+      "total": 50.79,
+      "release_build": "built",
+      "template_sequences": 1,
+      "stages": 4,
+      "plan_calls": 2
+    },
+    "serial": {
+      "rc": 0,
+      "elapsed": 268.2,
+      "fail": 0,
+      "units": 149,
+      "total": 266.03,
+      "release_build": "reused",
+      "template_sequences": 0,
+      "stages": 4,
+      "plan_calls": 2
+    }
+  },
+  "equivalence": {
+    "lines": [
+      64,
+      64
+    ],
+    "line_diffs": {
+      "f1_ordinary": [
+        [
+          "0",
+          "ok",
+          "TASK_ID 2026-082cf795c5b34641a15aa92e9293acbe"
+        ],
+        [
+          "0",
+          "ok",
+          "TASK_ID 2026-3b5668cb0c574cea9c06fb83552c62a5"
+        ]
+      ]
+    },
+    "repro": [
+      85,
+      85
+    ],
+    "repro_diffs": {}
+  }
+}

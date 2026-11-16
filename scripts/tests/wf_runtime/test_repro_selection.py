@@ -44,6 +44,17 @@ def context_for(deploy="dev", subject="sha256:release"):
             "candidate": ({"commit": "c" * 40, "tree_digest": "sha256:tree"} if deploy == "candidate" else None)}
 
 
+def subject_of(case, context):
+    groups = select.load_groups()
+    return select.red_subject(case, select.local_inputs(case, groups), select.public_inputs(), context)
+
+
+def fingerprint_of(case, context):
+    groups = select.load_groups()
+    return select.input_fingerprint(case, select.local_inputs(case, groups),
+                                    select.public_inputs(), context)
+
+
 class Base(unittest.TestCase):
     def setUp(self):
         self.cache = tempfile.mkdtemp(prefix="wf-repro-state-")
@@ -171,23 +182,21 @@ class CandidateFilterTest(Base):
 class IdentityTest(Base):
     def test_subject_ignores_deploy_and_root_but_fingerprint_does_not(self):
         case = "review-count-reject"
-        groups = select.load_groups()
         dev = select.execution_context()
-        subject = select.red_subject(case, groups, dev)
-        fingerprint = select.input_fingerprint(case, groups, dev)
+        subject = subject_of(case, dev)
+        fingerprint = fingerprint_of(case, dev)
         candidate = select.execution_context()
         candidate["deploy"] = "candidate"
         candidate["release_root_identity"] = "other-root"
         candidate["candidate_commit"] = "c" * 40
-        self.assertEqual(subject, select.red_subject(case, groups, candidate))
-        self.assertNotEqual(fingerprint, select.input_fingerprint(case, groups, candidate))
+        self.assertEqual(subject, subject_of(case, candidate))
+        self.assertNotEqual(fingerprint, fingerprint_of(case, candidate))
 
     def test_release_content_change_moves_the_subject(self):
         case = "review-count-reject"
-        groups = select.load_groups()
-        first = select.red_subject(case, groups, select.execution_context())
+        first = subject_of(case, select.execution_context())
         self.context = context_for(subject="sha256:other-release")
-        self.assertNotEqual(first, select.red_subject(case, groups, select.execution_context()))
+        self.assertNotEqual(first, subject_of(case, select.execution_context()))
 
 
 class AutoModeTest(Base):
@@ -262,7 +271,7 @@ class AutoModeTest(Base):
         legacy = {"schema_version": 2, "cases": {case: {"green": {"fingerprint": "old"}}}}
         Path(select.state_path()).write_text(json.dumps(legacy))
         self.assertEqual(select.auto_modes(
-            {case: {"red_subject_digest": "x", "inputs": {"targets": "t"}}},
+            {case: {"red_subject_digest": "x", "local_inputs": {"targets": "t"}}},
             select.load_groups())[case], "both")
         path, sha, size = self.verify(case, "green")
         select.commit_state(str(self.results), str(path), sha, str(size))
@@ -278,6 +287,18 @@ class AutoModeTest(Base):
 
 
 class CommitTest(Base):
+    def test_writer_barrier_scans_public_inputs_once(self):
+        """唯一 writer 在最终 barrier 各重算一次 public/context（不随 case 数增长）。"""
+        path, sha, size = self.verify("review-count-reject", "both")
+        select.reset_scans()
+        select.commit_state(str(self.results), str(path), sha, str(size))
+        counts = select.scans()
+        # 本 class 把 release_context 打了桩（固定 context），所以 release 计数恒为 0；
+        # 真实 release 扫描次数由 ScanCountTest（用真实 context 文件）覆盖。
+        self.assertEqual((counts["source"], counts["helpers"]), (1, 1),
+                         "writer barrier 只重算一次 source/helpers 公共输入")
+        self.assertLessEqual(counts["release"], 1)
+
     def test_commit_only_records_verified_cases_and_keeps_others(self):
         first, path, sha, size = self.bundle("review-count-reject", "both")
         second = select.select(["review"], only="review-unavailable", fixture_deploy="dev", mode="both")
@@ -292,7 +313,7 @@ class CommitTest(Base):
         self.assertEqual(updated, ["review-count-reject"])
         entry = select.read_state()["cases"]["review-count-reject"]
         self.assertEqual(entry["red"]["subject"],
-                         select.red_subject("review-count-reject", select.load_groups()))
+                         subject_of("review-count-reject", select.execution_context()))
         self.assertNotIn("review-unavailable", select.read_state()["cases"])
         self.assertTrue(path.endswith("repro-state.json"))
 
@@ -326,6 +347,110 @@ class CommitTest(Base):
         self.record("review-count-reject", "both", sha, "wrong-fingerprint")
         with self.assertRaises(select.SelectError):
             select.commit_state(str(self.results), str(path), sha, str(size))
+
+
+RELEASE_CONTEXT_DOC = {
+    "schema_version": 1, "deploy": "dev", "release_root": "/tmp/fake-release",
+    "version": "0.1.2", "ref": "refs/tags/wf-v0.1.2",
+    "release_subject": "sha256:release", "tree_digest": "sha256:tree",
+    "manifest_digest": "sha256:manifest", "candidate": None,
+}
+
+
+class ScanCountTest(unittest.TestCase):
+    """AC8/R3：公共扫描次数不随 case 数增长（3 与 30 个 case 相同，各 1/1/1）。"""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="wf-repro-scan-")
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        context = Path(self.tmp) / "context.json"
+        context.write_text(json.dumps(RELEASE_CONTEXT_DOC), encoding="utf-8")
+        saved = {key: os.environ.get(key) for key in ("WF_TEST_RUN_CACHE", "WF_RELEASE_CONTEXT")}
+        os.environ["WF_TEST_RUN_CACHE"] = self.tmp
+        os.environ["WF_RELEASE_CONTEXT"] = str(context)
+        self.addCleanup(self._restore, saved)
+
+    def _restore(self, saved):
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def freeze_synthetic(self, count):
+        names = [f"synthetic-{index:02d}" for index in range(count)]
+        groups = {"groups": {"synthetic": names}, "cases": {}}
+        local = {"script": "sha256:script", "targets": None, "case_meta": {}}
+        with mock.patch.object(select, "all_cases", return_value=names), \
+                mock.patch.object(select, "local_inputs", return_value=local):
+            select.reset_scans()
+            selection = select.select(["synthetic"], fixture_deploy="dev", mode="green",
+                                      groups_doc=groups)
+        return selection, select.scans()
+
+    def test_public_scans_are_constant_in_case_count(self):
+        small, small_counts = self.freeze_synthetic(3)
+        large, large_counts = self.freeze_synthetic(30)
+        self.assertEqual(len(small["cases"]), 3)
+        self.assertEqual(len(large["cases"]), 30)
+        self.assertEqual(small_counts, {"source": 1, "release": 1, "helpers": 1})
+        self.assertEqual(large_counts, small_counts)
+
+    def test_worker_consumes_frozen_public_inputs(self):
+        if str(REPRO) not in sys.path:
+            sys.path.insert(0, str(REPRO))
+        worker = _load("wf_repro_worker", REPRO / "_worker.py")
+        worker.repro_select = select
+        selection = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
+                                  mode="green")
+        document = select.bundle_document(selection)
+        select.reset_scans()
+        self.assertIsNone(worker.verify_frozen_case(document, "review-count-reject", "green"))
+        counts = select.scans()
+        self.assertEqual(counts["source"], 0, "worker 不得重扫 source")
+        self.assertEqual(counts["helpers"], 0, "worker 不得重扫 helpers")
+        self.assertEqual(counts["release"], 1, "worker 只比对一次 execution context")
+
+
+class BundleSchemaTest(Base):
+    def test_schema_two_bundle_carries_public_and_local_inputs(self):
+        selection = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
+                                  mode="green")
+        document = select.bundle_document(selection)
+        self.assertEqual(document["schema_version"], 2)
+        self.assertEqual(sorted(document["public_inputs"]),
+                         ["executor", "helpers", "runner", "source"])
+        self.assertEqual(sorted(document["cases"]["review-count-reject"]["local_inputs"]),
+                         ["case_meta", "script", "targets"])
+
+    def test_schema_one_bundle_is_refused(self):
+        selection = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
+                                  mode="green")
+        document = select.bundle_document(selection)
+        legacy = {"schema_version": 1,
+                  "execution_context": document["execution_context"],
+                  "mode": "green",
+                  "cases": {case: {"mode": "green",
+                                   "execution_fingerprint": record["execution_fingerprint"],
+                                   "red_subject_digest": record["red_subject_digest"],
+                                   "inputs": record["local_inputs"]}
+                            for case, record in document["cases"].items()}}
+        with self.assertRaises(select.SelectError) as caught:
+            select.validate_bundle(legacy)
+        self.assertIn("schema 2", str(caught.exception))
+
+    def test_tampered_public_inputs_are_refused_at_the_writer_barrier(self):
+        selection, path, sha, size = self.bundle("review-count-reject", "both")
+        document = json.loads(Path(path).read_text())
+        document["public_inputs"]["source"] = "sha256:tampered"
+        data = json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True).encode() + b"\n"
+        Path(path).write_bytes(data)
+        new_sha = hashlib.sha256(data).hexdigest()
+        self.record("review-count-reject", "both", new_sha,
+                    selection["cases"]["review-count-reject"]["execution_fingerprint"])
+        with self.assertRaises(select.SelectError) as caught:
+            select.commit_state(str(self.results), str(path), new_sha, str(len(data)))
+        self.assertIn("public inputs changed", str(caught.exception))
 
 
 if __name__ == "__main__":

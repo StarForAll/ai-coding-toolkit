@@ -7,7 +7,9 @@
   任一不符就拒绝，不静默使用旧副本。
 """
 
+import contextlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -46,6 +48,23 @@ class VersionTest(unittest.TestCase):
 
     def test_explicit_version_wins_over_placeholder(self):
         self.assertEqual(test_release.resolve_version("0.2.0", {"version": "0.0.0-dev"}), "0.2.0")
+
+
+class GitInjectionTest(unittest.TestCase):
+    """HEAD 读取失败：`WF_GIT_BIN` 只做测试注入，失败必须如实返回 None（不猜、不签发）。"""
+
+    def test_broken_git_bin_makes_head_unreadable(self):
+        root = tempfile.mkdtemp(prefix="wf-git-bin-")
+        self.addCleanup(lambda: shutil.rmtree(root, ignore_errors=True))
+        shim = os.path.join(root, "git-broken.sh")
+        with open(shim, "w", encoding="utf-8") as handle:
+            handle.write("#!/bin/bash\nexit 1\n")
+        os.chmod(shim, 0o755)
+        with mock.patch.dict(os.environ, {"WF_GIT_BIN": shim}):
+            self.assertIsNone(common.git_head())
+            self.assertIsNone(common.git_describe())
+            # 模板身份把 HEAD 当作可空输入：读不到时仍产出稳定摘要，由调用方决定是否用缓存。
+            self.assertTrue(common.fixture_template_inputs_digest("dev", "0.1.0").startswith("sha256:"))
 
 
 class OutputBoundaryTest(unittest.TestCase):
@@ -234,6 +253,33 @@ class EnsureAndCheckTest(unittest.TestCase):
         test_release.ensure_release(self.root, "0.1.0", self.dev)
         self.assertEqual(stamp, os.stat(self.root + ".meta.json").st_mtime_ns,
                          "源树未变时应复用缓存，不重建")
+
+    def test_build_leaves_no_staging_or_backup_litter(self):
+        """发布成功后不留下 `<root>.staging-*` / `.backup-*` 空壳（父目录也要回收）。"""
+        test_release.ensure_release(self.root, "0.1.0", self.dev)
+        parent = Path(self.root).parent
+        litter = sorted(path.name for path in parent.iterdir()
+                        if ".staging-" in path.name or ".backup-" in path.name)
+        self.assertEqual(litter, [], f"发布后残留 staging/backup：{litter}")
+        self.assertTrue(Path(self.root + ".meta.json").is_file())
+        self.assertTrue(Path(self.root + ".owner").is_file())
+
+    def test_cli_json_reports_built_then_reused_and_cumulative_builds(self):
+        """成本账目（AC5）：首次 built + builds=1，同输入再来 reused 且 builds 不增。"""
+
+        def run(flag):
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                code = test_release.main([flag, "--json", "--root", self.root, "--version", "0.1.0"])
+            self.assertEqual(code, 0)
+            return json.loads(buffer.getvalue())
+
+        payload = run("--ensure")
+        self.assertEqual((payload["status"], payload["builds"]), ("built", 1))
+        payload = run("--ensure")
+        self.assertEqual((payload["status"], payload["builds"]), ("reused", 1),
+                         "同输入复用不增加构建计数")
+        self.assertEqual(run("--check")["status"], "checked")
 
 
 if __name__ == "__main__":

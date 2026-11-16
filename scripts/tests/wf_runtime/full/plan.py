@@ -643,6 +643,30 @@ def describe(result):
     return "\n".join(lines)
 
 
+def note_plan_call(result, argv):
+    """计划调用计数（design §5.2 的合同计数）：只在本进程真的计算了计划时记一行。
+
+    写入位置优先级：`WF_PLAN_LOG`（preflight 的 bootstrap 文件）→ `$WF_RESULTS_DIR/plan-calls`。
+    两端都不存在或不可写时静默跳过（计数是证据，不是门禁）。
+    """
+    if "--plan-file" in argv:
+        return
+    path = os.environ.get("WF_PLAN_LOG")
+    if not path:
+        results = os.environ.get("WF_RESULTS_DIR")
+        if not results:
+            return
+        path = os.path.join(results, "plan-calls")
+    directory = os.path.dirname(path) or "."
+    if not os.path.isdir(directory):
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write("%s %d\n" % (result["mode"], result["list_only"]))
+    except OSError:
+        return
+
+
 def emit(result, fmt):
     if fmt == "json":
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
@@ -703,6 +727,7 @@ def main(argv=None):
             return 0
         print(f"PLAN-ERROR: {exc}", file=sys.stderr)
         return exc.code
+    note_plan_call(result, argv)
     fmt = parse_args(argv).format
     if result["list_only"]:
         # 人类可读摘要一律送 stderr：stdout 必须保持“可 eval 的赋值”（sh）或**单一 JSON**（json），

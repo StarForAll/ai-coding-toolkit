@@ -50,6 +50,12 @@ apply_frame_env() {
   export WF_RUNNER_ENTRY_PID="$WF_FRAME_ENTRY_PID"
   if [ "$WF_FRAME_SCOPE_ROOT" != "-" ]; then export WF_TEST_SCOPE_ROOT="$WF_FRAME_SCOPE_ROOT"; fi
 }
+# 阶段日志（design §5.2 的计数证据）：public 阶段在 claim 之前不能写结果目录，
+# 因此由 lease 阶段在 claim/prepare 之后补记 public，再记自己。
+note_stage() {
+  [ -n "${WF_RESULTS_DIR:-}" ] && [ -d "$WF_RESULTS_DIR" ] || return 0
+  printf '%s\n' "$1" >> "$WF_RESULTS_DIR/stages" 2>/dev/null || true
+}
 verify_inherited_locks() {
   "$PY" "$SCOPE_HELPER" check-lease >/dev/null || { echo "FIXTURE-LEASE-INVALID" >&2; exit 2; }
   "$PY" "$SCOPE_HELPER" check-results-lease >/dev/null || { echo "RESULTS-LEASE-INVALID" >&2; exit 2; }
@@ -66,15 +72,20 @@ case "$STAGE" in
     # 显式性在此刻按原始环境记录一次，内部 frame 原样传递，重入不重新猜。
     if [ -n "${WF_RESULTS_DIR:-}" ]; then RESULTS_EXPLICIT=1; else RESULTS_EXPLICIT=0; fi
     if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
-      # 测试域：结果与夹具默认也在 scope 内（越界写前拒绝，默认值不得自己越界）。
+      # 测试域：结果/夹具/cache/state 默认也在 scope 内（越界写前拒绝，默认值不得自己越界）。
       WF_RESULTS_DIR=${WF_RESULTS_DIR:-$WF_TEST_SCOPE_ROOT/run-$$}
       export WF_FIX="${WF_FIX:-$WF_TEST_SCOPE_ROOT/fixtures/run-$$}"
+      export WF_RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
+      export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$WF_TEST_SCOPE_ROOT/state}"
     else
       WF_RESULTS_DIR=${WF_RESULTS_DIR:-$HOME/.cache/wf-test-run/run-$$}
     fi
     WF_RESULTS_DIR=$("$PY" -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$WF_RESULTS_DIR")
     export WF_RESULTS_DIR
     # 唯一一次 preflight：禁写 pyc、不给 WF_RESULTS_DIR（list/dry-run 全程零写入）。
+    # 计划调用计数先落 bootstrap 文件（结果目录尚不存在），claim 后并入结果目录。
+    PLAN_LOG_BOOTSTRAP="${TMPDIR:-/tmp}/wf-plan-calls-$$"
+    export WF_PLAN_LOG="$PLAN_LOG_BOOTSTRAP"
     preflight_out=$(PYTHONDONTWRITEBYTECODE=1 WF_RESULTS_DIR= "$PY" "$HERE/plan.py" --format sh -- "$@")
     plan_rc=$?
     if [ "$plan_rc" -ne 0 ]; then
@@ -87,11 +98,13 @@ case "$STAGE" in
     if [ "${PLAN_LIST_ONLY:-0}" = "1" ] || [ "${WF_NO_RUN:-0}" = "1" ]; then
       # 显式结果目录：只写 plan.json 与必要 owner marker，并在当前域固定结果锁下短期完成。
       if [ "$RESULTS_EXPLICIT" = "1" ] && [ "${PLAN_LIST_ONLY:-0}" = "1" ]; then
+        rm -f "$PLAN_LOG_BOOTSTRAP" 2>/dev/null || true
         exec "$PY" "$SCOPE_HELPER" lease-domain -- bash -c '
           "$1" "$2" claim-results "$3" || exit 1
           "$1" "$4" --format json -- "${@:5}" >/dev/null || exit 2' \
           lease-mirror "$PY" "$SCOPE_HELPER" "$WF_RESULTS_DIR" "$HERE/plan.py" -- "$@"
       fi
+      rm -f "$PLAN_LOG_BOOTSTRAP" 2>/dev/null || true
       exit 0
     fi
     # 测试域：runner 管理的写入口必须落在 owned scope 内（越界写前拒绝）。
@@ -117,11 +130,22 @@ case "$STAGE" in
     # claim 必须在任何结果目录写入之前（pycache 目录也算“非空”）。
     "$PY" "$SCOPE_HELPER" claim-results "$WF_RESULTS_DIR" || exit 1
     "$PY" "$SCOPE_HELPER" prepare-results "$WF_RESULTS_DIR" || exit 1
+    note_stage public
+    note_stage lease
+    if [ -n "${WF_PLAN_LOG:-}" ] && [ -s "$WF_PLAN_LOG" ] && [ "$WF_PLAN_LOG" != "$WF_RESULTS_DIR/plan-calls" ]; then
+      cat "$WF_PLAN_LOG" >> "$WF_RESULTS_DIR/plan-calls" 2>/dev/null || true
+      rm -f "$WF_PLAN_LOG" 2>/dev/null || true
+    fi
+    export WF_PLAN_LOG="$WF_RESULTS_DIR/plan-calls"
     export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$WF_RESULTS_DIR/pycache}"
     mkdir -p "$PYTHONPYCACHEPREFIX"
     # 结果缓存轮转：只回收本 scope（run-*）的带 marker 目录，保留最近 20；root 可经
     # WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
-    RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+    if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+      RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
+    else
+      RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+    fi
     WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE_HELPER" prune-results "$RESULTS_CACHE" \
       --scope run --exclude "$WF_RESULTS_DIR" || true
     # ---- 计划（唯一权威）：lease 内唯一一次 final plan，落盘后冻结字节 -------------
@@ -164,6 +188,7 @@ case "$STAGE" in
   controlled)
     apply_frame_env
     verify_inherited_locks
+    note_stage controlled
     RESULTS_DIR="$WF_RESULTS_DIR"
     eval "$("$PY" "$HERE/plan.py" --plan-file "$WF_FRAME_PLAN_FILE")" || { echo "PLAN-EVAL-FAILED" >&2; exit 2; }
     release_args=(--deploy "$PLAN_FIXTURE_DEPLOY" --results-dir "$WF_RESULTS_DIR"
@@ -183,6 +208,7 @@ case "$STAGE" in
     ;;
   execute)
     apply_frame_env
+    note_stage execute
     RESULTS_DIR="$WF_RESULTS_DIR"
     if ! gate_out=$("$PY" "$HERE/execute_gate.py" \
         --entry-pid "$WF_FRAME_ENTRY_PID" --plan-file "$WF_FRAME_PLAN_FILE" \
@@ -298,6 +324,22 @@ fixture_args() {
 # 每单元都跑 wf_fixture.sh + f1_init.py 约 1.95s，而 cp -a 约 5ms：模板只构建一次、
 # 只读，每单元复制独立一份。复制不会搬走记录里的绝对路径与外部暂存目录，所以克隆后
 # 必须 repoint + 残留检查（template_check.py 是唯一判定点，bash 只传参与读退出码）。
+# run-owned 模板（无跨 run 缓存）：与 template_cache._build 同序（reset → wf_fixture → f1_init）。
+build_template_tree() {   # build_template_tree <root> <log>
+  local root=$1 log=$2 rc=0
+  local args=(--deploy "$PLAN_FIXTURE_DEPLOY")
+  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+    args+=(--release-root "$PLAN_RELEASE_ROOT" --release-ref "$PLAN_RELEASE_REF"
+           --release-version "$PLAN_RELEASE_VERSION")
+  fi
+  {
+    "$PY" "$HERE/fixture_scope.py" reset "$root" || exit 1
+    WF_FIX="$root" bash "$HERE/wf_fixture.sh" "$root" "${args[@]}" || exit 1
+    WF_FIX="$root" "$PY" "$HERE/f1_init.py" || exit 1
+  } >>"$log" 2>&1 || rc=$?
+  return "$rc"
+}
+
 template_check() {   # template_check <root> [extra args...]
   local root=$1; shift
   local args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF")
@@ -344,7 +386,11 @@ WF_TEMPLATE_SOURCE=""
 TEMPLATE_SOURCE=run-build
 TEMPLATE_CACHE_HIT=0
 TEMPLATE_CACHE_KEY=""
-TEMPLATE_CACHE_ROOT="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}/template"
+if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+  TEMPLATE_CACHE_ROOT="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}/template"
+else
+  TEMPLATE_CACHE_ROOT="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}/template"
+fi
 # dev HEAD 是安装记录身份的一部分；读不到时固定退回 run-owned 模板（不读写跨 run 缓存，
 # 也不签发 unknown）。该判断只在构建模板前算，preflight 不探测 HEAD。
 HEAD_READABLE=1
@@ -708,6 +754,12 @@ if [ "$hygiene_rc" -ne 0 ]; then
   unknown_fail=$((unknown_fail + 1))
 fi
 
+# 模板缓存构建序列次数（design §3.3）：命中=0，发布一次=1；模板机制关闭=0。
+TEMPLATE_BUILD_SEQUENCES=0
+if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_CACHE_HIT" = "0" ]; then
+  TEMPLATE_BUILD_SEQUENCES=1
+fi
+
 SUMMARY_JSON="$RESULTS_DIR/summary.json"
 WF_SUMMARY_JSON="$SUMMARY_JSON" \
 WF_SUMMARY_MODE="$PLAN_MODE" WF_SUMMARY_FULL_MODE="$PLAN_FULL_MODE" \
@@ -725,9 +777,24 @@ WF_SUMMARY_PYCACHE_ROOT="$PYTHONPYCACHEPREFIX" \
 WF_SUMMARY_TEMPLATE_SOURCE="$TEMPLATE_SOURCE" \
 WF_SUMMARY_TEMPLATE_CACHE_HIT="$TEMPLATE_CACHE_HIT" \
 WF_SUMMARY_TEMPLATE_CACHE_KEY="$TEMPLATE_CACHE_KEY" \
+WF_SUMMARY_TEMPLATE_SEQUENCES="$TEMPLATE_BUILD_SEQUENCES" \
 WF_SUMMARY_JOBS="$PLAN_JOBS" WF_SUMMARY_REPRO_JOBS="$PLAN_REPRO_JOBS" \
 "$PY" - <<'PY'
 import json, os
+
+
+def release_build():
+    """从 controlled 阶段的 release-context 搬运构建状态（built/reused/checked）。"""
+    path = os.environ.get("WF_RELEASE_CONTEXT")
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return (json.load(handle) or {}).get("release_build")
+    except (OSError, ValueError):
+        return None
+
+
 groups = (os.environ.get("WF_SUMMARY_REPRO_GROUPS") or "").split()
 total_seconds = round(int(os.environ["WF_SUMMARY_TOTAL_MS"]) / 1000, 3)
 pool_seconds = int(os.environ.get("WF_SUMMARY_POOL_SECONDS") or 0)
@@ -759,6 +826,9 @@ payload = {
     "template_source": os.environ.get("WF_SUMMARY_TEMPLATE_SOURCE"),
     "template_cache_hit": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_HIT") == "1",
     "template_cache_key": os.environ.get("WF_SUMMARY_TEMPLATE_CACHE_KEY") or None,
+    # 成本账目：release 构建状态与模板缓存构建序列次数（只报告，不作为门禁）。
+    "release_build": release_build(),
+    "template_build_sequences": int(os.environ.get("WF_SUMMARY_TEMPLATE_SEQUENCES") or 0),
     "pycache_root": os.environ.get("WF_SUMMARY_PYCACHE_ROOT"),
     "init_seconds": round(int(os.environ.get("WF_SUMMARY_INIT_MS") or 0) / 1000, 2),
     "suite_seconds": round(int(os.environ.get("WF_SUMMARY_SUITE_MS") or 0) / 1000, 2),

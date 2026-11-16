@@ -4,7 +4,9 @@
 只统计「已写出的结果行」会让“没跑出来的套件”变成绿灯。
 """
 
+import hashlib
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -64,16 +66,18 @@ class GateTest(unittest.TestCase):
         self.assertEqual(shell.stdout, "missing_one missing_two")
 
     def test_repro_gate_validates_frozen_bundle_without_writing_state(self):
-        import hashlib
-        import json
-
         repro = Path(self.dir) / "repro"
         repro.mkdir()
         context = {"deploy": "dev", "release_subject": "sha256:r", "runtime": {"tool": "t"},
                    "platform": "linux"}
-        bundle = {"schema_version": 1, "execution_context": context, "mode": "both",
+        public = {"source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
+                  "runner": {"repro_select.py": "sha256:sel", "run.sh": "sha256:run"}}
+        bundle = {"schema_version": 2, "execution_context": context, "public_inputs": public,
+                  "mode": "both",
                   "cases": {"case-a": {"mode": "both", "execution_fingerprint": "fp",
-                                       "red_subject_digest": "sha256:s", "inputs": {"script": "s"}}}}
+                                       "red_subject_digest": "sha256:s",
+                                       "local_inputs": {"script": "s", "targets": None,
+                                                        "case_meta": {}}}}}
         data = json.dumps(bundle).encode()
         (repro / "inputs.json").write_bytes(data)
         sha = hashlib.sha256(data).hexdigest()
@@ -97,6 +101,53 @@ class GateTest(unittest.TestCase):
         result.write_text(json.dumps(record))
         self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), sha, str(len(data))), 1)
         self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"), "0" * 64, str(len(data))), 1)
+
+    def test_schema_one_bundle_is_refused(self):
+        repro = Path(self.dir) / "repro"
+        repro.mkdir()
+        bundle = {"schema_version": 1,
+                  "execution_context": {"deploy": "dev", "release_subject": "sha256:r",
+                                        "runtime": {"tool": "t"}, "platform": "linux"},
+                  "mode": "green",
+                  "cases": {"case-a": {"mode": "green", "execution_fingerprint": "fp",
+                                       "red_subject_digest": "sha256:s", "inputs": {"script": "s"}}}}
+        data = json.dumps(bundle).encode()
+        (repro / "inputs.json").write_bytes(data)
+        spec = importlib.util.spec_from_file_location("wf_results_gate_legacy", FULL / "results_gate.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        self.assertEqual(module.repro_gate(str(repro), str(repro / "inputs.json"),
+                                           hashlib.sha256(data).hexdigest(), str(len(data))), 1)
+
+    def test_gate_does_not_rescan_public_inputs(self):
+        repro = Path(self.dir) / "repro"
+        repro.mkdir()
+        sys.path.insert(0, str(FULL / "repro"))
+        import repro_select
+        context = {"deploy": "dev", "release_subject": "sha256:r", "runtime": {"tool": "t"},
+                   "platform": "linux"}
+        public = {"source": "sha256:src", "helpers": "sha256:help", "executor": "sha256:exec",
+                  "runner": {"run.sh": "sha256:run"}}
+        bundle = {"schema_version": 2, "execution_context": context, "public_inputs": public,
+                  "mode": "green",
+                  "cases": {"case-a": {"mode": "green", "execution_fingerprint": "fp",
+                                       "red_subject_digest": "sha256:s",
+                                       "local_inputs": {"script": "s"}}}}
+        data = json.dumps(bundle).encode()
+        (repro / "inputs.json").write_bytes(data)
+        sha = hashlib.sha256(data).hexdigest()
+        (repro / "logs").mkdir()
+        (repro / "logs" / "case-a.green.log").write_text("PASS green: target verified\n")
+        (repro / "case-a.json").write_text(json.dumps(
+            {"case": "case-a", "mode": "green", "green": "pass", "red": "skip", "verified": True,
+             "execution_fingerprint": "fp", "bundle_sha256": sha, "green_seconds": 0.1,
+             "red_seconds": 0.0,
+             "phases": {"green": {"rc": 0, "status": "passed"}}}))
+        repro_select.reset_scans()
+        self.assertEqual(gate_mod.repro_gate(str(repro), str(repro / "inputs.json"), sha,
+                                             str(len(data))), 0)
+        self.assertEqual(repro_select.scans(), {"source": 0, "release": 0, "helpers": 0},
+                         "只读 gate 不得重算公共摘要")
 
     def test_complete_result_set_is_ok(self):
         self.write(line("a"), line("b"))

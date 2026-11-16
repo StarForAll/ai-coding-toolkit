@@ -100,7 +100,9 @@ def prepare_results(root):
                 path.unlink()
         elif (path.is_file() or path.is_symlink()) and path.name not in ('.wf-results-owner.json', '.runner.log', '.runner.json') and (
                 path.name == 'plan.json' or path.suffix in ('.json', '.out', '.log', '.timing')
-                or path.name in ('selection.tsv', 'lines', 'plan.err')):
+                or path.name in ('selection.tsv', 'lines', 'stages', 'plan-calls', 'plan.err')):
+            # stages/plan-calls 与 lines 同属"每 run 证据"：复用显式结果目录时必须从本轮重新计数，
+            # 否则一次 run 的"4 阶段/2 次计划"会跨轮累积（实测 4→8、2→4）。
             path.unlink()
     (root / 'logs').mkdir(exist_ok=True)
     return root
@@ -434,7 +436,15 @@ def verify_results_lock():
         if domain == 'production':
             expected = Path(PRODUCTION_RESULTS_LOCK)
         elif domain.startswith('scope:'):
-            expected = Path(domain[len('scope:'):]) / 'locks' / f'results-{os.getuid()}.lock'
+            # 域标记只定位对象：scope 域必须过 marker 校验，且等于当前活动 scope——
+            # 否则任何调用方都能用一段路径字符串把结果锁“继承”到别处。
+            scope_path = read_scope(Path(domain[len('scope:'):]))
+            active = os.environ.get('WF_TEST_SCOPE_ROOT')
+            if not active:
+                raise ValueError('scope results domain without an active test scope')
+            if Path(active).resolve() != scope_path.resolve():
+                raise ValueError('scope results domain does not match the active test scope')
+            expected = scope_path / 'locks' / f'results-{os.getuid()}.lock'
         else:
             raise ValueError(f'unknown results lock domain: {domain!r}')
         # 继承优先：祖先若是生产域锁，嵌套的测试 scope 也沿用同一把，不再自建第二把。

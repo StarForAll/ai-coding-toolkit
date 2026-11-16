@@ -91,25 +91,39 @@ def ancestor_verified(pid, entry_pid):
         raise ContextError("frame entry-pid 与当前祖先链不符")
 
 
+def test_release_cli():
+    """测试专用注入点：默认取仓库内真实 CLI；契约测试指向计数 shim（不劫持 PATH）。"""
+    return os.environ.get("WF_TEST_RELEASE_CLI") or os.path.join(
+        REPO, "scripts", "tests", "wf_test_release.py")
+
+
+def candidate_validator():
+    return os.environ.get("WF_CANDIDATE_VALIDATOR") or os.path.join(
+        HERE, "prepare_candidate_repo.py")
+
+
 def dev_prepare(root, ref, version, rebuild):
-    scripts = os.path.join(REPO, "scripts")
-    tool = os.path.join(scripts, "tests", "wf_test_release.py")
     # 本进程已持同一把 root 锁：CLI 加 --no-lock，内部 locked 实现不自撞。
-    command = [PY, tool, "--ensure" if rebuild else "--check", "--no-lock",
-               "--root", root, "--version", version]
+    command = [PY, test_release_cli(), "--ensure" if rebuild else "--check", "--no-lock",
+               "--root", root, "--version", version, "--json"]
     completed = subprocess.run(command, capture_output=True, text=True)
     if completed.returncode == 75:
         raise ContextError(f"release busy: {completed.stderr.strip()}")
     if completed.returncode != 0:
         label = "TEST-RELEASE-STALE" if "--check" in command else "TEST-RELEASE-BUILD-FAILED"
         raise ContextError(f"{label}: {completed.stderr.strip() or completed.stdout.strip()}")
-    return root, ref, version, None
+    try:
+        status = json.loads(completed.stdout).get("status")
+    except ValueError as exc:
+        raise ContextError("release CLI returned non-JSON status") from exc
+    if status not in ("built", "reused", "checked"):
+        raise ContextError(f"release CLI returned unknown status: {status!r}")
+    return root, ref, version, None, status
 
 
 def candidate_prepare(root, ref, version):
-    validator = os.path.join(HERE, "prepare_candidate_repo.py")
-    completed = subprocess.run([PY, validator, "--check", "--out", root, "--version", version,
-                                "--json"], capture_output=True, text=True)
+    completed = subprocess.run([PY, candidate_validator(), "--check", "--out", root,
+                                "--version", version, "--json"], capture_output=True, text=True)
     if completed.returncode != 0:
         raise ContextError(f"CANDIDATE-REPO-INVALID: "
                            f"{completed.stderr.strip() or completed.stdout.strip()}")
@@ -124,7 +138,7 @@ def candidate_prepare(root, ref, version):
     except OSError:
         pass
     return root, ref, version, {"commit": meta.get("commit"), "tree_digest": meta.get("tree_digest"),
-                                "meta_digest": meta_digest}
+                                "meta_digest": meta_digest}, "checked"
 
 
 def main(argv=None):
@@ -162,11 +176,11 @@ def main(argv=None):
                 raise ContextError(str(exc)) from exc
             release_lock.write_env(lock_fd, args.release_root)
             os.set_inheritable(lock_fd, True)
-            root, ref, version, candidate = dev_prepare(args.release_root, args.release_ref,
-                                                        args.release_version, not args.no_build)
+            root, ref, version, candidate, release_build = dev_prepare(
+                args.release_root, args.release_ref, args.release_version, not args.no_build)
         else:
-            root, ref, version, candidate = candidate_prepare(args.release_root, args.release_ref,
-                                                              args.release_version)
+            root, ref, version, candidate, release_build = candidate_prepare(
+                args.release_root, args.release_ref, args.release_version)
         common = _common()
         subject = None
         manifest_digest = None
@@ -192,6 +206,8 @@ def main(argv=None):
             "tree_digest": tree_digest,
             "runtime": _runtime_identity(),
             "candidate": candidate,
+            # 成本账目（design §3.3）：本次是 built/reused/checked——summary 只搬运不改判。
+            "release_build": release_build,
             "plan_sha256": args.plan_sha256,
             "plan_size": int(args.plan_size),
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

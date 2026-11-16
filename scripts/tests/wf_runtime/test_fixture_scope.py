@@ -294,6 +294,32 @@ class TestScopeTest(unittest.TestCase):
         with self.assertRaises(scope.FixtureError):
             scope.verify_results_lock()
 
+    def test_scope_domain_requires_an_active_scope(self):
+        """域标记只是定位：没有活动 scope 时，`scope:` 域不得被当成继承来的结果锁。"""
+        scope, _root = self.make_scope()
+        scope.acquire_results_lock()
+        self.assertTrue(scope.verify_results_lock())
+        os.environ.pop("WF_TEST_SCOPE_ROOT", None)
+        with self.assertRaises(scope.FixtureError):
+            scope.verify_results_lock()
+
+    def test_scope_domain_must_match_the_active_scope(self):
+        """另一个真实 scope 的域字符串也不能冒用当前 scope 的锁。"""
+        scope, _root = self.make_scope()
+        scope.acquire_results_lock()
+        other = scope.create_test_scope(str(self.base))
+        os.environ["WF_RESULTS_LOCK_DOMAIN"] = "scope:" + str(other)
+        with self.assertRaises(scope.FixtureError):
+            scope.verify_results_lock()
+
+    def test_unit_domain_without_scope_or_inherited_lock_is_refused(self):
+        scope, _root = self.make_scope()
+        os.environ.pop("WF_TEST_SCOPE_ROOT", None)
+        os.environ["WF_UNIT_DOMAIN"] = "unit"
+        self.addCleanup(os.environ.pop, "WF_UNIT_DOMAIN", None)
+        with self.assertRaises(scope.FixtureError):
+            scope.lease_domain([sys.executable, "-c", "pass"])
+
     def test_forged_results_lease_is_rejected(self):
         scope, _root = self.make_scope()
         os.environ.update({"WF_RESULTS_LOCK_FD": "0", "WF_RESULTS_LOCK_PID": str(os.getpid()),

@@ -375,18 +375,81 @@ def _capture_old(real):
     return {"present": True, "digest": digest, "meta": meta_text, "owner": owner_text}
 
 
-def _restore_old(real, journal):
-    """按 journal 冻结的旧字节回滚；验证不过就保留现场并失败。"""
+def _complete_generation(real):
+    """real 是否是一份带本工具 meta/owner 且树可验证的完整代（不比对当前输入）。"""
+    meta = read_meta(real)
+    owner = read_owner(real)
+    if not meta or not owner or owner.get("owner") != OWNER_TAG:
+        return False
+    if meta.get("schema_version") != META_SCHEMA:
+        return False
+    return _tree_digest_or_none(real) == meta.get("output_tree_digest")
+
+
+def _recovery_action(real, journal):
+    """恢复状态机（design §2）：按固定优先级判定，返回 (action, target)；纯判定、不写盘。
+
+    1 `roll-forward`        新代可验证（已装到 real 或仍在 staging）→ 前滚；
+    2 `rolled-back`         旧代仍在原位且字节等于 journal 冻结摘要 → 只清 staging/journal；
+    3 `roll-backup`         backup 字节等于 journal 冻结旧代 → 按冻结 meta/owner 回滚；
+    4 `rolled-back-absent`  首次发布：只撤销本事务的不完整新代；
+    5 `fail-closed`         两代都不可验证 → 保留现场、非零退出。
+
+    判定只用 journal 冻结的摘要与归属，不比 mtime、不看当前输入新鲜度。
+    """
+    new = journal.get("new") or {}
     old = journal.get("old") or {}
-    if not old.get("present"):
-        # 首次发布：只撤销本事务的不完整新代，不误删 unrelated 路径。
-        backup = (journal.get("new") or {}).get("backup")
-        if backup and os.path.isdir(backup):
-            shutil.rmtree(backup, ignore_errors=True)
-        staging = (journal.get("new") or {}).get("staging")
-        if staging and os.path.isdir(staging):
-            shutil.rmtree(staging, ignore_errors=True)
-        return "rolled-back-absent"
+    digest = new.get("digest")
+    if digest:
+        for candidate in (real, new.get("staging")):
+            if candidate and os.path.isdir(candidate) and _tree_digest_or_none(candidate) == digest:
+                return "roll-forward", candidate
+    if old.get("present"):
+        if _tree_digest_or_none(real) == old.get("digest"):
+            return "rolled-back", real
+        backup = new.get("backup")
+        if backup and os.path.isdir(backup) and _tree_digest_or_none(backup) == old.get("digest"):
+            return "roll-backup", backup
+    elif not _complete_generation(real):
+        return "rolled-back-absent", real
+    return "fail-closed", None
+
+
+def _roll_forward(real, journal, candidate):
+    new = journal.get("new") or {}
+    if candidate != real:
+        backup = new.get("backup")
+        if os.path.isdir(real):
+            if not backup:
+                raise TestReleaseError("journal 缺少 backup 路径，无法安装新代")
+            if os.path.isdir(backup):
+                shutil.rmtree(backup)
+            os.rename(real, backup)
+        os.rename(candidate, real)
+    if new.get("meta") is None or new.get("owner") is None:
+        raise TestReleaseError("journal 缺少新代 meta/owner，无法前滚；保留现场")
+    write_text_atomic(meta_path(real), new["meta"])
+    write_text_atomic(owner_path(real), new["owner"])
+    if _tree_digest_or_none(real) != new.get("digest"):
+        raise TestReleaseError("前滚后新代仍不可验证；保留现场")
+    return "rolled-forward"
+
+
+def _roll_back_in_place(real, journal):
+    """旧代仍在原位：按 journal 冻结的 meta/owner 原文复位，不重新序列化。"""
+    old = journal.get("old") or {}
+    if not old.get("meta") or not old.get("owner"):
+        raise TestReleaseError("journal 缺少旧代 meta/owner，无法确认旧代原位完好；保留现场")
+    write_text_atomic(meta_path(real), old["meta"])
+    write_text_atomic(owner_path(real), old["owner"])
+    if _tree_digest_or_none(real) != old.get("digest"):
+        raise TestReleaseError("恢复后旧代仍不可验证；保留现场")
+    return "rolled-back"
+
+
+def _restore_from_backup(real, journal):
+    """旧代已移走但 backup 可验证：按 journal 冻结的旧字节回滚。"""
+    old = journal.get("old") or {}
     backup = (journal.get("new") or {}).get("backup")
     if not backup or not os.path.isdir(backup):
         raise TestReleaseError(
@@ -403,45 +466,62 @@ def _restore_old(real, journal):
     return "rolled-back"
 
 
+def _undo_first_publication(real, journal):
+    """首次发布：只撤销本事务的不完整新代（staging/backup/不完整的 real），不碰 sibling。"""
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup"), real):
+        if path and os.path.isdir(path):
+            shutil.rmtree(path, ignore_errors=True)
+    return "rolled-back-absent"
+
+
 def recover_locked(real):
-    """独占锁内处理未完成 journal：新代可验证则前滚，否则回滚旧代。返回状态字符串。"""
+    """独占锁内处理未完成 journal：按 `_recovery_action` 判定前滚/回滚，返回状态字符串。"""
     journal = read_json(journal_path(real))
     if journal is None:
         raise TestReleaseError(f"journal 不可解析：{journal_path(real)}（保留现场）")
     if journal.get("schema_version") != JOURNAL_SCHEMA or journal.get("root") != real:
         raise TestReleaseError(f"journal schema/root 不符：{journal_path(real)}（保留现场）")
-    new = journal.get("new") or {}
-    staging = new.get("staging")
-    # 前滚：staging 或 root 已经等于预期新代字节
-    for candidate in (staging, real):
-        if candidate and os.path.isdir(candidate) and _tree_digest_or_none(candidate) == new.get("digest"):
-            if candidate != real:
-                backup = new.get("backup")
-                if os.path.isdir(real):
-                    if not backup:
-                        raise TestReleaseError("journal 缺少 backup 路径，无法安装新代")
-                    if os.path.isdir(backup):
-                        shutil.rmtree(backup)
-                    os.rename(real, backup)
-                os.rename(candidate, real)
-            write_text_atomic(meta_path(real), new["meta"])
-            write_text_atomic(owner_path(real), new["owner"])
-            if _tree_digest_or_none(real) != new.get("digest"):
-                raise TestReleaseError("前滚后新代仍不可验证；保留现场")
-            _finish_transaction(real, journal)
-            return "rolled-forward"
-    status = _restore_old(real, journal)
-    _finish_transaction(real, journal, keep_backup=False)
+    action, target = _recovery_action(real, journal)
+    if action == "roll-forward":
+        status = _roll_forward(real, journal, target)
+    elif action == "rolled-back":
+        status = _roll_back_in_place(real, journal)
+    elif action == "roll-backup":
+        status = _restore_from_backup(real, journal)
+    elif action == "rolled-back-absent":
+        status = _undo_first_publication(real, journal)
+    else:
+        raise TestReleaseError(
+            "无法恢复：当前代与 journal 记录的旧代/新代均不可验证（两代都不完整）；"
+            f"保留现场 {journal_path(real)}")
+    _finish_transaction(real, journal)
     return status
 
 
-def _finish_transaction(real, journal, keep_backup=False):
+def _reap_staging_parent(real, journal):
+    """删除本次事务的 staging **父目录**（`<root>.staging-<txn>`）。
+
+    `new.staging` 记的是 `staging/first`；发布时 first/second 都已被移走或清掉，
+    父目录会剩下一个空壳（历史上每次构建都留一个）。只按 `<basename(real)>.staging-`
+    前缀识别，且仅在事务收尾（成功/恢复）时调用；fail closed 路径不调用（保留现场）。
+    """
+    staging = (journal.get("new") or {}).get("staging")
+    if not staging:
+        return
+    parent = os.path.dirname(staging)
+    prefix = os.path.basename(real) + ".staging-"
+    if parent and os.path.basename(parent).startswith(prefix) and os.path.isdir(parent):
+        shutil.rmtree(parent, ignore_errors=True)
+
+
+def _finish_transaction(real, journal):
+    """事务收尾：清 staging/backup 与 journal。fail closed 路径不会走到这里（现场要保留）。"""
     new = journal.get("new") or {}
     for path in (new.get("staging"), new.get("backup")):
         if path and os.path.isdir(path):
-            if keep_backup:
-                continue
             shutil.rmtree(path, ignore_errors=True)
+    _reap_staging_parent(real, journal)
     os.unlink(journal_path(real))
 
 
@@ -472,6 +552,7 @@ def _publish_locked(real, version, dev_manifest, inputs):
             raise TestReleaseError("测试发行缺少 wf-release.json")
         _make_tagged_repo(first, version)
         digest = common.tree_digest(first)
+        previous = read_meta(real) or {}
         meta = {
             "schema_version": META_SCHEMA,
             "version": version,
@@ -482,6 +563,8 @@ def _publish_locked(real, version, dev_manifest, inputs):
             "source_tree_digest": common.source_tree_digest(),
             "built_at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
             "root": real,
+            # 累计构建次数（additive 诊断字段，读取方不依赖）：首建=1，同输入复用不增。
+            "builds": int(previous.get("builds") or 0) + 1,
         }
         owner = {"schema_version": 1, "owner": OWNER_TAG, "root": real, "version": version}
         journal["new"] = {
@@ -545,25 +628,30 @@ def _cleanup_stale(real):
 
 
 def ensure_release_locked(root=None, version=None, dev_manifest=None, rebuild=True):
-    """独占锁内确保缓存根有一份与当前输入一致的测试发行；返回 (root, meta)。"""
+    """独占锁内确保缓存根有一份与当前输入一致的测试发行。
+
+    返回 `(root, meta, status)`；status 是 `built`（本次构建）或 `reused`（命中或只核验），
+    供 `--json` 与 summary 的成本账目使用（不改变门禁语义）。
+    """
     dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
     version = version or resolve_version(None, dev_manifest)
     real = check_output_root(root or default_root(version))
     if os.path.isfile(journal_path(real)):
         recover_locked(real)
     if not rebuild:
-        return real, check_meta_locked(real, version, dev_manifest)
+        return real, check_meta_locked(real, version, dev_manifest), "reused"
     inputs = common.test_release_inputs_digest(version)
     _cleanup_stale(real)
     hit = _hit_meta(real, version, inputs)
     if hit is not None:
-        return real, hit
+        return real, hit, "reused"
     _assert_owned_or_empty(real)
-    return _publish_locked(real, version, dev_manifest, inputs)
+    root, meta = _publish_locked(real, version, dev_manifest, inputs)
+    return root, meta, "built"
 
 
-def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
-    """公开 ensure：独占锁内恢复/发布；竞争明确 busy。"""
+def ensure_release_status(root=None, version=None, dev_manifest=None, rebuild=True):
+    """公开 ensure（含构建状态 `built|reused`）；竞争明确 busy。"""
     dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
     version = version or resolve_version(None, dev_manifest)
     real = check_output_root(root or default_root(version))
@@ -572,6 +660,12 @@ def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
         return ensure_release_locked(real, version, dev_manifest, rebuild)
     finally:
         release_lock(fd)
+
+
+def ensure_release(root=None, version=None, dev_manifest=None, rebuild=True):
+    """公开 ensure：返回 `(root, meta)`（构建状态见 `ensure_release_status`）。"""
+    root, meta, _status = ensure_release_status(root, version, dev_manifest, rebuild)
+    return root, meta
 
 
 # ---- runner 消费期 lease ---------------------------------------------------
@@ -628,24 +722,24 @@ def main(argv=None):
             # 调用方已持同一把 root 锁：只走 locked 实现，不重复开锁。
             if args.check:
                 meta = check_meta_locked(root, version, dev_manifest)
-                status = "OK"
+                status = "checked"
             else:
-                root, meta = ensure_release_locked(root, version, dev_manifest)
-                status = "BUILT"
+                root, meta, status = ensure_release_locked(root, version, dev_manifest)
         elif args.check:
             meta = check_meta(root, version, dev_manifest)
-            status = "OK"
+            status = "checked"
         else:
-            root, meta = ensure_release(root, version, dev_manifest)
-            status = "BUILT"
+            root, meta, status = ensure_release_status(root, version, dev_manifest)
         if args.json:
             print(json.dumps({"status": status, "root": root, "version": meta["version"],
                               "release_ref": meta["release_ref"],
+                              "builds": meta.get("builds"),
                               "build_inputs": meta.get("build_inputs"),
                               "output_tree_digest": meta.get("output_tree_digest")},
                              ensure_ascii=False, sort_keys=True))
         else:
-            print(f"{status}  test-release {meta['version']}  {root}")
+            label = {"built": "BUILT", "reused": "REUSED", "checked": "OK"}[status]
+            print(f"{label}  test-release {meta['version']}  {root}")
             print(f"  release_ref: {meta['release_ref']}")
             print(f"  build_inputs: {meta.get('build_inputs')}")
         return 0

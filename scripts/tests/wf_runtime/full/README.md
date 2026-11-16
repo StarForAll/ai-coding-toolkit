@@ -11,6 +11,24 @@
    部署开发态运行时（调用 `scripts/wf-dev-deploy.py --confirm`）。夹具必须是新目录或带本工具所有权标记的目录；拒绝非空无主目录和符号链接。
 3. `run_all.sh` 自动分配临时夹具；`WF_FIX` 可指定安全临时路径。直接使用 `wf_fixture.sh` 时默认 `/tmp/wf-fixtures/f1`。
 
+### 宿主前置条件（HOME 由宿主提供，运行器不隔离）
+
+被测 SUT 把用户级环境当作执行事实的一部分，因此下列宿主条件必须就绪，**否则套件会在
+`task-new`/`task-check` 阶段被 SUT 拒绝**（不是运行器缺陷，也不得用假 HOME 绕过）：
+
+1. **执行器确认**：`~/.wf/interpreters.json` 里有与当前解释器匹配的确认元组。
+   缺失时 `task-new` 返回 `WF_EXECUTOR_UNCONFIRMED`（`facts.reason="no matching confirmation tuple"`）。
+   恢复方式是在终端里对夹具实际使用的解释器执行一次
+   `python3 <项目>/.wf/bin/wf.py confirm-executor --scope system`（非 TTY 会被拒绝，这是产品规则）。
+2. **git 身份**：夹具内的 `git commit`（首个 HEAD、归档提交）需要 `user.name`/`user.email`
+   （全局 `~/.gitconfig` 或仓库级配置皆可）。
+
+契约测试据此**不隔离 HOME**：`WF_TEST_SCOPE_ROOT` 只约束 runner 管理的写入口
+（results/cache/state/fixture/pycache/release 缓存），HOME 保持宿主值；用户 cache 与生产结果锁
+只用"存在性 + inode/mtime 快照"证明未被触碰。A/B 实测（同一 HEAD 代码、同一 scope、只改 HOME）：
+scope 内 HOME 会让候选流程 f0 的 `task-check` 变成 `WF_CHECK_STALE`（9 项里 3 项 FAIL），
+宿主 HOME 则全绿——换 HOME 等于改被测语义。
+
 ## 用例
 
 | 脚本 | 覆盖 |
@@ -111,6 +129,8 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   `pool_seconds/repro_seconds/startup_seconds`、模板来源三键（`template_source/template_cache_hit/template_cache_key`）、
   `pycache_root` 与 `budget`（60s 目标 / 65s 硬阈值，**只报告不硬失败**）。`suite_ran/flow_ran` 由
   `lines` × 注册表 `kind` 一次派生；`template_reused` 表示“本次 run 内共用同一夹具源”。
+  成本账目另有两个只读字段：`release_build`（controlled 阶段从 `release-context.json` 搬运的
+  `built|reused|checked`）与 `template_build_sequences`（模板缓存命中=0、本次发布一次=1、模板机制关闭=0）。
 - `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
 - 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
 - **阶段与 frame**：入口先是 `public`（记原始 results 显式性、一次禁写 pyc 的 preflight；list/dry-run 在此结束），
@@ -163,6 +183,108 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --group review --mode green --jo
   delta 对拍（新增即 `SOURCE-TREE-POLLUTED`），模板缓存条目用 strict 绝对判据。
 - 直接 `plan.py --list` 不再创建结果目录；`run_all.sh --list/--dry-run` 默认零写入（无 lease/结果/日志/pycache/prune）。
   只有**显式** `WF_RESULTS_DIR` 才写 plan.json + owner marker，并在当前域结果锁下短期完成。
+
+## 隔离 scope、成本账目与证据计数（2026-11-15）
+
+- **契约测试的单 scope 口径**（`scripts/tests/wf_runtime/test_run_all_contract.py`，`WF_SLOW_TESTS=1`）：
+  整个 class 只建一个 owned scope（`fixture_scope.py create-scope`）+ 空 pool 布局
+  `pool/results-cache`、`pool/test-release`；每个逻辑 case 有自己的 `state`（同一 case 的多次调用
+  共用 state），每次 runner 调用有自己的 `results`/`fixture`/`pycache`。helper 注入缺一即失败：
+  `WF_TEST_SCOPE_ROOT`、`WF_TEST_RELEASE_CACHE`、`WF_RESULTS_CACHE`、`WF_TEST_RUN_CACHE`、
+  `WF_PYCACHE`、`WF_RESULTS_DIR`、`WF_FIX`。**HOME 保持宿主值**：被测 SUT 的 check/归档判据依赖
+  用户级环境（git 身份、执行器确认），A/B 实测把 HOME 指到 scope 内会让候选流程的 `task-check`
+  退化成 `WF_CHECK_STALE`——假 HOME 会改变被测语义，所以隔离只施加在 runner 管理的写入口上。生产结果锁与 `~/.cache/wf-test-release|wf-test-run|wf-candidate-repo`
+  只做快照比对（存在性 + inode/mtime），运行前后必须一致；scope 内 create/delete 另行断言。
+- **成本与 deadline**：一个逻辑 case 共享一个 900 秒单调 deadline，子进程超时取 `min(剩余, 既有上限)`，
+  剩余为 0 直接失败并归因 `case deadline exhausted`（不重置、不加时）。class/case 墙钟、cold/warm、
+  `release_build`、`template_build_sequences`、取消窗口等待（15 秒窗口）与清理时间（5 秒窗口）、
+  teardown 与剩余 deadline 写进 `<scope>/evidence/class-cost.json`；`WF_CONTRACT_KEEP_SCOPE=1` 保留现场。
+- **阶段与计划计数文件**（证据，不是门禁）：`run_all` 在每个阶段入口向 `$WF_RESULTS_DIR/stages` 追加名字；
+  `public` 阶段在 claim 之前不能写结果目录，由 `lease` 阶段在 claim/prepare 之后补记，因此一次真实 run
+  是 `public,lease,controlled,execute` 四行。`plan.py` 每真正计算一次计划就向 `WF_PLAN_LOG`（preflight 的
+  bootstrap 文件）或 `$WF_RESULTS_DIR/plan-calls` 追加一行；preflight 的计数在 claim 后并入结果目录，
+  一次真实 run 合计 2 行（preflight + final）。
+- **调用计数注入点**（默认值不变，仅测试使用；不劫持 PATH）：`WF_TEST_RELEASE_CLI`（测试发行 CLI，
+  `release_context.py` 与 `repro/run.sh` 都消费）、`WF_CANDIDATE_VALIDATOR`（候选校验，
+  `release_context.py`、`repro/run.sh`、repro 最终 writer barrier 都消费）、`WF_GIT_BIN`
+  （`wf_release_common.git_head/git_describe`）。契约用计数 shim（记录 argv 后 exec 真实入口）断言：
+  内嵌 repro 不再 ensure/check（一次 run 只剩 controlled 阶段那一次）、独立 repro 入口 1 次、
+  候选 validator 起始与结束 barrier 各 1 次、坏候选只有起始 1 次且不启动 worker。
+- **release/模板构建次数**：测试发行 meta（schema 2）与模板条目 meta（schema 1）都有一个 additive
+  诊断字段 `builds`（首建=1，同输入复用不增）；`wf_test_release.py --ensure --json` 的 `status` 为
+  `built|reused`、`--check --json` 为 `checked`，供 summary 与契约账目读取。
+- **恢复状态机**（两处 cache 同形，判定只用 journal 冻结的摘要与归属，不比 mtime）：
+  1) 新代可验证（已装到根或仍在 staging）→ 前滚；2) 旧代仍在原位且字节等于冻结摘要 → 只清
+  staging/journal（**不要求 backup**）；3) 旧代已移走但 backup 可验证 → 按冻结 meta/owner 原文回滚；
+  4) 首次发布（old-absent）→ 只撤销本事务的不完整新代；5) 其余 → fail closed、保留现场、非零。
+  窗口断言覆盖「journal 后未移旧 / 移旧未装新 / 装新未写 meta / 写 meta 未清 journal / staging 半移动 /
+  首次发布半安装」，见 `test_release_lock.py` 与 `test_template_cache.py` 的 `RecoveryTest`。
+
+## 只读列举与精确清理
+
+两类缓存的所有权机制不同，**列举与清理必须分开**：测试发行根用 `.owner`（`wf-test-release` 标记），
+模板/夹具条目用 `fixture_scope` 的 `.wf-owner.json`。两者都禁止通配符与 `rm -rf`。
+
+```bash
+# A) 测试发行 cache：只读列举（路径/meta/owner/大小/身份）
+python3 - <<'LIST'
+import json, os
+from pathlib import Path
+root = Path(os.path.expanduser("~/.cache/wf-test-release"))
+for entry in sorted(root.glob("*")):
+    if not entry.is_dir() or entry.name.startswith("."):
+        continue
+    meta = Path(str(entry) + ".meta.json")
+    owner = Path(str(entry) + ".owner")
+    payload = json.loads(meta.read_text()) if meta.is_file() else {}
+    marker = json.loads(owner.read_text()) if owner.is_file() else {}
+    size = sum(path.stat().st_size for path in entry.rglob("*") if path.is_file())
+    print(entry, f"bytes={size}", f"owner={marker.get('owner')}", f"root={marker.get('root')}",
+          f"schema={payload.get('schema_version')}", f"builds={payload.get('builds')}",
+          f"tree={payload.get('output_tree_digest')}")
+LIST
+
+# A) 测试发行 cache：精确清理（先核 .owner 的 owner/root，再逐个删除**显式路径**）
+python3 - ~/.cache/wf-test-release/0.1.0 <<'REMOVE'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1]).resolve()          # 例如 ~/.cache/wf-test-release/0.1.0
+owner = Path(str(root) + ".owner")
+record = json.loads(owner.read_text(encoding="utf-8"))
+if record.get("owner") != "wf-test-release" or record.get("root") != str(root):
+    raise SystemExit("REFUSED: .owner 不描述该路径")
+import shutil
+shutil.rmtree(root)
+for sidecar in (".owner", ".meta.json", ".journal.json"):
+    Path(str(root) + sidecar).unlink(missing_ok=True)
+# .lock 是固定 inode 的 sidecar：只在你确定没有 runner/ensure 持锁时删除
+Path(str(root) + ".lock").unlink(missing_ok=True)
+print("removed", root)
+REMOVE
+
+# B) 模板 / 夹具条目：用唯一实现删除（它自校验 .wf-owner.json 的 owner/root）
+python3 scripts/tests/wf_runtime/full/fixture_scope.py remove <精确的 owned 路径>
+```
+
+`fixture_scope.py remove` 只接受带 `.wf-owner.json`（或 results 目录的 `.wf-results-owner.json`）
+且 `root` 与目标完全一致的路径；无主、归属不明、符号链接一律拒绝（`FIXTURE-REFUSED`）。
+它对 **test-release 根会拒绝**（那类根没有 fixture 标记），因此 A/B 用两套口径。
+模板缓存的 `<key>.meta.json` 是条目旁车：删除条目后需要一并显式删掉该 meta（无通配符）。
+测试发行的 `<root>.staging-<uuid>`/`<root>.backup-<uuid>` 是发布期中间态：发布成功或恢复成功时
+即回收（2026-11-16 起父目录也会被清掉，不再留空壳）；历史残留由下一次 ensure 的
+`_cleanup_stale()` 按前缀回收，也可按上面的"显式路径"逐条删除（不做 glob/`rm -rf`）。
+
+## 已知边界：SUT 对项目外符号链接的写入
+
+- **已拦住**：资产落点本身是指向项目外的符号链接（`proj/.wf/bin/wf.py -> outside/x`）→
+  `WF_ASSET_DECISION`（`target resolves outside its base`），整批零写入。
+- **未拦住（产品侧缺口）**：技能根目录（如 `proj/.claude/skills`）是指向项目外的符号链接时，
+  `install.py` 返回 `WF_OK` 并把 assets 写进项目外目录（实测 13 个 skill 目录）。根因：
+  `resolve_skill_roots()` 不校验技能根真实落点，`plan_writes()/inside()` 对已 realpath 的 base 判"在内"。
+  修复必须**同时覆盖 `uninstall.py` 的同判据**，并走发行重建（字节复现 + token parity）；
+  本仓库的 runner 任务不改产品 payload，故以
+  `test_run_all_contract.py::RunAllContractTest::test_known_gap_install_writes_through_a_symlinked_skill_root`
+  作为可复跑证据（逃逸目标仍在该 case 的 `WF_FIX` owned scope 内，不污染宿主）。
 
 ## 解释器契约
 

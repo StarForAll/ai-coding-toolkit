@@ -153,8 +153,10 @@ class JournalTest(Base):
                          meta["output_tree_digest"])
 
     def _journal(self, old, new):
-        write(self.journal, json.dumps({"schema_version": 1, "transaction": "tx", "root": str(self.root),
-                                        "old": old, "new": new}, sort_keys=True) + "\n")
+        write(self.journal, json.dumps(
+            {"schema_version": 1, "transaction": "tx",
+             "root": test_release.check_output_root(self.root), "old": old, "new": new},
+            sort_keys=True) + "\n")
 
     def _old_payload(self):
         return {"present": True, "digest": common.tree_digest(self.root),
@@ -247,6 +249,91 @@ class JournalTest(Base):
         self.assertTrue(self.journal.exists())
         self.assertTrue(Path(str(self.root) + ".backup-tx").is_dir())
         self.assertFalse(self.root.exists())
+
+    def recover(self):
+        """直接跑发布恢复（独占锁已在测试内自持）：断言状态机而不是 CLI 重建结果。"""
+        real = test_release.check_output_root(self.root)
+        return test_release.recover_locked(real)
+
+    def test_window_journal_written_before_old_moved_rolls_back_in_place(self):
+        """journal 已落、旧代未移、staging 不可验证：旧代原位完好 → 回滚完成，不要求 backup。"""
+        self.make_release("old")
+        old = self._old_payload()
+        staging = self._new_tree("new")
+        self._journal(old, {"digest": common.tree_digest(staging), "staging": str(staging),
+                           "backup": str(self.root) + ".backup-tx", "meta": "{}\n", "owner": "{}\n"})
+        write(staging / "x.txt", "corrupted\n")
+        self.assertEqual(self.recover(), "rolled-back")
+        self.assertEqual((self.root / "x.txt").read_text(), "old\n")
+        self.assertEqual(common.tree_digest(self.root), old["digest"])
+        self.assertEqual(self.meta.read_text(), old["meta"])
+        self.assertEqual(self.owner.read_text(), old["owner"])
+        self.assertFalse(self.journal.exists())
+        self.assertFalse(staging.exists())
+
+    def test_window_new_generation_installed_before_meta_is_completed(self):
+        """装新代但 meta/owner 仍是旧字节：前滚必须写出 journal 冻结的新 meta/owner。"""
+        self.make_release("old")
+        old = self._old_payload()
+        staging = self._new_tree("new")
+        new_meta = self._new_meta(staging)
+        new_meta_text = json.dumps(new_meta, sort_keys=True) + "\n"
+        owner_text = self.owner.read_text()
+        backup = str(self.root) + ".backup-tx"
+        self._journal(old, {"digest": new_meta["output_tree_digest"], "staging": str(staging),
+                           "backup": backup, "meta": new_meta_text, "owner": owner_text})
+        os.rename(self.root, backup)
+        os.rename(staging, self.root)                     # 半完成：新树已就位，meta 未写
+        self.assertEqual(self.recover(), "rolled-forward")
+        self.assertEqual((self.root / "x.txt").read_text(), "new\n")
+        self.assertEqual(common.tree_digest(self.root), new_meta["output_tree_digest"])
+        self.assertEqual(self.meta.read_text(), new_meta_text)
+        self.assertEqual(self.owner.read_text(), owner_text)
+        self.assertFalse(self.journal.exists())
+        self.assertFalse(Path(backup).exists())
+
+    def test_window_meta_written_before_journal_cleared_is_finished(self):
+        """meta/owner 已写、journal 未清：前滚按冻结字节复写并清掉 journal 与备份。"""
+        self.make_release("old")
+        old = self._old_payload()
+        staging = self._new_tree("new")
+        new_meta = self._new_meta(staging)
+        new_meta_text = json.dumps(new_meta, sort_keys=True) + "\n"
+        owner_text = self.owner.read_text()
+        backup = str(self.root) + ".backup-tx"
+        self._journal(old, {"digest": new_meta["output_tree_digest"], "staging": str(staging),
+                           "backup": backup, "meta": new_meta_text, "owner": owner_text})
+        os.rename(self.root, backup)
+        os.rename(staging, self.root)
+        write(self.meta, new_meta_text)
+        write(self.owner, owner_text)
+        self.assertEqual(self.recover(), "rolled-forward")
+        self.assertEqual(self.meta.read_text(), new_meta_text)
+        self.assertEqual(self.owner.read_text(), owner_text)
+        self.assertFalse(self.journal.exists())
+        self.assertFalse(Path(backup).exists())
+
+    def test_window_first_publication_partial_install_is_undone(self):
+        """首次发布的半安装：只撤销本事务的不完整新代，sibling 与备份路径不动。"""
+        sibling = self.root.parent / "keep.txt"
+        write(sibling, "keep\n")
+        write(self.root / "half-moved.txt", "partial\n")
+        staging = self._new_tree("new")
+        backup = str(self.root) + ".backup-tx"
+        write(Path(backup) / "junk.txt", "junk\n")
+        new_meta = self._new_meta(staging)
+        self._journal({"present": False},
+                      {"digest": new_meta["output_tree_digest"], "staging": str(staging),
+                       "backup": backup, "meta": json.dumps(new_meta, sort_keys=True) + "\n",
+                       "owner": json.dumps({"schema_version": 1, "owner": test_release.OWNER_TAG,
+                                            "root": str(self.root)}, sort_keys=True) + "\n"})
+        shutil.rmtree(staging)            # 半安装：staging 已被移走/丢失，real 仍不完整
+        self.assertEqual(self.recover(), "rolled-back-absent")
+        self.assertFalse(self.root.exists())
+        self.assertFalse(staging.exists())
+        self.assertFalse(Path(backup).exists())
+        self.assertFalse(self.journal.exists())
+        self.assertEqual(sibling.read_text(), "keep\n")
 
     def test_out_of_bounds_journal_is_refused(self):
         self.make_release()

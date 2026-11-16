@@ -48,8 +48,12 @@ CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重�
 - `--mode auto`：dev 找同名主体的有效 dev red，否则 both；candidate 只对 candidate-clean 用例要求同主体
   **且**同 release 内容/version/ref/runtime 的 dev red，缺失即拒绝（出口是先在 dev 用同一内容跑 red/both）。
   candidate green 从不续签 red。未知 targets、旧 schema 1/2 状态都只算 both/legacy，不推导、不复用。
-- 冻结来源只有一个 `inputs.json`（schema 1：execution_context + cases{mode,fingerprint,subject,inputs}），
-  原子写一次；env 只传 `WF_REPRO_INPUTS_FILE`。worker/gate/writer 都读这一份并核摘要与长度。
+- 冻结来源只有一个 `inputs.json`（schema 2：execution_context + public_inputs + cases{mode,fingerprint,
+  subject,local_inputs}），原子写一次；env 只传 `WF_REPRO_INPUTS_FILE`。worker/gate/writer 都读这一份并核摘要与长度。
+  **公共输入只算一次**：source/helpers/executor/runner 在 freeze 由 `repro_select.public_inputs()` 一次算齐并
+  冻结进 bundle；worker 只重算 case 局部输入（script/targets/case_meta）并比对 context；只读 gate 不重算任何
+  公共摘要；唯一 writer 在最终 barrier 各重算一次 `public_inputs()` 与 `execution_context()` 并与冻结值比对，
+  随后逐 case 只核局部输入与 subject。旧 schema 1 bundle 一律拒绝（每 run 产物，不迁移）。
 - 拓扑：R 编排 → W（只写自己结果）→ 只读 G（结构报告，**不写 state**）→ R 启动唯一 S（`commit-state`
   子进程）。S 与直接 CLI/库调用都先验真实 fixture/result（dev 再 release）租约，candidate 在最终 barrier
   重跑完整 validator；全局 context/bundle 变化整批不提交，普通 failed case 只挡自己。
@@ -60,8 +64,11 @@ CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重�
 - R 先取 fixture → 当前域结果锁 → dev release 独占锁（均同 PID exec 持有）；独立入口才初始化发行，
   继承入口只 verify 并派生 locator。结果锁是**域**锁：生产 `/tmp/wf-test-results-<uid>.lock`，
   测试域 `<scope>/locks/results-<uid>.lock`，不为每 run 建 sidecar。
-- 设 `WF_TEST_SCOPE_ROOT` 时，repro 的结果/pycache/state 必须在 scope 内；`--list` 在一切租约、
-  pycache 与状态读取之前纯选择退出。
+- 设 `WF_TEST_SCOPE_ROOT` 时，repro 的结果/pycache/state/cache 必须在 scope 内（独立入口对
+  `WF_RESULTS_CACHE`/`WF_TEST_RUN_CACHE` 也过 `check-scope`；未注入时默认落在 `<scope>/cache`、
+  `<scope>/state`）；`--list` 在一切租约、pycache 与状态读取之前纯选择退出。
+- 测试专用注入点（默认值不变，不劫持 PATH）：`WF_TEST_RELEASE_CLI` 覆盖独立入口的测试发行 CLI、
+  `WF_CANDIDATE_VALIDATOR` 覆盖候选校验（独立入口与 writer 最终 barrier 同一入口）。
 - namespace 单元会关掉本 worker 的宿主 FD 副本并标 `WF_UNIT_DOMAIN=unit`：伪造的私有 `/tmp` 同名锁不会被
   当宿主锁；只有显式 scope 单元可以在自己 scope 内建测试锁。结果目录无主或符号链接时拒绝清理；
   日志、模式、退出状态与冻结 bundle 不一致都计失败。

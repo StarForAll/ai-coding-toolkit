@@ -27,7 +27,20 @@ HOST_LOCATORS = (
     'WF_FRAME_SCOPE_ROOT', 'WF_FRAME_PLAN_FILE', 'WF_FRAME_PLAN_SHA256', 'WF_FRAME_PLAN_SIZE',
     'WF_FRAME_CONTEXT_FILE', 'WF_FRAME_CONTEXT_SHA256', 'WF_FRAME_CONTEXT_SIZE',
     'WF_TEST_SCOPE_ROOT',
+    # 宿主 state/cache locator：同名 `/tmp` 路径在挂载后不再代表宿主状态，必须一并清掉；
+    # 否则单元会按残留字符串去读/写宿主 repro-state 或结果缓存轮转根。
+    'WF_TEST_RUN_CACHE', 'WF_RESULTS_CACHE', 'WF_PLAN_LOG',
 )
+
+
+def scrub_state_locators(environ=None):
+    """清掉宿主 locator（含 state/cache 派生路径）；返回被清掉的键，便于断言与排障。"""
+    environ = os.environ if environ is None else environ
+    removed = []
+    for key in HOST_LOCATORS:
+        if environ.pop(key, None) is not None:
+            removed.append(key)
+    return removed
 
 
 def bind(source, target, readonly=False):
@@ -87,8 +100,7 @@ def main():
         print(f'NAMESPACE-FAILED: {exc}', file=sys.stderr)
         return 1
     close_host_descriptors()
-    for key in HOST_LOCATORS:
-        os.environ.pop(key, None)
+    scrub_state_locators()
     os.environ['WF_UNIT_DOMAIN'] = 'unit'
     os.environ['WF_HOST_MNT_ID'] = host_mnt
     os.environ['WF_NAMESPACE_READY'] = '1'

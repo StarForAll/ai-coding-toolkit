@@ -136,7 +136,7 @@
 生产固定 `/tmp/wf-test-results-<uid>.lock`（一个 UID 一把，prune 不回收、不建 per-run sidecar），测试域为
 `<WF_TEST_SCOPE_ROOT>/locks/results-<uid>.lock`。显式 `WF_RESULTS_DIR` 的 plan 镜像只短期持锁写
 plan/owner marker；普通无显式结果的 `--list/--dry-run` 零锁零写。runner 管理的写入口（results/cache/meta/
-state/夹具根/pycache/HOME）必须落在 owned scope 内，越界写前拒绝；suite 自有固定 `/tmp` scratch 不在
+state/夹具根/pycache）必须落在 owned scope 内（`HOME` 例外：见 §12.3，SUT 语义依赖宿主 HOME），越界写前拒绝；suite 自有固定 `/tmp` scratch 不在
 scope 保证里。namespace 单元覆盖 `/tmp` 前记录宿主 mount 域、覆盖后关闭继承的宿主 FD 副本并标
 `WF_UNIT_DOMAIN=unit`：生产锁 helper 域不符即拒绝，不把私有 `/tmp` 同名 inode 当宿主锁；显式 scope 的
 fake runner 可只在自己 scope 内建测试锁，但不能声称继承宿主锁。
@@ -389,7 +389,7 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 - `execution.run(argv, log_path, *, timeout, cwd=None, env=None, pass_fds=())`（`pass_fds` 是 controller 的显式 FD 白名单）：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
 - `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。**PASS 计数的唯一消费来源是结果 JSON 的 `assertion_result`**（run_all.sh 不在 shell 里复制行文法判定）；套件输出契约（三汇总行格式 + PASS/FAIL 行文法 + steps 终态）文档化在 execution.py 模块 docstring。
 - `fixture_scope reset|clone|move|remove|claim-results|prepare-results|lease|lease-results|lease-domain|check-lease|check-results-lease|create-scope|check-scope|prune-results`：临时目录/scope 归属、锁域与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
-- `repro_select execution_context()`、`red_subject(case, groups_doc, context=None)`、`input_fingerprint(case, groups_doc, context=None)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle)`（gate/writer 共用的纯校验）、`commit_state(results_dir, bundle, expected_sha, expected_size)`（唯一 writer：先验租约/context/bundle，candidate 再跑最终 validator）、`write_bundle(path, document)`。
+- `repro_select execution_context()`、`public_inputs()`（source/helpers/executor/runner 的唯一产生点）、`local_inputs(case, groups_doc)`、`red_subject(case, local, public, context)`、`input_fingerprint(case, local, public, context)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle)`（gate/writer 共用的纯校验，不重算公共摘要）、`commit_state(results_dir, bundle, expected_sha, expected_size)`（唯一 writer：先验租约/bundle/context，最终 barrier 各重算一次 public/context 后逐 case 核局部输入，candidate 再跑最终 validator）、`write_bundle(path, document)`、`reset_scans()/scans()`（测试专用公共扫描计数）。
 - `wf_test_release --ensure|--check|--lease|--verify-lease`（`--no-lock` 供已持同一 root 锁的调用方）与 `scripts/release_lock.py`：canonical root 固定 sidecar inode、非阻塞独占/共享 flock、busy 退出 75、`/proc` 祖先/FD/flock/mount 域核验。
 
 ### 3. Contracts
@@ -404,7 +404,20 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 计数不变式：`lines == suite_ran + flow_ran`、`units_total == suite_ran + flow_ran + repro_ran`、
 `repro_ran == repro 执行体的 REPRO_TOTAL`（repro 用例不写 `lines`，不与行数比较）。
 `template_reused` 的口径是“本次 run 内共用同一夹具源”（run 内构建或缓存条目都算），跨 run 命中看
-`template_cache_hit`/`template_source`。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
+`template_cache_hit`/`template_source`。成本账目另有 `release_build`（`built|reused|checked`，从
+controlled 阶段的 `release-context.json` 搬运）与 `template_build_sequences`（缓存命中=0、本次发布=1、
+模板机制关闭=0）；测试发行 meta（schema 2）与模板条目 meta（schema 1）各带 additive 诊断字段 `builds`。
+契约测试的隔离边界：单 class 一个 owned scope（marker 用 `read_scope()` 验回）+ 空 pool；每 case 独立
+`WF_TEST_RUN_CACHE`，每次调用独立 `results`/`fixture`/`pycache`；**HOME 不 scope 化**——SUT 的
+执行器确认（`~/.wf/interpreters.json`）与 check/归档判据依赖用户级环境，实测换成 scope 内 HOME 会让
+候选流程先 `WF_EXECUTOR_UNCONFIRMED`、再在补齐合成确认后 `task-check` 退化成 `WF_CHECK_STALE`
+（改变被测语义）；用户 cache 只用快照断言（存在性 + inode/mtime）证明未被触碰。宿主前置条件
+（执行器确认 + git 身份）写在 `full/README.md` 的「宿主前置条件」段。
+每个逻辑 case 共享**同一个** 900 秒单调 deadline（`CaseWorkspace.budget`，不是每调用新建），子调用
+按剩余量收紧、耗尽即失败；账目写 `<scope>/evidence/class-cost.json`。
+`stages`（`public,lease,controlled,execute` 四行）与 `plan-calls`（preflight + final 两行）是每 run 证据，
+只在本进程真的完成一次阶段/计划计算时追加，仅当结果目录可写才写、失败不阻断；它们与 `lines` 一样
+由 `prepare-results` 在 claim 后清空，**复用显式结果目录时从本轮重新计数**。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
 repro state schema 3，每个用例的 `green` 与 `red` 相位独立：green 记 `execution_fingerprint`，
 red 另记 `red_subject` + 产生它的 dev execution fingerprint。identity 拆两件——`red_subject` 是内容主体
@@ -412,9 +425,19 @@ red 另记 `red_subject` + 产生它的 dev execution fingerprint。identity 拆
 是本 case 输入 + 完整执行 context。candidate auto 只对 candidate-clean 用例要求同 subject **且**同
 release 内容/version/ref/runtime 的 dev red，否则拒绝（出口是 dev 同内容 red/both）；candidate green 不续签
 red。未知 targets 与旧 schema 1/2 只算 both/legacy，不推导；损坏/未知 schema 不覆盖。冻结来源只有
-`inputs.json`（schema 1，原子写一次），env 只传路径；worker 只写自己结果，gate 只读结构报告不写 state，
+`inputs.json`（schema 2，原子写一次），env 只传路径；公共输入在 freeze 一次算齐并冻结，worker 只重算
+case 局部输入（script/targets/case_meta）并比对 context，gate 只读结构报告不写 state、不重算公共摘要；
 唯一全局 writer 是 R 启动的 `commit-state` 子进程，S/库/CLI 都先验真实租约（candidate 加最终 validator）。
-运行前冻结、运行后与提交前重核同一 bundle 与输入。
+公共扫描次数不随 case 数增长（3 与 30 个 case 都是 source/helpers/release 各一次），旧 schema 1 bundle
+明确拒绝、不做兼容层。运行前冻结、运行后与提交前重核同一 bundle 与输入。
+
+两处 cache 的 journal 恢复共用同一状态机（判定只用 journal 冻结的摘要与归属，不比 mtime、不看当前输入
+新鲜度）：① 新代可验证（已装到根或仍在 staging）→ 前滚；② 旧代仍在原位且字节等于冻结摘要 → 只清
+staging/journal，**不要求 backup 存在**（这是 2026-11-15 修复的窗口：此前该窗口 fail closed）；
+事务收尾额外回收 `<root>.staging-<txn>` **父目录**（`new.staging` 记的是 `staging/first`，父目录原本每次留空壳），
+fail closed 路径不做这一步（现场要保留）；
+③ 旧代已移走但 backup 可验证 → 按冻结 meta/owner 原文回滚；④ 首次发布（old-absent）→ 只撤销本事务的
+不完整新代；⑤ 其余（两代都不可验证、journal schema/root 不符）→ fail closed、保留现场、非零。
 
 ### 4. Validation & Error Matrix
 
@@ -442,6 +465,25 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
 - `test_fixture_scope`：哨兵不变、符号链接/重叠拒绝、根运行互斥、归属后重建及结果清理。
 - `test_results_gate`：矛盾 rc/status、无效时间、缺行/重行、shell 列表引用和 repro 模式一致性。
 - `test_runner_hygiene`：G1 `/tmp` 导入注入零命中、G2 pyc 策略、G3 `.gitignore`、G8 假树静态引用全部归类、G9 缺根容错。
+- AC18 的分层断言：正式断言只覆盖"资产落点本身是指向项目外的符号链接"（`WF_ASSET_DECISION`、整批零写入）；
+  "技能根目录（如 `.claude/skills`）指向项目外"时产品当前返回 `WF_OK` 并写穿——以
+  `test_known_gap_install_writes_through_a_symlinked_skill_root` 登记为可复跑证据（逃逸目标仍在 case 的
+  `WF_FIX` owned scope 内，不污染宿主）；修复须同时覆盖 `uninstall.py` 的同判据并走发行重建，属产品侧另行立项。
+- 契约"无残留"类断言的实现要求：检测残留进程必须**同时**看 `/proc/<pid>/cmdline` 与 `environ`
+  （unit worker 的 argv 是 `bash run_one.sh <record>`，scope 只出现在 `WF_TEST_SCOPE_ROOT` 环境里），
+  并要有"只带 environ 引用的子进程也会被抓到"的自证用例，否则该断言可能恒空。
+- 本任务（2026-11-15）新增/加强的断言：`test_release_lock`/`test_template_cache` 的六个恢复窗口、
+  `test_test_release` 的 `--ensure --json` built→reused 与 `builds` 累计、`WF_GIT_BIN` 注入、
+  `test_template_cache` 的单槽双输入交替与 `builds` 不增、`test_repro_selection` 的 3 vs 30 case 公共扫描
+  计数相同 / worker 不重扫 source+helpers / schema 1 bundle 拒绝 / 公共输入篡改被 writer barrier 拒绝、
+  `test_results_gate` 的 gate 零重扫、`test_fixture_scope` 的 `scope:` 域必须有活动 scope 且同域、
+  `test_execution` 的 namespace state locator 清洗与真实 unshare 下的宿主锁不变、
+  `test_run_all_contract` 的单 scope/每 case state/每调用目录、plan-only 零 warmup、生产快照不变、
+  stage/plan 计数、成本账目、调用计数 shim、取消后可立即重取锁、SUT 级 escape。
+- 2026-11-16 补口：`prepare-results` 重置 `stages`/`plan-calls`（复用目录仍 4/2 行）、case 级共享
+  `CaseBudget`（递减 + 耗尽归因）、candidate 不建 dev 发行（release CLI 0 次）、独立 repro=1、
+  writer barrier 扫描=1、残留进程检测器自证、teardown 无 FD、template 两个恢复窗口、
+  发布器 staging 父目录回收、AC18 的"资产落点"正式断言 + "技能根符号链接"known-gap。
 - 本任务的边界套件：`test_python_runtime_identity`（路径身份/字节/dedup）、`test_test_release`（输入身份/树核验）、
   `test_release_lock`（ensure×ensure、ensure×check、共享 check、journal 各窗口、fail closed、lease 继承）、
   `test_template_cache`（键/命中/迁移/恢复）、`test_runner_protocol`（frame 编解码与拒绝面）、
