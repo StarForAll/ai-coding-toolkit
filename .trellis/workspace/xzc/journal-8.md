@@ -1187,3 +1187,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Next Steps
 
 - 产品侧缺口另行立项：install.py/uninstall.py 对技能根符号链接的同判据修复（known-gap 测试已登记）
+
+
+## Session 411: wf 运行器证据隔离与监督收口
+<!-- trellis-session: v=2 fp=a09c63a94b159843 -->
+
+**Date**: 2026-11-16
+**Task**: wf 运行器证据隔离与监督收口
+**Branch**: `main`
+
+### Summary
+
+完成 AC01–AC22：scope/证据隔离、候选审计与来源覆盖、C→G→S→W 监督/取消/清理、发行边界与重建；修复 bind-run readdir 顺序缺陷。验证：1106 单元、21 契约、ext4 full green 72.74s、serial 417.25s、both 102.17s/85 red、candidate 41.73s；证据与 scope 清理已归档。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `183ecff6` | fix(test): wf 运行器证据隔离、监督收口与发行边界 |
+
+### Status
+
+[OK] **Completed**

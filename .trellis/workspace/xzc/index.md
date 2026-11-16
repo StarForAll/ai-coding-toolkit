@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 410
+- **Total Sessions**: 411
 - **Last Active**: 2026-11-16
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1189 | Active |
+| `journal-8.md` | ~1211 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 411 | 2026-11-16 | wf 运行器证据隔离与监督收口 | `183ecff6` | `main` |
 | 410 | 2026-11-16 | wf 运行器恢复窗口/公共摘要 barrier/契约隔离收口 + 11-14 完成度审计 | `f8659567` | `main` |
 | 409 | 2026-11-15 | wf 运行器身份/锁与 repro 证明边界 | `cbc83d77` | `main` |
 | 408 | 2026-11-14 | wf 运行器第二轮：契约化提速与证据完整性 | `3620973a`, `c25023af`, `e5f91366`, `80c19fbe`, `2529ea03`, `06d8253b` | `main` |
