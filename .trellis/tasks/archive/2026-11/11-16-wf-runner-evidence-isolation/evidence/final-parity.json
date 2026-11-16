@@ -1,0 +1,17 @@
+{
+  "repro_selection_equal": true,
+  "repro_state_both": {
+    "cases": 85,
+    "red_cases": 85,
+    "schema_version": 4
+  },
+  "repro_state_green": {
+    "cases": 85,
+    "red_cases": 0,
+    "schema_version": 4
+  },
+  "unit_names_equal": true,
+  "unit_rc_status_differences": {},
+  "units_parallel": 64,
+  "units_serial": 64
+}

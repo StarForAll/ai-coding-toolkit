@@ -1,0 +1,515 @@
+{
+  "cases": {
+    "abandon-boundary": {
+      "green": {
+        "fingerprint": "sha256:39b6995b453256ac43f429b8bd94f198b8bbe9e6b3c76daa5280415034e99df2",
+        "verified_at": "2026-11-16T14:31:53.449696Z"
+      }
+    },
+    "auto-identity-gates": {
+      "green": {
+        "fingerprint": "sha256:67edc9dd460e2afabdb413c33443357f0504a225bffdd937af53e6f2b581031d",
+        "verified_at": "2026-11-16T14:31:53.449770Z"
+      }
+    },
+    "auto-identity-zero-input": {
+      "green": {
+        "fingerprint": "sha256:088d6be59bf20217d9ae9499aca82b3ab20eb82b84bdd005f11904fdb21c47eb",
+        "verified_at": "2026-11-16T14:31:53.449824Z"
+      }
+    },
+    "baseline-apply-generated": {
+      "green": {
+        "fingerprint": "sha256:57a64287a86d5676d1ac2c300efdf3d320d84811f6fe86b127077e4b214b08ec",
+        "verified_at": "2026-11-16T14:31:53.449878Z"
+      }
+    },
+    "bind-instance-mismatch": {
+      "green": {
+        "fingerprint": "sha256:2866baa2159c35c2ba6a3c4feae4bc5bdd48ac4b069654b1c50d0b864332c2fc",
+        "verified_at": "2026-11-16T14:31:53.449924Z"
+      }
+    },
+    "bind-resume-under-lock": {
+      "green": {
+        "fingerprint": "sha256:18a855ea2a728a828235ac004eefe72553f29032fb425ddc44f3ab721500d3b4",
+        "verified_at": "2026-11-16T14:31:53.449973Z"
+      }
+    },
+    "bind-run": {
+      "green": {
+        "fingerprint": "sha256:2679528013676d6e74d461142ac2fa72c5ae40e24d28c292fed462f736d21b06",
+        "verified_at": "2026-11-16T14:31:53.450031Z"
+      }
+    },
+    "branch-source-preview": {
+      "green": {
+        "fingerprint": "sha256:d055d9b99c055bdbde49640dd7254a4ae29537412aae75bd9eee77be02773587",
+        "verified_at": "2026-11-16T14:31:53.450226Z"
+      }
+    },
+    "complexity-bootstrap-exempt": {
+      "green": {
+        "fingerprint": "sha256:4933ae94848d66eae9298b164efe7153027ed0e30126afadfb22c85ded2b5e3e",
+        "verified_at": "2026-11-16T14:31:53.450276Z"
+      }
+    },
+    "complexity-human-carrier": {
+      "green": {
+        "fingerprint": "sha256:b630f17f82b908f49d60c5270d627e5307091ab1d3b49bf90e05383d1354eb45",
+        "verified_at": "2026-11-16T14:31:53.450328Z"
+      }
+    },
+    "d21-executor-set-move": {
+      "green": {
+        "fingerprint": "sha256:cd0360ce03a724240a7ad7f8d056d4439f8519d59e46139e703bf9f804ed5daf",
+        "verified_at": "2026-11-16T14:31:53.450371Z"
+      }
+    },
+    "d21-executor-set-multi-clone": {
+      "green": {
+        "fingerprint": "sha256:a6cee1fc960111ed118b5b64e1f12217ce1c4c0c0b7c5853be237aad60e0d45d",
+        "verified_at": "2026-11-16T14:31:53.450417Z"
+      }
+    },
+    "d21-executor-set-purge-reconfirm": {
+      "green": {
+        "fingerprint": "sha256:691fd7012ae07b1d1ae0cc86a5db34f5f53f41095281d0aa30d77ffc8825f244",
+        "verified_at": "2026-11-16T14:31:53.450459Z"
+      }
+    },
+    "d21-executor-set-venv-rebuild": {
+      "green": {
+        "fingerprint": "sha256:ab910f4e0e9d279e0573be24442329a3d382c709716c7bbb95a081774f9ed2a1",
+        "verified_at": "2026-11-16T14:31:53.450503Z"
+      }
+    },
+    "definition-static-check": {
+      "green": {
+        "fingerprint": "sha256:33c9a7dfc84351048d89927141d7e82a21ed450159eff66d5d78fc37d2864523",
+        "verified_at": "2026-11-16T14:31:53.450552Z"
+      }
+    },
+    "dep-edges": {
+      "green": {
+        "fingerprint": "sha256:b05755a15bf2c698364ea9ff444f879c2c211bd8b4216281dcaa72d5fe1f3b1b",
+        "verified_at": "2026-11-16T14:31:53.450600Z"
+      }
+    },
+    "enable-disabled-branch": {
+      "green": {
+        "fingerprint": "sha256:b51462ea1deafd32d8d665cc67fdeb08b2979061118c03876e8e49d8d39656b2",
+        "verified_at": "2026-11-16T14:31:53.450643Z"
+      }
+    },
+    "envelope-cache-and-short": {
+      "green": {
+        "fingerprint": "sha256:ee587957a43bfd8e3eb5e1b0fd5c894d8746b6611f868e100b24d19416024d3c",
+        "verified_at": "2026-11-16T14:31:53.450687Z"
+      }
+    },
+    "executor-approval-chain": {
+      "green": {
+        "fingerprint": "sha256:72440a53fb8a1f4cb62406496507a408c2b43b648cbb41310f31ecfedb36f6c9",
+        "verified_at": "2026-11-16T14:31:53.450731Z"
+      }
+    },
+    "executor-project-key-unusable": {
+      "green": {
+        "fingerprint": "sha256:a1e9d1ea61f739531171f1e824848d55b8f4901cb6d2339f2619b9f0c7a2ac82",
+        "verified_at": "2026-11-16T14:31:53.450775Z"
+      }
+    },
+    "executor-tuple-mismatch": {
+      "green": {
+        "fingerprint": "sha256:117cbf17c3f70193f5e59559f1c4ae3ec1d931a9384c7c292d267682117ed4a9",
+        "verified_at": "2026-11-16T14:31:53.450819Z"
+      }
+    },
+    "executor-version-change": {
+      "green": {
+        "fingerprint": "sha256:020bf1fb4595cd6303de5fdf8606510ccb02e2936cc3b0c3c7cb9e210bfe650c",
+        "verified_at": "2026-11-16T14:31:53.450862Z"
+      }
+    },
+    "external-change-boundary": {
+      "green": {
+        "fingerprint": "sha256:dc4c46592cb5cb0bf9b485a9037dfd440e63cc81e00982cd5418638d9cd82308",
+        "verified_at": "2026-11-16T14:31:53.450911Z"
+      }
+    },
+    "f5-4-generation-bool": {
+      "green": {
+        "fingerprint": "sha256:b1a9070ec76dddedb482ef70db315862f59aebb1c7ac47c8681d1e72b1ff0520",
+        "verified_at": "2026-11-16T14:31:53.450958Z"
+      }
+    },
+    "f7-1-touch-paths": {
+      "green": {
+        "fingerprint": "sha256:650ec3e11e29a094615ed0cb23bcb5ce6b51556fc16f508346d57b643795e6d7",
+        "verified_at": "2026-11-16T14:31:53.451001Z"
+      }
+    },
+    "f7-3-scope-single-source": {
+      "green": {
+        "fingerprint": "sha256:37a114e21045eb4e37944e4117e4eae796b99b86ce989e292935f0e0dc3a4126",
+        "verified_at": "2026-11-16T14:31:53.451043Z"
+      }
+    },
+    "gate-run": {
+      "green": {
+        "fingerprint": "sha256:0956b26dd238fc35c9d258222127c4b987ec4f4e8985a9ba5e5aebb91cc8d596",
+        "verified_at": "2026-11-16T14:31:53.451094Z"
+      }
+    },
+    "git-readiness-no-head": {
+      "green": {
+        "fingerprint": "sha256:718ed09b569e9d86cc636ee7c960b9a3c1694d2fdc9e14cf521a0e653b104692",
+        "verified_at": "2026-11-16T14:31:53.451140Z"
+      }
+    },
+    "handover-two-stage": {
+      "green": {
+        "fingerprint": "sha256:7e10a73eac39914944d8b76b32270c344cb6c4961e856e3baff4b7f3e1a4210a",
+        "verified_at": "2026-11-16T14:31:53.451187Z"
+      }
+    },
+    "help-covers-write-commands": {
+      "green": {
+        "fingerprint": "sha256:253152a04a7c1b2d402b26ca221b9dad95f788ce0725b95d8b7751807705f618",
+        "verified_at": "2026-11-16T14:31:53.451231Z"
+      }
+    },
+    "history-anchor-unreachable": {
+      "green": {
+        "fingerprint": "sha256:75824a0b58317b9c01394fb57d48f78d69e72589c1ec14ac4a25f841c6cdc0dc",
+        "verified_at": "2026-11-16T14:31:53.451284Z"
+      }
+    },
+    "identity-platform-fact": {
+      "green": {
+        "fingerprint": "sha256:0dd143aadc21bc00dab502791b85491c282649941ecadc088e18458bee9f50cc",
+        "verified_at": "2026-11-16T14:31:53.451337Z"
+      }
+    },
+    "inspect-declares-omitted": {
+      "green": {
+        "fingerprint": "sha256:eb7523ede6edfb30480181114a70839b564d8fc8e26f767d0b3c523b96d42b92",
+        "verified_at": "2026-11-16T14:31:53.451391Z"
+      }
+    },
+    "install-generation-bumps": {
+      "green": {
+        "fingerprint": "sha256:497b7376091526d7b34949b4a86f7460c53b45c133026f83a03dbd6c546f52e4",
+        "verified_at": "2026-11-16T14:31:53.451647Z"
+      }
+    },
+    "install-lock-foreign-object": {
+      "green": {
+        "fingerprint": "sha256:b97cac6e3b4edbb5f83707367492f826746156b95de137e6cb8c40692fe19c57",
+        "verified_at": "2026-11-16T14:31:53.451829Z"
+      }
+    },
+    "install-lock-realpath": {
+      "green": {
+        "fingerprint": "sha256:925873c075cf9a4b932104e6b6016663ffe6d7fc5bc7eab19d19804ed379721d",
+        "verified_at": "2026-11-16T14:31:53.452029Z"
+      }
+    },
+    "install-receipt-metadata": {
+      "green": {
+        "fingerprint": "sha256:1989afc86ceaed9ade90d4de70f4b1f54a17c60f544e994c1c32554ac44959ed",
+        "verified_at": "2026-11-16T14:31:53.452217Z"
+      }
+    },
+    "install-receipt-relative": {
+      "green": {
+        "fingerprint": "sha256:0e5633adf68b75977f3e0eeb02e20c31b9efcf0b91e3a3e0a187e4e91dfed71b",
+        "verified_at": "2026-11-16T14:31:53.452395Z"
+      }
+    },
+    "maintenance-disposition-s1": {
+      "green": {
+        "fingerprint": "sha256:e260359a7a552f98ad9a6936ebf025baeabfc92b9e32dc2a2ec328efb10a5cf2",
+        "verified_at": "2026-11-16T14:31:53.452450Z"
+      }
+    },
+    "project-key-archived-evidence": {
+      "green": {
+        "fingerprint": "sha256:38beb6ca154371333a3054ba1192f73406190121e67fb1a15f387dfac8f43178",
+        "verified_at": "2026-11-16T14:31:53.452498Z"
+      }
+    },
+    "r4-1-source-mismatch": {
+      "green": {
+        "fingerprint": "sha256:3bd2a17ac03f26b21356a92dbccb851f3a89edec84ae79791daef637237a0fed",
+        "verified_at": "2026-11-16T14:31:53.452546Z"
+      }
+    },
+    "ready-view": {
+      "green": {
+        "fingerprint": "sha256:b7b29defbac1ea999df0926543c3a16cf8f72c731be916a154b58938dc2171e5",
+        "verified_at": "2026-11-16T14:31:53.452595Z"
+      }
+    },
+    "reason-code-table": {
+      "green": {
+        "fingerprint": "sha256:8a4916d0a0372b3e52ac6678859ecb9600f9a9ecf416e28d1abee2445f77f0eb",
+        "verified_at": "2026-11-16T14:31:53.452641Z"
+      }
+    },
+    "record-missing-in-worktree": {
+      "green": {
+        "fingerprint": "sha256:613e6a5117e80e65c7d2e78960bf33a2550d283e7155552a7159eb3f77225152",
+        "verified_at": "2026-11-16T14:31:53.452690Z"
+      }
+    },
+    "reinstall-preserves-data": {
+      "green": {
+        "fingerprint": "sha256:c91950483cabeed27d5e45712453532409eb3f40f5d114d537848a19cf100813",
+        "verified_at": "2026-11-16T14:31:53.452872Z"
+      }
+    },
+    "release-identity-commit": {
+      "green": {
+        "fingerprint": "sha256:eaaeb654edecaa21398f032a969e0df5035d6ed6c2b15df5080ee69277b4d880",
+        "verified_at": "2026-11-16T14:31:53.453055Z"
+      }
+    },
+    "repair-controlled-apply": {
+      "green": {
+        "fingerprint": "sha256:76262c2dcc7acafc417497c4b4002ae47f2637beacb8c2f79389093f4d4affaf",
+        "verified_at": "2026-11-16T14:31:53.453103Z"
+      }
+    },
+    "review-copies-installed": {
+      "green": {
+        "fingerprint": "sha256:6126296ec198f32bbd0ba836e605ab6f8c863fa3da6d5eae4d5c95124065061f",
+        "verified_at": "2026-11-16T14:31:53.453149Z"
+      }
+    },
+    "review-count-reject": {
+      "green": {
+        "fingerprint": "sha256:2bcc3884bc0be1535f868b82c11eca9d3240cba7efe3bca184e241f8b04b560e",
+        "verified_at": "2026-11-16T14:31:53.453544Z"
+      }
+    },
+    "review-excluded-scope-covers": {
+      "green": {
+        "fingerprint": "sha256:56f6dc3c85ae160c26b7c4069d6a827d5aa6a0978afd57c424e9437153622504",
+        "verified_at": "2026-11-16T14:31:53.453611Z"
+      }
+    },
+    "review-filename-identity": {
+      "green": {
+        "fingerprint": "sha256:7b887a2da3224727b4fa21a81eb9f3d73dc526e7adb14d8b9d9dbc762863db5a",
+        "verified_at": "2026-11-16T14:31:53.453673Z"
+      }
+    },
+    "review-identity-c6": {
+      "green": {
+        "fingerprint": "sha256:9f69dec33e564a6b563699c788d501c6526a40caaf0becd94880cec994dd4aab",
+        "verified_at": "2026-11-16T14:31:53.453731Z"
+      }
+    },
+    "review-report-boundary": {
+      "green": {
+        "fingerprint": "sha256:f47619d08f65c4ae7a1d71580f7eda9da81d842f3992634124ba4c360c27492f",
+        "verified_at": "2026-11-16T14:31:53.453779Z"
+      }
+    },
+    "review-unavailable": {
+      "green": {
+        "fingerprint": "sha256:164a349709c4206562695df2c5783e5564393baaaca9e09bf0817ebe1095ff08",
+        "verified_at": "2026-11-16T14:31:53.453826Z"
+      }
+    },
+    "run-advance-creates-task": {
+      "green": {
+        "fingerprint": "sha256:2f1a44b1ce137333b1f35fbf415304c8429aeb016c2a66b72200067c7c52e93b",
+        "verified_at": "2026-11-16T14:31:53.453880Z"
+      }
+    },
+    "run-create-once": {
+      "green": {
+        "fingerprint": "sha256:a63602b29aa29a836dfce3570270fe53e71ba9e42dcddb09e7b4f1aada3cb2a8",
+        "verified_at": "2026-11-16T14:31:53.453937Z"
+      }
+    },
+    "run-finish": {
+      "green": {
+        "fingerprint": "sha256:0575aacfec8be135199bec0a3933af4cb00bf16ba7b17f1f374489d0dbf1a38f",
+        "verified_at": "2026-11-16T14:31:53.453986Z"
+      }
+    },
+    "run-pause-and-advance": {
+      "green": {
+        "fingerprint": "sha256:4001361813aec6723523a6bfa413161eef6e90bbcddde45362aa6667a72c2c94",
+        "verified_at": "2026-11-16T14:31:53.454036Z"
+      }
+    },
+    "run-resume": {
+      "green": {
+        "fingerprint": "sha256:d0e945f79b4771fe9041c284cf21c9c852fc9e41bfe831d32a92527355ec2ee2",
+        "verified_at": "2026-11-16T14:31:53.454092Z"
+      }
+    },
+    "run-terminate": {
+      "green": {
+        "fingerprint": "sha256:a626d7ed1baa4b41116e8b229d5abe493c9da6fad4e822ec5a050afc5dc284c9",
+        "verified_at": "2026-11-16T14:31:53.454147Z"
+      }
+    },
+    "skill-frontmatter-selfcheck": {
+      "green": {
+        "fingerprint": "sha256:5965ec5236a7258b7b60e4728c4005c5247fdf54a255a06c066947c1a3c3181e",
+        "verified_at": "2026-11-16T14:31:53.454192Z"
+      }
+    },
+    "snapshot-broken-type": {
+      "green": {
+        "fingerprint": "sha256:9f819399d44a8e58d963eaca51b13a73a8dcbd58ef64607f186b17a9b2d7b1b0",
+        "verified_at": "2026-11-16T14:31:53.454237Z"
+      }
+    },
+    "snapshot-empty-check": {
+      "green": {
+        "fingerprint": "sha256:219094125312431705a001e684860e4e17f62b28b812a66b1ddec6d56b07300e",
+        "verified_at": "2026-11-16T14:31:53.454280Z"
+      }
+    },
+    "snapshot-empty-stop": {
+      "green": {
+        "fingerprint": "sha256:5d851076fcf760ee3892e9b521dba0aeac8ab296c20fbbe39dc36f7496e5a327",
+        "verified_at": "2026-11-16T14:31:53.454322Z"
+      }
+    },
+    "snapshot-empty-write": {
+      "green": {
+        "fingerprint": "sha256:8c3bf9dbb4ca59f1d60b37effa35287299dceac8a06cc362539f13e46fda50f3",
+        "verified_at": "2026-11-16T14:31:53.454363Z"
+      }
+    },
+    "snapshot-missing-check": {
+      "green": {
+        "fingerprint": "sha256:47150b1ab01ba4d426739f1882547978d124e3d48a6ddeaf187d22645a8220d0",
+        "verified_at": "2026-11-16T14:31:53.454405Z"
+      }
+    },
+    "snapshot-missing-stop": {
+      "green": {
+        "fingerprint": "sha256:1b93574955e266f53f7f1eb06ec1d11c23ebc05ede76e2671d6fde6e87c68477",
+        "verified_at": "2026-11-16T14:31:53.454447Z"
+      }
+    },
+    "snapshot-missing-write": {
+      "green": {
+        "fingerprint": "sha256:a27fb0c5dd5dda0ab87db02884a1ecfb39638ca47a26dd4724db4c079b2baf1f",
+        "verified_at": "2026-11-16T14:31:53.454488Z"
+      }
+    },
+    "spec-three-part-index": {
+      "green": {
+        "fingerprint": "sha256:ae8bcb956a096ea4c44abbc149217c8f103b84bc749960e86d1d7beb910f30c2",
+        "verified_at": "2026-11-16T14:31:53.454538Z"
+      }
+    },
+    "stale-writer-facts": {
+      "green": {
+        "fingerprint": "sha256:279cb6e3fb773abbd49027b2ef25e52021f3633cc44a90ca26080c92f693b7f7",
+        "verified_at": "2026-11-16T14:31:53.454582Z"
+      }
+    },
+    "startup-checks-anchor-assets": {
+      "green": {
+        "fingerprint": "sha256:571068fc69c13ad327014f9eed1691d0a1cd6f03b342483d3c0f9f61a38db3e9",
+        "verified_at": "2026-11-16T14:31:53.454639Z"
+      }
+    },
+    "stop-preview-readonly": {
+      "green": {
+        "fingerprint": "sha256:a53e41a3e0c6f75cc097b595fa213ba35f436a00b1bb5f1db8ed7a74b7d9e0b1",
+        "verified_at": "2026-11-16T14:31:53.454685Z"
+      }
+    },
+    "stop-under-lock": {
+      "green": {
+        "fingerprint": "sha256:58574ffea45311c6b0c17e1a1bd6465ffcbeea708f23cbcf9507b0c8ff55f91c",
+        "verified_at": "2026-11-16T14:31:53.454729Z"
+      }
+    },
+    "stop-unstarted-surface": {
+      "green": {
+        "fingerprint": "sha256:3e3fd8eeffcb259a8b2024c2a80fa0d3c62e6b1ed45aeafc9406538f2a4410ed",
+        "verified_at": "2026-11-16T14:31:53.454778Z"
+      }
+    },
+    "task-dir-ascii": {
+      "green": {
+        "fingerprint": "sha256:7745c47cd8e2d84383fc81b598367a40b382e632b4f4f8e07fb8318146f0c531",
+        "verified_at": "2026-11-16T14:31:53.454824Z"
+      }
+    },
+    "task-dir-canonical": {
+      "green": {
+        "fingerprint": "sha256:7adee915b088665d94f3c8a6ae33e51da7ebf6fa581c478602f2fd94f2507b56",
+        "verified_at": "2026-11-16T14:31:53.454869Z"
+      }
+    },
+    "task-replace": {
+      "green": {
+        "fingerprint": "sha256:aedaebaa557035482afd303ede8f8963e37d8b3cd18cb70048cba3d6a0544a76",
+        "verified_at": "2026-11-16T14:31:53.454966Z"
+      }
+    },
+    "task-replace-preview": {
+      "green": {
+        "fingerprint": "sha256:1cc3c4afbcf9ec5e06b987392bc119a6aafe65d07743cb686cd3afadbad6ed79",
+        "verified_at": "2026-11-16T14:31:53.454916Z"
+      }
+    },
+    "task-rework": {
+      "green": {
+        "fingerprint": "sha256:30487597c9292896c2e03de7c058e9b145776214f0bc8447a0e657d7a124382d",
+        "verified_at": "2026-11-16T14:31:53.455064Z"
+      }
+    },
+    "task-rework-handover": {
+      "green": {
+        "fingerprint": "sha256:9c9afc7021ae6bac3948a520e305908c6f61f6663a69bd9d06714c13e618466f",
+        "verified_at": "2026-11-16T14:31:53.455011Z"
+      }
+    },
+    "task-start-surface": {
+      "green": {
+        "fingerprint": "sha256:a41efe120060d9f07d27e41ac51fd17defa8f9586b3eb9a8a7e2730633cda65b",
+        "verified_at": "2026-11-16T14:31:53.455111Z"
+      }
+    },
+    "terminate-stop-request": {
+      "green": {
+        "fingerprint": "sha256:9140fea989c0648d0bf06bce42181cedd5d81452b4b2fce414da7af25e37adef",
+        "verified_at": "2026-11-16T14:31:53.455179Z"
+      }
+    },
+    "transfer-target-task-field": {
+      "green": {
+        "fingerprint": "sha256:19116dc0e8bf742d7100af660143ba3047a636518989ab85e1e2878e5880e2de",
+        "verified_at": "2026-11-16T14:31:53.455226Z"
+      }
+    },
+    "uninstall-records-maintenance": {
+      "green": {
+        "fingerprint": "sha256:3da271bc8c72ca78982c219277e5647d6879b580c464c4906369b7039bad4f95",
+        "verified_at": "2026-11-16T14:31:53.455936Z"
+      }
+    },
+    "wf-repair-handoff": {
+      "green": {
+        "fingerprint": "sha256:fb3408d9c8d1c9a791d5c3df2753d39152327f67d69e47babc5872a70cfda95c",
+        "verified_at": "2026-11-16T14:31:53.455983Z"
+      }
+    }
+  },
+  "schema_version": 4
+}

@@ -1,0 +1,23 @@
+{
+  "cases": {
+    "branch-source-preview": {
+      "green": {
+        "fingerprint": "sha256:9b58ddb5ce095c18fd43faa6f1aaff2b873dfa61e834db488e9454c6050c5b37",
+        "verified_at": "2026-11-16T14:32:45.633616Z"
+      }
+    },
+    "reinstall-preserves-data": {
+      "green": {
+        "fingerprint": "sha256:c5052a92d55d82c1ba7a7ed76de907e0879d3e6ed642450be72b88ec4a6ec403",
+        "verified_at": "2026-11-16T14:32:45.633821Z"
+      }
+    },
+    "release-identity-commit": {
+      "green": {
+        "fingerprint": "sha256:7ab0574ae475f8f5e8fda4f0ef3ef8274f30d360fbcdf98498c225c2f808bc9e",
+        "verified_at": "2026-11-16T14:32:45.634008Z"
+      }
+    }
+  },
+  "schema_version": 4
+}
