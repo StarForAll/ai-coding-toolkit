@@ -1157,3 +1157,33 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 410: wf 运行器恢复窗口/公共摘要 barrier/契约隔离收口 + 11-14 完成度审计
+<!-- trellis-session: v=2 fp=06e901b7c85de36e -->
+
+**Date**: 2026-11-16
+**Task**: wf 运行器恢复窗口/公共摘要 barrier/契约隔离收口 + 11-14 完成度审计
+**Branch**: `main`
+
+### Summary
+
+修复两处 journal 恢复窗口（旧代原位不再 fail closed）、bundle schema 2 公共输入 barrier 化、契约测试单 scope/空 pool/每 case state/每调用目录/900s deadline/成本账目、计数注入点与 scope/namespace 硬化；补 11-14 逐 AC 审计与失实声明更正；README 宿主前置条件与精确清理口径
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `f8659567` | fix(test): wf 运行器恢复窗口、公共摘要 barrier 与契约隔离收口 |
+
+### Testing
+
+- [OK] T0 997 OK(skip 21)；定向 142；契约 20；full green 149×2（并行 52.8s/串行 268.2s）串并等价除随机 TASK_ID 外 0 差异；发行/设计/文档/技能/库校验 rc=0
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 产品侧缺口另行立项：install.py/uninstall.py 对技能根符号链接的同判据修复（known-gap 测试已登记）
