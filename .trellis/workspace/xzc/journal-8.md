@@ -1209,3 +1209,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 412: wf 运行器生命周期、缓存恢复与 controller 收口
+<!-- trellis-session: v=2 fp=49c8fd4d86265a8e -->
+
+**Date**: 2026-11-17
+**Task**: wf 运行器生命周期、缓存恢复与 controller 收口
+**Branch**: `main`
+
+### Summary
+
+完成父任务 11-16 及 C1/C2/C3：owner2/run-state/receipts/unit_execution/metrics1/summary3、controller 单终态与清理归因、模板/测试发行 acquire/checkpoint/material-owner、W1-W5/O1/F1 恢复、inventory/retire/observe、repro CLI 与公开解析；T0 1223/32 skipped、V-CONTRACT 31、full green/serial/both 与 candidate 均 GATE-OK、V-RELEASE/V-DOC 通过；未 push/PR。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ea03b20d` | fix(test): wf 运行器生命周期、缓存恢复与 controller 收口 |
+
+### Status
+
+[OK] **Completed**
