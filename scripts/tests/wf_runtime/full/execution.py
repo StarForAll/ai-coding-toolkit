@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import hashlib
 import importlib.util
 import json
 import math
@@ -70,6 +71,15 @@ PR_GET_CHILD_SUBREAPER = 37
 SUPERVISOR_BOOT_SECONDS = 15.0
 CLEANUP_GRACE_SECONDS = 5.0
 TERMINATE_GRACE_SECONDS = 2.0
+FAULT_SWITCH = 'WF_TEST_FAULT_INJECTION'
+FAULT_TARGET_ENV = 'WF_EXECUTION_FAULT_TARGET'
+FAULT_POINT_ENV = 'WF_EXECUTION_FAULT_POINT'
+FAULT_ACTION_ENV = 'WF_EXECUTION_FAULT_ACTION'
+FAULT_READY_FD_ENV = 'WF_EXECUTION_FAULT_READY_FD'
+FAULT_POINTS = ('supervisor-before-ready', 'supervisor-after-started', 'guardian-after-started')
+FAULT_ACTIONS = ('exception', 'exit', 'kill', 'hang')
+FAULT_SELECTORS = (FAULT_TARGET_ENV, FAULT_POINT_ENV, FAULT_ACTION_ENV,
+                   FAULT_READY_FD_ENV)
 def _faults_enabled():
     """故障注入只在显式测试开关下生效（不按普通环境变量改变生产行为）。"""
     return os.environ.get('WF_TEST_FAULT_INJECTION') == '1'
@@ -348,6 +358,7 @@ def _supervisor_main(raw):
         if ready_delay > 0:
             # 测试窗口：READY 前取消必须由 READY 分支经同一协议收口，不得启动目标。
             time.sleep(ready_delay)
+    _apply_fault(raw.get("fault"), 'supervisor-before-ready')
     _send(ctrl, {"v": PROTOCOL_VERSION, "type": "READY", "id": 0,
                  "pid": os.getpid(), "subreaper": True})
     buffer = b""
@@ -389,11 +400,13 @@ def _supervisor_main(raw):
                      "reason": "START carries no argv"})
         return 1
     stdout = log_fd if log_fd >= 0 else None
+    target_env = {key: value for key, value in os.environ.items()
+                  if key not in FAULT_SELECTORS}
     try:
         target = subprocess.Popen([sys.executable, os.path.abspath(__file__), "_target",
                                    json.dumps(policy), "--", *argv],
                                   stdout=stdout, stderr=subprocess.STDOUT if stdout is not None else None,
-                                  stdin=None, restore_signals=False,
+                                  stdin=None, restore_signals=False, env=target_env,
                                   pass_fds=tuple([log_fd] + extra_fds) if log_fd >= 0 else tuple(extra_fds))
     except OSError as exc:
         _send(ctrl, {"v": PROTOCOL_VERSION, "type": "DONE", "target_rc": None,
@@ -402,6 +415,7 @@ def _supervisor_main(raw):
         return 1
     _send(ctrl, {"v": PROTOCOL_VERSION, "type": "STARTED", "id": start.get("id", 0),
                  "pid": os.getpid(), "target_pid": target.pid})
+    _apply_fault(start.get("fault") or raw.get("fault"), 'supervisor-after-started')
     status = None
     cleanup_state = "cleaned"
     reason = ""
@@ -544,7 +558,8 @@ def _guardian_main(raw):
     try:
         supervisor = subprocess.Popen([sys.executable, os.path.abspath(__file__), "_supervisor",
                                        "--ctrl-fd", str(s.fileno()), "--log-fd", str(log_fd),
-                                       "--fds", ",".join(str(fd) for fd in extra_fds)],
+                                       "--fds", ",".join(str(fd) for fd in extra_fds),
+                                       "--fault", json.dumps(raw.get("fault") or {})],
                                       pass_fds=tuple(fd for fd in forward_fds if fd >= 0),
                                       start_new_session=True)
     except OSError as exc:
@@ -566,6 +581,8 @@ def _guardian_main(raw):
     cancel_deadline = None
     supervisor_done = None
     boot_deadline = time.monotonic() + SUPERVISOR_BOOT_SECONDS
+
+    fault_spec = raw.get("fault") or None
 
     def relay_to_client(message):
         nonlocal client_alive
@@ -607,6 +624,7 @@ def _guardian_main(raw):
                 for message in messages:
                     if message["type"] == "START":
                         started = True
+                        fault_spec = fault_spec or message.get("fault")
                         _send(gs, message)
                     elif message["type"] == "CANCEL" and not cancel_sent:
                         cancel_sent = True
@@ -628,6 +646,8 @@ def _guardian_main(raw):
                         supervisor_done = message
                     elif kind in ("READY", "STARTED", "CANCELLED_ACK"):
                         relay_to_client(message)
+                        if kind == "STARTED":
+                            _apply_fault(fault_spec, 'guardian-after-started')
             exited = supervisor.poll()
             if supervisor_done is not None:
                 # S 已给出内部结果：先等它退出，再由 G 做最终后代核验并只发一份最终 DONE。
@@ -742,47 +762,336 @@ def _read_cancel_file(path):
         return False
 
 
-def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pass_fds=()):
-    """Run one command under the C→G→S→W supervision described in the module docstring."""
+class EvidenceError(Exception):
+    """命令证据域不可用（启动前拒绝，不 fallback 到 standalone）。"""
+
+
+def _path_error_class():
+    try:
+        import fixture_scope
+        return fixture_scope.FixtureError
+    except ImportError:
+        return OSError
+
+
+def _local_modules():
+    here = os.path.dirname(os.path.abspath(__file__))
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import resource_lifecycle
+    import runner_cleanup
+    return resource_lifecycle, runner_cleanup
+
+
+def resolve_command_fault(identity):
+    """C 侧唯一选择器解析：总开关 + owned scope + 精确本命令身份才返回 FaultSpec。
+
+    未知点名/动作、目标不唯一、缺 scope 都在启动前拒绝；普通环境同名变量不生效。
+    """
+    if os.environ.get(FAULT_SWITCH) != '1':
+        return None
+    target = os.environ.get(FAULT_TARGET_ENV)
+    if not target:
+        return None
+    point = os.environ.get(FAULT_POINT_ENV)
+    action = os.environ.get(FAULT_ACTION_ENV)
+    if point not in FAULT_POINTS:
+        raise EvidenceError(f'unknown {FAULT_POINT_ENV}: {point!r}')
+    if action not in FAULT_ACTIONS:
+        raise EvidenceError(f'unknown {FAULT_ACTION_ENV}: {action!r}')
+    import fixture_scope
+    if fixture_scope.current_scope() is None:
+        raise EvidenceError('execution fault injection requires an owned test scope')
+    if identity is None:
+        raise EvidenceError('execution fault injection needs the command identity')
+    if target != identity:
+        return None
+    ready_fd = os.environ.get(FAULT_READY_FD_ENV)
+    spec = {'point': point, 'action': action, 'target': target}
+    if ready_fd:
+        try:
+            spec['ready_fd'] = int(ready_fd)
+        except ValueError as exc:
+            raise EvidenceError(f'invalid {FAULT_READY_FD_ENV}: {ready_fd!r}') from exc
+        if spec['ready_fd'] < 0:
+            raise EvidenceError(f'invalid {FAULT_READY_FD_ENV}: {ready_fd!r}')
+    return spec
+
+
+def _wait_test_ready(spec, where):
+    """测试专用 ready 管道：目标实际初始化完成后才在固定点注入，不靠 sleep 竞猜。"""
+    ready_fd = (spec or {}).get('ready_fd')
+    if ready_fd is None:
+        return
+    try:
+        readable, _, _ = select.select([ready_fd], [], [], 5.0)
+        if readable:
+            os.read(ready_fd, 1)
+    except (OSError, ValueError):
+        pass
+
+
+def _apply_fault(spec, where):
+    """只在已被 C 选中并随内部 START 送达的固定点执行有限动作。"""
+    if not spec or spec.get('point') != where:
+        return
+    if where in ('supervisor-after-started', 'guardian-after-started'):
+        _wait_test_ready(spec, where)
+    action = spec.get('action')
+    if action == 'exception':
+        raise RuntimeError(f'injected fault at {where}')
+    if action == 'exit':
+        os._exit(9)
+    if action == 'kill':
+        os.kill(os.getpid(), signal.SIGKILL)
+    if action == 'hang':
+        while True:
+            time.sleep(1)
+    raise EvidenceError(f'unknown fault action: {action!r}')
+
+
+class CancellationScope:
+    """共享取消作用域：controller 建立一次，内部 run 复用同一对象。
+
+    目标 W 的原始 signal policy 必须在安装本作用域的 latch handler **之前**采集；
+    作用域退出时只在 establishing 方恢复一次 handler/mask。
+    """
+
+    def __init__(self):
+        self.policy = _capture_target_policy()
+        self.latched = False
+        self.signum = None
+        self.reason = None
+        self._saved_handlers = {}
+        self._saved_mask = None
+        self._installed = False
+
+    def latch(self, signum, reason):
+        if not self.latched:
+            self.latched = True
+            self.signum = signum
+            self.reason = reason
+
+    def _handler(self, signum, _frame):
+        self.latch(signum, f'cancelled by signal {signum}')
+
+    def install(self):
+        if self._installed:
+            return self
+        self._saved_mask = signal.pthread_sigmask(
+            signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM, signal.SIGHUP})
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            self._saved_handlers[signum] = signal.signal(signum, self._handler)
+        signal.pthread_sigmask(signal.SIG_SETMASK, self._saved_mask)
+        self._installed = True
+        return self
+
+    def restore(self):
+        if not self._installed:
+            return
+        for signum, handler in self._saved_handlers.items():
+            signal.signal(signum, handler)
+        if self._saved_mask is not None:
+            signal.pthread_sigmask(signal.SIG_SETMASK, self._saved_mask)
+        self._installed = False
+
+
+def _check_anchor(path):
+    """log/receipt 的最终父目录必须是无链接真实目录（缺失链由调用方安全创建）。"""
+    parent = Path(path).parent
+    try:
+        parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        raise
+    current = parent
+    while True:
+        if current.is_symlink():
+            raise OSError(f'log parent contains a symlink: {current}')
+        if current.parent == current:
+            break
+        current = current.parent
+    if Path(path).is_symlink():
+        raise OSError(f'log path must not be a symlink: {path}')
+    return parent
+
+
+def _managed_evidence(log_path):
+    """已声明 managed 上下文：不完整/不可验证一律拒绝（不降级 standalone）。"""
+    lifecycle, _ = _local_modules()
+    run_id = os.environ.get('WF_RUN_ID')
+    evidence_root = os.environ.get('WF_COMMAND_EVIDENCE_ROOT')
+    results_root = os.environ.get('WF_RESULTS_DIR')
+    if not (run_id or evidence_root):
+        return None
+    if not (run_id and evidence_root and results_root):
+        raise EvidenceError('incomplete managed evidence context（拒绝 fallback 到 standalone）')
+    root = lifecycle.canonical_root(results_root)
+    owner = lifecycle.classify_owner(root)
+    if owner['kind'] != 'schema2' or owner['payload']['intent'] != 'execution':
+        raise EvidenceError('managed evidence root has no execution owner')
+    if owner['payload']['run_id'] != run_id:
+        raise EvidenceError('managed evidence run_id mismatches the results owner')
+    state = lifecycle.classify_run_state(root)
+    if state['kind'] not in ('active', 'finished') or state['payload']['run_id'] != run_id:
+        raise EvidenceError('managed evidence run-state is missing or belongs to another run')
+    commands = os.path.realpath(evidence_root)
+    expected = os.path.join(root, lifecycle.COMMANDS_DIR)
+    if commands != expected:
+        raise EvidenceError(f'managed evidence root must be {expected}')
+    if not os.path.isdir(commands):
+        raise EvidenceError(f'managed evidence root does not exist: {commands}')
+    return {'evidence_scope': 'managed-child', 'root': commands, 'run_id': run_id}
+
+
+def _evidence_descriptor(log_path, *, runner_control, receipt_path):
+    lifecycle, _ = _local_modules()
+    if runner_control:
+        if not receipt_path:
+            raise EvidenceError('root-control requires an explicit receipt path')
+        return {'evidence_scope': 'root-control', 'path': str(receipt_path),
+                'run_id': os.environ.get('WF_RUN_ID')}
+    managed = _managed_evidence(log_path)
+    if managed is not None:
+        return managed
+    scope_root = os.environ.get('WF_TEST_SCOPE_ROOT')
+    if scope_root:
+        import fixture_scope
+        fixture_scope.ensure_in_scope(Path(log_path).parent, Path(log_path))
+    return {'evidence_scope': 'standalone-command', 'root': str(Path(log_path).parent),
+            'run_id': None}
+
+
+def _receipt_record(descriptor, command_id, log_path, argv, cwd, local_cleanup, retained):
+    return {
+        'schema_version': 1,
+        'command_id': command_id,
+        'run_id': descriptor.get('run_id'),
+        'evidence_scope': descriptor['evidence_scope'],
+        'state': 'started',
+        'argv': list(map(str, argv)),
+        'cwd': str(cwd),
+        'log_path': str(log_path),
+        'started_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+        'finished_at': None,
+        'result': None,
+        'supervision': None,
+        'local_cleanup': local_cleanup,
+        'retained_paths': list(retained),
+    }
+
+
+def _receipt_path_for(descriptor, command_id, log_path):
+    lifecycle, _ = _local_modules()
+    if descriptor['evidence_scope'] == 'root-control':
+        return descriptor['path']
+    if descriptor['evidence_scope'] == 'managed-child':
+        return lifecycle.receipt_path(descriptor['root'], command_id)
+    return lifecycle.standalone_receipt_path(log_path, command_id)
+
+
+def _prepare_isolated_home(home):
+    """本 command 唯一的 HOME：先建立 owned marker/空根，再写 bootstrap 记录。"""
+    import fixture_scope
+    root = fixture_scope.reset(str(home))
+    spec = importlib.util.spec_from_file_location('wf_test_bootstrap',
+            Path(__file__).resolve().parents[4] / 'docs/workflows/wf/payload/bin/wf.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    scope, value, error = module.resolve_candidate(str(root), 'system')
+    if error:
+        raise RuntimeError(error)
+    candidate, error = module.candidate_path(str(root), value)
+    if error:
+        raise RuntimeError(error)
+    size, mtime = module.stat_tuple(candidate)
+    write_json(root / '.wf/interpreters.json', {'interpreters': [{
+        'scope': scope, 'project_id': None, 'key': 'python_executable',
+        'config_value': value, 'path_identity': module.path_identity(value, str(root)),
+        'size': size, 'mtime_ns': mtime, 'python_version': module.probe_version(candidate),
+        'confirmed_at': 'test-fixture'}]})
+    return root
+
+
+def _finish_receipt(path, command_id, updates):
+    lifecycle, _ = _local_modules()
+    return lifecycle.update_receipt(path, command_id, updates)
+
+
+def _result_projection(result):
+    return {key: result.get(key) for key in
+            ('rc', 'status', 'seconds', 'reason', 'supervision')}
+
+
+def _record_local(evidence_path, command_id, home, state, reason=None, origin='local'):
+    lifecycle, _cleanup = _local_modules()
+    updates = {'local_cleanup': state, 'retained_paths': [str(home)] if home else []}
+    if reason:
+        updates['local_reason'] = f'{origin}: {reason}'
+    lifecycle.update_receipt(evidence_path, command_id, updates)
+
+
+def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pass_fds=(),
+        scope=None, isolated_user=False, runner_control=False, receipt_path=None,
+        local_dirs=(), fault_identity=None):
+    """Run one command under the C→G→S→W supervision described in the module docstring.
+
+    `scope` 由 controller 传入时复用同一取消作用域；`isolated_user` 在本 command 的
+    command_id 下建立唯一 HOME，并在 supervision 结论之后决定删除/保留；`runner_control`
+    只由 root controller 使用（证据写 `.runner.json`）。
+    """
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError('command timeout must be positive and finite')
-    log_path = Path(log_path).absolute()
-    log_path.parent.mkdir(parents=True, exist_ok=True)
+    lifecycle, _cleanup = _local_modules()
+    log_path = Path(os.path.abspath(log_path))
+    target_cwd = Path(os.path.abspath(cwd or Path.cwd()))
+    _check_anchor(log_path)
     started = time.monotonic()
     deadline = started + timeout
     result = {'schema_version': 2, 'argv': list(map(str, argv)),
-              'cwd': str(Path(cwd or Path.cwd()).absolute()), 'log_path': str(log_path),
+              'cwd': str(target_cwd), 'log_path': str(log_path),
               'rc': 1, 'status': 'failed', 'reason': '', 'protocol_version': PROTOCOL_VERSION,
               'supervision': {'cleanup_state': 'unknown', 'infrastructure_error': True}}
-    policy = _capture_target_policy()
-    cancel = {'latched': False, 'signum': None, 'reason': None}
+    command_id = lifecycle.new_command_id()
+    descriptor = _evidence_descriptor(log_path, runner_control=runner_control,
+                                      receipt_path=receipt_path)
+    evidence_path = _receipt_path_for(descriptor, command_id, log_path)
+    home = Path(str(log_path) + '.home-' + command_id) if isolated_user else None
+    local_paths = ([str(home)] if home else []) + [os.path.abspath(item) for item in local_dirs]
+    receipt = _receipt_record(descriptor, command_id, log_path, argv, target_cwd,
+                              'pending' if local_paths else 'none', local_paths)
+    fault_spec = resolve_command_fault(fault_identity)
+    lifecycle.write_receipt(evidence_path, receipt)
+    own_scope = scope is None
+    scope = (scope or CancellationScope()).install()
+    result['command_id'] = command_id
+    result['evidence_path'] = evidence_path
+    result['local_dirs'] = [os.path.abspath(item) for item in local_dirs]
     cancel_file = os.environ.get('WF_CANCEL_FILE')
-    command_id = 1
-    log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
-    # inherit_output：目标直接继承调用方控制台；日志只保留失败原因（与旧行为一致）。
-    guardian_log_fd = log_fd if not inherit_output else -1
-    extra_fds = [int(fd) for fd in pass_fds]
-    saved_handlers = {}
-    saved_mask = None
+    log_fd = -1
     guardian = None
     channel = None
+    parent = None
     try:
-        saved_mask = signal.pthread_sigmask(
-            signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM, signal.SIGHUP})
-
-        def on_signal(signum, _frame):
-            if not cancel['latched']:
-                cancel.update(latched=True, signum=signum,
-                              reason=f'cancelled by signal {signum}')
-
-        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
-            saved_handlers[signum] = signal.signal(signum, on_signal)
+        if home is not None:
+            try:
+                _prepare_isolated_home(home)
+            except Exception as exc:
+                result.update(status='failed', rc=1,
+                              reason=f'isolated home preparation failed: {exc}',
+                              local_prepare_failed=True)
+                return result
+            env = {**(os.environ if env is None else env), 'HOME': str(home)}
+        log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+        # inherit_output：目标直接继承调用方控制台；日志只保留失败原因（与旧行为一致）。
+        guardian_log_fd = log_fd if not inherit_output else -1
+        extra_fds = [int(fd) for fd in pass_fds]
         parent, child = socket.socketpair()
         try:
             guardian = subprocess.Popen(
                 [sys.executable, os.path.abspath(__file__), '_guardian',
                  '--ctrl-fd', str(child.fileno()), '--log-fd', str(guardian_log_fd),
-                 '--fds', ','.join(str(fd) for fd in extra_fds)],
+                 '--fds', ','.join(str(fd) for fd in extra_fds),
+                 '--fault', json.dumps(fault_spec or {})],
                 pass_fds=tuple([child.fileno()] + ([log_fd] if guardian_log_fd >= 0 else [])
                                + extra_fds),
                 start_new_session=True, cwd=cwd, env=env)
@@ -791,7 +1100,6 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
         channel = parent
         os.close(log_fd)
         log_fd = -1
-        signal.pthread_sigmask(signal.SIG_SETMASK, saved_mask)
         buffer = b''
         ready = False
         start_sent = False
@@ -802,26 +1110,25 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
         cleanup_deadline = None
         while True:
             now = time.monotonic()
-            if cancel['latched'] is False and _read_cancel_file(cancel_file):
-                cancel.update(latched=True, signum=signal.SIGTERM,
-                              reason='cancelled by cancel file')
-            if cancel['latched'] and start_sent and not cancel_sent and channel is not None:
+            if scope.latched is False and _read_cancel_file(cancel_file):
+                scope.latch(signal.SIGTERM, 'cancelled by cancel file')
+            if scope.latched and start_sent and not cancel_sent and channel is not None:
                 # 已发 START：立即经同一通道取消（READY 之前的取消由 READY 分支发送）。
                 cancel_sent = True
                 cleanup_deadline = now + _supervision_grace()
                 try:
                     _send(channel, {'v': PROTOCOL_VERSION, 'type': 'CANCEL', 'id': command_id,
-                                    'signum': cancel['signum'], 'reason': cancel['reason']})
+                                    'signum': scope.signum, 'reason': scope.reason})
                 except (OSError, ProtocolError):
                     channel = None
-            if now >= deadline and not cancel['latched']:
-                cancel.update(latched=True, signum=0, reason=f'TIMEOUT after {timeout:g}s')
+            if now >= deadline and not scope.latched:
+                scope.latch(0, f'TIMEOUT after {timeout:g}s')
                 cleanup_deadline = now + _supervision_grace()
                 if start_sent and not cancel_sent and channel is not None:
                     cancel_sent = True
                     try:
                         _send(channel, {'v': PROTOCOL_VERSION, 'type': 'CANCEL', 'id': command_id,
-                                        'signum': 0, 'reason': cancel['reason']})
+                                        'signum': 0, 'reason': scope.reason})
                     except (OSError, ProtocolError):
                         channel = None
             if channel is not None:
@@ -844,12 +1151,12 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                     if kind == 'READY':
                         ready = True
                         result['supervision']['guardian_pid'] = message.get('guardian_pid')
-                        if not cancel['latched']:
+                        if not scope.latched:
                             start_sent = True
                             try:
                                 _send(channel, {'v': PROTOCOL_VERSION, 'type': 'START', 'id': command_id,
-                                                'policy': policy, 'argv': result['argv'],
-                                                'deadline': deadline})
+                                                'policy': scope.policy, 'argv': result['argv'],
+                                                'deadline': deadline, 'fault': fault_spec})
                             except (OSError, ProtocolError):
                                 channel = None
                         else:
@@ -858,8 +1165,7 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                             cleanup_deadline = time.monotonic() + _supervision_grace()
                             try:
                                 _send(channel, {'v': PROTOCOL_VERSION, 'type': 'CANCEL', 'id': command_id,
-                                                'signum': cancel['signum'],
-                                                'reason': cancel['reason']})
+                                                'signum': scope.signum, 'reason': scope.reason})
                             except (OSError, ProtocolError):
                                 channel = None
                     elif kind == 'STARTED':
@@ -923,8 +1229,8 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
             supervision['infrastructure_error'] = True
             supervision['cleanup_state'] = supervision.get('cleanup_state', 'unknown')
             result.update(status='failed',
-                          rc=124 if (cancel['reason'] or '').startswith('TIMEOUT') else 1,
-                          reason=result['reason'] or (cancel['reason']
+                          rc=124 if (scope.reason or '').startswith('TIMEOUT') else 1,
+                          reason=result['reason'] or (scope.reason
                                                       or 'supervision lost before a final result'))
         else:
             supervision.update(cleanup_state=done.get('cleanup_state', 'unknown'),
@@ -939,7 +1245,7 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                               reason=done.get('reason') or 'supervision infrastructure failure')
             elif done.get('cancelled'):
                 signum = done.get('signum') or 0
-                timed_out = (cancel['reason'] or '').startswith('TIMEOUT') or \
+                timed_out = (scope.reason or '').startswith('TIMEOUT') or \
                             str(done.get('reason') or '').startswith('command deadline exceeded')
                 result.update(status='timeout' if timed_out else 'cancelled',
                               rc=124 if timed_out else ((128 + int(signum)) if signum
@@ -952,23 +1258,22 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                 result.update(rc=int(target_rc),
                               status='passed' if target_rc == 0 else 'failed',
                               reason='' if target_rc == 0 else (done.get('reason') or ''))
-        if cancel['latched'] and result['status'] == 'passed':
+        if scope.latched and result['status'] == 'passed':
             # 取消或设施故障先于最终确认时，目标 rc=0 也不得取绿。
-            signum = cancel['signum'] or 0
+            signum = scope.signum or 0
             result.update(status='cancelled',
                           rc=(128 + int(signum)) if signum else 1,
-                          reason=cancel['reason'] or 'cancelled')
+                          reason=scope.reason or 'cancelled')
         if result['reason']:
             try:
                 with open(log_path, 'ab') as stream:
                     stream.write(('\n' + result['reason'] + '\n').encode())
             except OSError:
                 pass
+        return result
     finally:
-        for signum, handler in saved_handlers.items():
-            signal.signal(signum, handler)
-        if saved_mask is not None:
-            signal.pthread_sigmask(signal.SIG_SETMASK, saved_mask)
+        if own_scope:
+            scope.restore()
         if log_fd >= 0:
             try:
                 os.close(log_fd)
@@ -982,12 +1287,78 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
             guardian.wait()
         if channel is not None:
             channel.close()
-        try:
-            parent.close()
-        except (OSError, UnboundLocalError):
-            pass
+        if parent is not None:
+            try:
+                parent.close()
+            except OSError:
+                pass
         result['seconds'] = round(time.monotonic() - started, 6)
-    return result
+        _finalize_evidence(result, evidence_path, command_id, home, log_path)
+
+
+def _remove_local_dir(path, anchor):
+    """只删本 command 声明过的 local 根：有 fixture marker 的走 owned 入口，其余必须在
+    log 锚点之内（worker 相位 TMPDIR），拒绝跟随链接。"""
+    import fixture_scope
+    path = Path(path)
+    if not path.exists() and not path.is_symlink():
+        return True
+    if path.is_symlink():
+        raise OSError(f'local resource is a symlink: {path}')
+    if fixture_scope.marker(path).is_file():
+        fixture_scope.remove(str(path))
+        return True
+    anchor = Path(anchor).absolute()
+    try:
+        path.relative_to(anchor)
+    except ValueError:
+        raise OSError(f'local resource is outside the log anchor: {path}')
+    import shutil
+    shutil.rmtree(path)
+    return True
+
+
+def _finalize_evidence(result, evidence_path, command_id, home, log_path):
+    """写 finished receipt 并按 supervision 结论收口本 command 的 local 资源。"""
+    lifecycle, cleanup = _local_modules()
+    local_paths = ([str(home)] if home is not None else []) + list(result.get('local_dirs') or [])
+    local_state = 'none' if not local_paths else 'retained-unknown'
+    retained = list(local_paths)
+    try:
+        supervision = result.get('supervision') or {}
+        if local_paths:
+            if result.get('local_prepare_failed'):
+                local_state, retained = 'failed', list(local_paths)
+            elif supervision.get('cleanup_state') == 'cleaned' and result.get('status') in (
+                    'passed', 'failed', 'cancelled', 'timeout'):
+                failed = []
+                for item in local_paths:
+                    try:
+                        _remove_local_dir(item, Path(log_path).parent)
+                    except OSError as exc:
+                        failed.append(item)
+                        result['local_cleanup_error'] = str(exc)
+                local_state = 'failed' if failed else 'removed'
+                retained = failed
+            else:
+                local_state = ('failed' if supervision.get('cleanup_state') == 'failed'
+                               else 'retained-unknown')
+                retained = list(local_paths)
+        result['local_cleanup'] = local_state
+        updates = {'state': 'finished',
+                   'finished_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+                   'result': _result_projection(result),
+                   'supervision': result.get('supervision'),
+                   'local_cleanup': local_state,
+                   'retained_paths': retained}
+        lifecycle.update_receipt(evidence_path, command_id, updates)
+    except (lifecycle.LifecycleError, OSError) as exc:
+        # 写 finished 失败：保留 started，原非零 rc 保持；原 0 转非零并归因。
+        result['evidence_error'] = f'receipt finish failed: {exc}'
+        if result.get('rc') == 0:
+            result['rc'] = 1
+            result['status'] = 'failed'
+        result['reason'] = (result.get('reason') or '') + '; ' + result['evidence_error']
 
 
 def write_json(path, payload):
@@ -1077,42 +1448,372 @@ def verdict(log_path, rc, kind, expected=None, phase=None):
             'tail': tail, 'phase': phase, 'reason': reason}
 
 
-def isolated_user(log_path):
-    """Test-only user state: real bootstrap validation, synthetic fixture consent."""
-    import fixture_scope
-    root = fixture_scope.reset(str(log_path) + '.home')
-    spec = importlib.util.spec_from_file_location('wf_test_bootstrap',
-            Path(__file__).resolve().parents[4] / 'docs/workflows/wf/payload/bin/wf.py')
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    # These are fixture records, never copies of the real user's confirmation set.
-    scope, value, error = module.resolve_candidate(str(root), 'system')
-    if error:
-        raise RuntimeError(error)
-    candidate, error = module.candidate_path(str(root), value)
-    if error:
-        raise RuntimeError(error)
-    size, mtime = module.stat_tuple(candidate)
-    write_json(root / '.wf/interpreters.json', {'interpreters': [{
-        'scope': scope, 'project_id': None, 'key': 'python_executable',
-        'config_value': value, 'path_identity': module.path_identity(value, str(root)),
-        'size': size, 'mtime_ns': mtime, 'python_version': module.probe_version(candidate),
-        'confirmed_at': 'test-fixture'}]})
-    return root
+def _controller_refuse(message):
+    print(f'RUNNER-CONTROL-REFUSED: {message}', file=sys.stderr)
+    return 1
 
 
-def cleanup_cancelled_run(results):
+def _verify_controller_context(args, lifecycle):
+    """核 controller 的租约/owner/run-state/冻结 plan；任何不符都拒绝，不重做初始化。"""
     import fixture_scope
-    root = Path(results)
-    plan_path = root / 'plan.json'
-    if plan_path.is_file():
-        plan = json.loads(plan_path.read_text())
-        if plan.get('fix'):
-            fixture_scope.remove(plan['fix'])
-            fixture_scope.remove(plan['fix'] + '.legacy')
-    for path in root.iterdir():
-        if path.is_dir() and fixture_scope.marker(path).is_file():
-            fixture_scope.remove(path)
+    fixture_scope.verify_lease()
+    fixture_scope.verify_results_lock()
+    root = lifecycle.canonical_root(args.results_root)
+    if not isinstance(args.run_id, str) or not args.run_id:
+        raise EvidenceError('--run-id is required for the controller')
+    if args.runner_role not in lifecycle.ROLES:
+        raise EvidenceError(f'--runner-role must be one of {lifecycle.ROLES}')
+    owner = lifecycle.classify_owner(root)
+    if owner['kind'] != 'schema2' or owner['payload']['intent'] != 'execution':
+        raise EvidenceError('results root has no execution owner (begin_run missing)')
+    if owner['payload']['run_id'] != args.run_id:
+        raise EvidenceError('results owner run_id differs from the controller run_id')
+    state = lifecycle.classify_run_state(root)
+    if state['kind'] != 'active' or state['payload']['run_id'] != args.run_id:
+        raise EvidenceError('run-state is not the active generation of this run_id')
+    if args.runner_role == 'repro':
+        # 独立 repro 没有 run_all 的冻结 plan：证据来自本代 bundle/records 与 receipts。
+        return root, {"mode": "repro", "full_mode": 0,
+                      "fixture_deploy": os.environ.get('WF_FIXTURE_DEPLOY') or 'dev',
+                      "repro_enabled": 1, "units": []}
+    if not args.plan_file or not args.plan_sha256 or not args.plan_size:
+        raise EvidenceError('controller requires the frozen plan identity')
+    data = Path(args.plan_file).read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != args.plan_sha256 or str(len(data)) != str(args.plan_size):
+        raise EvidenceError('frozen plan bytes do not match the controller token')
+    plan = json.loads(data)
+    if not isinstance(plan, dict):
+        raise EvidenceError('frozen plan must be a JSON object')
+    return root, plan
+
+
+def _legacy_snapshot(plan):
+    """已知技术债清单：只接受注册过的单元名，快照后交给同一 gate。"""
+    raw = os.environ.get('WF_KNOWN_LEGACY') or ''
+    names = raw.split()
+    if not names:
+        return ''
+    import importlib.util
+    with open(Path(__file__).resolve().parent / 'units.json', encoding='utf-8') as handle:
+        registry = {entry['name'] for entry in json.load(handle)['units']}
+    unknown = [name for name in names if name not in registry]
+    if unknown:
+        raise EvidenceError('legacy debt names are not registered units: ' + ' '.join(unknown))
+    planned = {entry['name'] for entry in plan.get('units') or []}
+    if not set(names) & planned:
+        raise EvidenceError('legacy debt names do not participate in this plan')
+    return ' '.join(names)
+
+
+def _repro_bundle_fact(root):
+    path = Path(root) / 'repro.bundle.json'
+    if not path.is_file() or path.is_symlink():
+        return None, None
+    try:
+        record = json.loads(path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None, None
+    return record.get('sha256'), record.get('size')
+
+
+def _repro_gate_report(root, plan):
+    """独立 repro：只用本代 bundle/records（不造 lines/units，也不读 full metrics）。"""
+    import results_gate
+    bundle = Path(root) / 'inputs.json'
+    if not bundle.is_file():
+        raise EvidenceError('repro bundle is missing')
+    report = results_gate.repro_report(str(root))
+    counts = {"suite_ran": 0, "flow_ran": 0, "repro_ran": int(report.get('total') or 0),
+              "units_total": int(report.get('total') or 0),
+              "fail": int(report.get('failed') or 0), "bad": 0, "extra_failures": 0,
+              "repro_fail": int(report.get('failed') or 0), "legacy_debt": 0,
+              "unregistered_fail": 0, "debt_failed": [], "debt_fixed": [], "debt_missing": []}
+    gate = {"malformed": len(report.get('malformed') or []),
+            "missing": report.get('missing') or [], "duplicate": [], "unexpected": [],
+            "bad": [], "repro_fail": counts['repro_fail'],
+            "extra_failures": counts['extra_failures']}
+    return {"ok": bool(report.get('ok')), "gate": gate, "repro": report, "counts": counts,
+            "reasons": report.get('reasons') or []}
+
+
+def _gate_report(root, plan, plan_path):
+    import results_gate
+    lines = Path(root) / 'lines'
+    # 缺 lines 是“证据不完整”，不是 controller 崩溃：交给同一 assess_run_results 归因，
+    # 取消/早退仍按真实清理事实收口（不签成功）。
+    legacy = _legacy_snapshot(plan)
+    repro_root = Path(root) / 'repro' if plan.get('repro_enabled') else None
+    bundle_sha, bundle_size = (_repro_bundle_fact(root) if repro_root else (None, None))
+    return results_gate.assess_run_results(str(plan_path), str(lines),
+                                           str(repro_root) if repro_root else None,
+                                           bundle_sha, bundle_size, legacy)
+
+
+def _unknown_assessment(gate_report, reason):
+    return {"schema_version": 1, "cleanup_state": "unknown", "evidence_state": "incomplete",
+            "reasons": [reason], "problems": [{"kind": "controller", "detail": reason}],
+            "retained_paths": [], "commands": [], "units": [],
+            "target": {"cleanup_state": "unknown", "status": None, "rc": None},
+            "gate": gate_report, "repro": (gate_report or {}).get("repro")}
+
+
+def _assess_with_faults(root, run_id, plan, control, gate_report, fault, cleanup):
+    if fault == 'assess-exception':
+        raise RuntimeError('injected assess_run exception')
+    assessment = cleanup.assess_run(root, run_id, plan, control, gate_report)
+    if fault == 'assess-none':
+        assessment = None
+    elif fault == 'assess-empty':
+        assessment = {}
+    elif fault == 'assess-malformed':
+        assessment = {"cleanup_state": "cleaned", "problems": "not-a-list",
+                      "retained_paths": [], "target": {"cleanup_state": "cleaned"}}
+    elif fault == 'assess-contradictory':
+        assessment = dict(assessment, cleanup_state='cleaned',
+                          problems=[{"kind": "pending", "detail": "injected contradiction"}])
+    try:
+        return cleanup.validate_assessment(assessment)
+    except cleanup.CleanupError as exc:
+        return _unknown_assessment(gate_report, f"assessment rejected: {exc}")
+
+
+def _summary_report(gate_report, assessment, cleanup_report, control):
+    counts = dict((gate_report or {}).get('counts') or {})
+    control_failed = (control.get('status') != 'passed')
+    counts.setdefault('suite_ran', 0)
+    counts.setdefault('flow_ran', 0)
+    counts.setdefault('repro_ran', 0)
+    counts.setdefault('units_total', 0)
+    counts.setdefault('legacy_debt', 0)
+    counts.setdefault('bad', 0)
+    counts.setdefault('extra_failures', 0)
+    counts.setdefault('repro_fail', 0)
+    counts.setdefault('unregistered_fail', 0)
+    counts['fail'] = int(counts.get('fail') or 0) + (1 if control_failed else 0)
+    ok = (bool((gate_report or {}).get('ok')) and assessment['cleanup_state'] == 'cleaned'
+          and assessment['evidence_state'] == 'complete'
+          and cleanup_report['cleanup_state'] == 'cleaned' and not control_failed)
+    reasons = list(assessment.get('reasons') or []) + list(cleanup_report.get('reasons') or [])
+    if control_failed:
+        reasons.append(f"control status is {control.get('status')!r} (rc={control.get('rc')})")
+    return {
+        "ok": ok,
+        "counts": counts,
+        "gate": (gate_report or {}).get('gate') or {
+            "malformed": 0, "missing": [], "duplicate": [], "unexpected": [],
+            "bad": [], "repro_fail": counts.get('repro_fail', 0),
+            "extra_failures": counts.get('extra_failures', 0)},
+        "repro": (gate_report or {}).get('repro') or {},
+        "cleanup_state": cleanup_report['cleanup_state'],
+        "cleanup_report": cleanup_report,
+        "evidence_state": assessment['evidence_state'],
+        "reasons": reasons[:50],
+    }
+
+
+FAULT_SELECTOR_ENV = (
+    'WF_RUNNER_FINALIZE_FAULT', 'WF_RESULTS_INIT_STOP_AFTER',
+    'WF_TEMPLATE_TXN_STOP_AFTER', 'WF_TEST_RELEASE_TXN_STOP_AFTER',
+    'WF_EXECUTION_FAULT_TARGET', 'WF_EXECUTION_FAULT_POINT', 'WF_EXECUTION_FAULT_ACTION',
+    'WF_SUPERVISOR_FAULT', 'WF_GUARDIAN_FAULT', 'WF_UNIT_FAULT', 'WF_METRICS_FAULT',
+)
+
+
+def _child_environment(fault, results_summary):
+    """受限 fault 的交接：每个命令只按自己的身份匹配选择器；W 由 S 在 spawn 时剥离。
+
+    controller 级别的 `WF_RUNNER_FINALIZE_FAULT` 不进子进程；execution G/S 选择器保留给
+    各 C 解析（不匹配即忽略）；metrics spec 只用显式 `--fault` 交给本次 write_metrics。
+    """
+    env = {key: value for key, value in os.environ.items()
+           if key != 'WF_RUNNER_FINALIZE_FAULT'}
+    env.pop('WF_METRICS_FAULT', None)
+    if fault in results_summary.METRICS_FAULTS:
+        env['WF_METRICS_FAULT'] = fault
+    return env
+
+
+def validate_execution_selector():
+    """controller 启动前的选择器预检：非法点名/缺 scope 在 root 启动前拒绝。"""
+    if os.environ.get(FAULT_SWITCH) != '1':
+        return
+    target = os.environ.get(FAULT_TARGET_ENV)
+    if not target:
+        return
+    point = os.environ.get(FAULT_POINT_ENV)
+    action = os.environ.get(FAULT_ACTION_ENV)
+    if point not in FAULT_POINTS or action not in FAULT_ACTIONS:
+        raise EvidenceError(f'unknown execution fault point/action: {point!r}/{action!r}')
+    import fixture_scope
+    if fixture_scope.current_scope() is None:
+        raise EvidenceError('execution fault injection requires an owned test scope')
+
+
+def runner_control(args):
+    """外层 controller：同 C 进程核验 → root started → 监督 → 聚合 → finalize → 摘要 → 终态。"""
+    lifecycle, cleanup = _local_modules()
+    try:
+        fault = cleanup.validate_fault_selector()
+        validate_execution_selector()
+    except (cleanup.CleanupError, EvidenceError) as exc:
+        return _controller_refuse(str(exc))
+    try:
+        root, plan = _verify_controller_context(args, lifecycle)
+    except (EvidenceError, lifecycle.LifecycleError, OSError, ValueError,
+            _path_error_class()) as exc:
+        return _controller_refuse(str(exc))
+    try:
+        import results_summary
+    except ImportError as exc:
+        return _controller_refuse(f'summary module unavailable: {exc}')
+    role = args.runner_role
+    command = args.command[1:] if args.command[:1] == ['--'] else args.command
+    if not command:
+        return _controller_refuse('controller command is required')
+    result_path = Path(args.result) if args.result else Path(root) / lifecycle.CONTROL_NAME
+    try:
+        observe = cleanup.observe_roots(root, plan, role)
+    except Exception as exc:  # 观察失败只是诊断缺口，不扩大为当前 run 的恢复失败
+        observe = {"enabled": True, "status": "partial", "calls": 1,
+                   "roots": [], "error": str(exc), "reports": {}}
+        print(f'OBSERVE-FAILED: {exc}', file=sys.stderr)
+    print(f'OBSERVE: {observe["status"]} (enabled={observe["enabled"]}, '
+          f'calls={observe["calls"]}, roots={observe["roots"]})', file=sys.stderr, flush=True)
+    scope = CancellationScope().install()
+    success = False
+    publish_failure = False
+    final_rc = 1
+    status = 'failed'
+    report = None
+    assessment = None
+    cleanup_report = None
+    control_doc = None
+    gate_report = None
+    payload = None
+    try:
+        control_result = run(command, args.log, timeout=args.timeout, inherit_output=True,
+                             pass_fds=[item for item in (args.pass_fds or '').split(',') if item],
+                             scope=scope, runner_control=True, receipt_path=str(result_path),
+                             env=_child_environment(fault, results_summary))
+        try:
+            gate_report = (_repro_gate_report(root, plan) if role == 'repro'
+                           else _gate_report(root, plan, args.plan_file))
+            assessment = _assess_with_faults(root, args.run_id, plan, control_result,
+                                             gate_report, fault, cleanup)
+            # 清理已确认才删除；证据/摘要失败不影响“真实清理”的事实，但不得签成功。
+            cleanup_report = cleanup.finalize(root, plan, assessment)
+            metrics = None
+            input_evidence = None
+            if role == 'full':
+                context_path = Path(root) / lifecycle.RELEASE_CONTEXT_NAME
+                repro_root = Path(root) / 'repro' if plan.get('repro_enabled') else None
+                bundle_sha, bundle_size = (_repro_bundle_fact(root) if repro_root else (None, None))
+                metrics, input_evidence = results_summary.read_metrics(
+                    Path(root) / lifecycle.METRICS_NAME, args.run_id, root, role,
+                    args.plan_file, str(context_path), str(repro_root) if repro_root else None,
+                    bundle_sha, bundle_size)
+                context = results_summary._json_object(
+                    Path(context_path).read_bytes(), 'release context')
+            else:
+                context = None
+                bundle_sha, bundle_size = _repro_bundle_fact(root)
+                input_evidence = results_summary.repro_input_evidence(
+                    str(root), bundle_sha, bundle_size)
+            report = _summary_report(gate_report, assessment, cleanup_report, control_result)
+            status = 'ok' if report["ok"] else (
+                'cancelled' if control_result.get('status') in ('cancelled', 'timeout') else 'failed')
+            payload = results_summary.build(root, report, metrics, input_evidence,
+                                            plan, role, args.run_id, fault=fault)
+            success = report["ok"] and payload.get('status') == 'ok'
+        except (EvidenceError, cleanup.CleanupError, results_summary.SummaryError,
+                lifecycle.LifecycleError, OSError, ValueError) as exc:
+            print(f'RUNNER-FINALIZE-FAILED: {exc}', file=sys.stderr)
+            success = False
+            publish_failure = True
+            status = ('cancelled' if control_result.get('status') in ('cancelled', 'timeout')
+                      else 'failed')
+            if assessment is None:
+                assessment = _unknown_assessment(gate_report, str(exc))
+            cleanup_report = cleanup_report or {
+                "cleanup_state": "unknown", "removed": [], "failed": [],
+                "not_attempted": [], "retained_paths": [], "reasons": [str(exc)]}
+            control_doc = {
+                "schema_version": 1, "run_id": args.run_id, "role": role,
+                "target": {"status": control_result.get('status'), "rc": control_result.get('rc')},
+                "observe": observe, "failure": str(exc), "success": False,
+                "assessment": {"cleanup_state": assessment['cleanup_state'],
+                               "evidence_state": assessment['evidence_state'],
+                               "reasons": assessment.get('reasons') or [],
+                               "retained_paths": assessment.get('retained_paths') or []},
+                "cleanup": cleanup_report,
+            }
+        if payload is not None:
+            control_doc = {
+                "schema_version": 1, "run_id": args.run_id, "role": role,
+                "target": {"status": control_result.get('status'), "rc": control_result.get('rc')},
+                "observe": observe,
+                "assessment": {"cleanup_state": assessment['cleanup_state'],
+                               "evidence_state": assessment['evidence_state'],
+                               "reasons": assessment.get('reasons') or [],
+                               "retained_paths": assessment.get('retained_paths') or []},
+                "cleanup": cleanup_report,
+                "summary": {"path": payload.get('summary_path'), "status": payload.get('status'),
+                            "schema_version": payload.get('schema_version')},
+                "success": success,
+            }
+        if (cleanup_report or {}).get('cleanup_state') != 'cleaned' or not success:
+            print('CLEANUP-UNKNOWN: 本次 run 的清理/证据/发布未全部确认；'
+                  f'cleanup={(cleanup_report or {}).get("cleanup_state")} '
+                  f'evidence={assessment["evidence_state"]} '
+                  f'reasons={" ".join((cleanup_report or {}).get("reasons") or [])[:400]}',
+                  file=sys.stderr)
+        if fault == 'control-write-oserror':
+            print('RUNNER-CONTROL-FAILED: injected control write failure', file=sys.stderr)
+            success = False
+            publish_failure = True
+            final_evidence = 'incomplete'
+        elif control_doc is not None:
+            try:
+                _finish_receipt(str(result_path), control_result.get('command_id') or '',
+                                {'control': control_doc, 'success': success})
+            except (lifecycle.LifecycleError, OSError) as exc:
+                print(f'RUNNER-CONTROL-FAILED: {exc}', file=sys.stderr)
+                success = False
+                publish_failure = True
+                final_evidence = 'incomplete'
+        # 控制结果已终写后，才计算并写 run-state（run-state 是最后一个终态记录）。
+        state_cleanup = (cleanup_report or {}).get('cleanup_state') or 'unknown'
+        cancelled = control_result.get('status') in ('cancelled', 'timeout')
+        if not success and not cancelled and state_cleanup != 'failed':
+            state_cleanup = 'unknown'
+        final_evidence = ('incomplete' if publish_failure else assessment['evidence_state'])
+        if fault == 'state-finish-oserror':
+            print('RUNNER-STATE-FAILED: injected run-state finish failure', file=sys.stderr)
+            success = False
+        else:
+            try:
+                lifecycle.finish_run(root, args.run_id, role, state_cleanup, status,
+                                     final_evidence,
+                                     retained_paths=(cleanup_report or {}).get('retained_paths') or [],
+                                     reasons=(report or {}).get('reasons') or [])
+            except lifecycle.LifecycleError as exc:
+                print(f'RUNNER-STATE-FAILED: {exc}', file=sys.stderr)
+                success = False
+        final_rc = control_result.get('rc') or 0
+        if final_rc == 0 and not success:
+            final_rc = 1
+        counts = (report or {}).get('counts') or {}
+        print(f"---- runner-control run_id={args.run_id} status={status} "
+              f"cleanup={state_cleanup} evidence={assessment['evidence_state']} "
+              f"counts={counts} ----")
+        if not success:
+            print('GATE-FAIL: 本次运行未闭合（清理/证据/摘要任一未确认）', file=sys.stderr)
+        else:
+            print(f'GATE-OK: run_id={args.run_id} 清理/证据/摘要一致（fail={counts.get("fail", 0)}）')
+        return final_rc if 0 <= final_rc <= 255 else 1
+    finally:
+        scope.restore()
 
 
 def main(argv=None):
@@ -1124,11 +1825,20 @@ def main(argv=None):
     parser.add_argument('--expected', type=int)
     parser.add_argument('--phase', choices=('green', 'red'), default=None,
                         help='repro 判定所需相位（kind=repro 时必填）')
-    parser.add_argument('--isolated-user', action='store_true', help='use disposable test user configuration')
+    parser.add_argument('--isolated-user', action='store_true',
+                        help='use a unique disposable test HOME per command')
     parser.add_argument('--runner-control', action='store_true',
-                        help='inherit console output and clean runner fixtures on cancellation')
+                        help='run as the root controller (single finalize + summary publisher)')
+    parser.add_argument('--runner-role', choices=('full', 'repro'), default=None)
+    parser.add_argument('--results-root', default=None)
+    parser.add_argument('--run-id', default=None)
+    parser.add_argument('--plan-file', default=None)
+    parser.add_argument('--plan-sha256', default=None)
+    parser.add_argument('--plan-size', default=None)
     parser.add_argument('--timeout', type=float, default=float(os.environ.get('WF_COMMAND_TIMEOUT', 180)))
     parser.add_argument('--pass-fds', default='', help='逗号分隔的 FD 白名单（显式继承，不依赖 Popen 默认）')
+    parser.add_argument('--fault-identity', default=None,
+                        help='本命令的受限故障身份（unit:<name> / repro:<case>:<phase>）')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if args.kind == 'repro' and args.phase is None:
@@ -1140,16 +1850,18 @@ def main(argv=None):
     command = args.command[1:] if args.command[:1] == ['--'] else args.command
     if not command:
         parser.error('command is required')
-    user_root = isolated_user(args.log) if args.isolated_user else None
+    if args.runner_control:
+        return runner_control(args)
+    lifecycle, _cleanup = _local_modules()
     try:
-        env = {**os.environ, 'HOME': str(user_root)} if user_root else None
-        pass_fds = [item for item in (args.pass_fds or '').split(',') if item]
-        result = run(command, args.log, timeout=args.timeout, env=env,
-                     inherit_output=args.runner_control, pass_fds=pass_fds)
-    finally:
-        if user_root:
-            import fixture_scope
-            fixture_scope.remove(user_root)
+        result = run(command, args.log, timeout=args.timeout,
+                     inherit_output=False, pass_fds=[item for item in
+                                                     (args.pass_fds or '').split(',') if item],
+                     isolated_user=args.isolated_user, fault_identity=args.fault_identity)
+    except (OSError, EvidenceError, lifecycle.LifecycleError,
+            _path_error_class()) as exc:
+        print(f'EXECUTION-FAILED: {args.name} 启动前拒绝（证据域/路径）：{exc}', file=sys.stderr)
+        return 1
     supervision = result.get('supervision') or {}
     if result['status'] == 'passed' and supervision.get('cleanup_state') != 'cleaned':
         # 清理未知/失败不得以 rc=0 签成功；保留原因注入结果。
@@ -1157,27 +1869,21 @@ def main(argv=None):
                       reason=f"cleanup state is {supervision.get('cleanup_state') or 'unknown'}")
     check = verdict(args.log, result['rc'], args.kind, args.expected, phase=args.phase)
     result.update(name=args.name, kind=args.kind, assertion_result=check,
-                  isolated_user=bool(user_root))
+                  isolated_user=bool(args.isolated_user))
     if not check['ok'] and result['rc'] == 0:
         result.update(rc=1, status='failed', reason=check['reason'])
     if args.result:
         write_json(args.result, result)
-    if args.runner_control and result['status'] in ('cancelled', 'timeout'):
-        try:
-            cleanup_cancelled_run(Path(args.log).parent)
-        except (OSError, ValueError) as exc:
-            print(f'RUNNER-CLEANUP-FAILED: {exc}', file=sys.stderr)
     sys.stdout.write(Path(args.log).read_text(encoding='utf-8', errors='replace'))
     if not check['ok']:
         print(f'EXECUTION-FAILED: {args.name} {result["reason"] or check["reason"]}; log={args.log}',
               file=sys.stderr)
-    supervision = result.get('supervision') or {}
     if supervision.get('cleanup_state') != 'cleaned':
         print('CLEANUP-UNKNOWN: 最后有效监督方不可用，未声称已释放锁/夹具。'
               f' guardian={supervision.get("guardian_pid")} '
               f'supervisor={supervision.get("supervisor_pid")} '
               f'target={supervision.get("target_pid")} '
-              f'command={args.name} results={Path(args.log).parent}',
+              f'command={args.name} evidence={result.get("evidence_path")}',
               file=sys.stderr)
         print('恢复步骤：核对这些 PID/启动身份后手工停止本次命令，确认无存活持有者，'
               '再用 owned 清理入口回收夹具并重新运行；不要删除锁或按历史 PID 通配 kill。',
@@ -1186,22 +1892,33 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
+    def _fault_arg(value):
+        try:
+            spec = json.loads(value or '{}')
+        except ValueError:
+            return None
+        return spec or None
+
     if len(sys.argv) > 1 and sys.argv[1] == '_guardian':
         parser = argparse.ArgumentParser()
         parser.add_argument('--ctrl-fd', required=True)
         parser.add_argument('--log-fd', required=True)
         parser.add_argument('--fds', default='')
+        parser.add_argument('--fault', default='')
         parsed = parser.parse_args(sys.argv[2:])
         raise SystemExit(_guardian_main({'ctrl_fd': parsed.ctrl_fd, 'log_fd': parsed.log_fd,
-                                         'fds': [item for item in parsed.fds.split(',') if item]}))
+                                         'fds': [item for item in parsed.fds.split(',') if item],
+                                         'fault': _fault_arg(parsed.fault)}))
     if len(sys.argv) > 1 and sys.argv[1] == '_supervisor':
         parser = argparse.ArgumentParser()
         parser.add_argument('--ctrl-fd', required=True)
         parser.add_argument('--log-fd', required=True)
         parser.add_argument('--fds', default='')
+        parser.add_argument('--fault', default='')
         parsed = parser.parse_args(sys.argv[2:])
         raise SystemExit(_supervisor_main({'ctrl_fd': parsed.ctrl_fd, 'log_fd': parsed.log_fd,
-                                           'fds': [item for item in parsed.fds.split(',') if item]}))
+                                           'fds': [item for item in parsed.fds.split(',') if item],
+                                           'fault': _fault_arg(parsed.fault)}))
     if len(sys.argv) > 1 and sys.argv[1] == '_target':
         raise SystemExit(_target_main(sys.argv[2:]))
     raise SystemExit(main())

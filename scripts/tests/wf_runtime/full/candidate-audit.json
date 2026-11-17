@@ -1,5 +1,5 @@
 {
-  "audited_at": "2026-11-16",
+  "audited_at": "2026-11-17",
   "candidate_tree_digest": "sha256:8bd5978546d61efa08a308b635137409c6d600fabd6669cf97c8e8963cc6bbca",
   "generated_by": "scripts/tests/wf_runtime/full/candidate_audit.py",
   "invocation": [
@@ -15,9 +15,12 @@
   "units": {
     "cp1_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 20,
       "failures": [],
+      "invocation_id": "f140e8a9e85d4019b1a57cc814d5db44",
       "observed": 20,
       "rc": 0,
       "runner_rc": 0,
@@ -26,13 +29,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 20 cases; 20 passed"
+      "tail": "saved 20 cases; 20 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp2_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 15,
       "failures": [],
+      "invocation_id": "6b9989b98a4e46c4a978720570ebfd79",
       "observed": 15,
       "rc": 0,
       "runner_rc": 0,
@@ -41,13 +49,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 15 cases; 15 passed"
+      "tail": "saved 15 cases; 15 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp3_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 19,
       "failures": [],
+      "invocation_id": "6f65b74244c6451fa14cd7996dfdbe46",
       "observed": 19,
       "rc": 0,
       "runner_rc": 0,
@@ -56,13 +69,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 19 cases; 19 passed"
+      "tail": "saved 19 cases; 19 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp4_a8": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "dec1bdda3ad3484d8879b28403be686c",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -71,13 +89,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 cases; 9 passed"
+      "tail": "saved 9 cases; 9 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp4_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 6,
       "failures": [],
+      "invocation_id": "c1e4c42b4ed74b819dc1911a3da302c1",
       "observed": 6,
       "rc": 0,
       "runner_rc": 0,
@@ -86,13 +109,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 6 cases; 6 passed"
+      "tail": "saved 6 cases; 6 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp5_b12": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "bea2d3a8ebb2403aaf6a03f0db1ab902",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -101,13 +129,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 cases; 9 passed"
+      "tail": "saved 9 cases; 9 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "cp5_b345": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 8,
       "failures": [],
+      "invocation_id": "65df28590649403e9e41719a9e80c2aa",
       "observed": 8,
       "rc": 0,
       "runner_rc": 0,
@@ -116,13 +149,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 8 cases; 8 passed"
+      "tail": "saved 8 cases; 8 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "f1_ordinary": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "7ae04fa27e774bcfa0a7a12ce1cdeecb",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -131,16 +169,21 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "TASK_ID 2026-e7cb41071cac49c5b6502c9630ebfb76"
+      "tail": "TASK_ID 2026-d60a8995893742168cc2ea5db8fa23a9",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "p5_v1": {
       "assertion_ok": false,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "failed",
       "expected": 12,
       "failures": [
         "[V1] 追加平台（已装项目只加平台）: FAIL — False",
         "rc=0 observed=11 failures=1 expected=12"
       ],
+      "invocation_id": "77874a9810cb4d4ba7adc8ff1f9f856d",
       "observed": 11,
       "rc": 1,
       "runner_rc": 0,
@@ -149,13 +192,18 @@
       "status": "bad",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 12 cases"
+      "tail": "saved 12 cases",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r17r24_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 30,
       "failures": [],
+      "invocation_id": "7d5426de0be449d7be84a8a3a73bb238",
       "observed": 30,
       "rc": 0,
       "runner_rc": 0,
@@ -164,13 +212,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "total 30 / 30"
+      "tail": "total 30 / 30",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r1r2_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 14,
       "failures": [],
+      "invocation_id": "a33ac27dd7414fe5b08362510db6ddc0",
       "observed": 14,
       "rc": 0,
       "runner_rc": 0,
@@ -179,13 +232,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 14 cases; 14 passed"
+      "tail": "saved 14 cases; 14 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r25r30_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 10,
       "failures": [],
+      "invocation_id": "f975215d5f8b4b998928a44eceaac0b2",
       "observed": 10,
       "rc": 0,
       "runner_rc": 0,
@@ -194,13 +252,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 10 / 10"
+      "tail": "saved 10 / 10",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r31r34_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 13,
       "failures": [],
+      "invocation_id": "c4c8096ff4864ac094372ed229daaf18",
       "observed": 13,
       "rc": 0,
       "runner_rc": 0,
@@ -209,13 +272,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 13 / 13"
+      "tail": "saved 13 / 13",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r35_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 10,
       "failures": [],
+      "invocation_id": "8020815c6d3d4bc9a10c0bededae76ee",
       "observed": 10,
       "rc": 0,
       "runner_rc": 0,
@@ -224,13 +292,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 10 cases; 10 passed"
+      "tail": "saved 10 cases; 10 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r35r37_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 15,
       "failures": [],
+      "invocation_id": "7983e674a8c94f38a880b17a9da31528",
       "observed": 15,
       "rc": 0,
       "runner_rc": 0,
@@ -239,13 +312,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 15 / 15"
+      "tail": "saved 15 / 15",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r38r39_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "2fa485a7b6e7489bb76fab96451b699c",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -254,13 +332,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r40r42_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 10,
       "failures": [],
+      "invocation_id": "8f6a806fa62d4422a49412bbd23b8fd6",
       "observed": 10,
       "rc": 0,
       "runner_rc": 0,
@@ -269,13 +352,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 10 / 10"
+      "tail": "saved 10 / 10",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r43r45_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 16,
       "failures": [],
+      "invocation_id": "c7264a2c3c03477b8ac343c6a524eaca",
       "observed": 16,
       "rc": 0,
       "runner_rc": 0,
@@ -284,13 +372,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 16 / 16"
+      "tail": "saved 16 / 16",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r46_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 5,
       "failures": [],
+      "invocation_id": "2b5ed774eb1b43178f0c88a06fa2c210",
       "observed": 5,
       "rc": 0,
       "runner_rc": 0,
@@ -299,13 +392,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 5 / 5"
+      "tail": "saved 5 / 5",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r47r48_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 8,
       "failures": [],
+      "invocation_id": "ea8cb3a98c0b44b8976296128e37d9c8",
       "observed": 8,
       "rc": 0,
       "runner_rc": 0,
@@ -314,13 +412,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 8 / 8"
+      "tail": "saved 8 / 8",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r49_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 7,
       "failures": [],
+      "invocation_id": "8f8ed7eb30834600a12175a8dd3ad735",
       "observed": 7,
       "rc": 0,
       "runner_rc": 0,
@@ -329,13 +432,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 7 / 7"
+      "tail": "saved 7 / 7",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r50_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 7,
       "failures": [],
+      "invocation_id": "e43a9bafc5e2405b85fb527e2a7f5b18",
       "observed": 7,
       "rc": 0,
       "runner_rc": 0,
@@ -344,13 +452,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 7 / 7"
+      "tail": "saved 7 / 7",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r51r52_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "157aed3d39f6457588a470c0dd8bf43b",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -359,13 +472,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 / 9"
+      "tail": "saved 9 / 9",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r53_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "a492b01ba4524a47a42179f85b807bad",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -374,13 +492,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 / 9"
+      "tail": "saved 9 / 9",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r54_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 15,
       "failures": [],
+      "invocation_id": "73b2519eb75f4e21b61e80f154f7da98",
       "observed": 15,
       "rc": 0,
       "runner_rc": 0,
@@ -389,13 +512,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 15 / 15"
+      "tail": "saved 15 / 15",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r55_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 8,
       "failures": [],
+      "invocation_id": "b3d8add2450a43eaa223e4ed00796123",
       "observed": 8,
       "rc": 0,
       "runner_rc": 0,
@@ -404,13 +532,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 8 / 8"
+      "tail": "saved 8 / 8",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r56_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 4,
       "failures": [],
+      "invocation_id": "7a0fa97e754247b19f5159563f440381",
       "observed": 4,
       "rc": 0,
       "runner_rc": 0,
@@ -419,13 +552,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 4 / 4"
+      "tail": "saved 4 / 4",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r57_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 7,
       "failures": [],
+      "invocation_id": "8fc13973978649e294c552eb1f1a76fd",
       "observed": 7,
       "rc": 0,
       "runner_rc": 0,
@@ -434,13 +572,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 7 / 7"
+      "tail": "saved 7 / 7",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r58_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 10,
       "failures": [],
+      "invocation_id": "d4450f08650a4887a60389eeaf5615b1",
       "observed": 10,
       "rc": 0,
       "runner_rc": 0,
@@ -449,13 +592,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 10 / 10"
+      "tail": "saved 10 / 10",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r59_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 8,
       "failures": [],
+      "invocation_id": "303ffc43d3b648c890f3541f13deb22b",
       "observed": 8,
       "rc": 0,
       "runner_rc": 0,
@@ -464,13 +612,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 8 / 8"
+      "tail": "saved 8 / 8",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r60_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 6,
       "failures": [],
+      "invocation_id": "b6830e3652eb42e4b7972e615bcd8264",
       "observed": 6,
       "rc": 0,
       "runner_rc": 0,
@@ -479,13 +632,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 6 / 6"
+      "tail": "saved 6 / 6",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r61_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 6,
       "failures": [],
+      "invocation_id": "be1fbc57072841f399398e021bd2dba3",
       "observed": 6,
       "rc": 0,
       "runner_rc": 0,
@@ -494,13 +652,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 6 / 6"
+      "tail": "saved 6 / 6",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r62_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "0b8c001184bb4c8f944f6073879c9c5d",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -509,13 +672,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r63_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "e2b2ea4bbdf8459bb6286ee9462ab2ea",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -524,13 +692,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r64_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 5,
       "failures": [],
+      "invocation_id": "b9d304219f3442e9a8325a0036875b59",
       "observed": 5,
       "rc": 0,
       "runner_rc": 0,
@@ -539,13 +712,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 5 / 5"
+      "tail": "saved 5 / 5",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r65_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 6,
       "failures": [],
+      "invocation_id": "7f1851aca15042ada74eb0d1b19f6824",
       "observed": 6,
       "rc": 0,
       "runner_rc": 0,
@@ -554,13 +732,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 6 / 6"
+      "tail": "saved 6 / 6",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r66_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 12,
       "failures": [],
+      "invocation_id": "e343820d2ef346c9ab76a160b004b5bf",
       "observed": 12,
       "rc": 0,
       "runner_rc": 0,
@@ -569,34 +752,43 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 12 / 12"
+      "tail": "saved 12 / 12",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r67_tests": {
       "assertion_ok": false,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "failed",
       "expected": 17,
       "failures": [
-        "[FAIL] 4 有失败时脚本非零退出: exit=1 summary=None stdout=CONTROLLED-FAILED: CANDIDATE-REPO-INVALID: FAIL  runner-managed path escapes the test scope: <workdir>/candidate -> <workdir>/candidate (scope <scope>)",
         "[FAIL] 4b 无失败时零退出: exit=1 stdout=CONTROLLED-FAILED: CANDIDATE-REPO-INVALID: FAIL  runner-managed path escapes the test scope: <workdir>/candidate -> <workdir>/candidate (scope <scope>)",
         "[FAIL] 4c 少一行 PASS → 红且指出期望/实际: exit=1 log_tail=[]",
-        "[FAIL] 4d 串行段漏跑结果 → MISSING-RESULTS: exit=1 missing=AILED: CANDIDATE-REPO-INVALID: FAIL  runner-managed path escapes the test scope: <workdir>/candidate -> <workdir>/candidate (scope <scope>)",
-        "rc=0 observed=13 failures=8 expected=17"
+        "[FAIL] 4d 串行段漏跑结果 → 证据缺口: exit=1 missing=te -> <workdir>/candidate (scope <scope>)",
+        "rc=0 observed=14 failures=7 expected=17"
       ],
-      "observed": 13,
+      "invocation_id": "1c6c9eb9a025483493b89e6e1070d1d9",
+      "observed": 14,
       "rc": 1,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:29185f87880d96b5481b92c3f1eb465f2c84c1503c7ae76fbd2d11a05e3899eb",
+      "script_sha256": "sha256:e058e2a759089c47a052964d7f3aa597d6343c89fb45c35d22ee0ce01a92b221",
       "status": "bad",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 13 / 17"
+      "tail": "saved 14 / 17",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r68_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "805ddafcebf440a08a107bd0bd52a42f",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -605,13 +797,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r69_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "a19d4586fa4e4cd89e68d0cba971ad84",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -620,13 +817,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 / 9"
+      "tail": "saved 9 / 9",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r70_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 5,
       "failures": [],
+      "invocation_id": "474feca2af0845bfa8f14797754e8ae3",
       "observed": 5,
       "rc": 0,
       "runner_rc": 0,
@@ -635,13 +837,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 5 / 5"
+      "tail": "saved 5 / 5",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r71_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 16,
       "failures": [],
+      "invocation_id": "7a060fe7cb124ea3827281d9f9f8dbc0",
       "observed": 16,
       "rc": 0,
       "runner_rc": 0,
@@ -650,13 +857,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 16 / 16"
+      "tail": "saved 16 / 16",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r74_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 9,
       "failures": [],
+      "invocation_id": "093f18e821c74e499e19a2f01892c8f8",
       "observed": 9,
       "rc": 0,
       "runner_rc": 0,
@@ -665,13 +877,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 9 / 9"
+      "tail": "saved 9 / 9",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r75_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 12,
       "failures": [],
+      "invocation_id": "b4a9071bdbc14112a0a6750d29d55ec3",
       "observed": 12,
       "rc": 0,
       "runner_rc": 0,
@@ -680,13 +897,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 12 / 12"
+      "tail": "saved 12 / 12",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r76_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "cd310cb434af40dba449c0b526556db4",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -695,13 +917,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r77_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 17,
       "failures": [],
+      "invocation_id": "7d20033c954a4caa911f69b2c20b751e",
       "observed": 17,
       "rc": 0,
       "runner_rc": 0,
@@ -710,13 +937,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 17 / 17"
+      "tail": "saved 17 / 17",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r79_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 18,
       "failures": [],
+      "invocation_id": "1430a84667904fbf8f4d5078555729f7",
       "observed": 18,
       "rc": 0,
       "runner_rc": 0,
@@ -725,13 +957,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 18 / 18"
+      "tail": "saved 18 / 18",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r7r15_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 37,
       "failures": [],
+      "invocation_id": "b7f77c247b4a41be9dca4b4ec7b48fa7",
       "observed": 37,
       "rc": 0,
       "runner_rc": 0,
@@ -740,13 +977,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 37 cases; 37 passed"
+      "tail": "saved 37 cases; 37 passed",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r80_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 22,
       "failures": [],
+      "invocation_id": "db3c6ce546b8448cb838a6be0b55b367",
       "observed": 22,
       "rc": 0,
       "runner_rc": 0,
@@ -755,13 +997,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 22 / 22"
+      "tail": "saved 22 / 22",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r81_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 29,
       "failures": [],
+      "invocation_id": "368154716bdf4c4291e6c68edebbfd7f",
       "observed": 29,
       "rc": 0,
       "runner_rc": 0,
@@ -770,13 +1017,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 29 / 29"
+      "tail": "saved 29 / 29",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r82_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 27,
       "failures": [],
+      "invocation_id": "bc83c997f6c44f498ac2c7528e6eaac0",
       "observed": 27,
       "rc": 0,
       "runner_rc": 0,
@@ -785,13 +1037,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 27 / 27"
+      "tail": "saved 27 / 27",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r83_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 30,
       "failures": [],
+      "invocation_id": "34adc9035a0c442294a1c6eaa3be1023",
       "observed": 30,
       "rc": 0,
       "runner_rc": 0,
@@ -800,13 +1057,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 30 / 30"
+      "tail": "saved 30 / 30",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r84_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 13,
       "failures": [],
+      "invocation_id": "f9f41aef8a9b445f9368ae4018059741",
       "observed": 13,
       "rc": 0,
       "runner_rc": 0,
@@ -815,13 +1077,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 13 / 13"
+      "tail": "saved 13 / 13",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r85_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 16,
       "failures": [],
+      "invocation_id": "a60d2d96e42248388bf522825a5849c5",
       "observed": 16,
       "rc": 0,
       "runner_rc": 0,
@@ -830,13 +1097,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 16 / 16"
+      "tail": "saved 16 / 16",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r86_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 19,
       "failures": [],
+      "invocation_id": "f3a11b8080e0490cbb8870bc1f1f57ea",
       "observed": 19,
       "rc": 0,
       "runner_rc": 0,
@@ -845,13 +1117,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 19 / 19"
+      "tail": "saved 19 / 19",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r87_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 11,
       "failures": [],
+      "invocation_id": "2526e8840a39419eba3f174ebc096f42",
       "observed": 11,
       "rc": 0,
       "runner_rc": 0,
@@ -860,13 +1137,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 11 / 11"
+      "tail": "saved 11 / 11",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r88_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 7,
       "failures": [],
+      "invocation_id": "cb705ea49da5410f808e5b3dba6d3947",
       "observed": 7,
       "rc": 0,
       "runner_rc": 0,
@@ -875,13 +1157,18 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 7 / 7"
+      "tail": "saved 7 / 7",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r89_tests": {
       "assertion_ok": true,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "passed",
       "expected": 12,
       "failures": [],
+      "invocation_id": "cc304cb8c2394bb3ae266f0b8c572501",
       "observed": 12,
       "rc": 0,
       "runner_rc": 0,
@@ -890,16 +1177,21 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 12 / 12"
+      "tail": "saved 12 / 12",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     },
     "r90_tests": {
       "assertion_ok": false,
+      "command_evidence": 1,
+      "evidence_problem": null,
       "execution_status": "failed",
       "expected": 13,
       "failures": [
         "[FAIL] R93 追加平台共享根：平台增加、资产不变、回执含安装记录: added=[] assets=73->73 changes=['.wf/bin/repair.py', '.wf/bin/uninstall.py', '.wf/bin/wf.py', '.wf/lib/wflib/__init__.py', '.wf/lib/wflib/actions.py', '.wf/lib/wflib/assets.py', '.wf/lib/wflib/attestation.py', '.wf/lib/wflib/authorize.py', '.wf/lib/wflib/check.py', '.wf/lib/wflib/cli.py', '.wf/lib/wflib/codes.py', '.wf/lib/wflib/config.py', '.wf/lib/wflib/curation.py', '.wf/lib/wflib/decisions.py', '.wf/lib/wflib/fingerprint.py', '.wf/lib/wflib/gates.py', '.wf/lib/wflib/identity_store.py', '.wf/lib/wflib/judgments.py', '.wf/lib/wflib/lock.py', '.wf/lib/wflib/maintenance.py', '.wf/lib/wflib/module_main.py', '.wf/lib/wflib/paths.py', '.wf/lib/wflib/projection.py', '.wf/lib/wflib/protocol.py', '.wf/lib/wflib/records.py', '.wf/lib/wflib/review.py', '.wf/lib/wflib/runs.py', '.wf/lib/wflib/sampling.py', '.wf/lib/wflib/scale.py', '.wf/lib/wflib/scope.py', '.wf/lib/wflib/session.py', '.wf/lib/wflib/spec.py', '.wf/lib/wflib/taskfiles.py', '.wf/lib/wflib/tasks.py', '.wf/lib/wflib/templates.py', '.wf/lib/wflib/writer.py', '.wf/protocol/codes.json', '.wf/protocol/project_data.json', '.wf/protocol/redaction.baseline.json', '.wf/protocol/redaction.json', '.wf/protocol/repo_rules.json', '.wf/protocol/states.json', '.wf/protocol/thresholds.json', '.wf/templates/baseline.md', '.wf/templates/project-config.skeleton.json', '.wf/templates/spec/index.md', '.wf/templates/spec/pre-dev-checklist.md', '.wf/templates/spec/quality-checklist.md', '.wf/templates/spec/rule.md', '.wf/templates/task/design.md', '.wf/templates/task/implement.md', '.wf/templates/task/prd.md', '.wf/templates/task/task-record.json', '.wf/templates/user-workflow.md', '.wf/workflows/instance-flow.md', '.wf/workflows/knowledge-flow.md', '.wf/workflows/maintenance-flow.md', '.wf/workflows/review-flow.md', '.wf/workflows/session-flow.md', '.wf/workflows/task-flow.md', '.agents/skills/wf-bootstrap/SKILL.md', '.agents/skills/wf-code-review/SKILL.md', '.agents/skills/wf-continue/SKILL.md', '.agents/skills/wf-diagnosing-bugs/SKILL.md', '.agents/skills/wf-finish/SKILL.md', '.agents/skills/wf-grilling/SKILL.md', '.agents/skills/wf-repair-loop/SKILL.md', '.agents/skills/wf-review-accept-unknown/SKILL.md', '.agents/skills/wf-review-action/SKILL.md', '.agents/skills/wf-review/SKILL.md', '.agents/skills/wf-spec-update/SKILL.md', '.agents/skills/wf-start/SKILL.md', '.agents/skills/wf-tdd/SKILL.md']",
         "rc=0 observed=12 failures=1 expected=13"
       ],
+      "invocation_id": "c7254026620b46bf9047db63965ca159",
       "observed": 12,
       "rc": 1,
       "runner_rc": 0,
@@ -908,7 +1200,9 @@
       "status": "bad",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "saved 12 / 13"
+      "tail": "saved 12 / 13",
+      "unit_execution_run_id": null,
+      "unit_execution_state": "passed"
     }
   },
   "version": "0.1.0"

@@ -50,6 +50,9 @@ def run_phase(case, phase):
     log_path = os.path.join(log_dir, f"{case}.{phase}.log")
     temporary = tempfile.mkdtemp(prefix=f'{case}-{phase}-', dir=log_dir)
     env = {**os.environ, 'TMPDIR': temporary}
+    # 相位 TMPDIR 由 execution 在 supervision=cleaned 后统一回收；harness 不再自行删除
+    # staged 目录（否则 unknown/failed 会把现场抹掉）。显式 KEEP 始终保留。
+    env['WF_REPRO_DEFER_CLEANUP'] = '1'
     # green 进程清除继承的注入开关：外部环境不能让 green 静默走注入分支；
     # red 由 harness 按显式相位设置（每相位独立，不依赖父 shell 残留）。
     env.pop('WF_REPRO_INJECT', None)
@@ -57,14 +60,26 @@ def run_phase(case, phase):
         env['WF_REPRO_INJECT'] = '1'
     try:
         execution_result = execution.run([PY, os.path.join(HERE, case + ".py"), "--expect", phase],
-                                         log_path, timeout=TIMEOUT, env=env)
-    finally:
-        if os.environ.get('WF_REPRO_KEEP') != '1':
-            shutil.rmtree(temporary)
+                                         log_path, timeout=TIMEOUT, env=env,
+                                         local_dirs=[temporary],
+                                         fault_identity=f"repro:{case}:{phase}")
+    except (OSError, ValueError) as exc:
+        # 启动前拒绝（证据域/路径）：保留相位目录并报告，绝不伪造清理。
+        execution_result = {"rc": 1, "status": "failed", "seconds": 0.0,
+                            "reason": f"phase start refused: {exc}",
+                            "local_cleanup": "retained-unknown",
+                            "supervision": {"cleanup_state": "unknown",
+                                            "infrastructure_error": True}}
+        print(f"PHASE-RETAINED: {temporary}（启动前拒绝，未产生监督证据，保留现场）",
+              file=sys.stderr)
+        execution_result["retained_paths"] = [temporary]
     check = execution.verdict(log_path, execution_result["rc"], "repro", phase=phase)
     return {"passed": check["ok"], "seconds": execution_result["seconds"],
             "rc": execution_result["rc"], "detail": execution_result["reason"] or check["tail"],
-            "execution": execution_result}
+            "execution": execution_result,
+            "local_cleanup": execution_result.get("local_cleanup"),
+            "retained_paths": [temporary] if execution_result.get("local_cleanup") not in
+            ("removed", None) else []}
 
 
 def verify_frozen_case(bundle, case, mode):

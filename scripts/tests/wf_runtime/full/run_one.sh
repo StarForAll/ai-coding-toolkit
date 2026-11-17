@@ -24,6 +24,20 @@ fi
 export WF_FIX="$FIX" WF_LEGACY_FIXTURE_ROOT="$FIX.legacy"
 now_ms() { "$PY" -c 'import time; print(int(time.monotonic()*1000))'; }
 
+# 单元 invocation 固定一次：candidate audit 在启动前生成并注入；普通 runner 由本处生成。
+INVOCATION_ID="${WF_UNIT_INVOCATION_ID:-$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')}"
+export WF_UNIT_INVOCATION_ID="$INVOCATION_ID"
+RUN_ID_ARG=()
+if [ -n "${WF_RUN_ID:-}" ]; then RUN_ID_ARG=(--run-id "$WF_RUN_ID"); fi
+LIFECYCLE="$HERE/resource_lifecycle.py"
+# 每个命令显式给唯一结果 JSON；阶段引用只从这些路径收集，不靠 glob。
+phase_result() { printf '%s/logs/%s.%s.%s.json' "$RESULTS_DIR" "$unit" "$1" "$INVOCATION_ID"; }
+PHASE_ARGS=()
+add_phase() {  # add_phase <name> <result-path>
+  [ -f "$2" ] || return 0
+  PHASE_ARGS+=(--phase "$1:$2")
+}
+
 out="$RESULTS_DIR/$unit.out"
 : > "$out"
 init_started=$(now_ms)
@@ -33,13 +47,31 @@ prep_rc=0
 write_result() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$unit" "$1" "$2" "$3" "$4" >> "$RESULTS_DIR/lines"
 }
+# 单元终态（unit_execution schema1）唯一附加点；失败时本函数返回非零，调用方不得签成功。
+finish_unit() {  # finish_unit <passed|prep-failed> <row> [failure-reason]
+  local state=$1 row=$2 reason=${3:-} args=()
+  if [ "$state" = "passed" ]; then
+    args=(--unit-result "$RESULTS_DIR/$unit.test.log.json")
+  else
+    args=(--create-unit-result "$RESULTS_DIR/$unit.test.log.json")
+  fi
+  if [ -n "$reason" ]; then args+=(--failure-reason "$reason"); fi
+  "$PY" "$LIFECYCLE" unit-execution "${args[@]}" --unit "$unit" \
+    --invocation "$INVOCATION_ID" ${RUN_ID_ARG[@]+"${RUN_ID_ARG[@]}"} \
+    --state "$state" --result-row "$row" ${PHASE_ARGS[@]+"${PHASE_ARGS[@]}"}
+}
 
-# 夹具/安装失败：保留日志、写自己的 timing、五列 bad 行后正常退出（失败由 gate 汇总）。
+# 夹具/安装失败：保留日志、写自己的 timing、五列 bad 行与明确 preflight/prep 终态后正常退出。
 fail_prep() {
-  local elapsed=$(( ($(now_ms) - init_started) / 1000 ))
+  local label=$1 elapsed row
+  elapsed=$(( ($(now_ms) - init_started) / 1000 ))
   printf 'init_millis=%s\nsuite_millis=0\n' "$(( $(now_ms) - init_started ))" > "$RESULTS_DIR/$unit.timing"
-  printf '%-18s %s\n' "$unit" "$1" >> "$out"
-  write_result 1 "$elapsed" bad "$1"
+  printf '%-18s %s\n' "$unit" "$label" >> "$out"
+  row=$(printf '%s\t1\t%s\tbad\t%s' "$unit" "$elapsed" "$label")
+  printf '%s\n' "$row" >> "$RESULTS_DIR/lines"
+  finish_unit prep-failed "$row" "$label" >> "$out" 2>&1 || {
+    echo "UNIT-EVIDENCE-FAILED: $unit（失败单元的证据写入失败）" >> "$out"
+  }
   exit 0
 }
 
@@ -47,14 +79,17 @@ case "$fixture" in
   install)
     # f0：从发行安装器装到空目录，再执行记录里的脚本（candidate 模式用候选安装器）。
     target="$WF_LEGACY_FIXTURE_ROOT/$unit"
+    result=$(phase_result install)
     "$PY" "$HERE/fixture_scope.py" reset "$target" --forbid "$RESULTS_DIR" \
       --forbid "$SHARED_RELEASE" >>"$out" 2>&1 || fail_prep INSTALL-FAILED
-    if ! "$PY" "$HERE/execution.py" --name "$unit-install" \
+    if ! "$PY" "$HERE/execution.py" --name "$unit-install" --result "$result" \
         --log "$RESULTS_DIR/$unit-install.log" -- \
         "$PY" "$SHARED_RELEASE/install.py" --target "$target" --release-ref "$WF_INSTALL_REF" \
         --source "$SHARED_RELEASE" --platform dsh --confirm >>"$out" 2>&1; then
+      add_phase install "$result"
       fail_prep INSTALL-FAILED
     fi
+    add_phase install "$result"
     FIX="$target"
     ;;
   template)
@@ -78,11 +113,16 @@ case "$fixture" in
         printf '%s\n' "$check_out" >>"$out"
       fi
     else
-      "$PY" "$HERE/execution.py" --name fixture --log "$out.fixture.log" -- \
+      result=$(phase_result fixture)
+      "$PY" "$HERE/execution.py" --name fixture --result "$result" --log "$out.fixture.log" -- \
         bash "$HERE/wf_fixture.sh" "$FIX" >>"$out" 2>&1 || prep_rc=1
+      add_phase fixture "$result"
       if [ "$prep_rc" -eq 0 ]; then
-        WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name init --log "$out.init.log" -- \
+        result=$(phase_result init)
+        WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name init --result "$result" \
+          --log "$out.init.log" -- \
           "$PY" "$HERE/f1_init.py" >>"$out" 2>&1 || prep_rc=2
+        add_phase init "$result"
       fi
     fi
     ;;
@@ -122,18 +162,26 @@ started=$(now_ms)
 if [ -n "${WF_UNIT_FAULT:-}" ] && [ "${WF_TEST_FAULT_INJECTION:-0}" = "1" ]; then
   export WF_GUARDIAN_FAULT="$WF_UNIT_FAULT"
 fi
+test_result="$RESULTS_DIR/$unit.test.log.json"
 WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$unit" --kind "$executor_kind" \
-  --expected "$expect" --log "$RESULTS_DIR/$unit.test.log" \
-  --result "$RESULTS_DIR/$unit.test.log.json" ${user_args[@]+"${user_args[@]}"} \
+  --expected "$expect" --fault-identity "unit:$unit" --log "$RESULTS_DIR/$unit.test.log" \
+  --result "$test_result" ${user_args[@]+"${user_args[@]}"} \
   -- "$PY" "$HERE/$script" >>"$out" 2>&1
 rc=$?
+add_phase test "$test_result"
 # 套件耗时唯一来源：execution.py 结果 JSON 的 seconds（time.monotonic）；缺失计 0，由 gate 兜底。
 elapsed_ms=$("$PY" -c 'import json,sys
 try: print(int(float(json.load(open(sys.argv[1]))["seconds"]) * 1000))
-except (OSError, ValueError, KeyError): print(0)' "$RESULTS_DIR/$unit.test.log.json" 2>/dev/null) || elapsed_ms=$(( $(now_ms) - started ))
+except (OSError, ValueError, KeyError): print(0)' "$test_result" 2>/dev/null) || elapsed_ms=$(( $(now_ms) - started ))
 elapsed=$((elapsed_ms / 1000))
 printf 'init_millis=%s\nsuite_millis=%s\n' "$init_millis" "$elapsed_ms" > "$RESULTS_DIR/$unit.timing"
 line=$(tail -1 "$out")
 status=ok
 [ "$rc" -eq 0 ] || status=bad
-write_result "$rc" "$elapsed" "$status" "$line"
+row=$(printf '%s\t%s\t%s\t%s\t%s' "$unit" "$rc" "$elapsed" "$status" "$line")
+printf '%s\n' "$row" >> "$RESULTS_DIR/lines"
+finish_unit passed "$row" >> "$out" 2>&1 || {
+  echo "UNIT-EVIDENCE-FAILED: $unit（本次 invocation 的单元证据写入失败）" >> "$out"
+  exit 1
+}
+exit 0

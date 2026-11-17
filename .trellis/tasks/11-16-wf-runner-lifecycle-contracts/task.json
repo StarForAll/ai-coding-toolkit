@@ -1,0 +1,30 @@
+{
+  "id": "wf-runner-lifecycle-contracts",
+  "name": "wf-runner-lifecycle-contracts",
+  "title": "wf 运行器资源生命周期与恢复契约收口",
+  "description": "统一清理证据、资源删除、缓存事务恢复与摘要发布的完整入口契约，修正已确认的五类问题及同类调用链缺口；实施前提交规划审查",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P1",
+  "creator": "xzc",
+  "assignee": "xzc",
+  "createdAt": "2026-11-16",
+  "completedAt": null,
+  "branch": "main",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "11-17-wf-runner-cli-contracts",
+    "11-17-wf-runner-controller-lifecycle",
+    "11-17-wf-runner-cache-maintenance"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

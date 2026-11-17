@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # 修复的可证伪用例：一键（CI 可用）运行器。详细用法：repro/run.sh -h
 set -uo pipefail
-# 与 run_all 同一纪律：路径/scope 校验前禁写 pyc，并丢弃外部注入的 pycache 前缀。
-# inherited frame 重入继承父阶段已批准的 pycache，不再重置。
-if [ "${1:-}" != "--_wf-inherited-release" ]; then
+# 内部阶段标记：--_wf-repro-inner 只在 root controller 监督下重入；--_wf-inherited-release
+# 是父 run 的内嵌交接。两者的 pyc 窗口都继承父阶段已批准的 pycache。
+INNER=0
+case "${1:-}" in --_wf-repro-inner) INNER=1; shift ;; esac
+if [ "$INNER" != "1" ] && [ "${1:-}" != "--_wf-inherited-release" ]; then
   export PYTHONDONTWRITEBYTECODE=1
   unset PYTHONPYCACHEPREFIX
 fi
@@ -25,8 +27,9 @@ usage() { cat <<'EOF'
   bash .../repro/run.sh --fixture-deploy candidate --release-root <候选仓库根> \
        --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2 --mode green --no-build
 
-进程拓扑：R（本 shell）编排；worker 只写自己的结果；gate 只读校验；唯一 state writer 是本 shell
-启动的一个 `commit-state` 子进程。冻结来源只有一个 `inputs.json` bundle。
+进程拓扑：R（本 shell）编排；唯一 root controller（execution.py --runner-control）在同一 C 进程
+监督发行准备/用例执行，并在 bundle/records/receipts 全部核验后发布最终 repro 投影；worker 只写
+自己的结果；gate 只读校验；唯一 state writer 是本 shell 启动的一个 `commit-state` 子进程。
 EOF
 }
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,78 +40,122 @@ PY="${PY:-/softwares/python/bin/python3}"
 SCOPE="$FULL/fixture_scope.py"
 PATHS="$REPO/scripts/wf_test_paths.py"
 PROTOCOL="$FULL/runner_protocol.py"
+LIFECYCLE="$FULL/resource_lifecycle.py"
 # 测试专用注入点：默认取仓库内真实入口；契约测试指向计数 shim（只包一层 argv 记录）。
 RELEASE_CLI="${WF_TEST_RELEASE_CLI:-$REPO/scripts/tests/wf_test_release.py}"
 CANDIDATE_VALIDATOR="${WF_CANDIDATE_VALIDATOR:-$FULL/prepare_candidate_repo.py}"
-case "${1:-}" in -h|--help) usage; exit 0 ;; esac
+CLI="$HERE/cli.py"
 
-# 内部 frame 先整体剥离/校验：用户参数里不允许再出现保留选项。
-if ! frame=$("$PY" "$PROTOCOL" strip-inherited -- "$@"); then
+if [ "$INNER" = "1" ]; then
+  INHERITED=""
+else
+  # 内部 frame 先整体剥离/校验：用户参数里不允许再出现保留选项。
+  if ! frame=$("$PY" "$PROTOCOL" strip-inherited -- "$@"); then
+    exit 2
+  fi
+  eval "$frame" || { echo "FRAME-EVAL-FAILED" >&2; exit 2; }
+  set -- "${USER_ARGV[@]}"
+  INHERITED="${WF_STAGE:-}"
+fi
+
+# ---- 公开参数：唯一解析器是 cli.py；任何拒绝都发生在租约/layout/scope/cache/build 之前 ----
+if ! cli_out=$("$PY" "$CLI" "$@"); then
   exit 2
 fi
-eval "$frame" || { echo "FRAME-EVAL-FAILED" >&2; exit 2; }
-set -- "${USER_ARGV[@]}"
-INHERITED="${WF_STAGE:-}"
-
-MODE="both"
-GROUP_NAMES=()
-ONLY=""
-JOBS="${WF_REPRO_JOBS:-1}"
-BUILD=1
-DEPLOY="${WF_FIXTURE_DEPLOY:-dev}"
-RELEASE_ROOT="${WF_RELEASE_ROOT:-}"
-RELEASE_REF="${WF_RELEASE_REF:-}"
-RELEASE_VERSION="${WF_RELEASE_VERSION:-}"
-RELEASE_META="${WF_RELEASE_META:-}"
-RESULTS="${WF_REPRO_RESULTS:-}"
-
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --mode) MODE="${2:-}"; shift 2 ;;
-    --group) GROUP_NAMES+=("${2:-}"); shift 2 ;;
-    --only) ONLY="${2:-}"; shift 2 ;;
-    --jobs) JOBS="${2:-}"; shift 2 ;;
-    --fixture-deploy) DEPLOY="${2:-}"; shift 2 ;;
-    --release-root) RELEASE_ROOT="${2:-}"; shift 2 ;;
-    --release-ref) RELEASE_REF="${2:-}"; shift 2 ;;
-    --release-version) RELEASE_VERSION="${2:-}"; shift 2 ;;
-    --release-meta) RELEASE_META="${2:-}"; shift 2 ;;
-    --results-dir) RESULTS="${2:-}"; shift 2 ;;
-    --no-build) BUILD=0; shift ;;
-    --list) MODE="__list__"; shift ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "unknown option: $1" >&2; exit 2 ;;
-  esac
-done
-
-case "$MODE" in
-  green|red|both|auto|__list__) ;;
-  *) echo "repro: --mode 只接受 green|red|both|auto（收到 '$MODE'）" >&2; exit 2 ;;
-esac
-case "$JOBS" in
-  ''|*[!0-9]*) echo "repro: --jobs 必须是正整数（收到 '$JOBS'）" >&2; exit 2 ;;
-esac
-[ "$JOBS" -ge 1 ] || { echo "repro: --jobs 必须 >= 1" >&2; exit 2; }
+eval "$cli_out" || { echo "CLI-EVAL-FAILED" >&2; exit 2; }
+if [ "$HELP" = "1" ]; then usage; exit 0; fi
 
 group_args=()
 for g in "${GROUP_NAMES[@]}"; do
-  [ -n "$g" ] && group_args+=(--group "$g")
+  group_args+=(--group "$g")
 done
 
 # ---- 计划面：list 在租约/结果/pycache/state/runtime 之前纯选择退出 -----------------
-if [ "$MODE" = "__list__" ]; then
+if [ "$LIST" = "1" ]; then
   "$PY" "$HERE/repro_select.py" plan --fixture-deploy "$DEPLOY" --mode both --format json \
     "${group_args[@]}" ${ONLY:+--only "$ONLY"} \
     | "$PY" -c 'import json,sys; d=json.load(sys.stdin); [print(c + chr(9) + d["cases"][c]["mode"]) for c in d["cases"]]'
   exit $?
 fi
 
-# ---- 租约与发行：继承入口零 ensure/check；独立入口持锁初始化一次 --------------------
-if [ "$INHERITED" = "inherited" ]; then
-  CONTEXT_FILE="$WF_INHERITED_CONTEXT"
-  [ -f "$CONTEXT_FILE" ] || { echo "inherited release context missing: $CONTEXT_FILE" >&2; exit 2; }
-  ctx=$("$PY" - "$CONTEXT_FILE" "$WF_INHERITED_SHA256" "$WF_INHERITED_SIZE" <<'PY'
-import hashlib, json, os, sys
+# ---- 独立入口：租约 → layout → begin_run → root controller；内嵌/内层跳过前三步 --------
+if [ "$INNER" != "1" ] && [ "$INHERITED" != "inherited" ]; then
+  forward=(--fixture-deploy "$DEPLOY" --mode "$MODE" --jobs "$JOBS")
+  [ "$BUILD" = "1" ] || forward+=(--no-build)
+  [ -n "$ONLY" ] && forward+=(--only "$ONLY")
+  [ -n "$RESULTS" ] && forward+=(--results-dir "$RESULTS")
+  for g in "${GROUP_NAMES[@]}"; do forward+=(--group "$g"); done
+  if [ "$DEPLOY" = "candidate" ]; then
+    forward+=(--release-root "$RELEASE_ROOT" --release-ref "$RELEASE_REF"
+              --release-version "$RELEASE_VERSION")
+    [ -n "$RELEASE_META" ] && forward+=(--release-meta "$RELEASE_META")
+  fi
+  if [ -z "$RELEASE_ROOT$RELEASE_REF$RELEASE_VERSION" ] && [ "$DEPLOY" = "candidate" ]; then
+    echo "repro: candidate 模式需要 --release-root/--release-ref/--release-version" >&2
+    exit 2
+  fi
+  if [ "$DEPLOY" = "dev" ] && [ -n "$RELEASE_ROOT$RELEASE_REF$RELEASE_VERSION" ] \
+      && [ "${WF_REPRO_LEASE_READY:-0}" != "1" ]; then
+    echo "repro: dev 模式不接受 --release-*（候选请用 --fixture-deploy candidate）" >&2
+    exit 2
+  fi
+  if [ "$DEPLOY" = "candidate" ] && { [ "$MODE" = "red" ] || [ "$MODE" = "both" ]; }; then
+    echo "repro: candidate 模式只允许 --mode green|auto（red 注入针对源码，请在 dev 模式跑）" >&2
+    exit 2
+  fi
+  # 独立入口：fixture → results 域锁（同 PID exec 持有）。
+  if [ "${WF_REPRO_LEASE_READY:-0}" != "1" ]; then
+    export WF_REPRO_LEASE_READY=1
+    exec "$PY" "$SCOPE" lease-results -- bash "$0" "${forward[@]}"
+  fi
+  # 管理路径（纯派生，不写）：scope 下默认值从 scope 派生；显式域外值在首次写前拒绝。
+  if ! layout_out=$("$PY" "$PATHS" layout --kind repro --pid "$$" --mode "$MODE" --format sh); then
+    exit 2
+  fi
+  eval "$layout_out" || { echo "LAYOUT-EVAL-FAILED" >&2; exit 2; }
+  RESULTS="${RESULTS:-$LAYOUT_RESULTS_DIR}"
+  export WF_REPRO_RESULTS="$RESULTS"
+  export WF_RESULTS_DIR="$RESULTS"
+  export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$LAYOUT_STATE}"
+  export WF_TEST_RELEASE_CACHE="${WF_TEST_RELEASE_CACHE:-$LAYOUT_TEST_RELEASE_CACHE}"
+  if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+    "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" "$WF_TEST_RUN_CACHE" \
+      ${WF_TEST_RELEASE_CACHE:+"$WF_TEST_RELEASE_CACHE"} ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} || exit 2
+  fi
+  # 结果缓存轮转：独立入口只回收本 scope（repro-*）的 finished+cleaned 条目。
+  if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
+    RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
+  else
+    RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+  fi
+  WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" \
+    --scope repro --exclude "$RESULTS" || true
+  # 唯一初始化：owner 意图 → active state → prepare（三个 checkpoint 只在 helper 内退出）。
+  begin_out=$("$PY" "$LIFECYCLE" begin-run --results-root "$RESULTS" --role repro \
+      --intent execution --format sh)
+  begin_rc=$?
+  if [ "$begin_rc" -ne 0 ]; then
+    echo "RESULTS-INIT-FAILED: 初始化拒绝（rc=$begin_rc）；不启动 controller、不清理现场" >&2
+    exit "$begin_rc"
+  fi
+  eval "$begin_out" || { echo "RUN-ID-EVAL-FAILED" >&2; exit 2; }
+  export WF_RUN_ID="$RUN_ID"
+  export WF_COMMAND_EVIDENCE_ROOT="$RESULTS/commands"
+  exec "$PY" "$FULL/execution.py" --runner-control --name wf-repro-runner \
+    --runner-role repro --results-root "$RESULTS" --run-id "$WF_RUN_ID" \
+    --timeout "${WF_RUN_TIMEOUT:-1800}" --log "$RESULTS/.runner.log" \
+    --result "$RESULTS/.runner.json" --pass-fds "${WF_FIXTURE_LEASE_FD},${WF_RESULTS_LOCK_FD}" -- \
+    bash "$0" --_wf-repro-inner "${forward[@]}"
+fi
+
+# ---- 内层/内嵌：发行准备（受 root controller 或父 run 监督）---------------------
+case "$DEPLOY" in
+  dev)
+    if [ "$INHERITED" = "inherited" ]; then
+      CONTEXT_FILE="$WF_INHERITED_CONTEXT"
+      [ -f "$CONTEXT_FILE" ] || { echo "inherited release context missing: $CONTEXT_FILE" >&2; exit 2; }
+      ctx=$("$PY" - "$CONTEXT_FILE" "$WF_INHERITED_SHA256" "$WF_INHERITED_SIZE" <<'PY'
+import hashlib, json, sys
 path, sha, size = sys.argv[1:4]
 data = open(path, 'rb').read()
 if len(data) != int(size):
@@ -126,102 +173,65 @@ for role in ('tool', 'sut'):
 print(context['deploy']); print(context['release_root']); print(context['version']); print(context['ref'])
 print(context.get('release_subject') or ''); print(context.get('tree_digest') or '')
 PY
-  ) || { echo "RELEASE-CONTEXT-INVALID" >&2; exit 2; }
-  { read -r CTX_DEPLOY; read -r CTX_ROOT; read -r CTX_VERSION; read -r CTX_REF; \
-    read -r CTX_SUBJECT; read -r CTX_TREE; } <<< "$ctx"
-  [ "$CTX_DEPLOY" = "$DEPLOY" ] || { echo "RELEASE-CONTEXT-DEPLOY-MISMATCH" >&2; exit 2; }
-  "$PY" "$SCOPE" check-lease >/dev/null || { echo "FIXTURE-LEASE-INVALID" >&2; exit 2; }
-  "$PY" "$SCOPE" check-results-lease >/dev/null || { echo "RESULTS-LEASE-INVALID" >&2; exit 2; }
-  if [ "$DEPLOY" = "dev" ]; then
-    # dev 继承：父 context 是身份唯一来源，不要求内层重复传 --release-*。
-    "$PY" "$REPO/scripts/release_lock.py" --verify --root "$CTX_ROOT" >/dev/null \
-      || { echo "RELEASE-LEASE-INVALID" >&2; exit 2; }
-    export WF_RELEASE_TREE="$CTX_ROOT" WF_RELEASE_REF="$CTX_REF" WF_RELEASE_VERSION="$CTX_VERSION"
-    export WF_TEST_LIB="$CTX_ROOT/wf-release/lib"
-  else
-    [ "$CTX_ROOT" = "$RELEASE_ROOT" ] || { echo "RELEASE-CONTEXT-ROOT-MISMATCH" >&2; exit 2; }
-    export WF_RELEASE_TREE="$CTX_ROOT" WF_RELEASE_REF="$CTX_REF" WF_RELEASE_VERSION="$CTX_VERSION"
-    export WF_RELEASE_META="${RELEASE_META:-$CTX_ROOT.meta.json}"
-    export WF_TEST_LIB="$CTX_ROOT/wf-release/lib"
-  fi
-  export WF_RELEASE_CONTEXT="$CONTEXT_FILE" WF_FIXTURE_DEPLOY="$DEPLOY"
-else
-  # pycache 仅在 scope/layout 校验通过后启用（见下方 layout 之后的设置）。
-  case "$DEPLOY" in
-    dev)
-      if [ "${WF_REPRO_LEASE_READY:-0}" = "1" ] && [ -n "$RELEASE_ROOT" ]; then
-        # 持锁重入：父进程已解析好身份，原样沿用（不重算、不重新猜）。
+      ) || { echo "RELEASE-CONTEXT-INVALID" >&2; exit 2; }
+      { read -r CTX_DEPLOY; read -r CTX_ROOT; read -r CTX_VERSION; read -r CTX_REF; \
+        read -r CTX_SUBJECT; read -r CTX_TREE; } <<< "$ctx"
+      [ "$CTX_DEPLOY" = "$DEPLOY" ] || { echo "RELEASE-CONTEXT-DEPLOY-MISMATCH" >&2; exit 2; }
+      "$PY" "$SCOPE" check-lease >/dev/null || { echo "FIXTURE-LEASE-INVALID" >&2; exit 2; }
+      "$PY" "$SCOPE" check-results-lease >/dev/null || { echo "RESULTS-LEASE-INVALID" >&2; exit 2; }
+      "$PY" "$REPO/scripts/release_lock.py" --verify --root "$CTX_ROOT" >/dev/null \
+        || { echo "RELEASE-LEASE-INVALID" >&2; exit 2; }
+      export WF_RELEASE_TREE="$CTX_ROOT" WF_RELEASE_REF="$CTX_REF" WF_RELEASE_VERSION="$CTX_VERSION"
+      export WF_TEST_LIB="$CTX_ROOT/wf-release/lib"
+      export WF_RELEASE_CONTEXT="$CONTEXT_FILE" WF_FIXTURE_DEPLOY="$DEPLOY"
+      DEV_ROOT="$CTX_ROOT"; DEV_VERSION="$CTX_VERSION"; DEV_REF="$CTX_REF"
+    else
+      if [ -n "$RELEASE_ROOT" ] && [ -n "$RELEASE_VERSION" ] && [ -n "$RELEASE_REF" ]; then
         DEV_ROOT="$RELEASE_ROOT"; DEV_VERSION="$RELEASE_VERSION"; DEV_REF="$RELEASE_REF"
-        [ -n "$DEV_ROOT" ] && [ -n "$DEV_VERSION" ] && [ -n "$DEV_REF" ] \
-          || { echo "repro: 持锁重入缺 dev 发行身份" >&2; exit 2; }
       else
-        if [ -n "$RELEASE_ROOT$RELEASE_REF$RELEASE_VERSION" ]; then
-          echo "repro: dev 模式不接受 --release-*（候选请用 --fixture-deploy candidate）" >&2
-          exit 2
-        fi
         DEV_ROOT="$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import wf_test_release as t; print(t.default_root(t.resolve_version(None)))' "$REPO/scripts/tests")"
         DEV_VERSION="$("$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import wf_test_release as t; print(t.resolve_version(None))' "$REPO/scripts/tests")"
         DEV_REF="refs/tags/wf-v$DEV_VERSION"
       fi
-      ;;
-    candidate)
-      if [ -z "$RELEASE_ROOT" ] || [ -z "$RELEASE_REF" ] || [ -z "$RELEASE_VERSION" ]; then
-        echo "repro: candidate 模式需要 --release-root/--release-ref/--release-version" >&2
-        exit 2
+      if [ "${WF_REPRO_RELEASE_READY:-0}" != "1" ]; then
+        export WF_REPRO_RELEASE_READY=1
+        exec "$PY" "$REPO/scripts/release_lock.py" --lease --root "$DEV_ROOT" -- \
+          bash "$0" --_wf-repro-inner --fixture-deploy "$DEPLOY" --mode "$MODE" --jobs "$JOBS" \
+          $( [ "$BUILD" = "1" ] || printf '%s' --no-build ) \
+          ${ONLY:+--only "$ONLY"} --results-dir "${WF_REPRO_RESULTS:-$RESULTS}" \
+          $(for g in "${GROUP_NAMES[@]}"; do printf '%s %s ' --group "$g"; done) \
+          --release-root "$DEV_ROOT" --release-ref "$DEV_REF" --release-version "$DEV_VERSION"
       fi
-      if [ "$MODE" = "red" ] || [ "$MODE" = "both" ]; then
-        echo "repro: candidate 模式只允许 --mode green|auto（red 注入针对源码，请在 dev 模式跑）" >&2
-        exit 2
+      "$PY" "$SCOPE" check-lease >/dev/null || { echo "FIXTURE-LEASE-INVALID" >&2; exit 2; }
+      "$PY" "$SCOPE" check-results-lease >/dev/null || { echo "RESULTS-LEASE-INVALID" >&2; exit 2; }
+      "$PY" "$REPO/scripts/release_lock.py" --verify --root "$DEV_ROOT" >/dev/null \
+        || { echo "RELEASE-LEASE-INVALID" >&2; exit 2; }
+      if [ "$BUILD" = "1" ]; then
+        "$PY" "$RELEASE_CLI" --ensure --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
+          || { echo "BUILD-FAILED"; exit 1; }
+      else
+        "$PY" "$RELEASE_CLI" --check --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
+          || { echo "TEST-RELEASE-STALE: 测试发行副本缺失或过期（重建或去掉 --no-build）"; exit 1; }
       fi
-      ;;
-    *)
-      echo "repro: --fixture-deploy 只接受 dev|candidate（收到 '$DEPLOY'）" >&2; exit 2 ;;
-  esac
-  # 重入要用的 argv 只在这里组装一次（数组，不拼字符串）。
-  forward=(--fixture-deploy "$DEPLOY" --mode "$MODE" --jobs "$JOBS")
-  if [ "$BUILD" = "0" ]; then forward+=(--no-build); fi
-  if [ -n "$ONLY" ]; then forward+=(--only "$ONLY"); fi
-  if [ -n "$RESULTS" ]; then forward+=(--results-dir "$RESULTS"); fi
-  for g in "${GROUP_NAMES[@]}"; do forward+=(--group "$g"); done
-  if [ "$DEPLOY" = "dev" ]; then
-    forward+=(--release-root "$DEV_ROOT" --release-ref "$DEV_REF" --release-version "$DEV_VERSION")
-  else
-    forward+=(--release-root "$RELEASE_ROOT" --release-ref "$RELEASE_REF" --release-version "$RELEASE_VERSION")
-  fi
-  if [ "${WF_REPRO_LEASE_READY:-0}" != "1" ]; then
-    # fixture → 当前域结果锁（同 PID exec 持有）。
-    export WF_REPRO_LEASE_READY=1
-    exec "$PY" "$SCOPE" lease-results -- bash "$0" "${forward[@]}"
-  fi
-  if [ "$DEPLOY" = "dev" ]; then
-    # release 独占锁必须由**本 shell 进程**持有：先把 FD 交给一个 python 进程取锁，
-    # 再 exec 回本脚本（FD 真实存活，env 只是定位事实）。
-    if [ "${WF_REPRO_RELEASE_READY:-0}" != "1" ]; then
-      export WF_REPRO_RELEASE_READY=1
-      exec "$PY" "$REPO/scripts/release_lock.py" --lease --root "$DEV_ROOT" -- bash "$0" "${forward[@]}"
+      export WF_RELEASE_TREE="$DEV_ROOT" WF_RELEASE_REF="$DEV_REF" WF_RELEASE_VERSION="$DEV_VERSION"
+      export WF_TEST_LIB="$DEV_ROOT/wf-release/lib"
+      export WF_FIXTURE_DEPLOY=dev
     fi
-    if [ "$BUILD" -eq 1 ]; then
-      "$PY" "$RELEASE_CLI" --ensure --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
-        || { echo "BUILD-FAILED"; exit 1; }
-    else
-      "$PY" "$RELEASE_CLI" --check --no-lock --root "$DEV_ROOT" --version "$DEV_VERSION" \
-        || { echo "TEST-RELEASE-STALE: 测试发行副本缺失或过期（重建或去掉 --no-build）"; exit 1; }
+    ;;
+  candidate)
+    # 内嵌 repro 的候选身份由父 run 的起始/结束 barrier 已核验（design §3.3）。
+    if [ "$INHERITED" != "inherited" ]; then
+      "$PY" "$CANDIDATE_VALIDATOR" --check --out "$RELEASE_ROOT" --version "$RELEASE_VERSION" \
+        || { echo "CANDIDATE-REPO-INVALID"; exit 1; }
     fi
-    export WF_RELEASE_TREE="$DEV_ROOT" WF_RELEASE_REF="$DEV_REF" WF_RELEASE_VERSION="$DEV_VERSION"
-    export WF_TEST_LIB="$DEV_ROOT/wf-release/lib"
-    export WF_FIXTURE_DEPLOY=dev
-  else
-    "$PY" "$CANDIDATE_VALIDATOR" --check --out "$RELEASE_ROOT" --version "$RELEASE_VERSION" \
-      || { echo "CANDIDATE-REPO-INVALID"; exit 1; }
     export WF_RELEASE_TREE="$RELEASE_ROOT" WF_RELEASE_REF="$RELEASE_REF" WF_RELEASE_VERSION="$RELEASE_VERSION"
     export WF_RELEASE_META="${RELEASE_META:-$RELEASE_ROOT.meta.json}"
     export WF_TEST_LIB="$RELEASE_ROOT/wf-release/lib"
     export WF_FIXTURE_DEPLOY=candidate
-  fi
-fi
+    ;;
+esac
 
-# ---- 结果目录与选择 ----------------------------------------------------------------
-# 管理路径的唯一规则（wf_test_paths）：scope 下默认值从 scope 派生；显式值在首次写前校验。
+# ---- 结果目录（内层重算只用显式值；外层已派生） --------------------------------
 if ! layout_out=$("$PY" "$PATHS" layout --kind repro --pid "$$" --mode "$MODE" --format sh); then
   exit 2
 fi
@@ -236,25 +246,13 @@ if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
 fi
 export WF_TEST_RUN_CACHE="${WF_TEST_RUN_CACHE:-$LAYOUT_STATE}"
 export WF_TEST_RELEASE_CACHE="${WF_TEST_RELEASE_CACHE:-$LAYOUT_TEST_RELEASE_CACHE}"
-if [ -n "${WF_TEST_SCOPE_ROOT:-}" ] && [ "$INHERITED" != "inherited" ]; then
-  # state/结果派生写入同样必须落在 owned scope 内（design §3.4）。
-  "$PY" "$SCOPE" check-scope "$WF_TEST_SCOPE_ROOT" "$RESULTS" "$WF_TEST_RUN_CACHE" \
-    ${WF_TEST_RELEASE_CACHE:+"$WF_TEST_RELEASE_CACHE"} ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} || exit 2
-fi
-# 结果缓存轮转：独立 repro 入口只回收本 scope（repro-*）的带 marker 目录；root 可经
-# WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
-if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
-  RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
-else
-  RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
-fi
-WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" \
-  --scope repro --exclude "$RESULTS" || true
-"$PY" "$SCOPE" prepare-results "$RESULTS" || exit 1
+mkdir -p "$RESULTS/logs" "$RESULTS/commands" || exit 1
 export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$RESULTS/pycache}"
-mkdir -p "$PYTHONPYCACHEPREFIX" "$RESULTS/logs"
+mkdir -p "$PYTHONPYCACHEPREFIX"
 export WF_REPRO_RESULTS="$RESULTS" PY
-# 取消：写一次性取消请求让每个 worker 的 C（execution.py）自行收口 G/S；不再递归强杀监督进程。
+# 内嵌 repro 继承父 run 的 results root（owner/state/receipts 都在那里）；独立入口由外层显式导出。
+if [ -z "${WF_RESULTS_DIR:-}" ]; then export WF_RESULTS_DIR="$RESULTS"; fi
+# 取消：写一次性取消请求让每个 worker 的 C（execution.py）自行收口 G/S；内层不删现场。
 export WF_CANCEL_FILE="${WF_CANCEL_FILE:-$RESULTS/cancel-request}"
 rm -f "$WF_CANCEL_FILE" 2>/dev/null || true
 trap 'trap "" INT TERM HUP; printf "cancelled by shell trap\n" > "$WF_CANCEL_FILE" 2>/dev/null || true; exit 143' TERM
@@ -306,6 +304,12 @@ if [ -n "${REPRO_SKIPPED_LIST:-}" ]; then
 fi
 echo "REPRO_SKIPPED_COUNT=$skipped_count"
 echo "repro 用例：$(printf '%s\n' "$summary" | sed -n 's/^REPRO_PASSED=//p')/$(printf '%s\n' "$summary" | sed -n 's/^REPRO_TOTAL=//p')（mode=$MODE，${elapsed}s）"
+bundle_sha=$(printf '%s\n' "$summary" | sed -n 's/^REPRO_BUNDLE_SHA256=//p' | head -1)
+bundle_size=$(printf '%s\n' "$summary" | sed -n 's/^REPRO_BUNDLE_SIZE=//p' | head -1)
+if [ -n "$bundle_sha" ] && [ -n "$bundle_size" ]; then
+  printf '{"sha256":"%s","size":%s}\n' "$bundle_sha" "$bundle_size" \
+    > "$RESULTS/repro.bundle.json" 2>/dev/null || true
+fi
 
 # ---- 唯一 state writer（R 串行启动并等待；gate rc 不等于写许可）--------------------
 writer_rc=0
@@ -317,7 +321,13 @@ else
 fi
 
 if ! [[ "${failed_count:-}" =~ ^[0-9]+$ ]]; then
-  echo "repro: 汇总缺失（父进程统计失败）"; exit 1
+  echo "repro: 汇总缺失（父进程统计失败）"
+  exit 1
 fi
 [ "$writer_rc" -eq 0 ] || echo "WRITER-FAILED: $writer_rc"
-[ "$failed_count" -eq 0 ] && [ "$summary_rc" -eq 0 ] && [ "$writer_rc" -eq 0 ]
+if [ "$failed_count" -eq 0 ] && [ "$summary_rc" -eq 0 ] && [ "$writer_rc" -eq 0 ]; then
+  echo "INNER-TARGET-OK: 用例证据与 state 交接完成；最终成功出口只在 root controller"
+  exit 0
+fi
+echo "INNER-TARGET-FAILED: 用例证据未通过，交给 root controller 按真实证据收口"
+exit 1

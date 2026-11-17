@@ -107,9 +107,9 @@ case "$STAGE" in
       # 显式结果目录：只写 plan.json 与必要 owner marker，并在当前域固定结果锁下短期完成。
       if [ "$RESULTS_EXPLICIT" = "1" ] && [ "${PLAN_LIST_ONLY:-0}" = "1" ]; then
         exec "$PY" "$SCOPE_HELPER" lease-domain -- bash -c '
-          "$1" "$2" claim-results "$3" || exit 1
+          "$1" "$2" claim-plan "$3" || exit 1
           "$1" "$4" --format json -- "${@:5}" >/dev/null || exit 2' \
-          lease-mirror "$PY" "$SCOPE_HELPER" "$WF_RESULTS_DIR" "$HERE/plan.py" -- "$@"
+          lease-mirror "$PY" "$HERE/resource_lifecycle.py" "$WF_RESULTS_DIR" "$HERE/plan.py" -- "$@"
       fi
       exit 0
     fi
@@ -137,13 +137,21 @@ case "$STAGE" in
   lease)
     apply_frame_env
     verify_inherited_locks
-    # claim 必须在任何结果目录写入之前（pycache 目录也算“非空”）。
-    "$PY" "$SCOPE_HELPER" claim-results "$WF_RESULTS_DIR" || exit 1
-    "$PY" "$SCOPE_HELPER" prepare-results "$WF_RESULTS_DIR" || exit 1
+    # 初始化只有一次：owner 意图 → active state → 按旧代许可 prepare（helper 内三个 checkpoint）。
+    begin_out=$("$PY" "$HERE/resource_lifecycle.py" begin-run \
+        --results-root "$WF_RESULTS_DIR" --role full --intent execution --format sh)
+    begin_rc=$?
+    if [ "$begin_rc" -ne 0 ]; then
+      echo "RESULTS-INIT-FAILED: 初始化拒绝（rc=$begin_rc）；不启动 controller、不清理现场" >&2
+      exit "$begin_rc"
+    fi
+    eval "$begin_out" || { echo "RUN-ID-EVAL-FAILED" >&2; exit 2; }
+    export WF_RUN_ID="$RUN_ID"
+    export WF_COMMAND_EVIDENCE_ROOT="$WF_RESULTS_DIR/commands"
     note_stage public
     note_stage lease
     # 计划调用计数：preflight 的一行来自内存（public 阶段不落任何文件），final plan 由
-    # plan.py 自己追加到同一文件；复用结果目录时这两个文件都已在 prepare-results 清空。
+    # plan.py 自己追加到同一文件；复用结果目录时这两个文件都已在 begin-run 的 prepare 清空。
     if [ -n "${WF_PREFLIGHT_PLAN_LINE:-}" ]; then
       printf '%s\n' "$WF_PREFLIGHT_PLAN_LINE" >> "$WF_RESULTS_DIR/plan-calls"
     fi
@@ -192,6 +200,8 @@ case "$STAGE" in
     pass_fds="${WF_FIXTURE_LEASE_FD},${WF_RESULTS_LOCK_FD}"
     export WF_RUNNER_CONTROL_PID=$$
     exec "$PY" "$HERE/execution.py" --runner-control --name wf-runner \
+      --runner-role full --results-root "$WF_RESULTS_DIR" --run-id "$WF_RUN_ID" \
+      --plan-file "$PLAN_FILE" --plan-sha256 "$TOKEN_SHA256" --plan-size "$TOKEN_SIZE" \
       --timeout "${WF_RUN_TIMEOUT:-1800}" --log "$RESULTS_DIR/.runner.log" \
       --result "$RESULTS_DIR/.runner.json" --pass-fds "$pass_fds" -- \
       bash "$0" "${FRAME[@]}"
@@ -234,6 +244,8 @@ case "$STAGE" in
     FIX="$PLAN_FIX"
     RESULTS_DIR="$PLAN_RESULTS_DIR"
     export WF_FIX="$FIX" WF_ISOLATED_UNITS="${PLAN_ISOLATED_UNITS:-}"
+    export WF_RUN_ID="${WF_RUN_ID:?missing run id from lease begin_run}"
+    export WF_COMMAND_EVIDENCE_ROOT="$RESULTS_DIR/commands"
     LEGACY_FIXTURE_ROOT="$FIX.legacy"
     WF_LEGACY_FIXTURE_ROOT="$LEGACY_FIXTURE_ROOT"
     export WF_LEGACY_FIXTURE_ROOT
@@ -275,28 +287,7 @@ RUN_TEMPLATE=""
 CANCEL_REQUEST="$RESULTS_DIR/cancel-request"
 rm -f "$CANCEL_REQUEST" 2>/dev/null || true
 export WF_CANCEL_FILE="$CANCEL_REQUEST"
-CLEANUP_DONE=0
-CLEANUP_FAILED=0
-cleanup_fixtures() {
-  local rc=0
-  for fixture_path in "$FIX" "$LEGACY_FIXTURE_ROOT" ${RUN_TEMPLATE:+"$RUN_TEMPLATE"}; do
-    [ -n "$fixture_path" ] || continue
-    [ -e "$fixture_path" ] || continue
-    "$PY" "$SCOPE_HELPER" remove "$fixture_path" >/dev/null 2>>"$RESULTS_DIR/cleanup.err" || rc=1
-  done
-  return "$rc"
-}
-on_exit_cleanup() {
-  if [ "$CLEANUP_DONE" != "1" ]; then
-    cleanup_fixtures >/dev/null 2>&1 || true
-  fi
-}
-trap on_exit_cleanup EXIT
-# 早期阶段（public/lease/controlled 被直接 TERM）不需要递归清理；ctrl 阶段由 C 收口。
-request_cancel() {
-  trap '' INT TERM HUP
-  printf 'cancelled by shell trap\n' > "$CANCEL_REQUEST" 2>/dev/null || true
-}
+# 本 shell 不再拥有资源删除：root controller 在同一 C 进程 finalize。
 trap 'request_cancel; exit 143' TERM
 trap 'request_cancel; exit 130' INT
 trap 'request_cancel; exit 129' HUP
@@ -312,7 +303,7 @@ init_millis=0
 suite_millis=0
 green_seconds=0
 red_seconds=0
-fail=0
+STRUCTURAL_FAIL=0
 suite_ran=0
 flow_ran=0
 repro_ran=0
@@ -402,16 +393,6 @@ template_cache_cli() {  # template_cache_cli <subcommand> [extra args...]
   "$PY" "$HERE/template_cache.py" "$sub" "${args[@]}" "$@"
 }
 
-cleanup_template_cache_stale() {  # 只收本工具自己的历史残留（staging/backup/旧版 stale）
-  local path
-  for path in "$TEMPLATE_CACHE_ROOT"/*.staging-* "$TEMPLATE_CACHE_ROOT"/*.backup-* \
-              "$TEMPLATE_CACHE_ROOT"/*.stale-* "$TEMPLATE_CACHE_ROOT"/*.build; do
-    [ -e "$path" ] || continue
-    "$PY" "$HERE/fixture_scope.py" remove "$path" >/dev/null 2>&1 \
-      || echo "（无法回收陈旧模板缓存条目：$path）"
-  done
-}
-
 TEMPLATE_SECONDS=0
 WF_TEMPLATE_READY=0
 WF_TEMPLATE=""
@@ -461,32 +442,25 @@ else
     WF_TEMPLATE_READY=1
   else
     mkdir -p "$TEMPLATE_CACHE_ROOT"
-    cleanup_template_cache_stale "$TEMPLATE_CACHE_ROOT"
     if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ] && [ -z "$RELEASE_SUBJECT" ]; then
       RELEASE_SUBJECT=$(release_subject_digest) || { echo "RELEASE-SUBJECT-FAILED"; exit 1; }
     fi
-    # 发布前先迁移可确认同槽位的 legacy key（只改 key 名，不改内容身份）。
-    TEMPLATE_CACHE_KEY=$(template_cache_cli migrate) || { echo "TEMPLATE-CACHE-MIGRATE-FAILED"; exit 1; }
-    if hit=$(template_cache_cli lookup); then
-      TEMPLATE_CACHE_KEY=$(printf '%s\n' "$hit" | sed -n '2p')
-      TEMPLATE_ENTRY="$TEMPLATE_CACHE_ROOT/$TEMPLATE_CACHE_KEY"
-      WF_TEMPLATE="$TEMPLATE_ENTRY"
-      WF_TEMPLATE_SOURCE=$(printf '%s\n' "$hit" | sed -n '1p')
-      WF_TEMPLATE_READY=1
-      TEMPLATE_SOURCE=cache
+    # 唯一修改型入口：恢复 → 迁移 → 命中 → 必要时发布（顺序只在 template_cache.acquire）。
+    if ! acquired=$(template_cache_cli acquire); then
+      echo "TEMPLATE-CACHE-FAILED"
+      exit 1
+    fi
+    unset WF_TEMPLATE_TXN_REBUILD
+    TEMPLATE_CACHE_KEY=$(printf '%s\n' "$acquired" | sed -n '2p')
+    TEMPLATE_ENTRY="$TEMPLATE_CACHE_ROOT/$TEMPLATE_CACHE_KEY"
+    WF_TEMPLATE="$TEMPLATE_ENTRY"
+    WF_TEMPLATE_SOURCE=$(printf '%s\n' "$acquired" | sed -n '1p')
+    WF_TEMPLATE_READY=1
+    TEMPLATE_SOURCE=cache
+    if [ "$(printf '%s\n' "$acquired" | sed -n '4p')" = "TEMPLATE-CACHE-HIT=1" ]; then
       TEMPLATE_CACHE_HIT=1
       echo "（模板缓存命中：$TEMPLATE_ENTRY）"
     else
-      if ! published=$(template_cache_cli publish); then
-        echo "TEMPLATE-CACHE-PUBLISH-FAILED"
-        exit 1
-      fi
-      TEMPLATE_CACHE_KEY=$(printf '%s\n' "$published" | sed -n '2p')
-      TEMPLATE_ENTRY="$TEMPLATE_CACHE_ROOT/$TEMPLATE_CACHE_KEY"
-      WF_TEMPLATE="$TEMPLATE_ENTRY"
-      WF_TEMPLATE_SOURCE=$(printf '%s\n' "$published" | sed -n '1p')
-      WF_TEMPLATE_READY=1
-      TEMPLATE_SOURCE=cache
       TEMPLATE_CACHE_HIT=0
       echo "（模板缓存已发布：$TEMPLATE_ENTRY）"
     fi
@@ -516,7 +490,7 @@ add_init_millis() {
 
 run_repro() {
   # 只有一条实现：repro/run.sh（也可单独/CI 运行）。这里只消费它的机器可读汇总。
-  # 失败计数写进 repro_fail（不直接改 fail）：并发开关下它跑在子 shell 里，父进程按计数器合并。
+  # 失败计数写进 repro_fail（不直接改 STRUCTURAL_FAIL）：并发开关下它跑在子 shell 里，父进程按计数器合并。
   local args=(--mode "$PLAN_REPRO_MODE" --jobs "$PLAN_REPRO_JOBS"
               --fixture-deploy "$PLAN_FIXTURE_DEPLOY" --results-dir "$RESULTS_DIR/repro")
   local g
@@ -563,6 +537,16 @@ run_repro() {
     repro_fail=$((repro_fail + 1))
   fi
   [ "$rc" -eq 0 ] || repro_rc=1
+  bundle_sha=$(printf '%s\n' "$out" | sed -n 's/^REPRO_BUNDLE_SHA256=//p' | head -1)
+  bundle_size=$(printf '%s\n' "$out" | sed -n 's/^REPRO_BUNDLE_SIZE=//p' | head -1)
+  case "$bundle_sha" in
+    *[!0-9a-f]*|'') : ;;
+    *) case "$bundle_size" in
+         ''|*[!0-9]*) : ;;
+         *) printf '{"sha256":"%s","size":%s}\n' "$bundle_sha" "$bundle_size" \
+              > "$RESULTS_DIR/repro.bundle.json" ;;
+       esac ;;
+  esac
 }
 
 # 执行记录解析：`name:kind:expect:fixture:script` 五段固定顺序（plan.py 是唯一产出点）。
@@ -573,12 +557,8 @@ record_field() {
 }
 record_script() { printf '%s' "${1##*:}"; }
 
-# ---- 已知技术债清单（必过门的唯一豁免来源）---------------------------------
-# 这些套件当前是红的、且原因已登记；它们**不阻塞**必过门，但会被单独列出。
-# 一旦它们转绿，本脚本会失败并提示从清单里移除 —— 清单不允许腐烂。
-# 2026-11-10：cp3/r67/r68/r69/r70/r71 已全部修绿，清单清空——现在**没有豁免**。
-# 以后要加条目，必须同时在 task 记录里写明"为什么现在修不了、谁来修"，否则不许进清单。
-KNOWN_LEGACY="${WF_KNOWN_LEGACY-}"
+# 已知技术债清单只由 root controller 从 WF_KNOWN_LEGACY 快照并交给 assess_run_results；
+# 本 shell 不再单独计算 debt/stale，也不再拥有成功/失败出口。
 
 JOBS=$PLAN_JOBS
 EXECUTION_MODE=serial
@@ -592,7 +572,7 @@ for rec in "${UNIT_RECORDS[@]}"; do UNIT_NAMES+=("$(record_name "$rec")"); done
 ALL_NAMES="${UNIT_NAMES[*]}"
 if [ "${#UNIT_RECORDS[@]}" -eq 0 ]; then
   echo "PLAN-EMPTY: 没有可执行单元"
-  fail=$((fail+1))
+  STRUCTURAL_FAIL=$((STRUCTURAL_FAIL+1))
 fi
 
 : > "$RESULTS_MARK"
@@ -634,7 +614,7 @@ if [ "$JOBS" -gt 1 ] && [ -n "$PLAN_UNITS_PARALLEL" ] && can_unshare; then
     WF_NAMESPACE=0 bash "$HERE/run_one.sh" "$rec"
   done
   if [ "$xargs_rc" -ne 0 ]; then
-    echo "XARGS-EXIT: $xargs_rc"; fail=$((fail+1))
+    echo "XARGS-EXIT: $xargs_rc"; STRUCTURAL_FAIL=$((STRUCTURAL_FAIL+1))
   fi
 else
   if [ "$JOBS" -gt 1 ]; then
@@ -658,76 +638,11 @@ else
 fi
 POOL_SECONDS=$(( ($(now_ms) - POOL_STARTED) / 1000 ))
 if [ "$BUILD_OK" = 0 ]; then
-  fail=$((fail + 1))
+  STRUCTURAL_FAIL=$((STRUCTURAL_FAIL + 1))
 fi
 
-# ---- 完整性判定（唯一实现 results_gate.py）：两段都结束后对名字全集判一次 ---
+# ---- 结果行诊断：逐行打印（完整性判定只在 assess_run_results 一处）------------
 sort -t$'\t' -k1 "$RESULTS_MARK" | awk -F'\t' '{printf "%-18s rc=%s %ss %s | %s\n", $1, $2, $3, $4, $5}'
-gate_rc=0
-gate_out=$("$PY" "$HERE/results_gate.py" --lines "$RESULTS_MARK" --expected "$ALL_NAMES") || gate_rc=$?
-if [ -z "$gate_out" ]; then
-  # gate helper 崩溃/无输出：按“未验证”失败，不留下未绑定变量把脚本打断。
-  echo "RESULTS-GATE-FAILED: rc=$gate_rc（结果行未判定）"
-  gate_out="GATE_MALFORMED=0
-GATE_UNIQUE=0
-GATE_MISSING=
-GATE_DUPLICATE=
-GATE_UNEXPECTED=
-GATE_BAD="
-  fail=$((fail + 1))
-fi
-eval "$gate_out" || { echo "GATE-EVAL-FAILED"; fail=$((fail + 1)); }
-GATE_MALFORMED=${GATE_MALFORMED:-0}
-GATE_MISSING=${GATE_MISSING:-}
-GATE_DUPLICATE=${GATE_DUPLICATE:-}
-GATE_UNEXPECTED=${GATE_UNEXPECTED:-}
-GATE_BAD=${GATE_BAD:-}
-if [ "$GATE_MALFORMED" -ne 0 ]; then
-  echo "MALFORMED-RESULTS: $GATE_MALFORMED 行"
-fi
-if [ -n "$GATE_MISSING" ]; then
-  echo "MISSING-RESULTS:$GATE_MISSING（子进程未产出结果行）"
-fi
-if [ -n "$GATE_DUPLICATE" ]; then
-  echo "DUPLICATE-RESULTS: $GATE_DUPLICATE"
-fi
-if [ -n "$GATE_UNEXPECTED" ]; then
-  echo "UNEXPECTED-RESULTS:$GATE_UNEXPECTED"
-fi
-fail=$((fail + GATE_MALFORMED + $(printf '%s' "$GATE_MISSING" | wc -w)
-         + $(printf '%s' "$GATE_DUPLICATE" | wc -w) + $(printf '%s' "$GATE_UNEXPECTED" | wc -w)
-         + $(printf '%s' "$GATE_BAD" | wc -w)))
-
-# ---- 计数一次派生：lines（唯一结果集）× 注册表 kind（记录第二段）-----------
-counts=$("$PY" - "$RESULTS_MARK" "$PLAN_UNITS" <<'PY'
-import sys
-
-kinds = {}
-for record in sys.argv[2].split():
-    parts = record.split(":")
-    if len(parts) >= 2:
-        kinds[parts[0]] = parts[1]
-suite = flow = 0
-seen = set()
-try:
-    with open(sys.argv[1], encoding="utf-8", errors="replace") as handle:
-        lines = handle.read().splitlines()
-except OSError:
-    lines = []
-for line in lines:
-    parts = line.split("\t")
-    if len(parts) != 5 or parts[0] in seen:
-        continue
-    seen.add(parts[0])
-    kind = kinds.get(parts[0])
-    if kind in ("suite", "candidate"):
-        suite += 1
-    elif kind in ("flow", "extra"):
-        flow += 1
-print(suite, flow)
-PY
-) || { echo "COUNTS-DERIVATION-FAILED"; fail=$((fail+1)); counts="0 0"; }
-read -r suite_ran flow_ran <<< "$counts"
 
 # 计时：全部单元的 .timing 在两段结束后一次累加（worker 只写自己的文件）。
 init_millis=0
@@ -749,6 +664,7 @@ if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
     else
       echo "REPRO-COUNTERS-MISSING"
       repro_fail=$((repro_fail + 1))
+      repro_rc=1
     fi
     repro_seconds=$(( ($(now_ms) - REPRO_STARTED) / 1000 ))
   else
@@ -756,40 +672,26 @@ if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
     run_repro
     repro_seconds=$(( ($(now_ms) - REPRO_STARTED) / 1000 ))
   fi
-  fail=$((fail + repro_fail))
+fi
+# repro 入口自身的非零（含唯一 state writer 失败）必须阻断内层成功出口；
+# 只依赖 records 结构无法证明本代 repro 证明已提交，因此不能只看 assess 诊断。
+if [ "${repro_rc:-0}" -ne 0 ]; then
+  echo "REPRO-INNER-FAILED: rc=$repro_rc（state writer/证据汇总未闭合）"
+  STRUCTURAL_FAIL=$((STRUCTURAL_FAIL + 1))
 fi
 
-# ---- 必过门核算：区分"未登记的红"与"已登记的债" ------------------------------
-legacy_failed=""
-legacy_fixed=""
-legacy_missing=""
-if [ -f "$RESULTS_MARK" ]; then
-  for suite in $KNOWN_LEGACY; do
-    # 子集模式（WF_SUITES）下没有参与的套件不算"清单过期"：那是没跑，不是没结果
-    case " ${UNIT_NAMES[*]} " in *" $suite "*) ;; *) continue ;; esac
-    state=$(awk -F'\t' -v s="$suite" 'NF==5 && $1==s {print $4}' "$RESULTS_MARK" | head -1)
-    case "$state" in
-      bad)  legacy_failed="$legacy_failed $suite" ;;
-      ok)   legacy_fixed="$legacy_fixed $suite" ;;
-      "")   legacy_missing="$legacy_missing $suite" ;;
-    esac
-  done
-fi
-if [ -n "$legacy_failed" ]; then
-  echo "LEGACY-DEBT:$legacy_failed（已登记的技术债，不阻塞必过门；修好后请从 KNOWN_LEGACY 移除）"
-fi
-if [ -n "$legacy_fixed" ]; then
-  echo "LEGACY-FIXED:$legacy_fixed（已转绿，请从 KNOWN_LEGACY 移除，使其成为必过项）"
-fi
-if [ -n "$legacy_missing" ]; then
-  echo "LEGACY-MISSING:$legacy_missing（清单里的套件没有结果行；清单过期或套件被删除）"
-fi
-
-debt=$(printf '%s' "$legacy_failed" | wc -w)
-stale=$(( $(printf '%s' "$legacy_fixed" | wc -w) + $(printf '%s' "$legacy_missing" | wc -w) ))
-unknown_fail=$(( fail - debt ))
+# 本段只做两件事：把测量交给 schema1 交接对象，并输出非最终诊断。
+# gate/cleanup/成功结论由同 C 进程的 root controller 从当前证据派生（本 shell 不再有成功出口）。
 total_millis=$(( $(now_ms) - TOTAL_STARTED )); total_seconds=$((total_millis / 1000))
+suite_ran=0; flow_ran=0
+for rec in "${UNIT_RECORDS[@]}"; do
+  case "$(record_field "$rec" 2)" in
+    suite|candidate) suite_ran=$((suite_ran + 1)) ;;
+    flow|extra) flow_ran=$((flow_ran + 1)) ;;
+  esac
+done
 units_total=$((suite_ran + flow_ran + repro_ran))
+INNER_FAIL=0
 
 # ---- 产品发行树必须没被测试改写 ---------------------------------------------
 PRODUCT_AFTER=$(product_digest)
@@ -797,7 +699,7 @@ if [ "$PRODUCT_BEFORE" != "$PRODUCT_AFTER" ]; then
   echo "PRODUCT-TREE-CHANGED: docs/workflows/wf-release 在运行期间被改写（测试不得写产品发行树）"
   echo "  before=$PRODUCT_BEFORE"
   echo "  after =$PRODUCT_AFTER"
-  unknown_fail=$((unknown_fail + 1))
+  INNER_FAIL=1
 fi
 
 # ---- 源树卫生：运行后 delta 判定（新增 → 失败标签；存量只警告）---------------
@@ -805,7 +707,7 @@ hygiene_rc=0
 "$PY" "$HERE/source_hygiene.py" check "$REPO_ROOT" --expect "$HYGIENE_SNAPSHOT" || hygiene_rc=$?
 if [ "$hygiene_rc" -ne 0 ]; then
   echo "SOURCE-TREE-POLLUTED: 运行期在源树新增了字节码产物（明细见上）"
-  unknown_fail=$((unknown_fail + 1))
+  INNER_FAIL=1
 fi
 
 # 模板缓存构建序列次数（design §3.3）：命中=0，发布一次=1；模板机制关闭=0。
@@ -814,45 +716,17 @@ if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_
   TEMPLATE_BUILD_SEQUENCES=1
 fi
 
-# ---- 取消请求在收口前出现：不得签成功 -----------------------------------------
+# ---- 取消请求在收口前出现：内层只报告，不删除、不签成功 ------------------------
 if [ -f "$CANCEL_REQUEST" ]; then
-  echo "CANCEL-REQUESTED: 运行被取消，跳过成功出口"
-  unknown_fail=$((unknown_fail + 1))
+  echo "CANCEL-REQUESTED: 运行被取消，root controller 继续按真实终态收口"
+  INNER_FAIL=1
 fi
 
-# ---- 已拥有资源清理：必须在发布摘要与成功出口之前确认 ---------------------------
-# 先聚合每个命令的 cleanup 结论：命令级 unknown/failed 时保留现场，不删除夹具。
-cleanup_unknown_out=$("$PY" "$HERE/runner_cleanup.py" --results-dir "$RESULTS_DIR" --format sh) || true
-eval "$cleanup_unknown_out" || { echo "CLEANUP-STATE-EVAL-FAILED"; unknown_fail=$((unknown_fail + 1)); }
-if [ "${CLEANUP_UNKNOWN_COUNT:-0}" -gt 0 ]; then
-  echo "CLEANUP-UNKNOWN: 命令级清理未确认（${CLEANUP_UNKNOWN:-unknown}）；保留夹具/现场，不重试"
-  echo "恢复步骤：核对 EXECUTION-FAILED 里的 command/guardian/supervisor/target 身份，确认无存活持有者后再人工回收。"
-  unknown_fail=$((unknown_fail + 1))
-  CLEANUP_STATE=unknown
-  CLEANUP_DONE=1
-else
-  cleanup_rc=0
-  cleanup_fixtures || cleanup_rc=$?
-  if [ "$cleanup_rc" -ne 0 ]; then
-    echo "CLEANUP-FAILED: 本 run 拥有的夹具/模板未能回收（见 $RESULTS_DIR/cleanup.err）"
-    unknown_fail=$((unknown_fail + 1))
-  fi
-  CLEANUP_DONE=1
-  if [ "$cleanup_rc" -ne 0 ]; then CLEANUP_STATE=failed; else CLEANUP_STATE=cleaned; fi
-fi
-
-# ---- 失败计数拆分：lines 的 bad 行由 summary 从实际结果集派生 ------------------
-bad_lines=$(printf '%s' "$GATE_BAD" | wc -w)
-extra_failures=$(( unknown_fail - bad_lines ))
-[ "$extra_failures" -lt 0 ] && extra_failures=0
-
-# ---- 摘要：计数从实际结果集 × 注册 kind 派生，原子发布 + 读回，失败即非零 --------
-METRICS_JSON="$RESULTS_DIR/summary-metrics.json"
-WF_METRICS_JSON="$METRICS_JSON" \
+# ---- 测量交接（schema1）：只含计时/并发/模板事实，不含 gate/cleanup/成功结论 ----
+MEASUREMENTS_JSON="$RESULTS_DIR/summary-measurements.json"
 WF_METRICS_MODE="$PLAN_MODE" WF_METRICS_FULL_MODE="$PLAN_FULL_MODE" \
 WF_METRICS_DEPLOY="$PLAN_FIXTURE_DEPLOY" \
-WF_METRICS_REPRO_RAN="$repro_ran" WF_METRICS_REPRO_FAIL="$repro_fail" \
-WF_METRICS_DEBT="$debt" WF_METRICS_BUILD="$build_seconds" WF_METRICS_TEMPLATE="$TEMPLATE_SECONDS" \
+WF_METRICS_BUILD="$build_seconds" WF_METRICS_TEMPLATE="$TEMPLATE_SECONDS" \
 WF_METRICS_INIT_MS="$init_millis" WF_METRICS_SUITE_MS="$suite_millis" \
 WF_METRICS_GREEN="$green_seconds" WF_METRICS_RED="$red_seconds" \
 WF_METRICS_TOTAL_MS="$total_millis" WF_METRICS_EFFECTIVE_JOBS="$JOBS" \
@@ -866,12 +740,7 @@ WF_METRICS_TEMPLATE_CACHE_HIT="$TEMPLATE_CACHE_HIT" \
 WF_METRICS_TEMPLATE_CACHE_KEY="$TEMPLATE_CACHE_KEY" \
 WF_METRICS_TEMPLATE_SEQUENCES="$TEMPLATE_BUILD_SEQUENCES" \
 WF_METRICS_JOBS="$PLAN_JOBS" WF_METRICS_REPRO_JOBS="$PLAN_REPRO_JOBS" \
-WF_METRICS_GATE_MALFORMED="$GATE_MALFORMED" WF_METRICS_GATE_MISSING="$(printf '%s' "$GATE_MISSING" | wc -w)" \
-WF_METRICS_GATE_DUPLICATE="$(printf '%s' "$GATE_DUPLICATE" | wc -w)" \
-WF_METRICS_GATE_UNEXPECTED="$(printf '%s' "$GATE_UNEXPECTED" | wc -w)" \
-WF_METRICS_EXTRA_FAILURES="$extra_failures" \
-WF_METRICS_CLEANUP_STATE="$CLEANUP_STATE" \
-"$PY" - <<'PY'
+WF_MEASUREMENTS_JSON="$MEASUREMENTS_JSON" "$PY" - <<'MEASUREMENTS'
 import json, os
 
 
@@ -894,75 +763,84 @@ def number(name, default=0):
     return int(value)
 
 
-metrics = {
+measurements = {
     "mode": os.environ.get("WF_METRICS_MODE"),
     "full_mode": number("WF_METRICS_FULL_MODE"),
     "fixture_deploy": os.environ.get("WF_METRICS_DEPLOY"),
-    "repro_ran": number("WF_METRICS_REPRO_RAN"),
-    "repro_fail": number("WF_METRICS_REPRO_FAIL"),
-    "legacy_debt": number("WF_METRICS_DEBT"),
+    "execution_mode": os.environ.get("WF_METRICS_EXECUTION_MODE"),
+    "fallback_reason": os.environ.get("WF_METRICS_FALLBACK") or "",
+    "repro_mode": os.environ.get("WF_METRICS_REPRO_MODE"),
+    "repro_groups": (os.environ.get("WF_METRICS_REPRO_GROUPS") or "").split(),
+    "repro_concurrent": os.environ.get("WF_METRICS_REPRO_CONCURRENT") == "1",
+    "jobs": number("WF_METRICS_JOBS"),
+    "requested_jobs": number("WF_METRICS_JOBS"),
+    "effective_jobs": number("WF_METRICS_EFFECTIVE_JOBS"),
+    "repro_jobs": number("WF_METRICS_REPRO_JOBS"),
+    "pycache_root": os.environ.get("WF_METRICS_PYCACHE_ROOT") or "",
+    "template_source": os.environ.get("WF_METRICS_TEMPLATE_SOURCE"),
+    "template_cache_hit": os.environ.get("WF_METRICS_TEMPLATE_CACHE_HIT") == "1",
+    "template_cache_key": os.environ.get("WF_METRICS_TEMPLATE_CACHE_KEY") or None,
+    "template_reused": os.environ.get("WF_TEMPLATE_READY") == "1",
+    "template_build_sequences": number("WF_METRICS_TEMPLATE_SEQUENCES"),
+    "release_build": release_build(),
     "build_seconds": number("WF_METRICS_BUILD"),
     "template_seconds": number("WF_METRICS_TEMPLATE"),
     "init_millis": number("WF_METRICS_INIT_MS"),
     "suite_millis": number("WF_METRICS_SUITE_MS"),
     "green_seconds": number("WF_METRICS_GREEN"),
     "red_seconds": number("WF_METRICS_RED"),
-    "total_seconds": round(number("WF_METRICS_TOTAL_MS") / 1000, 3),
-    "effective_jobs": number("WF_METRICS_EFFECTIVE_JOBS"),
-    "execution_mode": os.environ.get("WF_METRICS_EXECUTION_MODE"),
-    "fallback_reason": os.environ.get("WF_METRICS_FALLBACK"),
-    "repro_mode": os.environ.get("WF_METRICS_REPRO_MODE"),
-    "repro_groups": (os.environ.get("WF_METRICS_REPRO_GROUPS") or "").split(),
+    "total_millis": number("WF_METRICS_TOTAL_MS"),
     "pool_seconds": number("WF_METRICS_POOL_SECONDS"),
     "repro_seconds": number("WF_METRICS_REPRO_SECONDS"),
-    "repro_concurrent": os.environ.get("WF_METRICS_REPRO_CONCURRENT") == "1",
-    "pycache_root": os.environ.get("WF_METRICS_PYCACHE_ROOT"),
-    "template_source": os.environ.get("WF_METRICS_TEMPLATE_SOURCE"),
-    "template_cache_hit": os.environ.get("WF_METRICS_TEMPLATE_CACHE_HIT") == "1",
-    "template_cache_key": os.environ.get("WF_METRICS_TEMPLATE_CACHE_KEY") or None,
-    "template_reused": os.environ.get("WF_TEMPLATE_READY") == "1",
-    "template_build_sequences": number("WF_METRICS_TEMPLATE_SEQUENCES"),
-    "jobs": number("WF_METRICS_JOBS"),
-    "requested_jobs": number("WF_METRICS_JOBS"),
-    "repro_jobs": number("WF_METRICS_REPRO_JOBS"),
-    "release_build": release_build(),
-    "gate_malformed": number("WF_METRICS_GATE_MALFORMED"),
-    "gate_missing": number("WF_METRICS_GATE_MISSING"),
-    "gate_duplicate": number("WF_METRICS_GATE_DUPLICATE"),
-    "gate_unexpected": number("WF_METRICS_GATE_UNEXPECTED"),
-    "extra_failures": number("WF_METRICS_EXTRA_FAILURES"),
-    "cleanup_state": os.environ.get("WF_METRICS_CLEANUP_STATE") or "unknown",
 }
-path = os.environ["WF_METRICS_JSON"]
-with open(path, "w", encoding="utf-8") as handle:
-    json.dump(metrics, handle, ensure_ascii=False, indent=2, sort_keys=True)
+with open(os.environ["WF_MEASUREMENTS_JSON"], "w", encoding="utf-8") as handle:
+    json.dump(measurements, handle, ensure_ascii=False, indent=2, sort_keys=True)
     handle.write("\n")
-PY
+MEASUREMENTS
 if [ $? -ne 0 ]; then
-  echo "SUMMARY-METRICS-FAILED: 无法采集摘要输入"
-  unknown_fail=$((unknown_fail + 1))
+  echo "MEASUREMENTS-FAILED: 无法采集测量输入"
+  INNER_FAIL=1
 fi
 
-summary_rc=0
-if [ -f "$RESULTS_DIR/plan.json" ] && [ -n "${WF_FRAME_CONTEXT_FILE:-}" ] && [ -f "$METRICS_JSON" ]; then
-  "$PY" "$HERE/results_summary.py" --results-dir "$RESULTS_DIR" \
-    --plan-file "$RESULTS_DIR/plan.json" --context-file "$WF_FRAME_CONTEXT_FILE" \
-    --lines "$RESULTS_MARK" --metrics "$METRICS_JSON" || summary_rc=$?
+# ---- 非最终诊断：与 controller 共用 assess_run_results（不构成成功出口）--------
+REPRO_DIR=""
+BUNDLE_SHA=""
+BUNDLE_SIZE=""
+if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
+  REPRO_DIR="$RESULTS_DIR/repro"
+  if [ -f "$RESULTS_DIR/repro.bundle.json" ]; then
+    BUNDLE_SHA=$(sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' "$RESULTS_DIR/repro.bundle.json" | head -1)
+    BUNDLE_SIZE=$(sed -n 's/.*"size": *\([0-9]*\).*/\1/p' "$RESULTS_DIR/repro.bundle.json" | head -1)
+  fi
+fi
+diag_rc=0
+"$PY" "$HERE/results_gate.py" --assess-run --plan-file "$RESULTS_DIR/plan.json" \
+  --lines "$RESULTS_DIR/lines" ${REPRO_DIR:+--repro-results "$REPRO_DIR"} \
+  ${BUNDLE_SHA:+--bundle-sha256 "$BUNDLE_SHA"} ${BUNDLE_SIZE:+--bundle-size "$BUNDLE_SIZE"} \
+  --format sh || diag_rc=$?
+
+# ---- 测量交接（schema1，原子写）：失败让本层非零并由 controller 拒绝 --------------
+METRICS_FAULT="${WF_METRICS_FAULT:-}"
+unset WF_METRICS_FAULT
+metrics_ok=1
+if [ -f "$MEASUREMENTS_JSON" ]; then
+  "$PY" "$HERE/results_summary.py" --write-metrics --results-dir "$RESULTS_DIR" \
+    --run-id "$WF_RUN_ID" --role full --plan-file "$RESULTS_DIR/plan.json" \
+    --context-file "$WF_FRAME_CONTEXT_FILE" \
+    ${REPRO_DIR:+--repro-results "$REPRO_DIR"} \
+    ${BUNDLE_SHA:+--bundle-sha256 "$BUNDLE_SHA"} ${BUNDLE_SIZE:+--bundle-size "$BUNDLE_SIZE"} \
+    --measurements "$MEASUREMENTS_JSON" ${METRICS_FAULT:+--fault "$METRICS_FAULT"} || metrics_ok=0
 else
-  echo "SUMMARY-INPUTS-MISSING: 缺少冻结 plan/context 或 metrics"
-  summary_rc=1
+  echo "METRICS-INPUTS-MISSING"
+  metrics_ok=0
 fi
-if [ "$summary_rc" -ne 0 ]; then
-  echo "SUMMARY-FAILED: 摘要未成功发布（非零 $summary_rc）；不输出 GATE-OK"
-  unknown_fail=$((unknown_fail + 1))
-fi
+[ "$metrics_ok" = "1" ] || INNER_FAIL=1
 
-echo "---- 运行 $units_total 项（套件 $suite_ran，流程/extra $flow_ran，repro $repro_ran），失败 $fail 项（其中已登记债 $debt 项）----"
+echo "---- 执行单元 $units_total（套件 $suite_ran，流程/extra $flow_ran，repro $repro_ran）exit=$INNER_FAIL diag=$diag_rc ----"
 echo "---- 计时 build=${build_seconds}s template=${TEMPLATE_SECONDS}s init=$((init_millis/1000))s suite=$((suite_millis/1000))s green=${green_seconds}s red=${red_seconds}s total=${total_seconds}s ----"
-if [ "$unknown_fail" -ne 0 ] || [ "$stale" -ne 0 ]; then
-  [ "$unknown_fail" -ne 0 ] && echo "GATE-FAIL: 未登记的失败 $unknown_fail 项（必过门未通过）"
-  [ "$stale" -ne 0 ] && echo "GATE-BOOKKEEPING: 豁免清单有 $stale 项需要销账（转绿或已不存在）"
+if [ "$INNER_FAIL" -ne 0 ] || [ "$diag_rc" -ne 0 ] || [ "$STRUCTURAL_FAIL" -ne 0 ]; then
+  echo "INNER-TARGET-FAILED: 目标/测量未通过，交给 root controller 按真实证据收口"
   exit 1
 fi
-echo "GATE-OK: 必过门通过（豁免中的债：$(printf '%s' "$legacy_failed" | wc -w) 项）"
+echo "INNER-TARGET-OK: 目标结果与测量交接完成；最终成功出口只在 root controller"
 exit 0

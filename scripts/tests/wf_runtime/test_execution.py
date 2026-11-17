@@ -2,6 +2,7 @@
 """The runner must bound commands and retain their actual failure output."""
 import fcntl
 import importlib.util
+import json
 import os
 from pathlib import Path
 import signal
@@ -150,6 +151,182 @@ class ExecutionTest(unittest.TestCase):
         self.assertEqual((results / "returned").read_text(), "ok")
         self.assertFalse((template / "write-probe").exists())
         self.assertFalse((release / "write-probe").exists())
+
+
+class EvidenceTest(unittest.TestCase):
+    """命令证据域（AC03）：standalone/ managed 先登记再启动，写失败不启动，坏上下文不降级。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-evidence-test-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.log = self.root / "logs" / "command.log"
+
+    def module(self):
+        path = FULL / "execution.py"
+        spec = importlib.util.spec_from_file_location("wf_execution_evidence_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def lifecycle(self):
+        path = FULL / "resource_lifecycle.py"
+        spec = importlib.util.spec_from_file_location("wf_lifecycle_exec_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def test_standalone_receipt_is_a_hidden_sibling_and_returns_the_path(self):
+        execution = self.module()
+        marker = self.root / "started"
+        result = execution.run([sys.executable, "-c",
+                                "open(%r,'w').write('x')" % str(marker)],
+                               self.log, timeout=10)
+        self.assertEqual(result["status"], "passed")
+        self.assertTrue(marker.exists())
+        evidence = Path(result["evidence_path"])
+        self.assertEqual(evidence.parent, self.log.parent)
+        self.assertTrue(evidence.name.startswith("." + self.log.name + ".execution-"))
+        record = json.loads(evidence.read_text())
+        self.assertEqual(record["evidence_scope"], "standalone-command")
+        self.assertIsNone(record["run_id"])
+        self.assertEqual(record["state"], "finished")
+        self.assertEqual(record["command_id"], result["command_id"])
+        self.assertEqual(record["local_cleanup"], "none")
+
+    def test_missing_log_parents_are_created_and_relative_log_uses_caller_cwd(self):
+        execution = self.module()
+        target_cwd = self.root / "target"
+        target_cwd.mkdir()
+        relative = os.path.relpath(self.root / "relative.log", Path.cwd())
+        result = execution.run([sys.executable, "-c", "print('ok')"],
+                               Path(relative), timeout=10, cwd=target_cwd)
+        self.assertEqual(result["status"], "passed")
+        self.assertTrue((self.root / "relative.log").exists(),
+                        "相对 log 必须相对调用者 cwd 固定，而不是目标 cwd")
+        self.assertEqual(result["cwd"], str(target_cwd))
+        self.assertEqual(Path(result["evidence_path"]).parent, self.root)
+
+    def test_managed_context_is_verified_and_receipts_land_in_commands(self):
+        execution = self.module()
+        life = self.lifecycle()
+        results = self.root / "results"
+        run = life.begin_run(str(results), "execution", "full")
+        old = dict(os.environ)
+        try:
+            os.environ.update({"WF_RUN_ID": run["run_id"], "WF_RESULTS_DIR": str(results),
+                               "WF_COMMAND_EVIDENCE_ROOT": str(results / "commands")})
+            result = execution.run([sys.executable, "-c", "print('ok')"],
+                                   self.log, timeout=10)
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        record = json.loads(Path(result["evidence_path"]).read_text())
+        self.assertEqual(record["evidence_scope"], "managed-child")
+        self.assertEqual(record["run_id"], run["run_id"])
+        self.assertEqual(Path(result["evidence_path"]).parent, results / "commands")
+        self.assertEqual(record["state"], "finished")
+
+    def test_incomplete_managed_context_is_refused_without_starting_the_target(self):
+        execution = self.module()
+        marker = self.root / "started"
+        old = dict(os.environ)
+        try:
+            os.environ["WF_RUN_ID"] = "run-without-root"
+            with self.assertRaises(execution.EvidenceError):
+                execution.run([sys.executable, "-c",
+                               "open(%r,'w').write('x')" % str(marker)],
+                              self.log, timeout=10)
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        self.assertFalse(marker.exists(), "证据域拒绝必须在目标启动前")
+        self.assertFalse(self.log.exists(), "被拒绝的调用不得留下成功日志")
+
+    def test_scope_boundary_rejects_logs_outside_the_owned_scope(self):
+        import fixture_scope
+        execution = self.module()
+        scope = fixture_scope.create_test_scope()
+        self.addCleanup(lambda: __import__("shutil").rmtree(scope, ignore_errors=True))
+        old = dict(os.environ)
+        try:
+            os.environ["WF_TEST_SCOPE_ROOT"] = str(scope)
+            outside = self.root / "outside.log"
+            with self.assertRaises(fixture_scope.FixtureError):
+                execution.run([sys.executable, "-c", "print('ok')"], outside, timeout=10)
+            inside = scope / "logs" / "inside.log"
+            result = execution.run([sys.executable, "-c", "print('ok')"], inside, timeout=10)
+            self.assertEqual(result["status"], "passed")
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+
+    def test_receipt_write_failure_prevents_the_target_from_starting(self):
+        execution = self.module()
+        marker = self.root / "started"
+        self.log.parent.mkdir()
+        self.log.parent.chmod(0o500)
+        self.addCleanup(lambda: self.log.parent.chmod(0o700))
+        with self.assertRaises(OSError):
+            execution.run([sys.executable, "-c",
+                           "open(%r,'w').write('x')" % str(marker)], self.log, timeout=10)
+        self.assertFalse(marker.exists(), "写 started 失败时目标不得启动")
+
+    def test_isolated_home_is_unique_removed_on_success_and_retained_on_unknown(self):
+        execution = self.module()
+        result = execution.run([sys.executable, "-c", "print('ok')"], self.log,
+                               timeout=10, isolated_user=True)
+        self.assertEqual(result["status"], "passed")
+        record = json.loads(Path(result["evidence_path"]).read_text())
+        self.assertEqual(record["local_cleanup"], "removed")
+        self.assertFalse(Path(str(self.log) + ".home-" + result["command_id"]).exists(),
+                         "cleaned 的隔离 HOME 必须回收")
+        os.environ.update({"WF_TEST_FAULT_INJECTION": "1", "WF_GUARDIAN_FAULT": "kill",
+                           "WF_GUARDIAN_FAULT_DELAY": "0.2"})
+        self.addCleanup(lambda: [os.environ.pop(key, None) for key in
+                                 ("WF_TEST_FAULT_INJECTION", "WF_GUARDIAN_FAULT",
+                                  "WF_GUARDIAN_FAULT_DELAY")])
+        failed = execution.run([sys.executable, "-c", "import time; time.sleep(2)"],
+                               self.root / "logs" / "fail.log", timeout=10,
+                               isolated_user=True)
+        self.assertNotEqual(failed["status"], "passed")
+        record = json.loads(Path(failed["evidence_path"]).read_text())
+        self.assertIn(record["local_cleanup"], ("retained-unknown", "failed"))
+        self.assertTrue(Path(str(self.root / "logs" / "fail.log") + ".home-"
+                             + failed["command_id"]).exists(),
+                        "监督 unknown 时隔离 HOME 必须保留")
+
+
+
+
+    def test_declared_local_dirs_are_removed_only_after_clean_supervision(self):
+        execution = self.module()
+        self.log.parent.mkdir(parents=True, exist_ok=True)
+        local = self.log.parent / "phase-tmp"
+        local.mkdir()
+        (local / "payload").write_text("x")
+        result = execution.run([sys.executable, "-c", "print('ok')"], self.log,
+                               timeout=10, local_dirs=[local])
+        self.assertEqual(result["status"], "passed")
+        self.assertFalse(local.exists(), "cleaned 的相位 TMPDIR 必须回收")
+        record = json.loads(Path(result["evidence_path"]).read_text())
+        self.assertEqual(record["local_cleanup"], "removed")
+        retained = self.log.parent / "retained-tmp"
+        retained.mkdir()
+        os.environ.update({"WF_TEST_FAULT_INJECTION": "1", "WF_GUARDIAN_FAULT": "kill",
+                           "WF_GUARDIAN_FAULT_DELAY": "0.2"})
+        self.addCleanup(lambda: [os.environ.pop(key, None) for key in
+                                 ("WF_TEST_FAULT_INJECTION", "WF_GUARDIAN_FAULT",
+                                  "WF_GUARDIAN_FAULT_DELAY")])
+        failed = execution.run([sys.executable, "-c", "import time; time.sleep(2)"],
+                               self.root / "logs" / "phase.log", timeout=10,
+                               local_dirs=[retained])
+        self.assertNotEqual(failed["status"], "passed")
+        record = json.loads(Path(failed["evidence_path"]).read_text())
+        self.assertIn(record["local_cleanup"], ("retained-unknown", "failed"))
+        self.assertIn(str(retained), record["retained_paths"])
+        self.assertTrue(retained.exists())
+
 
 
 class NamespaceScrubTest(unittest.TestCase):

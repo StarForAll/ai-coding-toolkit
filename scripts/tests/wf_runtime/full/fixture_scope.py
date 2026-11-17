@@ -11,7 +11,9 @@ import shutil
 import sys
 import tempfile
 
-REPO = Path(__file__).resolve().parents[4]
+HERE = Path(__file__).resolve().parent
+REPO = HERE.parents[3]
+sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(REPO / 'scripts'))
 import wf_test_paths  # noqa: E402  （作者侧路径/scope 唯一所有者；本模块只委托）
 
@@ -70,47 +72,29 @@ def write_marker(path, payload):
 
 
 def claim_results(root):
-    root = validate(root)
-    root.parent.mkdir(parents=True, exist_ok=True)
-    owner = results_marker(root)
-    if root.is_symlink() or (root.exists() and not root.is_dir()):
-        raise FixtureError(f'results path must be a real directory: {root}')
-    if root.exists():
-        try:
-            record = json.loads(owner.read_text())
-        except (OSError, ValueError):
-            record = {}
-        if any(root.iterdir()) and record != {'owner': OWNER, 'root': str(root)}:
-            raise FixtureError(f'unowned nonempty results directory: {root}; choose a new temporary directory')
-    else:
-        root.mkdir()
-    write_marker(owner, {'owner': OWNER, 'root': str(root)})
-    return root
+    """计划镜像入口：委托 `resource_lifecycle.claim_plan`（schema2 plan-only owner）。"""
+    import resource_lifecycle
+    try:
+        return resource_lifecycle.claim_plan(root)
+    except resource_lifecycle.LifecycleError as exc:
+        raise FixtureError(str(exc)) from exc
+
+
+def begin_run(root, intent="execution", role="full", run_id=None):
+    """兼容 delegate：结果初始化唯一实现在 `resource_lifecycle.begin_run`。"""
+    import resource_lifecycle
+    try:
+        return resource_lifecycle.begin_run(root, intent, role, run_id)
+    except resource_lifecycle.LifecycleError as exc:
+        raise FixtureError(str(exc)) from exc
 
 
 def prepare_results(root):
-    root = claim_results(root)
-    for path in root.iterdir():
-        if path.name == 'logs':
-            if path.is_symlink() or not path.is_dir():
-                raise FixtureError(f'results log path must be a real directory: {path}')
-            shutil.rmtree(path)
-        elif path.is_dir() and marker(path).is_file():
-            remove(path)
-        elif path.is_file() and path.name.startswith('.') and path.name.endswith('.wf-owner.json'):
-            owned_root = root / path.name[1:-len('.wf-owner.json')]
-            if not owned_root.exists():
-                path.unlink()
-        elif (path.is_file() or path.is_symlink()) and path.name not in ('.wf-results-owner.json', '.runner.log') and (
-                path.name == 'plan.json' or path.suffix in ('.json', '.out', '.log', '.timing')
-                or path.name in ('selection.tsv', 'lines', 'stages', 'plan-calls', 'plan.err')):
-            # stages/plan-calls 与 lines 同属"每 run 证据"：复用显式结果目录时必须从本轮重新计数，
-            # 否则一次 run 的"4 阶段/2 次计划"会跨轮累积（实测 4→8、2→4）。
-            # `.runner.json` 是外层 C 的每 run 控制结果；保留旧值会让下一轮在 C 写回前
-            # 失败时把上一轮 cleanup=unknown 误聚合成本轮证据。
-            path.unlink()
-    (root / 'logs').mkdir(exist_ok=True)
-    return root
+    """只在 begin_run 的旧代许可内清理；不提供独立“继续清理 active 目录”入口。"""
+    import resource_lifecycle
+    raise FixtureError(
+        'prepare-results 不再是公共入口：结果身份与准备统一由 resource_lifecycle.begin-run '
+        '在持有结果锁时完成；请换新结果目录或按盘点/退役流程处置旧现场')
 
 
 def reset(root, forbidden=()):
@@ -206,8 +190,6 @@ def clone(source, target):
 
 
 DEFAULT_CACHE = Path.home() / '.cache' / 'wf-test-run'
-_KEEP_NAMES = {'lines', 'plan.err', 'selection.tsv'}
-_KEEP_DIRS = {'logs', 'repro', 'template'}
 
 
 def _validate_cache_root(root):
@@ -223,27 +205,12 @@ def _validate_cache_root(root):
 
 
 def _valid_results_owner(directory):
-    marker = results_marker(directory)
+    """新协议 owner 由 resource_lifecycle 判定；只有 finished+cleaned 可自动轮转。"""
+    import resource_lifecycle
     try:
-        return json.loads(marker.read_text()) == {'owner': OWNER, 'root': str(directory)}
-    except (OSError, ValueError):
+        return resource_lifecycle.classify_result(str(directory))['automatic_prune']
+    except (resource_lifecycle.LifecycleError, OSError):
         return False
-
-
-def _bootstrap_eligible(directory):
-    """无主历史目录的保守判定：顶层内容全部为运行器已知产物（复用 prepare-results
-    的文件白名单 + 已知子目录名 logs/repro/template）。子树内容不再逐项审查——
-    它们全部是运行器自产副本，整树删除是有意行为（实现注释，见任务 design D5.3）。"""
-    try:
-        for name in os.listdir(directory):
-            if name.endswith(('.json', '.out', '.log', '.timing')) or name in _KEEP_NAMES:
-                continue
-            if name in _KEEP_DIRS and os.path.isdir(Path(directory) / name):
-                continue
-            return False, name
-    except OSError:
-        return False, os.listdir(directory)
-    return True, None
 
 
 def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
@@ -291,20 +258,19 @@ def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
             # marker 校验兜底的 fail-safe：删不掉就留着并报告，不中断后续回收。
             print(f'PRUNE-SKIPPED {entry.name}: {exc}', file=sys.stderr)
             kept += 1
+    review = []
     if bootstrap:
+        # 无主目录不再凭“顶层看起来都是已知产物”删除：只报告待退役复核。
         for entry in candidates:
-            if _valid_results_owner(entry) or entry in exclude:
+            if entry in exclude or any(entry == item for item in owned):
                 continue
-            eligible, offender = _bootstrap_eligible(entry)
-            if not eligible:
-                print(f'PRUNE-SKIPPED {entry.name}: 未知顶层内容 {offender!r}', file=sys.stderr)
-                continue
-            try:
-                shutil.rmtree(entry)
-                pruned += 1
-            except OSError as exc:
-                print(f'PRUNE-SKIPPED {entry.name}: {exc}', file=sys.stderr)
+            print(f'PRUNE-KEPT {entry.name}: needs-retirement-review（无主/非终态，见盘点退役流程）',
+                  file=sys.stderr)
+            review.append(entry.name)
     print(f'PRUNED={pruned} KEPT={kept}', file=sys.stderr)
+    if review:
+        print('PRUNE-REVIEW=' + ' '.join(sorted(review)), file=sys.stderr)
+        return 1
     return 0
 
 
@@ -565,6 +531,17 @@ def main(argv=None):
     lease_results_parser.add_argument('command', nargs=argparse.REMAINDER)
     ensure_scope = sub.add_parser('check-scope')
     ensure_scope.add_argument('paths', nargs='+')
+    inventory = sub.add_parser('inventory-results')
+    inventory.add_argument('--cache-root', default=None)
+    inventory.add_argument('--results-root', action='append', default=[])
+    inventory.add_argument('--fixture', action='append', default=[])
+    inventory.add_argument('--format', choices=('json', 'sh'), default='json')
+    retire = sub.add_parser('retire-results')
+    retire.add_argument('--selection', required=True)
+    retire.add_argument('--retirement-mode', required=True,
+                        choices=('safe-legacy', 'manual-retained'))
+    retire.add_argument('--confirm-retirement', action='store_true', required=True)
+    retire.add_argument('--report', required=True)
     prune = sub.add_parser('prune-results')
     prune.add_argument('root')
     prune.add_argument('--scope', choices=('run', 'repro'), required=True)
@@ -609,6 +586,16 @@ def main(argv=None):
                 claim_results(args.root)
             elif args.operation == 'prepare-results':
                 prepare_results(args.root)
+            elif args.operation == 'inventory-results':
+                report = inventory_results(args.cache_root, args.results_root, args.fixture)
+                if args.format == 'json':
+                    print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+                else:
+                    print('INVENTORY_STATUS=' + report.get('status', 'partial'))
+                    print('INVENTORY_ENTRIES=' + str(len(report.get('entries') or [])))
+                return 0 if report.get('status') in ('complete', 'absent') else 1
+            elif args.operation == 'retire-results':
+                return retire_results(args)
             elif args.operation == 'prune-results':
                 prune_results(args.root, args.scope, args.keep, args.exclude, args.bootstrap)
             else:
@@ -617,6 +604,201 @@ def main(argv=None):
     except (FixtureError, OSError) as exc:
         print(f'FIXTURE-REFUSED: {exc}', file=sys.stderr)
         return 1
+
+
+# ---- C3：结果/夹具盘点与退役（父任务 design §4.2）-----------------------------
+
+DOMAIN = "results"
+
+
+def _result_entry(path, root_label):
+    import resource_lifecycle
+    info = resource_lifecycle.classify_result(path)
+    entry = {"root": root_label, "path": os.path.realpath(path), "kind": "result-root",
+             "class": info["kind"], "provenance": {
+                 "legacy-owned": "legacy-owned",
+                 "finished-cleaned": "owned",
+                 "plan-only": "owned",
+                 "empty": "owned",
+                 "active": "owned",
+                 "incomplete-new": "owned",
+                 "unknown": "unknown-entry",
+                 "unowned": "unowned",
+                 "absent": "unknown-entry",
+                 "unreadable": "unowned",
+             }.get(info["kind"], "unknown-entry"),
+             "reusable": info["reusable"], "blocked": None if info["reusable"] else info["reason"],
+             "uid": os.stat(path).st_uid if os.path.exists(path) else None,
+             "owner": (info.get("owner") or {}).get("kind"),
+             "state": (info.get("state") or {}).get("kind"),
+             "retained_paths": ((info.get("state") or {}).get("payload") or {}).get(
+                 "retained_paths") or [],
+             "reasons": ((info.get("state") or {}).get("payload") or {}).get(
+                 "reasons") or [],
+             "allowed": (["safe-legacy"] if info["kind"] == "legacy-owned" else
+                         (["manual-retained"] if info["kind"] in
+                          ("finished-cleaned", "active", "incomplete-new", "plan-only", "empty")
+                          else [])),
+             "digest": None}
+    identity = Path(path) / ".wf-results-owner.json"
+    try:
+        import hashlib
+        blob = b""
+        for name in (".wf-results-owner.json", "run-state.json"):
+            candidate = Path(path) / name
+            if candidate.is_symlink():
+                continue
+            if candidate.is_file() and candidate.stat().st_size <= 1024 * 1024:
+                blob += name.encode() + b"\0" + candidate.read_bytes() + b"\0"
+        entry["digest"] = "sha256:" + hashlib.sha256(blob).hexdigest() if blob else None
+    except OSError:
+        entry["digest"] = None
+    return entry
+
+
+def _fixture_entry(path, root_label):
+    path = os.path.realpath(path)
+    marker = Path(path).parent / ("." + Path(path).name + ".wf-owner.json")
+    try:
+        record = json.loads(marker.read_text())
+    except (OSError, ValueError):
+        record = None
+    owned = (record == {"owner": OWNER, "root": path}
+             and (not os.path.exists(path) or os.stat(path).st_uid == os.getuid()))
+    return {"root": root_label, "path": path, "kind": "fixture",
+            "class": "fixture-owned" if owned else "fixture-unowned",
+            "provenance": "owned" if owned else "unowned",
+            "blocked": None if owned else "no matching fixture marker",
+            "uid": os.stat(path).st_uid if os.path.exists(path) else None,
+            "marker": str(marker) if marker.is_file() else None,
+            "digest": None}
+
+
+def inventory_results(cache_root=None, results_roots=(), fixtures=()):
+    """只读盘点：cache 模式扫描直接子项；精确模式逐项核 owner/marker（互斥）。"""
+    precise = bool(results_roots or fixtures)
+    if cache_root and precise:
+        raise FixtureError("cache 模式与精确结果/夹具模式互斥")
+    if not cache_root and not precise:
+        raise FixtureError("inventory-results 至少给 --cache-root 或 --results-root/--fixture")
+    entries, unknown = [], []
+    if cache_root:
+        root = os.path.realpath(os.path.abspath(cache_root))
+        try:
+            names = sorted(os.listdir(root))
+        except FileNotFoundError:
+            return {"schema_version": 1, "domain": DOMAIN, "root": root,
+                    "status": "absent", "entries": [], "unknown": []}
+        except OSError as exc:
+            return {"schema_version": 1, "domain": DOMAIN, "root": root,
+                    "status": "partial", "error": str(exc), "entries": [], "unknown": []}
+        for name in names:
+            path = os.path.join(root, name)
+            if os.path.islink(path):
+                unknown.append({"path": path, "reason": "symlink（不跟随）"})
+                continue
+            if not os.path.isdir(path):
+                unknown.append({"path": path, "reason": "未知文件"})
+                continue
+            if not (name.startswith("run-") or name.startswith("repro-")):
+                unknown.append({"path": path, "reason": "非 run-/repro- 前缀（不推断归属）"})
+                continue
+            entries.append(_result_entry(path, root))
+        return {"schema_version": 1, "domain": DOMAIN, "root": root,
+                "status": "partial" if unknown else "complete",
+                "entries": entries, "unknown": unknown, "capacity": "not-measured"}
+    label = "precise"
+    for path in results_roots:
+        entries.append(_result_entry(path, label))
+    for path in fixtures:
+        entries.append(_fixture_entry(path, label))
+    return {"schema_version": 1, "domain": DOMAIN, "root": label, "status": "complete",
+            "entries": entries, "unknown": [], "capacity": "not-measured"}
+
+
+def observe_results(root, exclude=()):
+    """root controller 维护前一次浅扫（排除当前 results 与父子目录）。"""
+    report = inventory_results(cache_root=root)
+    excluded = {os.path.realpath(item) for item in exclude}
+    counts = {}
+    for item in report.get("entries") or []:
+        if item["path"] in excluded:
+            continue
+        key = item.get("class") or "unknown"
+        counts[key] = counts.get(key, 0) + 1
+    return {"root": report.get("root"), "status": report.get("status", "complete"),
+            "counts": counts, "capacity": "not-measured",
+            "inventory_hint": f"python3 {os.path.abspath(__file__)} inventory-results "
+                              f"--cache-root {report.get('root')} --format json"}
+
+
+def _results_guard():
+    """fixture lease + 结果域锁；两者都非阻塞取，忙则拒绝。"""
+    _lease_fixture()
+    if os.environ.get("WF_RESULTS_LOCK_FD"):
+        verify_results_lock()
+        return
+    acquire_results_lock()
+
+
+def _delete_results_entry(item):
+    import resource_lifecycle
+    path = item["path"]
+    if item["kind"] == "fixture":
+        remove(path)
+        return
+    if os.path.islink(path) or not os.path.isdir(path):
+        raise OSError(f"结果根不是真实目录：{path}")
+    import shutil
+    shutil.rmtree(path)
+    if os.path.lexists(path):
+        raise OSError(f"结果根删除失败：{path}")
+
+
+def retire_results(args):
+    import resource_lifecycle
+    document_path = Path(args.selection)
+    try:
+        document = json.loads(document_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise FixtureError(f"selection 不可读：{exc}") from exc
+    selected = resource_lifecycle.selection_entries(document, DOMAIN)
+    # 重扫描：cache/precise 由 selection 的 root 字段决定；不信任输入提供的 digest 作为权限。
+    roots = {item.get("root") for item in selected}
+    if roots == {document.get("root")} and document.get("root") not in (None, "precise"):
+        current = inventory_results(cache_root=document["root"])
+    else:
+        results_roots = [item["path"] for item in selected if item["kind"] == "result-root"]
+        fixtures = [item["path"] for item in selected if item["kind"] == "fixture"]
+        current = inventory_results(results_roots=results_roots, fixtures=fixtures)
+    current_by_path = {os.path.realpath(item["path"]): item for item in current["entries"]}
+    chosen = []
+    for item in selected:
+        found = current_by_path.get(os.path.realpath(item["path"]))
+        if found is None or found["kind"] != item["kind"]:
+            raise FixtureError(f"selection 项不存在/漂移：{item['path']}")
+        if item.get("provenance") and found.get("provenance") != item["provenance"]:
+            raise FixtureError(f"selection provenance 漂移：{item['path']}")
+        if found["kind"] == "result-root" and found.get("provenance") not in ("owned", "legacy-owned"):
+            raise FixtureError(f"结果根没有可验证 wf owner，拒绝退役：{item['path']}")
+        chosen.append(found)
+    for item in chosen:
+        live = resource_lifecycle.live_references(item["path"])
+        if live:
+            raise FixtureError(f"存在活引用（{live[0]['pid']}）拒绝删除：{item['path']}")
+    if args.retirement_mode == "safe-legacy":
+        for item in chosen:
+            if item["kind"] == "result-root" and item.get("provenance") != "legacy-owned":
+                raise FixtureError(f"safe-legacy 只接受严格旧格式 owner：{item['path']}")
+            if item["kind"] == "fixture" and item.get("provenance") != "owned":
+                raise FixtureError(f"safe-legacy 只接受可验证 fixture marker：{item['path']}")
+    report = resource_lifecycle.execute_retirement(
+        DOMAIN, document.get("root") or "precise", chosen,
+        args.retirement_mode, args.report, _delete_results_entry, _results_guard, False)
+    print(json.dumps({"state": "retired", "mode": args.retirement_mode,
+                      "report": os.path.abspath(args.report),
+                      "entries": len(report["results"])}, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 if __name__ == '__main__':

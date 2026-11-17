@@ -135,6 +135,23 @@ class CaseWorkspace:
         return env
 
 
+def write_class_cost(scope, cost):
+    """teardown 证据写失败必须可见：返回错误字符串（None=成功），绝不以空报告掩盖。"""
+    evidence = Path(scope) / "evidence" / "class-cost.json"
+    try:
+        evidence.parent.mkdir(parents=True, exist_ok=True)
+        evidence.write_text(json.dumps(cost, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+                            encoding="utf-8")
+    except OSError as exc:
+        return f"{evidence}: {exc}"
+    return None
+
+
+def should_keep_scope(leftovers, open_fds, host_changes, evidence_error, keep_env):
+    """任何未闭合现场/宿主变化/证据失败都保留 scope，供人工复核。"""
+    return bool(keep_env or leftovers or open_fds or host_changes or evidence_error)
+
+
 @unittest.skipUnless(SLOW, "WF_SLOW_TESTS=1 才跑 run_all 端到端（独占夹具）")
 class RunAllContractTest(unittest.TestCase):
     @classmethod
@@ -158,7 +175,7 @@ class RunAllContractTest(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # 先等子进程/FD 结束，再回收 scope：残留进程即失败（AC3）。
+        # 先完成进程/FD/宿主保护断言，再决定是否回收 scope（AC10：证据写失败不得吞掉）。
         started = time.monotonic()
         leftovers = cls._scope_processes()
         open_in_scope = cls._own_descriptors_in_scope()
@@ -166,6 +183,7 @@ class RunAllContractTest(unittest.TestCase):
         host_differences = {path: host_snapshot.compare(cls.production_before[path],
                                                         cls.production_after[path])
                             for path in cls.production_before}
+        changed = {path: diff for path, diff in host_differences.items() if diff["changed"]}
         cls.cost["host_protection"] = host_differences
         remaining = CLASS_DEADLINE_SECONDS - (time.monotonic() - cls.class_started)
         cls.cost["teardown_seconds"] = round(time.monotonic() - started, 2)
@@ -175,12 +193,10 @@ class RunAllContractTest(unittest.TestCase):
             (sum(call["seconds"] for call in entry.get("calls") or [])
              + entry.get("candidate_prepare_seconds", 0.0))
             for entry in (cls.cost["cases"].values() or [{}]))
-        evidence = Path(cls.scope) / "evidence" / "class-cost.json"
-        try:
-            evidence.write_text(json.dumps(cls.cost, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-                                encoding="utf-8")
-        except OSError:
-            pass
+        evidence_error = write_class_cost(cls.scope, cls.cost)
+        if evidence_error:
+            cls.cost["evidence_write_error"] = evidence_error
+            print(f"TEARDOWN-EVIDENCE-FAILED: {evidence_error}", file=sys.stderr)
         print("class-cost: " + json.dumps({key: cls.cost[key] for key in
                                            ("class_seconds", "teardown_seconds",
                                             "class_deadline_remaining", "longest_case_seconds",
@@ -190,18 +206,24 @@ class RunAllContractTest(unittest.TestCase):
             print(f"LEFTOVER-PROCESS {pid}: {cmdline}", file=sys.stderr)
         for fd, target in open_in_scope:
             print(f"LEFTOVER-FD {fd}: {target}", file=sys.stderr)
-        if os.environ.get("WF_CONTRACT_KEEP_SCOPE") == "1":
+        keep = should_keep_scope(leftovers, open_in_scope, changed, evidence_error,
+                                 os.environ.get("WF_CONTRACT_KEEP_SCOPE") == "1")
+        if keep:
             print(f"contract scope kept: {cls.scope}")
         else:
             shutil.rmtree(cls.scope, ignore_errors=True)
+        problems = []
         if leftovers:
-            raise AssertionError(f"tearDownClass 仍有 {len(leftovers)} 个引用 scope 的进程残留")
+            problems.append(f"tearDownClass 仍有 {len(leftovers)} 个引用 scope 的进程残留")
         if open_in_scope:
-            raise AssertionError(f"tearDownClass 仍有 {len(open_in_scope)} 个指向 scope 的 FD 残留")
-        changed = {path: diff for path, diff in host_differences.items() if diff["changed"]}
+            problems.append(f"tearDownClass 仍有 {len(open_in_scope)} 个指向 scope 的 FD 残留")
         if changed:
-            raise AssertionError("宿主缓存/生产结果锁的终态与类入口清单不一致："
-                                 + json.dumps(changed, ensure_ascii=False, sort_keys=True))
+            problems.append("宿主缓存/生产结果锁的终态与类入口清单不一致："
+                            + json.dumps(changed, ensure_ascii=False, sort_keys=True))
+        if evidence_error:
+            problems.append(f"teardown 证据写失败：{evidence_error}")
+        if problems:
+            raise AssertionError("; ".join(problems))
 
     @classmethod
     def _own_descriptors_in_scope(cls):
@@ -264,6 +286,24 @@ class RunAllContractTest(unittest.TestCase):
         finally:
             proc.kill()
             proc.wait(timeout=5)
+
+    def test_teardown_decision_keeps_the_scope_on_unclosed_facts(self):
+        """证据失败/残留/宿主变化必须保留 scope，且与清理顺序无关。"""
+        self.assertTrue(should_keep_scope([], [], {}, "disk full", False))
+        self.assertTrue(should_keep_scope([("1", "x")], [], {}, None, False))
+        self.assertTrue(should_keep_scope([], [("3", "x")], {}, None, False))
+        self.assertTrue(should_keep_scope([], [], {"p": {}}, None, False))
+        self.assertTrue(should_keep_scope([], [], {}, None, True))
+        self.assertFalse(should_keep_scope([], [], {}, None, False))
+
+    def test_class_cost_write_failure_is_reported_not_swallowed(self):
+        with tempfile.TemporaryDirectory(prefix="wf-contract-cost-") as root:
+            path = Path(root) / "evidence" / "class-cost.json"
+            path.parent.mkdir()
+            path.mkdir()  # 目录占位：write_text 必然失败
+            error = write_class_cost(root, {"schema_version": 1})
+            self.assertIsNotNone(error)
+            self.assertIn("class-cost.json", error)
 
     # ---- 基座 ---------------------------------------------------------------
     def case(self, name):
@@ -424,9 +464,11 @@ class RunAllContractTest(unittest.TestCase):
                 "WF_RESULTS_CACHE": str(results_cache)}
         result, _, env = self.run_runner(case, [], cold)
         self.assertEqual(result.returncode, 0, result.stdout[-2000:] + result.stderr[-2000:])
-        self.assertIn("运行 1 项", result.stdout)
+        self.assertIn("执行单元 1", result.stdout)
         self.assertIn("GATE-OK", result.stdout)
         self.assertNotIn("REPRO_TOTAL", result.stdout)
+        self.assertNotIn("CLEANUP-UNKNOWN", result.stdout + result.stderr,
+                         "正常 root started 不得被误报成 child unknown")
         results = Path(env["WF_RESULTS_DIR"])
         self.assertEqual(lines(results / "stages"), ["public", "lease", "controlled", "execute"],
                          "一次真实 run = 4 个阶段（3 次脚本重入）")
@@ -438,7 +480,22 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(summary["flow_ran"], 0)
         self.assertTrue(summary["template_reused"], "默认应共用同一夹具源")
         self.assertIn(summary["template_source"], ("run-build", "cache"))
-        self.assertEqual(summary["schema_version"], 2)
+        self.assertEqual(summary["schema_version"], 3)
+        control = json.loads((results / ".runner.json").read_text())
+        observe = control["control"]["observe"]
+        self.assertEqual(observe["status"], "enabled")
+        self.assertEqual(observe["calls"], 1, "真实 root 只调用一次 observe_roots")
+        self.assertTrue(observe["roots"], "实际配置根必须各出现一次")
+        self.assertEqual(len(observe["roots"]), len(set(observe["roots"])), "根必须去重")
+        self.assertEqual(control["control"]["assessment"]["evidence_state"], "complete")
+        self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
+        state = json.loads((results / "run-state.json").read_text())
+        self.assertEqual((state["state"], state["cleanup_state"], state["evidence_state"]),
+                         ("finished", "cleaned", "complete"))
+        self.assertEqual(state["run_id"], control["run_id"])
+        self.assertEqual(summary["run_id"], control["run_id"])
+        self.assertEqual(set(summary["input_evidence"]),
+                         {"metrics", "plan", "context", "lines", "units", "repro"})
         self.assertEqual(summary["units_total"],
                          summary["suite_ran"] + summary["flow_ran"] + summary["repro_ran"])
         self.assertIn("budget", summary)
@@ -491,7 +548,7 @@ class RunAllContractTest(unittest.TestCase):
         case = self.case("gate-fail")
         result, _, _ = self.run_runner(case, [], {"WF_SUITES": "f1_candidate_smoke"})
         self.assertNotEqual(result.returncode, 0, result.stdout[-2000:])
-        self.assertIn("GATE-FAIL", result.stdout)
+        self.assertIn("GATE-FAIL", result.stdout + result.stderr)
 
     def test_stale_test_release_is_refused_in_a_private_pool(self):
         case = self.case("stale-release")
@@ -650,6 +707,221 @@ class RunAllContractTest(unittest.TestCase):
         self.assertFalse(summary["template_cache_hit"])
         self.assertEqual(entries(cache), before, "HEAD 不可读时不得读写跨 run 模板缓存")
 
+    # ---- controller / finalize / 发布故障（AC02/AC10/AC14）-------------------
+    def _fault_run(self, name, fault, extra=None):
+        case = self.case(name)
+        env = {"WF_SUITES": "r70_tests", "WF_JOBS": "1",
+               "WF_TEST_FAULT_INJECTION": "1", "WF_RUNNER_FINALIZE_FAULT": fault}
+        env.update(extra or {})
+        result, _, env_used = self.run_runner(case, [], env)
+        return result, Path(env_used["WF_RESULTS_DIR"])
+
+    def test_controller_and_finalize_faults_never_sign_success(self):
+        for fault in ("assess-exception", "assess-none", "assess-empty", "assess-malformed",
+                      "assess-contradictory", "delete-oserror", "control-write-oserror",
+                      "summary-exception", "summary-malformed"):
+            with self.subTest(fault=fault):
+                result, results = self._fault_run("fault-" + fault, fault)
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output[-1500:])
+                self.assertNotIn("GATE-OK", output)
+                state_path = results / "run-state.json"
+                if state_path.exists():
+                    state = json.loads(state_path.read_text())
+                    self.assertFalse(state.get("state") == "finished"
+                                     and state.get("cleanup_state") == "cleaned",
+                                     f"{fault}: 不得写 finished-cleaned")
+                plan = json.loads((results / "plan.json").read_text())
+                if fault in ("assess-exception", "assess-none", "assess-empty",
+                             "assess-malformed", "assess-contradictory", "delete-oserror"):
+                    self.assertTrue(Path(plan["fix"]).exists(),
+                                    f"{fault}: 清理未确认/失败时必须保留现场")
+
+    def test_delete_after_first_reports_exact_partial_completion(self):
+        result, results = self._fault_run("fault-delete-after-first", "delete-after-first")
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output[-1500:])
+        self.assertNotIn("GATE-OK", output)
+        plan = json.loads((results / "plan.json").read_text())
+        self.assertFalse(Path(plan["fix"]).exists(), "第一项 owned 资源已删除")
+        self.assertTrue(Path(plan["fix"] + ".legacy").exists(), "第二项必须保留")
+        control = json.loads((results / ".runner.json").read_text())
+        cleanup = control["control"]["cleanup"]
+        self.assertEqual(cleanup["cleanup_state"], "failed")
+        self.assertEqual(cleanup["removed"], ["FIX"])
+        self.assertEqual(cleanup["failed"], ["LEGACY_FIXTURE_ROOT"])
+        self.assertEqual(cleanup["retained_paths"], [plan["fix"] + ".legacy"])
+        state = json.loads((results / "run-state.json").read_text())
+        self.assertEqual(state["state"], "finished")
+        self.assertEqual(state["cleanup_state"], "failed",
+                         "删除失败必须如实记为 failed（不得降成 unknown 或 cleaned）")
+
+    def test_state_finish_failure_keeps_the_run_active(self):
+        result, results = self._fault_run("fault-state-finish", "state-finish-oserror")
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output[-1500:])
+        self.assertNotIn("GATE-OK", output)
+        state = json.loads((results / "run-state.json").read_text())
+        self.assertEqual(state["state"], "active", "run-state 终写失败必须保留 active")
+        # 下一次运行不得自动复用 active 现场。
+        case = self.case("fault-state-finish-retry")
+        retry, _, _ = self.run_runner(case, [], {"WF_SUITES": "r70_tests", "WF_JOBS": "1",
+                                                 "WF_RESULTS_DIR": str(results)})
+        self.assertNotEqual(retry.returncode, 0)
+        self.assertIn("RESULTS-INIT-FAILED", retry.stdout + retry.stderr)
+
+    def test_metrics_handoff_faults_are_rejected_by_the_reader(self):
+        for fault in ("metrics-write-oserror", "metrics-missing", "metrics-truncated",
+                      "metrics-old-run", "metrics-input-mismatch"):
+            with self.subTest(fault=fault):
+                result, results = self._fault_run("metrics-" + fault, fault)
+                output = result.stdout + result.stderr
+                self.assertNotEqual(result.returncode, 0, output[-1500:])
+                self.assertNotIn("GATE-OK", output)
+                state = json.loads((results / "run-state.json").read_text())
+                self.assertFalse(state.get("state") == "finished"
+                                 and state.get("cleanup_state") == "cleaned",
+                                 f"{fault}: metrics 失败不得写 finished-cleaned")
+                if (results / "summary.json").exists():
+                    summary = json.loads((results / "summary.json").read_text())
+                    self.assertNotEqual(summary.get("status"), "ok")
+
+    def test_metric_fault_selectors_do_not_leak_into_units(self):
+        result, results = self._fault_run("metrics-no-leak", "metrics-missing")
+        for name in ("r70_tests.out",):
+            text = (results / name).read_text(encoding="utf-8", errors="replace")
+            self.assertNotIn("WF_METRICS_FAULT", text)
+
+    # ---- 模板事务真实入口（AC04/AC19）-------------------------------------
+    def test_repro_state_writer_failure_blocks_the_inner_success_exit(self):
+        case = self.case("repro-state-fail")
+        state = case.private / "readonly-state"
+        state.mkdir()
+        state.chmod(0o555)
+        self.addCleanup(lambda: state.chmod(0o755))
+        result, _, env = self.run_runner(
+            case, ["--repro", "green", "--repro-group", "install"],
+            {"WF_SUITES": "r70_tests", "WF_WITH_REPRO": "1", "WF_REPRO_JOBS": "1",
+             "WF_TEST_RUN_CACHE": str(state)})
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output[-2000:])
+        self.assertNotIn("GATE-OK", output)
+        self.assertIn("REPRO-INNER-FAILED", output)
+        results = Path(env["WF_RESULTS_DIR"])
+        if (results / "summary.json").exists():
+            summary = json.loads((results / "summary.json").read_text())
+            self.assertNotEqual(summary.get("status"), "ok")
+
+    def test_template_window_recovers_through_the_real_run_all_entry(self):
+        case = self.case("template-window")
+        env_extra = {"WF_SUITES": "r70_tests"}
+        first, _, env = self.run_runner(case, [], env_extra)
+        self.assertEqual(first.returncode, 0, first.stdout[-2000:] + first.stderr[-2000:])
+        results = Path(env["WF_RESULTS_DIR"])
+        cache = Path(env["WF_RESULTS_CACHE"]) / "template"
+        self.assertTrue(entries(cache), "首次真实 run 必须发布模板缓存条目")
+        fault = dict(env_extra, WF_TEST_FAULT_INJECTION="1",
+                     WF_TEMPLATE_TXN_REBUILD="1",
+                     WF_TEMPLATE_TXN_STOP_AFTER="after-journal")
+        failed, _, _ = self.run_runner(case, [], fault)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("TEMPLATE-CACHE-FAILED", failed.stdout + failed.stderr)
+        recovered, _, env = self.run_runner(case, [], env_extra)
+        self.assertEqual(recovered.returncode, 0,
+                         recovered.stdout[-2000:] + recovered.stderr[-2000:])
+        self.assertIn("TEMPLATE-CACHE-RECOVERED: rolled-back", recovered.stderr)
+        self.assertIn("GATE-OK", recovered.stdout)
+        control = json.loads((Path(env["WF_RESULTS_DIR"]) / ".runner.json").read_text())
+        template_root = str(cache.resolve())
+        observe = control["control"]["observe"]
+        self.assertIn(template_root, observe["roots"])
+        report = observe["reports"][template_root]
+        self.assertIn(report["status"], ("partial", "complete"))
+        self.assertGreaterEqual(report["counts"].get("journal", 0)
+                                + report["counts"].get("recovery-required", 0), 1,
+                                "恢复前 observe 必须如实显示未完成事务/待恢复条目")
+        self.assertFalse([name for name in entries(cache) if name.endswith(".journal.json")],
+                         "真实入口恢复后不得残留 journal")
+
+    # ---- 初始化真死亡（AC08/AC09）-----------------------------------------
+    def _seed_cleaned_results(self, case):
+        env_extra = {"WF_SUITES": "r70_tests"}
+        result, _, env = self.run_runner(case, [], env_extra)
+        self.assertEqual(result.returncode, 0, result.stdout[-2000:] + result.stderr[-2000:])
+        return env_extra, Path(env["WF_RESULTS_DIR"])
+
+    def _plane_owner(self, results):
+        return json.loads((results / ".wf-results-owner.json").read_text())
+
+    def test_init_checkpoint_death_leaves_identity_and_blocks_reuse(self):
+        """首次/计划转执行/cleaned 重用 × 三个点：helper os._exit(97)，shell 原样退出。"""
+        points = ("after-owner-intent", "after-run-state-before-prepare",
+                  "after-prepare-before-controller")
+        for scenario in ("first", "plan-only", "reuse"):
+            for index, point in enumerate(points):
+                with self.subTest(scenario=scenario, point=point):
+                    case = self.case(f"init-{scenario}-{index}")
+                    env_extra = {"WF_SUITES": "r70_tests"}
+                    if scenario == "reuse":
+                        env_extra, results = self._seed_cleaned_results(case)
+                        seed_plan = (results / "plan.json").exists()
+                        self.assertTrue(seed_plan)
+                    else:
+                        results = Path(case.env(**env_extra)["WF_RESULTS_DIR"])
+                    if scenario == "plan-only":
+                        mirror, _, _ = self.run_runner(
+                            case, ["--list"], dict(env_extra, WF_RESULTS_DIR=str(results)))
+                        self.assertEqual(mirror.returncode, 0, mirror.stderr)
+                        self.assertEqual(self._plane_owner(results)["intent"], "plan-only")
+                        self.assertTrue((results / "plan.json").is_file())
+                    fault = dict(env_extra, WF_RESULTS_DIR=str(results),
+                                 WF_TEST_FAULT_INJECTION="1",
+                                 WF_RESULTS_INIT_STOP_AFTER=point)
+                    proc, _, _ = self.run_runner(case, [], fault)
+                    self.assertEqual(proc.returncode, 97,
+                                     proc.stdout[-1000:] + proc.stderr[-1000:])
+                    self.assertIn("WF-RESULTS-INIT-STOP", proc.stderr)
+                    self.assertNotIn("RUN_ID=", proc.stdout, "死亡窗口不得给成功 run_id")
+                    control_path = results / ".runner.json"
+                    owner_after = self._plane_owner(results)
+                    if control_path.exists():
+                        # reuse 现场的旧 control 记录可以保留，但它必须还是上一代的 run_id。
+                        old_control = json.loads(control_path.read_text())
+                        self.assertNotEqual(old_control.get("run_id"), owner_after["run_id"],
+                                            "helper 死后不得启动本代 controller")
+                    else:
+                        self.assertFalse(control_path.exists())
+                    owner = self._plane_owner(results)
+                    self.assertEqual((owner["schema_version"], owner["intent"]),
+                                     (2, "execution"))
+                    state_path = results / "run-state.json"
+                    if point == "after-owner-intent":
+                        if state_path.exists():
+                            old_state = json.loads(state_path.read_text())
+                            self.assertNotEqual(old_state["run_id"], owner["run_id"],
+                                                "本代 state 尚未写；残留只能是上一代记录")
+                            self.assertEqual(scenario, "reuse",
+                                             "首次/计划场景不应有残留 state")
+                    else:
+                        self.assertTrue(state_path.exists())
+                    if scenario != "first":
+                        if point == "after-prepare-before-controller":
+                            self.assertFalse((results / "plan.json").exists(),
+                                             "prepare 后的旧产物已按许可清理")
+                        else:
+                            self.assertTrue((results / "plan.json").exists(),
+                                            "prepare 之前的旧证据必须保留")
+                    # 新入口不得把死亡现场降级成 legacy/plan-only；也不得自动删现场。
+                    retry, _, _ = self.run_runner(
+                        case, [], dict(env_extra, WF_RESULTS_DIR=str(results),
+                                       WF_TEST_FAULT_INJECTION="0",
+                                       WF_RESULTS_INIT_STOP_AFTER=""))
+                    self.assertNotEqual(retry.returncode, 0)
+                    self.assertIn("RESULTS-INIT-FAILED", (retry.stdout + retry.stderr))
+                    self.assertTrue((results / ".wf-results-owner.json").exists())
+                    # 锁必须真实释放：scope 结果锁与 fixture lease 均可再次获取。
+                    self.assert_scope_locks_reacquirable()
+
     # ---- 取消面（AC3/AC11）-------------------------------------------------
     def test_interrupting_root_runner_cleans_its_command_and_fixtures(self):
         case = self.case("cancel")
@@ -678,7 +950,16 @@ class RunAllContractTest(unittest.TestCase):
             self.cost["cleanup_seconds"] = round(time.monotonic() - cleanup_started, 2)
             self.assertNotEqual(proc.returncode, 0, stdout.decode() + stderr.decode())
             control = json.loads((results / ".runner.json").read_text())
-            self.assertEqual(control["status"], "cancelled")
+            self.assertEqual(control["control"]["target"]["status"], "cancelled")
+            self.assertFalse(control.get("success"))
+            self.assertEqual(control["state"], "finished")
+            self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
+            state = json.loads((results / "run-state.json").read_text())
+            self.assertEqual(state["status"], "cancelled")
+            self.assertEqual(state["cleanup_state"], "cleaned",
+                             "取消完成清理后必须如实记录清理事实")
+            self.assertEqual(state["evidence_state"], "incomplete",
+                             "取消导致证据不完整；复用由证据门禁阻断，不靠篡改 cleanup")
             plan = json.loads((results / "plan.json").read_text())
             self.assertFalse(Path(plan["fix"]).exists(), "取消后夹具必须回收")
             self.assertFalse((results / "template").exists(), "取消后 run 内模板必须回收")
@@ -697,8 +978,8 @@ class RunAllContractTest(unittest.TestCase):
             case, [], {"WF_SUITES": "r70_tests", "WF_JOBS": "1",
                        "WF_TEST_FAULT_INJECTION": "1", "WF_UNIT_FAULT": "kill"})
         self.assertNotEqual(result.returncode, 0, result.stdout[-2000:])
-        self.assertIn("CLEANUP-UNKNOWN", result.stdout)
-        self.assertIn("GATE-FAIL", result.stdout)
+        self.assertIn("CLEANUP-UNKNOWN", result.stdout + result.stderr)
+        self.assertIn("GATE-FAIL", result.stdout + result.stderr)
         results = Path(env["WF_RESULTS_DIR"])
         summary = json.loads((results / "summary.json").read_text())
         self.assertEqual(summary["cleanup_state"], "unknown")

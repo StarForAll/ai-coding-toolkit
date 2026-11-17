@@ -165,10 +165,27 @@ class Precondition(Exception):
 
 
 def _cleanup():
+    """staged 目录的回收许可来自真实监督结论：
+    - WF_REPRO_KEEP=1：显式保留并报告路径；
+    - WF_REPRO_DEFER_CLEANUP=1：托管 worker 在 supervision 核验后统一回收相位目录；
+    - 两者都没有（手工直接 case）：不假装清理成功，保留并报告 staged 路径。"""
     if os.environ.get("WF_REPRO_KEEP") == "1":
+        for path in _STAGED:
+            print(f"STAGED-KEPT: {path}", file=__import__("sys").stderr)
+        _STAGED.clear()
         return
+    if os.environ.get("WF_REPRO_DEFER_CLEANUP") == "1":
+        for path in _STAGED:
+            print(f"STAGED-DEFERRED: {path}", file=__import__("sys").stderr)
+        _STAGED.clear()
+        return
+    kept = []
     for path in _STAGED:
         shutil.rmtree(path, ignore_errors=True)
+        if os.path.exists(path):
+            kept.append(path)
+    if kept:
+        print("STAGED-RETAINED: " + " ".join(kept), file=__import__("sys").stderr)
     _STAGED.clear()
 
 

@@ -238,8 +238,17 @@ shutil.copy(os.path.join(wfdrive.REPO, "scripts", "python_runtime_identity.py"),
 # 测试发行入口桩（release_context 只借用它的 ensure/check 子命令；锁由 release_lock 负责）。
 # 它必须遵守真实 CLI 的 `--json` 状态契约：release_context 会解析 status（built|reused|checked）。
 open(os.path.join(fake_root, "scripts/tests/wf_test_release.py"), "w").write(
-    'import json\nprint(json.dumps({"status": "built", "builds": 1, "root": "fake", '
-    '"version": "0.1.0"}))\nraise SystemExit(0)\n')
+    'import json, sys\n\n\n'
+    'def observe(root):\n'
+    '    return {"root": root, "status": "absent", "counts": {},\n'
+    '            "capacity": "not-measured", "inventory_hint": ""}\n\n\n'
+    'def inventory(root):\n'
+    '    return {"schema_version": 1, "domain": "test-release-cache", "root": root,\n'
+    '            "status": "absent", "entries": [], "unknown": []}\n\n\n'
+    'if __name__ == "__main__":\n'
+    '    print(json.dumps({"status": "built", "builds": 1, "root": "fake", '
+    '"version": "0.1.0"}))\n'
+    '    raise SystemExit(0)\n')
 # release 锁桩：假环境不付真实 flock，但保留 acquire/write_env/verify 的形状。
 open(os.path.join(fake_root, "scripts/release_lock.py"), "w").write(
     'import os\n\n\nclass Busy(Exception):\n    pass\n\n\nclass LockError(Exception):\n    pass\n\n\n'
@@ -267,7 +276,12 @@ open(os.path.join(fake, "run_one.sh"), "w").write(
     '  -- "$PY" "$HERE/$script" >>"$out" 2>&1\nrc=$?\n'
     'line=$(tail -1 "$out")\n'
     'status=ok\n[ "$rc" -eq 0 ] || status=bad\n'
-    'printf "%s\\t%s\\t%s\\t%s\\t%s\\n" "$suite" "$rc" "0" "$status" "$line" >> "$RESULTS_DIR/lines"\n')
+    'row=$(printf "%s\\t%s\\t%s\\t%s\\t%s" "$suite" "$rc" "0" "$status" "$line")\n'
+    'printf "%s\\n" "$row" >> "$RESULTS_DIR/lines"\n'
+    'rid=()\n[ -n "${WF_RUN_ID:-}" ] && rid=(--run-id "$WF_RUN_ID")\n'
+    '"$PY" "$HERE/resource_lifecycle.py" unit-execution --unit-result "$RESULTS_DIR/$suite.test.log.json" \\\n'
+    '  --unit "$suite" --state passed --result-row "$row" \\\n'
+    '  --phase "test:$RESULTS_DIR/$suite.test.log.json" "${rid[@]}" >>"$out" 2>&1 || exit 1\n')
 open(os.path.join(fake, "wf_fixture.sh"), "w").write(
     '#!/bin/bash\nset -e\nF=${1:-/tmp/fake}\nrm -rf "$F"; mkdir -p "$F/.wf/bin"\n'
     ': > "$F/.wf/bin/wf.py"\n')
@@ -359,10 +373,11 @@ _fake_env = {**_fake_base, "WF_TEST_SCOPE_ROOT": _fake_scope, "WF_FIX": _fake_fi
 proc = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                       env={**_fake_env, "WF_RESULTS_DIR": _fake_results1})
 _summary = [ln for ln in proc.stdout.splitlines() if ln.startswith("---- ")]
-rec("4 有失败时脚本非零退出", "exit≠0 且汇总报失败",
+rec("4 有失败时脚本非零退出", "exit≠0 且 controller 报失败",
     f"exit={proc.returncode} summary={_summary[-1] if _summary else None} "
-    f"stdout={(proc.stdout or '')[-800:]} stderr={(proc.stderr or '')[-800:]}",
-    proc.returncode != 0 and any("失败 1 项" in ln for ln in _summary))
+    f"stdout={(proc.stdout or '')[-4000:]} stderr={(proc.stderr or '')[-4000:]}",
+    proc.returncode != 0 and ("GATE-FAIL" in (proc.stderr or "")
+                              or any("status=failed" in ln for ln in _summary)))
 _cp1_expect = int(next(item["expect"] for item in _manifest["units"] if item["name"] == "cp1_tests"))
 open(os.path.join(fake, "cp1_tests.py"), "w").write(
     "".join("print('[PASS] case " + str(i) + "')\n" for i in range(1, _cp1_expect + 1))
@@ -410,9 +425,9 @@ atexit.register(shutil.rmtree, _fake_results4, ignore_errors=True)
 proc4 = subprocess.run(["bash", os.path.join(fake, "run_all.sh")], capture_output=True, text=True,
                        env={**_fake_env, "WF_RESULTS_DIR": _fake_results4, "WF_JOBS": "4",
                             "R67_SKIP_SERIAL": "1"})
-rec("4d 串行段漏跑结果 → MISSING-RESULTS", "exit≠0 且 MISSING-RESULTS 含 cp1_tests",
+rec("4d 串行段漏跑结果 → 证据缺口", "exit≠0 且 ASSESS_MISSING 含 cp1_tests",
     f"exit={proc4.returncode} missing={(proc4.stdout or '')[-200:]}",
-    proc4.returncode != 0 and "MISSING-RESULTS:cp1_tests" in proc4.stdout)
+    proc4.returncode != 0 and "ASSESS_MISSING=cp1_tests" in proc4.stdout)
 
 json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

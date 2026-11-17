@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -47,40 +48,82 @@ class FixtureScopeTest(unittest.TestCase):
             scope.prepare_results(target)
         self.assertEqual(sentinel.read_text(), '{"user": true}')
 
-    def test_owned_results_cleanup_only_removes_runner_artifacts(self):
+    def lifecycle(self):
+        spec = importlib.util.spec_from_file_location(
+            "wf_resource_lifecycle_fixture_test", FULL / "resource_lifecycle.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def finished_run(self, root, artifacts=()):
+        life = self.lifecycle()
+        out = life.begin_run(str(root), "execution", "full")
+        for relative in artifacts:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            if relative.endswith("/"):
+                path.mkdir(exist_ok=True)
+            else:
+                path.write_text("x")
+        life.finish_run(str(root), out["run_id"], "full", "cleaned", "ok", "complete")
+        return out
+
+    def test_finished_cleaned_generation_is_reset_through_begin_run(self):
         scope = self.scope()
         target = self.root / "results"
-        scope.claim_results(target)
-        (target / "old.json").write_text("{}")
-        (target / "notes.txt").write_text("keep")
-        (target / "logs").mkdir()
-        (target / "logs" / "old.log").write_text("log")
-        scope.prepare_results(target)
+        self.finished_run(target, ["old.json", "lines", "logs/old.log", "commands/a.json"])
+        scope.begin_run(str(target))
         self.assertFalse((target / "old.json").exists())
-        self.assertEqual((target / "notes.txt").read_text(), "keep")
+        self.assertFalse((target / "commands" / "a.json").exists())
+        self.assertFalse((target / "logs" / "old.log").exists())
         self.assertTrue((target / "logs").is_dir())
-        self.assertTrue((target / ".wf-results-owner.json").is_file())
+        self.assertEqual(json.loads((target / ".wf-results-owner.json").read_text())["intent"],
+                         "execution")
+
+    def test_unknown_top_level_entry_blocks_reuse_without_deletion(self):
+        scope = self.scope()
+        target = self.root / "results"
+        self.finished_run(target)
+        (target / "notes.txt").write_text("keep")
+        with self.assertRaises(scope.FixtureError):
+            scope.begin_run(str(target))
+        self.assertEqual((target / "notes.txt").read_text(), "keep")
 
     def test_reused_results_drop_stale_runner_control_record(self):
         scope = self.scope()
         results = self.root / 'results'
-        scope.claim_results(results)
-        (results / '.runner.json').write_text('{"status": "failed", "supervision": '
-                                              '{"cleanup_state": "unknown"}}')
-        scope.prepare_results(results)
+        self.finished_run(results, ['.runner.json'])
+        scope.begin_run(str(results))
         self.assertFalse((results / '.runner.json').exists(),
                          "上一轮的 .runner.json 不得跨轮污染 cleanup 聚合")
 
-    def test_dangling_log_link_is_removed_without_creating_its_target(self):
+    def test_dangling_log_link_is_refused_without_creating_its_target(self):
         scope = self.scope()
         results = self.root / 'results'
-        scope.claim_results(results)
+        self.finished_run(results)
         outside = self.root / 'outside.log'
         link = results / 'case.log'
         link.symlink_to(outside)
-        scope.prepare_results(results)
-        self.assertFalse(link.is_symlink())
+        with self.assertRaises(scope.FixtureError):
+            scope.begin_run(str(results))
+        self.assertTrue(link.is_symlink())
         self.assertFalse(outside.exists())
+
+    def test_prepare_results_is_no_longer_a_standalone_entry(self):
+        scope = self.scope()
+        target = self.root / "results"
+        self.finished_run(target)
+        with self.assertRaises(scope.FixtureError):
+            scope.prepare_results(target)
+
+    def test_claim_results_writes_plan_only_owner(self):
+        scope = self.scope()
+        target = self.root / "results"
+        scope.claim_results(target)
+        owner = json.loads((target / ".wf-results-owner.json").read_text())
+        self.assertEqual((owner["schema_version"], owner["intent"], owner["run_id"]),
+                         (2, "plan-only", None))
+        self.assertFalse((target / "run-state.json").exists())
 
     def test_fixture_lease_rejects_parallel_root_invocation(self):
         command = [sys.executable, str(FULL / "fixture_scope.py"), "lease", "--",
@@ -169,17 +212,28 @@ class PruneResultsTest(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def _make_run(self, name, owned=True, mtime=0):
-        import json as _json
+    def lifecycle(self):
+        spec = importlib.util.spec_from_file_location(
+            "wf_resource_lifecycle_prune_test", FULL / "resource_lifecycle.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _make_run(self, name, owned=True, mtime=0, state="finished", cleanup="cleaned",
+                  evidence="complete"):
         import os as _os
         directory = self.cache / name
-        directory.mkdir()
-        (directory / "lines").write_text("stub")
         if owned:
+            life = self.lifecycle()
+            run = life.begin_run(str(directory), "execution", "full")
+            (directory / "lines").write_text("stub")
+            if state == "finished":
+                life.finish_run(str(directory), run["run_id"], "full", cleanup, "ok", evidence)
             marker = directory / ".wf-results-owner.json"
-            marker.write_text(_json.dumps(
-                {"owner": "wf-test-fixture-v1", "root": str(directory)}))
             _os.utime(marker, (mtime, mtime))
+        else:
+            directory.mkdir()
+            (directory / "lines").write_text("stub")
         return directory
 
     def test_prunes_oldest_owned_beyond_keep_and_prefix_isolated(self):
@@ -204,20 +258,33 @@ class PruneResultsTest(unittest.TestCase):
         self.assertTrue(unowned.exists())
         self.assertTrue(excluded.exists())
 
-    def test_bootstrap_only_removes_known_product_shapes(self):
+    def test_bootstrap_only_reports_unowned_entries_and_never_deletes_them(self):
         scope = self.scope()
         eligible = self._make_run("run-300", owned=False)
         (eligible / "logs").mkdir()  # 已知子目录（无 marker）
         unknown = self._make_run("run-301", owned=False)
-        (unknown / "flows").write_text("x")  # 顶层未知文件 → 跳过
-        deep = self._make_run("run-302", owned=False)
-        (deep / "home-suite").mkdir()  # 顶层未知目录 → 跳过
-        keep_marker = self._make_run("run-303", mtime=5)
-        scope.prune_results(self.cache, "run", keep=20, bootstrap=True)
-        self.assertFalse(eligible.exists())
+        (unknown / "flows").write_text("x")
+        active = self._make_run("run-302", state="active")
+        retained = self._make_run("run-303", cleanup="unknown")
+        keep_marker = self._make_run("run-304", mtime=5)
+        rc = scope.prune_results(self.cache, "run", keep=20, bootstrap=True)
+        self.assertEqual(rc, 1, "无主/非终态条目必须报告待退役复核并以非零退出")
+        self.assertTrue(eligible.exists(), "已知形状不等于删除许可")
         self.assertTrue(unknown.exists())
-        self.assertTrue(deep.exists())
+        self.assertTrue(active.exists())
+        self.assertTrue(retained.exists())
         self.assertTrue(keep_marker.exists())
+
+    def test_legacy_owner_is_not_auto_pruned(self):
+        scope = self.scope()
+        legacy = self.cache / "run-400"
+        legacy.mkdir()
+        (legacy / "lines").write_text("x")
+        (legacy / ".wf-results-owner.json").write_text(json.dumps(
+            {"owner": "wf-test-fixture-v1", "root": str(legacy)}))
+        rc = scope.prune_results(self.cache, "run", keep=0, bootstrap=True)
+        self.assertEqual(rc, 1)
+        self.assertTrue(legacy.exists(), "旧格式 owner 不能凭名字自动轮转")
 
     def test_invalid_root_and_scope_are_refused(self):
         scope = self.scope()
@@ -369,3 +436,218 @@ class TestScopeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---- C3：结果/夹具盘点与退役（父任务 design §4.2）-----------------------------
+
+import pty  # noqa: E402
+import select  # noqa: E402
+
+
+def results_cli(scope, args, env_extra=None):
+    import subprocess
+    env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+    env["WF_TEST_SCOPE_ROOT"] = str(scope)
+    env.update(env_extra or {})
+    return subprocess.run([sys.executable, str(FULL / "fixture_scope.py"), *args],
+                          capture_output=True, text=True, env=env, cwd=str(FULL.parents[2]),
+                          timeout=120)
+
+
+def retire_results_pty(scope, args, phrase):
+    master, slave = pty.openpty()
+    env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+    env["WF_TEST_SCOPE_ROOT"] = str(scope)
+    proc = subprocess.Popen([sys.executable, str(FULL / "fixture_scope.py"),
+                             "retire-results", *args], stdin=slave, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, env=env,
+                            cwd=str(FULL.parents[2]))
+    os.close(slave)
+    try:
+        time.sleep(0.5)
+        try:
+            os.write(master, (phrase + "\n").encode())
+        except OSError:
+            pass
+        try:
+            stdout, stderr = proc.communicate(timeout=60)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate(timeout=10)
+            stderr += "\nPTY-CHILD-TIMEOUT"
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+    return proc.returncode, stdout, stderr
+
+
+class ResultsInventoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import fixture_scope as scope_module
+        cls.scope = scope_module.create_test_scope()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.scope, ignore_errors=True)
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="results-", dir=self.scope))
+        self.cache = self.root / "cache"
+        self.cache.mkdir()
+
+    def lifecycle(self):
+        spec = importlib.util.spec_from_file_location(
+            "wf_lifecycle_results_inventory", FULL / "resource_lifecycle.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def new_run(self, name, finish=True):
+        life = self.lifecycle()
+        path = self.cache / name
+        out = life.begin_run(str(path), "execution", "full")
+        if finish:
+            life.finish_run(str(path), out["run_id"], "full", "cleaned", "ok", "complete")
+        return path
+
+    def legacy_run(self, name):
+        path = self.cache / name
+        path.mkdir()
+        (path / "lines").write_text("x")
+        (path / ".wf-results-owner.json").write_text(json.dumps(
+            {"owner": "wf-test-fixture-v1", "root": str(path)}))
+        return path
+
+    def inventory(self, *extra):
+        proc = results_cli(self.scope, ["inventory-results", "--cache-root", str(self.cache),
+                                        "--format", "json", *extra])
+        return proc, json.loads(proc.stdout or "{}")
+
+    def test_inventory_reports_identity_and_never_writes(self):
+        cleaned = self.new_run("run-1")
+        legacy = self.legacy_run("repro-2")
+        unowned = self.cache / "run-3"
+        unowned.mkdir()
+        (unowned / "lines").write_text("x")
+        active = self.new_run("run-4", finish=False)
+        before = sorted(os.listdir(self.cache))
+        proc, report = self.inventory()
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertEqual(sorted(os.listdir(self.cache)), before, "inventory 必须零写")
+        by_path = {item["path"]: item for item in report["entries"]}
+        self.assertEqual(by_path[os.path.realpath(cleaned)]["class"], "finished-cleaned")
+        self.assertEqual(by_path[os.path.realpath(legacy)]["provenance"], "legacy-owned")
+        self.assertEqual(by_path[os.path.realpath(unowned)]["provenance"], "unowned")
+        self.assertEqual(by_path[os.path.realpath(active)]["class"], "active")
+        for path in (cleaned, legacy, active):
+            item = by_path[os.path.realpath(path)]
+            self.assertTrue(item.get("digest"), f"{path} 的身份快照必须存在")
+
+    def test_safe_legacy_only_accepts_strict_old_results(self):
+        legacy = self.legacy_run("repro-2")
+        cleaned = self.new_run("run-1")
+        proc, report = self.inventory()
+        self.assertEqual(proc.returncode, 0)
+        legacy_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(legacy))
+        cleaned_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(cleaned))
+        selection = self.root / "legacy.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                         "root": report["root"], "entries": [legacy_entry]}))
+        report_path = self.root / "legacy-retire.json"
+        proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
+                                        "--retirement-mode", "safe-legacy",
+                                        "--confirm-retirement", "--report", str(report_path)])
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(legacy.exists())
+        self.assertTrue(cleaned.exists())
+        # 新协议结果不得走 safe-legacy。
+        selection = self.root / "new.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                         "root": report["root"], "entries": [cleaned_entry]}))
+        proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
+                                        "--retirement-mode", "safe-legacy",
+                                        "--confirm-retirement",
+                                        "--report", str(self.root / "new-retire.json")])
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue(cleaned.exists())
+
+    def test_manual_retained_requires_tty_and_exact_results_digest(self):
+        cleaned = self.new_run("run-1")
+        proc, report = self.inventory()
+        entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(cleaned))
+        selection = self.root / "selection.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                         "root": report["root"], "entries": [entry]}))
+        plain = results_cli(self.scope, ["retire-results", "--selection", str(selection),
+                                         "--retirement-mode", "manual-retained",
+                                         "--confirm-retirement",
+                                         "--report", str(self.root / "plain.json")])
+        self.assertNotEqual(plain.returncode, 0)
+        self.assertIn("TTY", plain.stderr)
+        self.assertTrue(cleaned.exists())
+        digest = self.lifecycle().selection_digest([entry])
+        phrase = f"results {report['root']} {digest} abandon"
+        rc, stdout, stderr = retire_results_pty(
+            self.scope, ["--selection", str(selection), "--retirement-mode", "manual-retained",
+                         "--confirm-retirement", "--report", str(self.root / "manual.json")],
+            phrase)
+        self.assertEqual(rc, 0, stdout + stderr)
+        self.assertFalse(cleaned.exists())
+
+    def test_unowned_results_and_unowned_fixtures_are_refused(self):
+        unowned = self.cache / "run-9"
+        unowned.mkdir()
+        (unowned / "lines").write_text("x")
+        fixture = self.root / "loose-fixture"
+        fixture.mkdir()
+        (fixture / "payload").write_text("x")
+        proc, report = self.inventory()
+        result_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(unowned))
+        selection = self.root / "bad.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                         "root": report["root"], "entries": [result_entry]}))
+        proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
+                                        "--retirement-mode", "manual-retained",
+                                        "--confirm-retirement",
+                                        "--report", str(self.root / "bad.json.out")])
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue(unowned.exists())
+        # 精确 fixture 模式：无 marker 的目录不能被当作 owned。
+        proc = results_cli(self.scope, ["inventory-results", "--fixture", str(fixture),
+                                        "--format", "json"])
+        precise = json.loads(proc.stdout)
+        self.assertEqual(precise["entries"][0]["provenance"], "unowned")
+
+    def test_owned_fixture_is_precisely_retired(self):
+        import fixture_scope as scope_module
+        fixture = self.root / "owned-fixture"
+        scope_module.reset(fixture)
+        (fixture / "payload").write_text("x")
+        proc = results_cli(self.scope, ["inventory-results", "--fixture", str(fixture),
+                                        "--format", "json"])
+        report = json.loads(proc.stdout)
+        entry = report["entries"][0]
+        self.assertEqual(entry["provenance"], "owned")
+        selection = self.root / "fixture.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                         "root": "precise", "entries": [entry]}))
+        digest = self.lifecycle().selection_digest([entry])
+        phrase = f"results precise {digest} abandon"
+        rc, stdout, stderr = retire_results_pty(
+            self.scope, ["--selection", str(selection), "--retirement-mode", "manual-retained",
+                         "--confirm-retirement", "--report", str(self.root / "fixture.json.out")],
+            phrase)
+        self.assertEqual(rc, 0, stdout + stderr)
+        self.assertFalse(fixture.exists())
+
+    def test_observe_excludes_current_results(self):
+        cleaned = self.new_run("run-1")
+        current = self.new_run("run-2")
+        import fixture_scope as scope_module
+        report = scope_module.observe_results(str(self.cache), exclude=[str(current)])
+        self.assertIn("finished-cleaned", report["counts"])
+        self.assertEqual(report["counts"].get("finished-cleaned"), 1)
+        self.assertIn("inventory-results", report["inventory_hint"])

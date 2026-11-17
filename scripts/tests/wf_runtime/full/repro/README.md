@@ -32,7 +32,8 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --only bind  # 只跑名字含�
 bash scripts/tests/wf_runtime/full/repro/run.sh --list       # 列出用例
 ```
 
-默认 both 模式退出码 0 才表示"每条用例的 green 与 red 都成立"；机器可读汇总为
+默认 both 模式退出码 0 只由 root controller 的最终投影给出（bundle/records/receipts/cleanup 全部核验后），
+内层 `INNER-TARGET-OK` 不是成功出口；机器可读汇总为
 `REPRO_TOTAL= / REPRO_PASSED= / REPRO_FAILED= / REPRO_GREEN_SECONDS= / REPRO_RED_SECONDS=`，
 另有结构性事实 `REPRO_STRUCTURAL_OK= / REPRO_ELIGIBLE= / REPRO_BUNDLE_SHA256=`。`run_all.sh`
 委托本脚本，并**一律**用 `--_wf-inherited-release` frame 交接已核发行身份（默认构建与
@@ -54,9 +55,15 @@ CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重�
   冻结进 bundle；worker 只重算 case 局部输入（script/targets/case_meta）并比对 context；只读 gate 不重算任何
   公共摘要；唯一 writer 在最终 barrier 各重算一次 `public_inputs()` 与 `execution_context()` 并与冻结值比对，
   随后逐 case 只核局部输入与 subject。旧 schema 1 bundle 一律拒绝（每 run 产物，不迁移）。
-- 拓扑：R 编排 → W（只写自己结果）→ 只读 G（结构报告，**不写 state**）→ R 启动唯一 S（`commit-state`
-  子进程）。S 与直接 CLI/库调用都先验真实 fixture/result（dev 再 release）租约，candidate 在最终 barrier
-  重跑完整 validator；全局 context/bundle 变化整批不提交，普通 failed case 只挡自己。
+- 拓扑（独立入口）：R 取租约/layout → `resource_lifecycle.begin-run(role=repro)` 写 schema2 owner +
+  active run-state → root controller（同 C 进程，`execution.py --runner-control --runner-role repro`）
+  监督发行准备与 worker/gate/writer → finalize → schema3 repro 投影 + run-state 终态，最后才输出
+  `GATE-OK`。内嵌入口复用父 run_id/receipts/release context，不另起 controller、不发布父摘要。
+- 命令证据：每个 phase `execution.run` 先写 receipt（managed→父/本 run `commands/<command_id>.json`；
+  独立 API→log 同目录隐藏 sibling），相位 TMPDIR 在 supervision=cleaned 后回收，否则保留并在
+  `retained_paths` 报告。只读 gate 不写 state；唯一 state writer 仍是 `commit-state` 子进程。
+- candidate 最终 barrier 与直接 CLI/库调用的租约核验不变；candidate 的独立入口只调用 validator 一次
+  （起始/结束由父 run 负责），内嵌入口不再重复校验。
 - 状态 schema 3：`green` 与 `red` 相位独立；旧 1/2 只作 legacy 保留，未知/损坏不覆盖。
 
 ## 租约、测试域与 namespace

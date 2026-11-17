@@ -141,11 +141,18 @@ scope 保证里。namespace 单元覆盖 `/tmp` 前记录宿主 mount 域、覆�
 `WF_UNIT_DOMAIN=unit`：生产锁 helper 域不符即拒绝，不把私有 `/tmp` 同名 inode 当宿主锁；显式 scope 的
 fake runner 可只在自己 scope 内建测试锁，但不能声称继承宿主锁。
 
-**结果缓存轮转（2026-11-14 起）**：run_all（`--scope run`）与独立 repro 入口
-（`--scope repro`）在 `prepare-results` 之后各自回收本前缀的带 marker 结果目录，保留
-最近 20；root 经 `WF_RESULTS_CACHE` 注入（默认 `~/.cache/wf-test-run`）——r67 假环境与
-契约测试必须指向临时根，不触碰真实用户缓存。`--bootstrap`（仅手工执行）额外回收无主
-但顶层内容全部为已知产物的历史目录；liveness 保障隐式依赖全局 flock 单运行器。
+**结果身份与缓存轮转（2026-11-17 起）**：结果目录的协议身份由
+`.wf-results-owner.json`（schema 2：owner/root/lifecycle_protocol/intent/run_id）与
+`run-state.json`（schema 1：run_id/root/role/state/cleanup_state/evidence_state/retained_paths）
+共同表达；`resource_lifecycle.begin-run` 在 lease 持锁时唯一一次写“意图 → active state →
+按旧代许可 prepare”，三个初始化 checkpoint 只在 helper 内 `os._exit(97)`，shell 原样退出、
+不启动 controller/不清理。新代码不再写 schema 缺失的旧 owner；旧格式只作 legacy-owned，
+不自动复用/轮转。`finished + cleanup=cleaned + evidence=complete + 无 KEEP` 才可自动复用；
+active/unknown/incomplete-new/KEEP 保留现场，处置入口是 inventory/retire（见下文）。
+run_all（`--scope run`）与独立 repro 入口（`--scope repro`）只自动回收本前缀且满足上述
+终态的结果目录，保留最近 20；root 经 `WF_RESULTS_CACHE` 注入（默认 `~/.cache/wf-test-run`）——
+契约测试必须指向临时根，不触碰真实用户缓存。`--bootstrap`（仅手工）只报告
+needs-retirement-review 并非零退出，不再凭“顶层看起来已知”删除。
 直接 `plan.py --list` 不再创建结果目录；显式 `WF_RESULTS_DIR` 时 plan.json 仍镜像写入
 （`test_dry_run_only_prints_plan` 消费该行为）。
 
@@ -388,7 +395,14 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 - `execution.run(argv, log_path, *, timeout, cwd=None, env=None, pass_fds=())`（`pass_fds` 是 controller 的显式 FD 白名单）：完整 stdout/stderr 日志、单调时间、退出原因、进程清理。
 - `execution.verdict(log_path, rc, kind, expected=None)`：集中适配 suite/flow/steps/repro；任意 PASS 子串不算断言。**PASS 计数的唯一消费来源是结果 JSON 的 `assertion_result`**（run_all.sh 不在 shell 里复制行文法判定）；套件输出契约（三汇总行格式 + PASS/FAIL 行文法 + steps 终态）文档化在 execution.py 模块 docstring。
-- `fixture_scope reset|clone|move|remove|claim-results|prepare-results|lease|lease-results|lease-domain|check-lease|check-results-lease|create-scope|check-scope|prune-results`：临时目录/scope 归属、锁域与结果缓存轮转（prune-results：marker 门控 + `--scope run|repro` 前缀隔离 + `--keep N` + `--exclude` + `--bootstrap` 仅手工；root 经 `WF_RESULTS_CACHE` 注入）。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
+- `fixture_scope reset|clone|move|remove|claim-plan|begin-run(委托)|lease|lease-results|lease-domain|check-lease|check-results-lease|create-scope|check-scope|prune-results|inventory-results|retire-results`：临时/结果/夹具归属、锁域与存量处置（prune：新协议终态门控 + 前缀隔离 + keep/exclude + 仅报告式 bootstrap；inventory/retire：cache 或精确 results/fixture 两种互斥模式，safe-legacy/manual-retained 同一写序）。`begin-run` 的唯一实现在 `resource_lifecycle.py`；`prepare-results` 不再是独立入口。`move` 只用于模板缓存发布/失效：要求 marker 存在且 owner 匹配，搬动后重写 marker（`remove` 仍严格比对 `root`）。
+- `resource_lifecycle`：schema2 owner、run-state、receipt/unit_execution 原子写、产物登记、初始化 checkpoint、inventory 选择格式/集合摘要/TTY 确认/外部报告/逐项删除的共用写序；不杀进程、不扫全根、不实现材料事务。
+- root 维护前一采样只做一次浅层 observe：直接子项 + owner/state/meta/journal（≤1 MiB、不跟链接），
+  不递归树/不算摘要/不恢复；深层 inventory 另由显式命令产生。坏 journal 的 cache-key reset 必须整组
+  选中同 key 材料，材料 marker/正式 meta 只能在对应树确认不存在后删除。
+- `runner_cleanup.assess_execution/assess_run/finalize`：supervision→cleaned/unknown/failed 的唯一解释；cleanup 与 evidence 分开归因；只有 cleaned 才按 FIX→LEGACY_FIXTURE_ROOT→RUN_TEMPLATE 删除，首次失败即停。root controller（`execution.runner_control`，同 C 进程）负责聚合、finalize、schema3 摘要发布与 run-state 终态；`execute` shell 无成功出口。
+- `results_summary.write_metrics/read_metrics/build/publish`：schema1 测量交接（绑定 run_id/root/role 与 plan/context/lines/units/repro 输入摘要），schema3 摘要原子发布并全对象读回；gate/cleanup/成功结论只来自 controller 当前证据。
+- `template_cache acquire|inventory|retire` 与 `wf_test_release --inventory/--retire`：恢复→迁移/命中→发布收拢为一个修改型入口；F1 只有材料确已删除才删 journal；测试发行 staging/backup 用独立 material-owner（schema1、owner=`wf-test-release-material`）先写后建/改名；O1 按 marker/material-owner 判归属，unproven 只可 manual-retained（TTY+集合摘要，缓存另加 `unproven-cache`）。
 - `repro_select execution_context()`、`public_inputs()`（source/helpers/executor/runner 的唯一产生点）、`local_inputs(case, groups_doc)`、`red_subject(case, local, public, context)`、`input_fingerprint(case, local, public, context)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle)`（gate/writer 共用的纯校验，不重算公共摘要）、`commit_state(results_dir, bundle, expected_sha, expected_size)`（唯一 writer：先验租约/bundle/context，最终 barrier 各重算一次 public/context 后逐 case 核局部输入，candidate 再跑最终 validator）、`write_bundle(path, document)`、`reset_scans()/scans()`（测试专用公共扫描计数）。
 - `wf_test_release --ensure|--check|--lease|--verify-lease`（`--no-lock` 供已持同一 root 锁的调用方）与 `scripts/release_lock.py`：canonical root 固定 sidecar inode、非阻塞独占/共享 flock、busy 退出 75、`/proc` 祖先/FD/flock/mount 域核验。
 
@@ -398,7 +412,9 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 
 夹具只能是安全临时路径或专用测试缓存内目录。非空目录须有匹配其规范路径的所有权标记；符号链接、与项目/发行/结果重叠的夹具拒绝。结束清理自身夹具和模板，保留日志；不自动接管历史目录。`cp3/r1r2` 使用合成执行器确认集合和临时 HOME，不复制真人确认记录；夹具 Git 忽略测试生成的 check-logs，不依赖全局 Git 配置。
 
-`summary`（schema 2）的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际；
+`summary`（schema 3）的 `requested_jobs/effective_jobs`、`execution_mode/fallback_reason` 分别描述请求和实际；
+`run_id` 与同代 owner/state/控制记录一致，`input_evidence` 记录实际消费的输入快照；`status=ok` 同时要求
+门禁、`cleanup=cleaned` 与 `evidence=complete`；
 `pool_seconds`/`repro_seconds`/`startup_seconds` 是分段墙钟，`budget` 只报告（60s 目标 / 65s 硬阈值，任意机器硬失败会假红）。
 `suite_ran/flow_ran` 由 `lines` × 注册表 `kind` 一次派生（`suite|candidate`→suite_ran，`flow|extra`→flow_ran），
 计数不变式：`lines == suite_ran + flow_ran`、`units_total == suite_ran + flow_ran + repro_ran`、
@@ -417,7 +433,7 @@ controlled 阶段的 `release-context.json` 搬运）与 `template_build_sequenc
 按剩余量收紧、耗尽即失败；账目写 `<scope>/evidence/class-cost.json`。
 `stages`（`public,lease,controlled,execute` 四行）与 `plan-calls`（preflight + final 两行）是每 run 证据，
 只在本进程真的完成一次阶段/计划计算时追加，仅当结果目录可写才写、失败不阻断；它们与 `lines` 一样
-由 `prepare-results` 在 claim 后清空，**复用显式结果目录时从本轮重新计数**。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
+由 `begin-run` 的 prepare 在 owner/state 写入后清空，**复用显式结果目录时从本轮重新计数**。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
 repro state schema 3，每个用例的 `green` 与 `red` 相位独立：green 记 `execution_fingerprint`，
 red 另记 `red_subject` + 产生它的 dev execution fingerprint。identity 拆两件——`red_subject` 是内容主体
@@ -480,7 +496,13 @@ Bad：沿用旧 `verified_both_at` 给新摘要背书；把宿主夹具父目录
   `test_results_gate` 的 gate 零重扫、`test_fixture_scope` 的 `scope:` 域必须有活动 scope 且同域、
   `test_execution` 的 namespace state locator 清洗与真实 unshare 下的宿主锁不变、
   `test_run_all_contract` 的单 scope/每 case state/每调用目录、plan-only 零 warmup、生产快照不变、
-  stage/plan 计数、成本账目、调用计数 shim、取消后可立即重取锁、SUT 级 escape。
+  stage/plan 计数、成本账目、调用计数 shim、取消后可立即重取锁、SUT 级 escape、
+  初始化三 checkpoint 真死亡与锁释放、controller/finalize/摘要/metrics 故障矩阵、delete-after-first 部分完成。
+- 2026-11-17 生命周期/缓存收口：owner schema2 + run-state schema1、三域 receipts（managed/standalone
+  hidden sibling/root）、unit_execution schema1（prep 失败也有终态）、schema1 metrics + schema3 summary、
+  C→G→S→W 确定性故障点与 ready 管道、隔离 HOME/相位 TMPDIR 的清理判定、模板/测试发行
+  `acquire`/checkpoint/material-owner、W1–W5/O1/F1 真实入口恢复、inventory/retire 的共同写序与
+  unproven 额外确认、root 维护前一次 observe_roots（C2 disabled → C3 enabled，计划/内嵌/per-case 零次）。
 - 2026-11-16 补口：`prepare-results` 重置 `stages`/`plan-calls`（复用目录仍 4/2 行）、case 级共享
   `CaseBudget`（递减 + 耗尽归因）、candidate 不建 dev 发行（release CLI 0 次）、独立 repro=1、
   writer barrier 扫描=1、残留进程检测器自证、teardown 无 FD、template 两个恢复窗口、

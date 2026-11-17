@@ -434,7 +434,8 @@ class ScanCountTest(unittest.TestCase):
 
 class PublicHelperIdentityTest(Base):
     def test_helper_set_covers_core_proof_inputs(self):
-        for name in ("../library_source.py", "../prepare_candidate_repo.py",
+        for name in ("cli.py", "../resource_lifecycle.py", "../library_source.py",
+                     "../prepare_candidate_repo.py",
                      "../release_context.py", "../results_gate.py", "../results_summary.py",
                      "../fixture_scope.py", "../execute_gate.py", "../run_all.sh",
                      "../../../../wf_test_paths.py"):

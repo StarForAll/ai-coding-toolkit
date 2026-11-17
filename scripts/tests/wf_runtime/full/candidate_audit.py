@@ -30,6 +30,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
@@ -54,7 +55,7 @@ def parse_failures(text):
     found = []
     for line in text.splitlines():
         stripped = line.strip()
-        if not stripped:
+        if not stripped or stripped.startswith("[PASS]"):
             continue
         if any(pattern.search(stripped) for pattern in FAILURE_PATTERNS):
             found.append(stripped)
@@ -90,7 +91,33 @@ def _last_line(path):
     return lines[-1] if lines else ""
 
 
-def record_suite(entry, results_dir, workdir=None):
+def _verify_unit_evidence(result, invocation_id):
+    """本次 invocation 的精确 unit_execution/阶段引用；旧 JSON 或旧绿行不得冒充。"""
+    unit_execution = result.get("unit_execution")
+    if not isinstance(unit_execution, dict):
+        return "no unit_execution（旧结果/未按新协议写入）"
+    if unit_execution.get("invocation_id") != invocation_id:
+        return f"invocation mismatch: {unit_execution.get('invocation_id')!r}"
+    if unit_execution.get("run_id") is not None:
+        return f"standalone audit received a managed run_id: {unit_execution.get('run_id')!r}"
+    evidence = unit_execution.get("command_evidence")
+    if not isinstance(evidence, list) or not evidence:
+        return "no command_evidence"
+    for item in evidence:
+        if not isinstance(item, dict):
+            return "malformed command_evidence"
+        try:
+            receipt = json.loads(Path(item["evidence_path"]).read_text(encoding="utf-8"))
+        except (OSError, ValueError, KeyError):
+            return f"receipt unreadable: {item.get('evidence_path')}"
+        if receipt.get("command_id") != item.get("command_id"):
+            return "receipt command_id mismatch"
+        if receipt.get("state") != "finished":
+            return "receipt is not finished"
+    return None
+
+
+def record_suite(entry, results_dir, workdir=None, invocation_id=None):
     name = entry["name"]
     out_path = Path(results_dir) / f"{name}.out"
     result_path = Path(results_dir) / f"{name}.test.log.json"
@@ -100,6 +127,9 @@ def record_suite(entry, results_dir, workdir=None):
         output = ""
     result = _read_json(result_path) or {}
     assertion = result.get("assertion_result") or {}
+    evidence_problem = (_verify_unit_evidence(result, invocation_id)
+                        if invocation_id is not None else None)
+    unit_execution = result.get("unit_execution") or {}
     line = ""
     try:
         for candidate in reversed(Path(results_dir, "lines").read_text(encoding="utf-8").splitlines()):
@@ -119,9 +149,17 @@ def record_suite(entry, results_dir, workdir=None):
     reason = assertion.get("reason") or ""
     if reason and reason not in failures:
         failures.append(sanitize(reason, workdir))
+    status = command_status
+    if evidence_problem:
+        status = "stale-evidence"
     return {
         "rc": command_rc,
-        "status": command_status,
+        "status": status,
+        "invocation_id": invocation_id,
+        "unit_execution_state": unit_execution.get("state"),
+        "unit_execution_run_id": unit_execution.get("run_id"),
+        "command_evidence": len(unit_execution.get("command_evidence") or []),
+        "evidence_problem": evidence_problem,
         "suite_rc": suite_rc,
         "execution_status": result.get("status"),
         "expected": assertion.get("expected", entry.get("expect")),
@@ -153,9 +191,15 @@ def _audit_env(workdir, candidate, version, ref, template=None):
         "WF_COMMAND_TIMEOUT": "240",
         "PYTHONPYCACHEPREFIX": os.path.join(workdir, "pycache"),
     }
-    env.pop("WF_CANCEL_FILE", None)
-    env.pop("WF_UNIT_FAULT", None)
-    env.pop("WF_TEST_FAULT_INJECTION", None)
+    for name in ("WF_CANCEL_FILE", "WF_UNIT_FAULT", "WF_TEST_FAULT_INJECTION",
+                 "WF_TEMPLATE_TXN_STOP_AFTER", "WF_TEMPLATE_TXN_REBUILD",
+                 "WF_TEST_RELEASE_TXN_STOP_AFTER", "WF_TEST_RELEASE_TXN_REBUILD",
+                 "WF_RESULTS_INIT_STOP_AFTER", "WF_EXECUTION_FAULT_TARGET",
+                 "WF_EXECUTION_FAULT_POINT", "WF_EXECUTION_FAULT_ACTION",
+                 "WF_EXECUTION_FAULT_READY_FD", "WF_RUNNER_FINALIZE_FAULT",
+                 "WF_SUMMARY_FAULT", "WF_METRICS_FAULT", "WF_GUARDIAN_FAULT",
+                 "WF_SUPERVISOR_FAULT"):
+        env.pop(name, None)
     if template:
         env.update({"WF_TEMPLATE_READY": "1", "WF_TEMPLATE": template,
                     "WF_TEMPLATE_SOURCE": template})
@@ -203,13 +247,14 @@ def generate(tree, version, ref, workdir, out, candidate_root=None, template=Non
             continue
         name = entry["name"]
         fix = os.path.join(workdir, "fix-" + name)
-        run_env = {**env, "FIX": fix}
+        invocation = uuid.uuid4().hex
+        run_env = {**env, "FIX": fix, "WF_UNIT_INVOCATION_ID": invocation}
         record = None
         proc = subprocess.run(
             ["bash", str(HERE / "run_one.sh"),
              f"{name}:suite:{entry['expect']}:template:{entry.get('script', name + '.py')}"],
             env=run_env, capture_output=True, text=True, timeout=400)
-        record = record_suite(entry, results, workdir)
+        record = record_suite(entry, results, workdir, invocation)
         record["runner_rc"] = proc.returncode
         record["runner_stderr_tail"] = sanitize((proc.stderr or "")[-400:], workdir)
         records[name] = record

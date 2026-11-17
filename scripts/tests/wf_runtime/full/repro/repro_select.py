@@ -36,18 +36,23 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FULL = os.path.dirname(HERE)
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 GROUPS_JSON = os.path.join(HERE, "groups.json")
-HELPERS = ("_harness.py", "_release.py", "_review_flow.py", "_review_launch.py",
+HELPERS = ("cli.py", "_harness.py", "_release.py", "_review_flow.py", "_review_launch.py",
            "_snapshot.py", "_executor_set.py", "_worker.py",
-           # 公共 helper 必须全部进入证明身份：这些文件改变行为（库来源、scope/layout、
-           # 候选最终校验、发行上下文、结果/摘要判定、主 runner shell）时，旧 red/green
-           # 证明必须失去资格，而不是按“版本号相同”继续复用。
+           # 公共 helper 必须全部进入证明身份：这些文件改变行为（公开 argv 语义、库来源、
+           # scope/layout、候选最终校验、发行上下文、结果/摘要判定、主 runner shell）时，
+           # 旧 red/green 证明必须失去资格，而不是按“版本号相同”继续复用。
            "../library_source.py", "../prepare_candidate_repo.py", "../release_context.py",
            "../results_gate.py", "../results_summary.py", "../fixture_scope.py",
-           "../execute_gate.py", "../run_all.sh", "../../../../wf_test_paths.py")
-RUNNER_FILES = ("repro_select.py", "run.sh")
+           "../execute_gate.py", "../resource_lifecycle.py", "../run_all.sh",
+           "../../../../wf_test_paths.py")
+RUNNER_FILES = ("cli.py", "repro_select.py", "run.sh")
 # 协议成组升级：bundle/state/context 一次性换代，旧证明只作 legacy（不静默兼容）。
 STATE_SCHEMA = 4
 BUNDLE_SCHEMA = 3
+# 结果根里的生命周期/摘要文件：不是 repro case 结果，禁止被 validate_repro 当记录读取。
+NON_CASE_FILES = {".wf-results-owner.json", "inputs.json", "run-state.json", "summary.json",
+                  "summary-metrics.json", "summary-measurements.json", "release-context.json",
+                  "repro.bundle.json", "source-hygiene.before.json"}
 CONTEXT_SCHEMA = 2
 RELEASE_CONTEXT_SCHEMA = 2
 PHASES = {"green": ("green",), "red": ("red",), "both": ("green", "red")}
@@ -482,7 +487,9 @@ def validate_repro(root, bundle):
     root = os.path.abspath(root)
     records, malformed = {}, []
     for path in sorted(glob.glob(os.path.join(root, "*.json"))):
-        if os.path.basename(path) in ("inputs.json", ".wf-results-owner.json"):
+        # 结果根同时承载生命周期证据（schema2 owner/run-state/摘要/控制记录）；
+        # 它们不是 case 结果，由 bundle 或对应 reader 单独核验。
+        if os.path.basename(path) in NON_CASE_FILES:
             continue
         try:
             with open(path, encoding="utf-8") as handle:

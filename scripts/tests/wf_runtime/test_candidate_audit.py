@@ -38,14 +38,30 @@ class CandidateAuditTest(unittest.TestCase):
     def test_record_keeps_command_rc_and_suite_rc_apart(self):
         entry = {"name": "p5_v1", "expect": 12, "script": "p5_v1.py"}
         (self.root / "p5_v1.out").write_text("[V1] x: FAIL — False\nsaved 12 cases\n")
+        receipt = self.root / "logs" / "p5_v1.test.inv-1.json"
+        receipt.parent.mkdir()
+        receipt.write_text(json.dumps({"schema_version": 1, "command_id": "c1",
+                                       "run_id": None, "evidence_scope": "standalone-command",
+                                       "state": "finished", "local_cleanup": "none",
+                                       "retained_paths": []}))
         (self.root / "p5_v1.test.log.json").write_text(json.dumps({
             "rc": 1, "status": "failed", "supervision": {"target_rc": 0,
                                                         "cleanup_state": "cleaned"},
+            "unit_execution": {"schema_version": 1, "unit": "p5_v1", "invocation_id": "inv-1",
+                               "run_id": None, "state": "passed",
+                               "result_row": ["p5_v1", "1", "2.0", "bad", "saved 12 cases"],
+                               "command_evidence": [
+                                   {"phase": "test", "command_id": "c1",
+                                    "evidence_path": str(receipt),
+                                    "result_path": str(self.root / "p5_v1.test.log.json")}]},
             "assertion_result": {
                 "ok": False, "expected": 12, "observed": 11,
                 "reason": "rc=0 observed=11 failures=1 expected=12"}}))
         (self.root / "lines").write_text("p5_v1\t1\t2.0\tbad\tsaved 12 cases\n")
-        record = self.audit.record_suite(entry, self.root, str(self.root))
+        record = self.audit.record_suite(entry, self.root, str(self.root), "inv-1")
+        self.assertEqual(record["unit_execution_state"], "passed")
+        self.assertEqual(record["command_evidence"], 1)
+        self.assertIsNone(record["evidence_problem"])
         self.assertEqual(record["rc"], 1, "命令层退出码")
         self.assertEqual(record["suite_rc"], 0, "suite 进程自身 rc")
         self.assertEqual((record["expected"], record["observed"], record["assertion_ok"]),
@@ -64,6 +80,33 @@ class CandidateAuditTest(unittest.TestCase):
             self.assertTrue(data["units"][name]["failures"], name)
         self.assertEqual(data["units"]["p5_v1"]["rc"], 1)
         self.assertEqual(data["units"]["p5_v1"]["suite_rc"], 0)
+
+    def test_stale_invocation_or_managed_run_id_is_not_accepted(self):
+        entry = {"name": "p5_v1", "expect": 12, "script": "p5_v1.py"}
+        receipt = self.root / "logs" / "phase.json"
+        receipt.parent.mkdir()
+        receipt.write_text(json.dumps({"schema_version": 1, "command_id": "c1",
+                                       "run_id": None, "evidence_scope": "standalone-command",
+                                       "state": "finished", "local_cleanup": "none",
+                                       "retained_paths": []}))
+        base = {"unit_execution": {"schema_version": 1, "unit": "p5_v1",
+                                   "invocation_id": "old-inv", "run_id": None,
+                                   "state": "passed",
+                                   "result_row": ["p5_v1", "0", "1", "ok", "x"],
+                                   "command_evidence": [
+                                       {"phase": "test", "command_id": "c1",
+                                        "evidence_path": str(receipt),
+                                        "result_path": str(self.root / "x.json")}]}}
+        (self.root / "p5_v1.test.log.json").write_text(json.dumps(base))
+        (self.root / "lines").write_text("p5_v1\t0\t1\tok\tx\n")
+        record = self.audit.record_suite(entry, self.root, str(self.root), "new-inv")
+        self.assertEqual(record["status"], "stale-evidence")
+        base["unit_execution"]["invocation_id"] = "new-inv"
+        base["unit_execution"]["run_id"] = "run-1"
+        (self.root / "p5_v1.test.log.json").write_text(json.dumps(base))
+        record = self.audit.record_suite(entry, self.root, str(self.root), "new-inv")
+        self.assertEqual(record["status"], "stale-evidence")
+        self.assertIn("managed run_id", record["evidence_problem"])
 
     def test_missing_result_is_not_silently_clean(self):
         entry = {"name": "missing", "expect": 1, "script": "p5_v1.py"}

@@ -243,6 +243,109 @@ class PublishCostTest(Base):
         self.assertEqual(json.loads(self.meta_text(entry))["builds"], 1, "命中不重建、不增计数")
 
 
+
+class ObserveTest(Base):
+    def setUp(self):
+        self.scope = fixture_scope.create_test_scope()
+        self.addCleanup(shutil.rmtree, self.scope, True)
+        self.root = Path(tempfile.mkdtemp(prefix="cache-observe-", dir=self.scope))
+        self.cache_root = self.root / "template"
+        self.cache_root.mkdir()
+        self.results = self.root / "results"
+        self.results.mkdir()
+
+    def publish(self):
+        return run_template_cli("publish", self.cache_root, self.results, self.scope)
+
+    def key(self):
+        return next(name for name in os.listdir(self.cache_root)
+                    if name.endswith("-cHkzLjE0-ZGV2"))
+
+    def test_observe_is_shallow_and_names_the_control_records(self):
+        self.assertEqual(self.publish().returncode, 0)
+        import wf_release_common as common
+        with mock.patch.object(common, "tree_digest",
+                               side_effect=AssertionError("observe must not walk trees")):
+            report = cache.observe(str(self.cache_root))
+        self.assertEqual(report["status"], "complete", report)
+        self.assertEqual(report["counts"].get("valid"), 1)
+        self.assertEqual(report["capacity"], "not-measured")
+        self.assertTrue(report["observed_at"])
+        self.assertIn("inventory --cache-root", report["inventory_hint"])
+
+    def test_observe_reports_pending_journal_and_materials_without_recovery(self):
+        self.assertEqual(self.publish().returncode, 0)
+        key = self.key()
+        journal = Path(cache.journal_path(str(self.cache_root), key))
+        journal.write_text('{"schema_version": 1, "key": "broken"}')
+        staging = Path(str(self.cache_root / key) + ".staging-tx")
+        staging.mkdir()
+        report = cache.observe(str(self.cache_root))
+        self.assertEqual(report["status"], "partial")
+        self.assertGreaterEqual(report["counts"].get("recovery-required", 0), 1)
+        self.assertGreaterEqual(report["counts"].get("orphan-like", 0), 1)
+        self.assertTrue(journal.exists(), "observe 不得恢复/删除")
+
+
+class LookupJournalTest(Base):
+    def test_lookup_refuses_pending_journal_without_writing(self):
+        inputs = cache.inputs_digest(self.args)
+        key = cache.key_for(self.args, inputs)
+        entry = self.entry(key, inputs=inputs)
+        journal = Path(cache.journal_path(str(self.root), key))
+        journal.write_text('{"schema_version": 1, "key": "k1", "root": "/elsewhere"}')
+        before = sorted(os.listdir(self.root))
+        code = cache.main(["lookup", "--cache-root", str(self.root), "--deploy", "dev"])
+        self.assertEqual(code, 10)
+        self.assertEqual(sorted(os.listdir(self.root)), before)
+        self.assertTrue(journal.exists())
+
+
+class FinishFailureTest(Base):
+    def test_material_cleanup_failure_keeps_the_journal(self):
+        entry = self.entry("k1", tree_marker="old")
+        old = {"present": True, "digest": cache.common.tree_digest(str(entry)),
+               "meta": self.meta_text(entry)}
+        staging = Path(str(entry) + ".staging-tx")
+        fixture_scope.reset(staging)
+        (staging / "content").write_text("new\n")
+        journal = {"schema_version": 1, "key": "k1", "transaction": "tx",
+                   "old": old,
+                   "new": {"digest": None, "staging": str(staging),
+                           "backup": str(entry) + ".backup-tx", "meta": None}}
+        cache._write_json(cache.journal_path(str(self.root), "k1"), journal)
+        import shutil as _shutil
+        original = _shutil.rmtree
+
+        def failing(path, *args, **kwargs):
+            if str(path) == str(staging):
+                raise OSError("injected cleanup failure")
+            return original(path, *args, **kwargs)
+
+        with mock.patch.object(_shutil, "rmtree", side_effect=failing):
+            with self.assertRaises(cache.CacheError):
+                cache.recover(str(entry), str(self.root), "k1")
+        self.assertTrue(cache.journal_path(str(self.root), "k1").__class__ and
+                        Path(cache.journal_path(str(self.root), "k1")).exists())
+
+
+class CheckpointGateTest(Base):
+    def test_invalid_checkpoint_needs_switch_and_owned_scope(self):
+        with mock.patch.dict(os.environ, {"WF_TEMPLATE_TXN_STOP_AFTER": "bogus"}, clear=False):
+            with self.assertRaises(cache.CacheError):
+                cache.validate_checkpoint()
+        with mock.patch.dict(os.environ, {"WF_TEST_FAULT_INJECTION": "1",
+                                          "WF_TEMPLATE_TXN_STOP_AFTER": "bogus"}, clear=False):
+            with self.assertRaises(cache.CacheError):
+                cache.validate_checkpoint()
+        with mock.patch.dict(os.environ, {"WF_TEST_FAULT_INJECTION": "1",
+                                          "WF_TEMPLATE_TXN_STOP_AFTER": "after-journal"},
+                             clear=False):
+            with mock.patch.object(cache, "_owned_scope", return_value=False):
+                with self.assertRaises(cache.CacheError):
+                    cache.validate_checkpoint()
+
+
 class RecoveryTest(Base):
     def journal(self, entry, staging, old, digest="__auto__", meta="{}\n"):
         if digest == "__auto__":
@@ -410,3 +513,320 @@ class RecoveryTest(Base):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---- C3：真实发布器的确定性窗口、盘点与退役 ---------------------------------
+
+import hashlib  # noqa: E402
+import pty  # noqa: E402
+import select  # noqa: E402
+import signal  # noqa: E402
+import subprocess  # noqa: E402
+import time  # noqa: E402
+
+import resource_lifecycle as lifecycle  # noqa: E402
+
+
+def run_template_cli(command, cache_root, results_dir, scope, env_extra=None, analysis=None):
+    env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+    env.update({"WF_TEST_SCOPE_ROOT": str(scope),
+                "WF_FIXTURE_LEASE_FD": str(analysis["lease_fd"]) if analysis else "",
+                "WF_FIXTURE_LEASE_PID": str(analysis["lease_pid"]) if analysis else ""})
+    if results_dir:
+        env["PYTHONPYCACHEPREFIX"] = str(Path(results_dir) / "pycache")
+    env = {key: value for key, value in env.items() if value != ""}
+    env.update(env_extra or {})
+    args = [sys.executable, str(FULL / "template_cache.py"), command,
+            "--cache-root", str(cache_root)]
+    if command in ("publish", "acquire", "lookup", "migrate", "key"):
+        args += ["--deploy", "dev"]
+    if results_dir:
+        args += ["--results-dir", str(results_dir)]
+    return subprocess.run(args,
+                          capture_output=True, text=True, env=env, cwd=str(REPO), timeout=180)
+
+
+def run_retire_pty(args, env, phrase, timeout=60):
+    """真实 PTY：确认提示走 stderr；短语预先写入 tty，等子进程收口。"""
+    master, slave = pty.openpty()
+    proc = subprocess.Popen([sys.executable, str(FULL / "template_cache.py"), "retire", *args],
+                            stdin=slave, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, env=env, cwd=str(REPO))
+    os.close(slave)
+    try:
+        time.sleep(0.5)
+        try:
+            os.write(master, (phrase + "\n").encode())
+        except OSError:
+            pass
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate(timeout=10)
+            stderr += "\nPTY-CHILD-TIMEOUT"
+    finally:
+        try:
+            os.close(master)
+        except OSError:
+            pass
+        if proc.poll() is None:
+            proc.kill()
+            proc.communicate(timeout=10)
+    return proc.returncode, stdout, stderr
+
+
+class CheckpointTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.scope = fixture_scope.create_test_scope()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.scope, ignore_errors=True)
+
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix="cache-", dir=self.scope))
+        self.cache_root = self.root / "template"
+        self.cache_root.mkdir()
+        self.results = self.root / "results"
+        self.results.mkdir()
+
+    def publish(self, env_extra=None):
+        return run_template_cli("publish", self.cache_root, self.results, self.scope, env_extra)
+
+    def acquire(self, env_extra=None):
+        return run_template_cli("acquire", self.cache_root, self.results, self.scope, env_extra)
+
+    def inventory(self):
+        proc = run_template_cli("inventory", self.cache_root, None, self.scope)
+        return json.loads(proc.stdout)
+
+    def key(self):
+        return next(name for name in os.listdir(self.cache_root)
+                    if name.endswith("-cHkzLjE0-ZGV2") and not name.endswith((".json", ".owner")))
+
+    def valid_meta(self, key):
+        meta = json.loads((self.cache_root / f"{key}.meta.json").read_text())
+        import wf_release_common as common
+        return (meta["root"] == os.path.realpath(self.cache_root / key)
+                and meta["output_tree_digest"] == common.tree_digest(str(self.cache_root / key)))
+
+    def test_w1_to_w5_and_f1_real_publisher_windows(self):
+        scenarios = {
+            "after-journal": ("rolled-back", True),
+            "after-old-moved": ("rolled-back", True),
+            "after-new-installed": ("rolled-back", True),
+            "after-meta": ("rolled-forward", True),
+            "after-material-cleanup-before-journal-remove": ("rolled-forward", True),
+        }
+        for point, (status, old) in scenarios.items():
+            with self.subTest(point=point):
+                shutil.rmtree(self.cache_root, ignore_errors=True)
+                self.cache_root.mkdir()
+                self.assertEqual(self.publish().returncode, 0)
+                key = self.key()
+                fault = {"WF_TEST_FAULT_INJECTION": "1",
+                         "WF_TEMPLATE_TXN_REBUILD": "1",
+                         "WF_TEMPLATE_TXN_STOP_AFTER": point}
+                failed = self.publish(fault)
+                self.assertEqual(failed.returncode, 97, failed.stderr)
+                self.assertIn("WF-TEMPLATE-TXN-STOP", failed.stderr)
+                recovered = self.acquire()
+                self.assertEqual(recovered.returncode, 0, recovered.stderr)
+                self.assertIn(f"TEMPLATE-CACHE-RECOVERED: {status}", recovered.stderr)
+                self.assertFalse((self.cache_root / f"{key}.journal.json").exists())
+                self.assertTrue(self.valid_meta(key))
+        # W5：首次发布（old absent）在新代摘要确认前撤销，随后真实入口正常发布。
+        shutil.rmtree(self.cache_root, ignore_errors=True)
+        self.cache_root.mkdir()
+        failed = self.publish({"WF_TEST_FAULT_INJECTION": "1",
+                               "WF_TEMPLATE_TXN_STOP_AFTER": "after-new-installed"})
+        self.assertEqual(failed.returncode, 97)
+        recovered = self.acquire()
+        self.assertEqual(recovered.returncode, 0, recovered.stderr)
+        self.assertIn("rolled-back-absent", recovered.stderr)
+        self.assertTrue(self.valid_meta(self.key()))
+
+    def test_o1_staging_orphan_is_owned_and_safe_legacy(self):
+        failed = self.publish({"WF_TEST_FAULT_INJECTION": "1",
+                               "WF_TEMPLATE_TXN_STOP_AFTER": "after-staging-before-journal"})
+        self.assertEqual(failed.returncode, 97)
+        report = self.inventory()
+        self.assertEqual(report["status"], "complete")
+        staging = [item for item in report["entries"] if item["kind"] == "template-staging"]
+        self.assertEqual(len(staging), 1)
+        self.assertEqual(staging[0]["provenance"], "owned")
+        selection = self.root / "selection.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "template-cache",
+                                         "root": report["root"], "entries": [staging[0]]}))
+        retire_report = self.root / "retire.json"
+        # 走真实 CLI 时必须带 selection/report；用独立进程避免继承测试进程的 lease 环境。
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env.update({"WF_TEST_SCOPE_ROOT": str(self.scope),
+                    "PYTHONPYCACHEPREFIX": str(Path(self.results) / "pycache")})
+        proc = subprocess.run([sys.executable, str(FULL / "template_cache.py"), "retire",
+                               "--cache-root", str(self.cache_root),
+                               "--selection", str(selection),
+                               "--retirement-mode", "safe-legacy",
+                               "--confirm-retirement", "--report", str(retire_report)],
+                              capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(Path(staging[0]["path"]).exists())
+        self.assertEqual(json.loads(retire_report.read_text())["results"][0]["state"], "removed")
+
+    def test_rebuild_injection_is_one_shot_and_builds_increment(self):
+        self.assertEqual(self.publish().returncode, 0)
+        key = self.key()
+        before = json.loads((self.cache_root / f"{key}.meta.json").read_text())["builds"]
+        proc = self.publish({"WF_TEST_FAULT_INJECTION": "1",
+                             "WF_TEMPLATE_TXN_REBUILD": "1"})
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("TEMPLATE-CACHE-HIT=0", proc.stdout)
+        after = json.loads((self.cache_root / f"{key}.meta.json").read_text())["builds"]
+        self.assertEqual(after, before + 1)
+        second = self.acquire()
+        self.assertIn("TEMPLATE-CACHE-HIT=1", second.stdout, "注入只能影响本次命中")
+        self.assertEqual(json.loads((self.cache_root / f"{key}.meta.json").read_text())["builds"],
+                         after)
+        # 成功事务不得留下 staging/backup 的树或兄弟 marker；entry 自身 marker/meta 保留。
+        leftovers = [name for name in os.listdir(self.cache_root)
+                     if ".staging-" in name or ".backup-" in name]
+        self.assertEqual(leftovers, [], f"事务材料/marker 残留：{leftovers}")
+
+    def test_inventory_flags_bad_journal_and_retire_resets_then_rebuilds(self):
+        self.assertEqual(self.publish().returncode, 0)
+        key = self.key()
+        journal = self.cache_root / f"{key}.journal.json"
+        journal.write_text("{broken")
+        report = self.inventory()
+        self.assertEqual(report["status"], "partial")
+        self.assertTrue(any(item["kind"] == "journal" and item["blocked"] for item in
+                            report["entries"]))
+        selection = self.root / "selection.json"
+        entries = [item for item in report["entries"]
+                   if item["path"] in (str(journal), str(self.cache_root / key))]
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "template-cache",
+                                         "root": report["root"],
+                                         "entries": [item for item in entries]}))
+        # 非 TTY 的 manual-retained 必须零删除。
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env.update({"WF_TEST_SCOPE_ROOT": str(self.scope),
+                    "PYTHONPYCACHEPREFIX": str(Path(self.results) / "pycache")})
+        report_path = self.root / "bad-journal-report.json"
+        proc = subprocess.run([sys.executable, str(FULL / "template_cache.py"), "retire",
+                               "--cache-root", str(self.cache_root), "--selection", str(selection),
+                               "--retirement-mode", "manual-retained", "--confirm-retirement",
+                               "--report", str(report_path)],
+                              capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("TTY", proc.stderr)
+        self.assertTrue((self.cache_root / key).exists())
+        self.assertTrue(journal.exists())
+        # 真实 PTY 确认后：材料 → marker → journal，最后真实入口重建同 key。
+        entries_sorted = lifecycle.selection_entries(
+            json.loads(selection.read_text()), "template-cache")
+        digest = lifecycle.selection_digest(entries_sorted)
+        phrase = f"template-cache {report['root']} {digest} abandon"
+        rc, stdout, stderr = run_retire_pty(
+            ["--cache-root", str(self.cache_root), "--selection", str(selection),
+             "--retirement-mode", "manual-retained", "--confirm-retirement",
+             "--report", str(report_path)], env, phrase)
+        self.assertEqual(rc, 0, stdout + stderr)
+        self.assertIn("MANUAL-RETAINED-CONFIRM", stderr)
+        self.assertFalse(journal.exists())
+        self.assertFalse((self.cache_root / key).exists())
+        self.assertFalse((self.cache_root / f"{key}.meta.json").exists(),
+                         "条目退役必须同时移除正式 meta")
+        rebuilt = self.acquire()
+        self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+        self.assertIn("TEMPLATE-CACHE-HIT=0", rebuilt.stdout)
+        self.assertTrue(self.valid_meta(self.key()))
+
+    def test_safe_legacy_refuses_a_current_template_entry(self):
+        self.assertEqual(self.publish().returncode, 0)
+        report = self.inventory()
+        entry = next(item for item in report["entries"] if item["kind"] == "template-entry")
+        selection = self.root / "entry.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "template-cache",
+                                         "root": report["root"], "entries": [entry]}))
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env["WF_TEST_SCOPE_ROOT"] = str(self.scope)
+        proc = subprocess.run([sys.executable, str(FULL / "template_cache.py"), "retire",
+                               "--cache-root", str(self.cache_root), "--selection", str(selection),
+                               "--retirement-mode", "safe-legacy", "--confirm-retirement",
+                               "--report", str(self.root / "entry-report.json")],
+                              capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("有效模板条目", proc.stderr)
+        self.assertTrue(Path(entry["path"]).exists())
+
+    def test_selection_and_report_outside_scope_are_refused(self):
+        self.assertEqual(self.publish().returncode, 0)
+        report = self.inventory()
+        entry = next(item for item in report["entries"] if item["kind"] == "template-entry")
+        selection = self.root / "selection.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "template-cache",
+                                         "root": report["root"], "entries": [entry]}))
+        outside = Path(tempfile.mkdtemp(prefix="outside-report-"))
+        self.addCleanup(lambda: shutil.rmtree(outside, ignore_errors=True))
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env["WF_TEST_SCOPE_ROOT"] = str(self.scope)
+        proc = subprocess.run([sys.executable, str(FULL / "template_cache.py"), "retire",
+                               "--cache-root", str(self.cache_root), "--selection", str(selection),
+                               "--retirement-mode", "manual-retained", "--confirm-retirement",
+                               "--report", str(outside / "report.json")],
+                              capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("escapes the test scope", proc.stderr)
+
+    def test_unproven_material_requires_explicit_unproven_confirmation(self):
+        orphan = self.cache_root / ("e" * 12 + "-cHkzLjE0-ZGV2.staging-deadbeef")
+        orphan.mkdir()
+        (orphan / "payload").write_text("x")
+        report = self.inventory()
+        item = next(entry for entry in report["entries"] if entry["path"] == str(orphan))
+        self.assertEqual(item["provenance"], "unproven")
+        selection = self.root / "unproven.json"
+        selection.write_text(json.dumps({"schema_version": 1, "domain": "template-cache",
+                                         "root": report["root"], "entries": [item]}))
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env.update({"WF_TEST_SCOPE_ROOT": str(self.scope),
+                    "PYTHONPYCACHEPREFIX": str(Path(self.results) / "pycache")})
+        # safe-legacy 拒绝 unproven。
+        proc = subprocess.run([sys.executable, str(FULL / "template_cache.py"), "retire",
+                               "--cache-root", str(self.cache_root), "--selection", str(selection),
+                               "--retirement-mode", "safe-legacy", "--confirm-retirement",
+                               "--report", str(self.root / "safe.json")],
+                              capture_output=True, text=True, env=env, cwd=str(REPO), timeout=120)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertTrue(orphan.exists())
+        # manual-retained 缺少 unproven-cache 短语 → 零删除。
+        digest = lifecycle.selection_digest([item])
+        phrase = f"template-cache {report['root']} {digest} abandon"
+        report_path = self.root / "unproven-report.json"
+        rc, stdout, stderr = run_retire_pty(
+            ["--cache-root", str(self.cache_root), "--selection", str(selection),
+             "--retirement-mode", "manual-retained", "--confirm-retirement",
+             "--report", str(report_path)], env, phrase)
+        self.assertNotEqual(rc, 0)
+        self.assertTrue(orphan.exists())
+        # 正确短语（含 unproven-cache）才删除，并在报告如实保留 unproven 归属事实。
+        phrase = f"template-cache {report['root']} {digest} abandon unproven-cache"
+        rc, stdout, stderr = run_retire_pty(
+            ["--cache-root", str(self.cache_root), "--selection", str(selection),
+             "--retirement-mode", "manual-retained", "--confirm-retirement",
+             "--report", str(self.root / "unproven-ok.json")], env, phrase)
+        self.assertEqual(rc, 0, stdout + stderr)
+        self.assertFalse(orphan.exists())
+        saved = json.loads((self.root / "unproven-ok.json").read_text())
+        self.assertEqual(saved["selected"][0]["provenance"], "unproven")
+
+    def test_observe_reports_counts_without_writing(self):
+        self.assertEqual(self.publish().returncode, 0)
+        template_cache = cache
+        report = template_cache.observe(str(self.cache_root))
+        self.assertEqual(report["status"], "complete")
+        self.assertGreater(sum(report["counts"].values()), 0)
+        self.assertIn("inventory", report["inventory_hint"])
+        self.assertFalse((self.cache_root / "obs.json").exists())

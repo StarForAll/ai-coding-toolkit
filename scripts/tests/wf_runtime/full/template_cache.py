@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import uuid
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", "..", "..", ".."))
@@ -33,6 +34,7 @@ sys.path.insert(0, HERE)
 
 import wf_release_common as common  # noqa: E402
 import fixture_scope  # noqa: E402
+import resource_lifecycle as lifecycle  # noqa: E402
 
 META_SCHEMA = 1
 JOURNAL_SCHEMA = 1
@@ -149,10 +151,14 @@ def _valid_meta(entry, key, inputs):
 
 
 def lookup(args):
-    """命中打印 root 与 meta JSON；miss 打印原因并返回 10。"""
+    """只读查找：发现未完成 journal 时拒绝（不恢复、不写）；miss 返回 10。"""
     inputs = inputs_digest(args)
     key = key_for(args, inputs)
     entry = os.path.join(args.cache_root, key)
+    if os.path.isfile(journal_path(args.cache_root, key)):
+        print(f"TEMPLATE-CACHE-RECOVERY-REQUIRED: {journal_path(args.cache_root, key)}"
+              "（用 acquire 在独占锁下恢复；只读 lookup 不写）", file=sys.stderr)
+        return 10
     if not os.path.isdir(entry):
         print(f"TEMPLATE-CACHE-MISS: 条目不存在 {entry}", file=sys.stderr)
         return 10
@@ -178,13 +184,18 @@ def _legacy_slot_of(name):
 
 
 def migrate(args):
+    """CLI 投影：迁移后打印 key（acquire 使用不打印的 `_migrate`，避免污染其 4 行输出）。"""
+    print(_migrate(args))
+    return 0
+
+
+def _migrate(args):
     """只在同一 Python/deploy/release 槽位、owner/root/身份完整匹配时把 legacy key 改名到新 key。"""
     inputs = inputs_digest(args)
     key = key_for(args, inputs)
     target = os.path.join(args.cache_root, key)
     if os.path.exists(target):
-        print(key)
-        return 0
+        return key
     pyver = f"{sys.version_info[0]}.{sys.version_info[1]}"
     version, ref = version_ref(args)
     candidates = []
@@ -212,13 +223,11 @@ def migrate(args):
             continue
         candidates.append(entry)
     if not candidates:
-        print(key)
-        return 0
+        return key
     source = candidates[0]
     fixture_scope.move(source, target)
     os.rename(meta_path(source), meta_path(target))
-    print(key)
-    return 0
+    return key
 
 
 def _build(args, staging):
@@ -384,10 +393,13 @@ def publish(args):
         print(f"TEMPLATE-CACHE-RECOVERED: {status}", file=sys.stderr)
     previous = _read_json(meta_path(entry)) or {}
     reason, _ = _valid_meta(entry, key, inputs) if os.path.isdir(entry) else ("不存在", None)
-    if reason is None and not _check_identity(entry, args):
+    if reason is None and not _check_identity(entry, args) and not _rebuild_requested():
         print(os.path.realpath(entry))
         print(key)
         return 0
+    if reason is None:
+        print("TEMPLATE-CACHE-REBUILD-INJECTED: 跳过本次命中，仍走真实 build/journal/move",
+              file=sys.stderr)
     transaction = uuid.uuid4().hex
     staging = entry + f".staging-{transaction}"
     backup = entry + f".backup-{transaction}"
@@ -395,19 +407,25 @@ def publish(args):
                "old": _capture_old(entry), "new": None}
     try:
         os.makedirs(args.cache_root, exist_ok=True)
-        shutil.rmtree(staging, ignore_errors=True)
+        for candidate in (staging, backup):
+            if os.path.lexists(candidate) or fixture_scope.marker(Path(candidate)).exists():
+                raise CacheError(f"事务材料路径/marker 已存在（碰撞拒绝，不先删除）：{candidate}")
         _build(args, staging)
         reason = _check_identity(staging, args)
         if reason:
             raise CacheError(f"新条目身份校验失败：{reason}")
         if inputs_digest(args) != inputs:
             raise CacheError("模板输入在构建期间变化；拒绝把混合产物发布成稳定输入")
+        _stop("after-staging-before-journal")
         # 先落 journal（此时还没有新代摘要）：崩溃后只有摘要确认过的新代才前滚。
         journal["new"] = {"digest": None, "staging": staging, "backup": backup, "meta": None}
         _write_json(journal_path(args.cache_root, key), journal)
+        _stop("after-journal")
         if os.path.isdir(entry):
             fixture_scope.move(entry, backup)
+            _stop("after-old-moved")
         fixture_scope.move(staging, entry)
+        _stop("after-new-installed")
         # repoint 会改写记录里的绝对路径，摘要必须在它之后算（否则永远不符）。
         repoint = [PY, os.path.join(HERE, "template_check.py"), entry, "--repoint-from", staging,
                    "--expect-repoint-min", "1", "--quiet"]
@@ -435,6 +453,7 @@ def publish(args):
         journal["new"]["meta"] = json.dumps(meta, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
         _write_json(journal_path(args.cache_root, key), journal)
         _write_json(meta_path(entry), None, journal["new"]["meta"])
+        _stop("after-meta")
         if _check_identity(entry, args):
             raise CacheError("发布后身份校验失败")
         if _tree(entry) != digest:
@@ -442,6 +461,9 @@ def publish(args):
         _finish(args.cache_root, key, journal)
         print(os.path.realpath(entry))
         print(key)
+        print(inputs)
+        print("TEMPLATE-CACHE-HIT=0")
+        os.environ.pop(TXN_REBUILD_ENV, None)
         return 0
     except Exception:
         try:
@@ -457,7 +479,7 @@ def publish(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="夹具模板缓存（身份/单槽/journal 发布）")
     sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("key", "lookup", "migrate", "publish"):
+    for name in ("key", "lookup", "migrate", "publish", "acquire"):
         command = sub.add_parser(name)
         command.add_argument("--cache-root", required=True)
         command.add_argument("--deploy", choices=("dev", "candidate"), required=True)
@@ -466,6 +488,16 @@ def main(argv=None):
         command.add_argument("--release-root", default=None)
         command.add_argument("--subject", default=None, help="已核候选 release subject（candidate）")
         command.add_argument("--results-dir", default=None)
+    inventory_parser = sub.add_parser("inventory")
+    inventory_parser.add_argument("--cache-root", required=True)
+    inventory_parser.add_argument("--format", choices=("json", "sh"), default="json")
+    retire_parser = sub.add_parser("retire")
+    retire_parser.add_argument("--cache-root", required=True)
+    retire_parser.add_argument("--selection", required=True)
+    retire_parser.add_argument("--retirement-mode", choices=lifecycle.RETIREMENT_MODES,
+                               required=True)
+    retire_parser.add_argument("--confirm-retirement", action="store_true", required=True)
+    retire_parser.add_argument("--report", default=None)
     args = parser.parse_args(argv)
     try:
         if args.command == "key":
@@ -475,12 +507,510 @@ def main(argv=None):
             return lookup(args)
         if args.command == "migrate":
             return migrate(args)
+        if args.command == "acquire":
+            if not args.results_dir:
+                raise CacheError("acquire 需要 --results-dir（构建日志落点）")
+            return acquire(args)
+        if args.command == "inventory":
+            report = inventory(args.cache_root)
+            if args.format == "json":
+                print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+            else:
+                print("TEMPLATE_CACHE_STATUS=" + report.get("status", "partial"))
+                print("TEMPLATE_CACHE_ENTRIES=" + str(len(report.get("entries") or [])))
+            return 0 if report.get("status") in ("complete", "absent") else 1
+        if args.command == "retire":
+            return retire(args)
         if not args.results_dir:
             raise CacheError("publish 需要 --results-dir")
         return publish(args)
     except (CacheError, common.ReleaseError, fixture_scope.FixtureError, OSError) as exc:
         print(f"TEMPLATE-CACHE-FAILED: {exc}", file=sys.stderr)
         return 1
+
+
+# ---- C3：确定性事务窗口、acquire 收拢与维护入口（父任务 design §5/§5.1/§4.2）-----
+
+TXN_STOP_ENV = "WF_TEMPLATE_TXN_STOP_AFTER"
+TXN_REBUILD_ENV = "WF_TEMPLATE_TXN_REBUILD"
+FAULT_SWITCH = "WF_TEST_FAULT_INJECTION"
+CHECKPOINTS = ("after-staging-before-journal", "after-journal", "after-old-moved",
+               "after-new-installed", "after-meta",
+               "after-material-cleanup-before-journal-remove")
+
+
+def _faults():
+    return os.environ.get(FAULT_SWITCH) == "1"
+
+
+def _owned_scope():
+    try:
+        return fixture_scope.current_scope() is not None
+    except fixture_scope.FixtureError:
+        return False
+
+
+def validate_checkpoint():
+    requested = os.environ.get(TXN_STOP_ENV)
+    if not requested:
+        return None
+    if not _faults():
+        raise CacheError(f"{TXN_STOP_ENV} 只在 {FAULT_SWITCH}=1 时生效")
+    if requested not in CHECKPOINTS:
+        raise CacheError(f"未知模板事务 checkpoint：{requested!r}")
+    if not _owned_scope():
+        raise CacheError("模板事务 checkpoint 需要有效 owned test scope")
+    return requested
+
+
+def _stop(point):
+    if os.environ.get(TXN_STOP_ENV) != point:
+        return
+    sys.stderr.write(f"WF-TEMPLATE-TXN-STOP: {point} pid={os.getpid()}\n")
+    sys.stderr.flush()
+    sys.stdout.flush()
+    os._exit(97)
+
+
+def _rebuild_requested():
+    return (_faults() and os.environ.get(TXN_REBUILD_ENV) == "1" and _owned_scope())
+
+
+def _strict_remove(path):
+    """删除材料并确认不存在；失败保留现场（不 ignore_errors、不先删 journal）。"""
+    if not path or not os.path.lexists(path):
+        return
+    if os.path.islink(path) or os.path.isfile(path):
+        os.unlink(path)
+    else:
+        shutil.rmtree(path)
+    if os.path.lexists(path):
+        raise CacheError(f"材料删除失败，保留现场：{path}")
+
+
+def _remove_template_material(path):
+    """材料树与其兄弟 fixture marker 一起确认删除（marker 只能在树确认不存在的路径上移除）。"""
+    _strict_remove(path)
+    marker = fixture_scope.marker(Path(path))
+    if marker.is_symlink():
+        raise CacheError(f"材料 marker 是符号链接，保留现场：{marker}")
+    if marker.exists():
+        os.unlink(marker)
+        if marker.exists():
+            raise CacheError(f"材料 marker 删除失败：{marker}")
+
+
+def _finish(cache_root, key, journal):
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup")):
+        if path and (os.path.lexists(path) or fixture_scope.marker(Path(path)).exists()):
+            try:
+                _remove_template_material(path)
+            except OSError as exc:
+                raise CacheError(f"事务材料未清理：{path}: {exc}") from exc
+    _stop("after-material-cleanup-before-journal-remove")
+    path = journal_path(cache_root, key)
+    try:
+        os.unlink(path)
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise CacheError(f"journal 删除失败（材料已清，可重试收尾）：{path}: {exc}") from exc
+
+
+def _undo_first_publication(entry, journal):
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup"), entry):
+        if path and (os.path.lexists(path) or fixture_scope.marker(Path(path)).exists()):
+            try:
+                _remove_template_material(path)
+            except OSError as exc:
+                raise CacheError(f"撤销首次发布失败，保留 journal：{path}: {exc}") from exc
+    # entry 的正式 meta 属本次新代；旧代 meta 由 journal 冻结并在回滚路径恢复。
+    meta = meta_path(entry)
+    if os.path.lexists(meta):
+        os.unlink(meta)
+    return "rolled-back-absent"
+
+
+def _validate_journal_paths(cache_root, key, journal):
+    entry = os.path.join(cache_root, key)
+    allowed = {"entry": entry, "meta": meta_path(entry)}
+    new = journal.get("new") or {}
+    for field, prefix in (("staging", entry + ".staging-"), ("backup", entry + ".backup-")):
+        value = new.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not value.startswith(prefix) \
+                or os.path.dirname(os.path.realpath(value)) != os.path.realpath(cache_root):
+            raise CacheError(f"journal {field} 路径越界/不符：{value!r}（保留现场）")
+        allowed[field] = value
+    staging_parent = os.path.dirname(new.get("staging") or "")
+    if staging_parent and os.path.basename(staging_parent).startswith(
+            os.path.basename(entry) + ".staging-"):
+        allowed["staging_parent"] = staging_parent
+        if os.path.dirname(os.path.realpath(staging_parent)) != os.path.realpath(cache_root):
+            raise CacheError("journal staging 父目录越界（保留现场）")
+    return allowed
+
+
+def recover(entry, cache_root, key):
+    path = journal_path(cache_root, key)
+    journal = _read_json(path)
+    if journal is None:
+        raise CacheError(f"journal 不可解析：{path}（保留现场）")
+    if journal.get("schema_version") != JOURNAL_SCHEMA or journal.get("key") != key:
+        raise CacheError(f"journal schema/key 不符：{path}（保留现场）")
+    _validate_journal_paths(cache_root, key, journal)
+    action, target = _recovery_action(entry, journal)
+    if action == "roll-forward":
+        status = _roll_forward(entry, journal, target)
+    elif action == "rolled-back":
+        status = _roll_back_in_place(entry, journal)
+    elif action == "roll-backup":
+        status = _restore_from_backup(entry, journal, path)
+    elif action == "rolled-back-absent":
+        status = _undo_first_publication(entry, journal)
+    else:
+        raise CacheError(
+            "无法恢复：当前条目与 journal 记录的旧代/新代均不可验证（两代都不完整）；"
+            f"保留现场 {path}")
+    _finish(cache_root, key, journal)
+    return status
+
+
+def acquire(args):
+    """唯一修改型入口：恢复 → 验证/迁移/命中 → 必要时发布（shell 不再自排顺序）。"""
+    validate_checkpoint()
+    inputs = inputs_digest(args)
+    key = key_for(args, inputs)
+    entry = os.path.join(args.cache_root, key)
+    if os.path.isfile(journal_path(args.cache_root, key)):
+        status = recover(entry, args.cache_root, key)
+        print(f"TEMPLATE-CACHE-RECOVERED: {status}", file=sys.stderr)
+    _migrate(args)
+    reason, meta = _valid_meta(entry, key, inputs) if os.path.isdir(entry) else ("不存在", None)
+    if reason is None and not _check_identity(entry, args) and not _rebuild_requested():
+        print(os.path.realpath(entry))
+        print(key)
+        print(meta["inputs_digest"])
+        print("TEMPLATE-CACHE-HIT=1")
+        return 0
+    if reason is None:
+        print("TEMPLATE-CACHE-REBUILD-INJECTED: 跳过本次命中，仍走真实 build/journal/move",
+              file=sys.stderr)
+    return publish(args)
+
+
+# ---- inventory / observe ----------------------------------------------------
+
+
+def _uid(path):
+    try:
+        return os.stat(path).st_uid
+    except OSError:
+        return None
+
+
+def _marker_matches(path):
+    marker = fixture_scope.marker(fixture_scope.Path(path))
+    try:
+        record = json.loads(marker.read_text())
+    except (OSError, ValueError):
+        return False
+    return record == {"owner": fixture_scope.OWNER,
+                      "root": os.path.realpath(path)} and os.stat(path).st_uid == os.getuid()
+
+
+def _entry_kind(name, entry_path):
+    for prefix, kind in ((".staging-", "template-staging"), (".backup-", "template-backup"),
+                         (".stale-", "template-stale")):
+        if prefix in name:
+            return kind
+    if name.endswith(".build"):
+        return "template-build"
+    return "template-entry"
+
+
+def inventory(cache_root):
+    """只读盘点：不恢复、不取修改锁、不写 pyc/sidecar，只输出 JSON 结构。"""
+    cache_root = os.path.abspath(cache_root)
+    root = os.path.realpath(cache_root)
+    reader_fds = []
+    entries, unknown = [], []
+    try:
+        names = sorted(os.listdir(root))
+    except FileNotFoundError:
+        return {"schema_version": 1, "domain": "template-cache", "root": root,
+                "status": "absent", "entries": [], "unknown": []}
+    except OSError as exc:
+        return {"schema_version": 1, "domain": "template-cache", "root": root,
+                "status": "partial", "error": f"cache root unreadable: {exc}",
+                "entries": [], "unknown": []}
+    for name in names:
+        path = os.path.join(root, name)
+        name_kind = _entry_kind(name, path)
+        if os.path.islink(path):
+            unknown.append({"path": path, "reason": "symlink（不跟随）"})
+            continue
+        if name.endswith(".journal.json"):
+            key = name[:-len(".journal.json")]
+            entry = os.path.join(root, key)
+            journal = _read_json(path)
+            blocked = None
+            try:
+                if journal is None:
+                    blocked = "journal unreadable（需完整 key reset）"
+                else:
+                    _validate_journal_paths(root, key, journal)
+            except CacheError as exc:
+                blocked = str(exc)
+            entries.append({"root": root, "path": path, "kind": "journal", "key": key,
+                            "provenance": "owned", "blocked": blocked or "journal-active",
+                            "matenal_root": entry, "uid": _uid(path),
+                            "digest": "sha256:" + __import__("hashlib").sha256(
+                                Path(path).read_bytes()).hexdigest()})
+            continue
+        if name.endswith(".meta.json") or name.endswith(".owner") or (
+                name.startswith(".") and name.endswith(".wf-owner.json")):
+            # 附属记录随所属 entry/材料处置；marker-only 壳在上面的专门扫描里识别。
+            continue
+        if not os.path.isdir(path):
+            if os.path.isfile(path) and name.endswith(".lock"):
+                unknown.append({"path": path, "reason": "固定 .lock（永不作为清单对象）"})
+            else:
+                unknown.append({"path": path, "reason": "未知文件"})
+            continue
+        kind = name_kind
+        marker = fixture_scope.marker(fixture_scope.Path(path))
+        if kind != "template-entry":
+            provenance = "owned" if _marker_matches(path) else "unproven"
+            material_key = name.split(".staging-")[0].split(".backup-")[0].split(".stale-")[0]
+            entries.append({"root": root, "path": path, "kind": kind, "key": material_key,
+                            "provenance": provenance, "uid": _uid(path),
+                            "marker": str(marker) if marker.is_file() else None,
+                            "digest": _tree(path), "blocked": None,
+                            "reason": "" if provenance == "owned" else "no matching fixture marker"})
+            continue
+        # 正式 entry（key 目录）：journal 存在 → 恢复优先；否则按 meta 判有效/未知。
+        key = name
+        journal = _read_json(journal_path(root, key))
+        if journal is not None:
+            provenance, blocked = "owned", "journal-active（先走 acquire 恢复）"
+            digest = _tree(path)
+        else:
+            meta = _read_json(meta_path(path))
+            if meta and meta.get("schema_version") == META_SCHEMA and \
+                    meta.get("root") == os.path.realpath(path) and \
+                    _tree(path) == meta.get("output_tree_digest"):
+                provenance, blocked = "owned", None
+            else:
+                provenance, blocked = "unknown-entry", "meta/树不可验证"
+            digest = _tree(path)
+        entries.append({"root": root, "path": path, "kind": "template-entry", "key": key,
+                        "provenance": provenance, "blocked": blocked, "uid": _uid(path),
+                        "digest": digest, "marker": str(marker) if marker.is_file() else None})
+    # marker-only 壳：marker 存在但对应树不存在。
+    for name in names:
+        if name.startswith(".") and name.endswith(".wf-owner.json"):
+            target = os.path.join(root, name[1:-len(".wf-owner.json")])
+            if not os.path.lexists(target):
+                entries.append({"root": root, "path": os.path.join(root, name),
+                                "kind": "marker",
+                                "key": name[1:-len(".wf-owner.json")],
+                                "provenance": "owned",
+                                "uid": _uid(os.path.join(root, name)), "blocked": None,
+                                "digest": "sha256:" + __import__("hashlib").sha256(
+                                    Path(root, name).read_bytes()).hexdigest()})
+    status = "partial" if unknown or any(item.get("blocked") for item in entries) else "complete"
+    return {"schema_version": 1, "domain": "template-cache", "root": root,
+            "status": status, "entries": entries, "unknown": unknown,
+            "capacity": "not-measured"}
+
+
+def _read_control(path):
+    try:
+        if os.path.islink(path) or os.path.getsize(path) > 1024 * 1024:
+            return None
+    except OSError:
+        return None
+    return _read_json(path)
+
+
+def observe(cache_root):
+    """root 维护前的浅层观察：只读直接子项/控制记录，不递归、不算树摘要。"""
+    root = os.path.abspath(cache_root)
+    observed_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    if not os.path.exists(root):
+        return {"root": root, "status": "absent", "counts": {}, "capacity": "not-measured",
+                "observed_at": observed_at,
+                "inventory_hint": f"python3 {os.path.abspath(__file__)} inventory "
+                                  f"--cache-root {root} --format json"}
+    counts, unverified = {}, []
+    try:
+        names = sorted(os.listdir(root))
+    except OSError as exc:
+        return {"root": root, "status": "unverified", "counts": {}, "error": str(exc),
+                "capacity": "not-measured", "observed_at": observed_at,
+                "inventory_hint": f"python3 {os.path.abspath(__file__)} inventory "
+                                  f"--cache-root {root} --format json"}
+    for name in names:
+        path = os.path.join(root, name)
+        if os.path.islink(path):
+            unverified.append(name)
+            continue
+        if name.endswith(".lock"):
+            continue
+        if name.endswith(".journal.json"):
+            journal = _read_control(path)
+            counts["journal"] = counts.get("journal", 0) + 1
+            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
+            continue
+        if name.endswith((".meta.json", ".wf-owner.json")) or name.startswith("."):
+            continue
+        if ".staging-" in name or ".backup-" in name or ".stale-" in name:
+            counts["orphan-like"] = counts.get("orphan-like", 0) + 1
+            marker = fixture_scope.marker(Path(path))
+            if not _marker_matches(path) or not marker.is_file():
+                counts["unproven"] = counts.get("unproven", 0) + 1
+            continue
+        if not os.path.isdir(path):
+            counts["unknown"] = counts.get("unknown", 0) + 1
+            continue
+        journal = _read_control(journal_path(root, name))
+        if journal is not None:
+            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
+            continue
+        meta = _read_control(meta_path(path))
+        owner = _read_control(os.path.join(root, "." + name + ".wf-owner.json"))
+        if meta is not None and owner is not None and \
+                meta.get("schema_version") == 1 and owner.get("owner") == fixture_scope.OWNER:
+            counts["valid"] = counts.get("valid", 0) + 1
+        else:
+            counts["unknown"] = counts.get("unknown", 0) + 1
+    status = "partial" if unverified or counts.get("unknown") or counts.get("recovery-required") \
+        else "complete"
+    return {"root": os.path.realpath(root), "status": status, "counts": counts,
+            "unverified": unverified, "capacity": "not-measured",
+            "observed_at": observed_at,
+            "inventory_hint": f"python3 {os.path.abspath(__file__)} inventory "
+                              f"--cache-root {root} --format json"}
+
+
+# ---- retire -----------------------------------------------------------------
+
+
+def _guard_locks():
+    inherited = os.environ.get("WF_FIXTURE_LEASE_FD")
+    if inherited:
+        fixture_scope.verify_lease()
+        return
+    import fcntl
+    lock_path = Path("/tmp") / f"wf-test-fixtures-{os.getuid()}.lock"
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(fd)
+        raise CacheError("模板维护忙：另一个 wf harness 持有 fixture lease") from exc
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _delete_selected(item):
+    path = item["path"]
+    if item["kind"] == "journal":
+        # journal 最后删：只有同一 key 的材料已被处置时才允许（排序由调用方保证）。
+        os.unlink(path)
+        return
+    if item["kind"] == "marker":
+        os.unlink(path)
+        target = os.path.join(os.path.dirname(path),
+                              os.path.basename(path)[1:-len(".wf-owner.json")])
+        if os.path.isdir(target) and not os.listdir(target):
+            os.rmdir(target)
+        return
+    if os.path.islink(path) or os.path.isfile(path):
+        os.unlink(path)
+        return
+    shutil.rmtree(path)
+    marker = fixture_scope.marker(fixture_scope.Path(path))
+    if marker.is_file():
+        os.unlink(marker)
+    if item["kind"] == "template-entry":
+        meta = meta_path(path)
+        if os.path.lexists(meta):
+            os.unlink(meta)
+
+
+def _selection_order(entries):
+    order = {"template-staging": 0, "template-backup": 0, "template-stale": 0,
+             "template-build": 0, "template-entry": 1,
+             "template-stale": 0, "template-build": 0, "marker": 1, "journal": 2}
+    return sorted(entries, key=lambda item: order.get(item["kind"], 1))
+
+
+def _require_in_scope(path, label):
+    scope = os.environ.get("WF_TEST_SCOPE_ROOT")
+    if scope:
+        fixture_scope.ensure_in_scope(Path(path))
+
+
+def retire(args):
+    cache_root = os.path.abspath(args.cache_root)
+    _require_in_scope(args.selection, "selection")
+    _require_in_scope(args.report, "report")
+    document = _read_json(args.selection)
+    if document is None:
+        raise CacheError(f"selection 不可读：{args.selection}")
+    selected = lifecycle.selection_entries(document, "template-cache")
+    current = {os.path.realpath(item["path"]): item
+               for item in inventory(cache_root)["entries"]}
+    chosen = []
+    for item in selected:
+        found = current.get(os.path.realpath(item["path"]))
+        if found is None:
+            raise CacheError(f"selection 项已不存在/漂移：{item['path']}")
+        if found["kind"] != item["kind"]:
+            raise CacheError(f"selection kind 漂移：{item['path']}")
+        if item.get("provenance") and found.get("provenance") != item["provenance"]:
+            raise CacheError(f"selection provenance 漂移：{item['path']}")
+        if found.get("blocked") == "journal-active" and found["kind"] != "journal":
+            raise CacheError(f"journal 未收尾的材料必须先走 acquire 恢复：{item['path']}")
+        chosen.append(found)
+    for item in chosen:
+        live = lifecycle.live_references(item["path"])
+        if live:
+            raise CacheError(f"存在活引用（{live[0]['pid']}:{live[0]['kind']}）拒绝删除：{item['path']}")
+    # 坏 journal 的 cache-key reset 必须整组选中：entry/材料/marker/journal 全在集合内。
+    selected = {os.path.realpath(item["path"]) for item in chosen}
+    for key in {item.get("key") for item in chosen if item["kind"] == "journal"}:
+        group = [item for item in current.values() if item.get("key") == key]
+        missing = sorted(item["path"] for item in group
+                         if os.path.realpath(item["path"]) not in selected)
+        if missing:
+            raise CacheError(f"cache key 重置集合不完整（缺 {missing}）；不得只删 journal 留下可命中残代")
+    if args.retirement_mode == "safe-legacy":
+        for item in chosen:
+            if item.get("provenance") not in ("owned", "legacy-owned", "empty-shell"):
+                raise CacheError(f"safe-legacy 只接受可验证归属：{item['path']} "
+                                 f"({item.get('provenance')})")
+            if item["kind"] == "journal":
+                raise CacheError("journal 不能走 safe-legacy（需完整 key reset/manual-retained）")
+            if item["kind"] == "template-entry":
+                raise CacheError("有效模板条目不是 legacy 材料；请走 manual-retained 或正常替换")
+    report = lifecycle.execute_retirement(
+        "template-cache", os.path.realpath(cache_root), _selection_order(chosen),
+        args.retirement_mode, args.report, _delete_selected, _guard_locks, True)
+    print(json.dumps({"state": "retired", "mode": args.retirement_mode,
+                      "report": os.path.abspath(args.report),
+                      "entries": len(report["results"])}, ensure_ascii=False,
+                     sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":

@@ -36,12 +36,16 @@ import shutil
 import sys
 import tempfile
 import uuid
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "wf_runtime", "full"))
 
 import wf_release_common as common  # noqa: E402
 import release_lock as lock  # noqa: E402
 import wf_test_paths  # noqa: E402
+import resource_lifecycle as lifecycle  # noqa: E402
 
 REPO_ROOT = common.REPO_ROOT
 SOURCE_ROOT = common.SOURCE_ROOT
@@ -480,13 +484,24 @@ def _restore_from_backup(real, journal):
     return "rolled-back"
 
 
-def _undo_first_publication(real, journal):
-    """首次发布：只撤销本事务的不完整新代（staging/backup/不完整的 real），不碰 sibling。"""
+def _validate_journal_material_paths(real, journal):
+    cache_root = os.path.dirname(real)
+    base = os.path.basename(real)
     new = journal.get("new") or {}
-    for path in (new.get("staging"), new.get("backup"), real):
-        if path and os.path.isdir(path):
-            shutil.rmtree(path, ignore_errors=True)
-    return "rolled-back-absent"
+    for field, prefix in (("staging", base + ".staging-"), ("backup", base + ".backup-")):
+        value = new.get(field)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise TestReleaseError(f"journal {field} 越界/不符：{value!r}（保留现场）")
+        canonical = os.path.realpath(value)
+        root_real = os.path.realpath(cache_root)
+        parent = os.path.dirname(canonical)
+        direct = (parent == root_real and os.path.basename(canonical).startswith(prefix))
+        nested = (os.path.dirname(parent) == root_real
+                  and os.path.basename(parent).startswith(prefix))
+        if not (direct or nested):
+            raise TestReleaseError(f"journal {field} 路径越界/不符：{value!r}（保留现场）")
 
 
 def recover_locked(real):
@@ -496,6 +511,7 @@ def recover_locked(real):
         raise TestReleaseError(f"journal 不可解析：{journal_path(real)}（保留现场）")
     if journal.get("schema_version") != JOURNAL_SCHEMA or journal.get("root") != real:
         raise TestReleaseError(f"journal schema/root 不符：{journal_path(real)}（保留现场）")
+    _validate_journal_material_paths(real, journal)
     action, target = _recovery_action(real, journal)
     if action == "roll-forward":
         status = _roll_forward(real, journal, target)
@@ -513,32 +529,6 @@ def recover_locked(real):
     return status
 
 
-def _reap_staging_parent(real, journal):
-    """删除本次事务的 staging **父目录**（`<root>.staging-<txn>`）。
-
-    `new.staging` 记的是 `staging/first`；发布时 first/second 都已被移走或清掉，
-    父目录会剩下一个空壳（历史上每次构建都留一个）。只按 `<basename(real)>.staging-`
-    前缀识别，且仅在事务收尾（成功/恢复）时调用；fail closed 路径不调用（保留现场）。
-    """
-    staging = (journal.get("new") or {}).get("staging")
-    if not staging:
-        return
-    parent = os.path.dirname(staging)
-    prefix = os.path.basename(real) + ".staging-"
-    if parent and os.path.basename(parent).startswith(prefix) and os.path.isdir(parent):
-        shutil.rmtree(parent, ignore_errors=True)
-
-
-def _finish_transaction(real, journal):
-    """事务收尾：清 staging/backup 与 journal。fail closed 路径不会走到这里（现场要保留）。"""
-    new = journal.get("new") or {}
-    for path in (new.get("staging"), new.get("backup")):
-        if path and os.path.isdir(path):
-            shutil.rmtree(path, ignore_errors=True)
-    _reap_staging_parent(real, journal)
-    os.unlink(journal_path(real))
-
-
 def _publish_locked(real, version, dev_manifest, inputs):
     """独占锁内发布：冻结输入 → staging 双构建 → journal → 备份/安装 → 验证 → 提交。"""
     builder = _load_builder()
@@ -549,7 +539,11 @@ def _publish_locked(real, version, dev_manifest, inputs):
     journal["old"] = _capture_old(real)
     try:
         os.makedirs(os.path.dirname(real) or ".", exist_ok=True)
-        shutil.rmtree(staging, ignore_errors=True)
+        for candidate in (staging, material_owner_path(staging), backup,
+                          material_owner_path(backup)):
+            if os.path.lexists(candidate):
+                raise TestReleaseError(f"事务材料路径已存在（碰撞拒绝，不先删除）：{candidate}")
+        _write_material_owner(staging, "staging", real, version, transaction)
         os.makedirs(staging)
         first = os.path.join(staging, "first")
         second = os.path.join(staging, "second")
@@ -565,6 +559,7 @@ def _publish_locked(real, version, dev_manifest, inputs):
         if not manifest_on_disk:
             raise TestReleaseError("测试发行缺少 wf-release.json")
         _make_tagged_repo(first, version)
+        _stop("after-staging-before-journal")
         digest = common.tree_digest(first)
         previous = read_meta(real) or {}
         meta = {
@@ -589,16 +584,22 @@ def _publish_locked(real, version, dev_manifest, inputs):
             "owner": json.dumps(owner, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         }
         write_json_atomic(journal_path(real), journal)
+        _stop("after-journal")
         if os.path.isdir(real):
+            _write_material_owner(backup, "backup", real, version, transaction)
             os.rename(real, backup)
+            _stop("after-old-moved")
         os.rename(first, real)
+        _stop("after-new-installed")
         shutil.rmtree(second, ignore_errors=True)
         write_text_atomic(meta_path(real), journal["new"]["meta"])
         write_text_atomic(owner_path(real), journal["new"]["owner"])
         if common.tree_digest(real) != digest:
             raise TestReleaseError("发布后发行树字节与冻结摘要不符")
         _verify_tree_against_meta(real, meta, version)
+        _stop("after-meta")
         _finish_transaction(real, journal)
+        os.environ.pop(REBUILD_ENV, None)
         return real, meta
     except Exception:
         # 尽力立即回滚；回滚不了就保留 journal 现场（下次 ensure 先恢复）。
@@ -626,21 +627,6 @@ def _make_tagged_repo(root, version):
                        capture_output=True)
 
 
-def _cleanup_stale(real):
-    """恢复之后才清理本工具拥有的历史残留（stale/未走完的 staging/backup）。只按前缀收。"""
-    parent = os.path.dirname(real) or "."
-    base = os.path.basename(real)
-    try:
-        names = os.listdir(parent)
-    except OSError:
-        return
-    for name in names:
-        if name.startswith(base + ".staging-") or name.startswith(base + ".backup-"):
-            path = os.path.join(parent, name)
-            if os.path.isdir(path):
-                shutil.rmtree(path, ignore_errors=True)
-
-
 def ensure_release_locked(root=None, version=None, dev_manifest=None, rebuild=True):
     """独占锁内确保缓存根有一份与当前输入一致的测试发行。
 
@@ -649,16 +635,20 @@ def ensure_release_locked(root=None, version=None, dev_manifest=None, rebuild=Tr
     """
     dev_manifest = dev_manifest if dev_manifest is not None else common.load_dev_manifest()
     version = version or resolve_version(None, dev_manifest)
+    validate_checkpoint()
     real = check_output_root(root or default_root(version))
     if os.path.isfile(journal_path(real)):
-        recover_locked(real)
+        status = recover_locked(real)
+        print(f"TEST-RELEASE-RECOVERED: {status}", file=sys.stderr)
     if not rebuild:
         return real, check_meta_locked(real, version, dev_manifest), "reused"
     inputs = common.test_release_inputs_digest(version)
-    _cleanup_stale(real)
     hit = _hit_meta(real, version, inputs)
-    if hit is not None:
+    if hit is not None and not _rebuild_requested():
         return real, hit, "reused"
+    if hit is not None:
+        print("TEST-RELEASE-REBUILD-INJECTED: 跳过本次命中，仍走真实 build/journal/move",
+              file=sys.stderr)
     _assert_owned_or_empty(real)
     root, meta = _publish_locked(real, version, dev_manifest, inputs)
     return root, meta, "built"
@@ -710,12 +700,19 @@ def main(argv=None):
     group.add_argument("--check", action="store_true", help="只核对 meta 与当前输入（共享锁）")
     group.add_argument("--lease", action="store_true", help="持独占锁后 exec 进入消费命令")
     group.add_argument("--verify-lease", action="store_true", help="核验继承来的消费期 lease")
+    group.add_argument("--inventory", action="store_true", help="只读盘点测试发行缓存根")
+    group.add_argument("--retire", action="store_true", help="按 selection 精确退役材料（需报告）")
     parser.add_argument("--version", default=None, help="X.Y.Z（默认按 dev-manifest/测试常量解析）")
     parser.add_argument("--root", default=None, help="输出根（默认 ~/.cache/wf-test-release/<version>）")
     parser.add_argument("--no-build", action="store_true", help="--lease 时不重建，只做新鲜度核验")
     parser.add_argument("--no-lock", action="store_true",
                         help="调用方已持同一把 root 锁（locked 实现不加锁，不自撞）")
     parser.add_argument("--json", action="store_true", help="输出机器可读结果")
+    parser.add_argument("--cache-root", default=None)
+    parser.add_argument("--selection", default=None)
+    parser.add_argument("--retirement-mode", choices=lifecycle.RETIREMENT_MODES, default=None)
+    parser.add_argument("--confirm-retirement", action="store_true")
+    parser.add_argument("--report", default=None)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     try:
@@ -723,6 +720,18 @@ def main(argv=None):
             verify_lease(args.root)
             print("OK  lease", flush=True)
             return 0
+        if args.inventory:
+            if not args.cache_root:
+                parser.error("--inventory requires --cache-root")
+            report = inventory(args.cache_root)
+            print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+            return 0 if report.get("status") in ("complete", "absent") else 1
+        if args.retire:
+            if not args.cache_root or not args.selection or not args.retirement_mode \
+                    or not args.confirm_retirement or not args.report:
+                parser.error("--retire requires --cache-root/--selection/--retirement-mode/"
+                             "--confirm-retirement/--report")
+            return retire(args)
         dev_manifest = common.load_dev_manifest()
         version = resolve_version(args.version, dev_manifest)
         root = check_output_root(args.root or default_root(version))
@@ -762,6 +771,412 @@ def main(argv=None):
     except (common.ReleaseError, SystemExit) as exc:  # build() 的版本一致性拒绝
         print(f"FAIL  {exc}", file=sys.stderr)
         return 1
+
+
+# ---- C3：材料归属、确定性窗口与维护入口（父任务 design §5/§5.1/§4.2）-----------
+
+MATERIAL_TAG = "wf-test-release-material"
+MATERIAL_SCHEMA = 1
+TXN_STOP_ENV = "WF_TEST_RELEASE_TXN_STOP_AFTER"
+FAULT_SWITCH = "WF_TEST_FAULT_INJECTION"
+CHECKPOINTS = ("after-staging-before-journal", "after-journal", "after-old-moved",
+               "after-new-installed", "after-meta",
+               "after-material-cleanup-before-journal-remove")
+
+def material_owner_path(material):
+    return os.path.abspath(material) + ".owner"
+
+
+def _owned_scope():
+    try:
+        return wf_test_paths.current_scope() is not None
+    except wf_test_paths.PathError:
+        return False
+
+
+def _faults():
+    return os.environ.get(FAULT_SWITCH) == "1"
+
+
+REBUILD_ENV = "WF_TEST_RELEASE_TXN_REBUILD"
+
+
+def _rebuild_requested():
+    return _faults() and os.environ.get(REBUILD_ENV) == "1" and _owned_scope()
+
+
+def validate_checkpoint():
+    requested = os.environ.get(TXN_STOP_ENV)
+    if not requested:
+        return None
+    if not _faults():
+        raise TestReleaseError(f"{TXN_STOP_ENV} 只在 {FAULT_SWITCH}=1 时生效")
+    if requested not in CHECKPOINTS:
+        raise TestReleaseError(f"未知测试发行 checkpoint：{requested!r}")
+    if not _owned_scope():
+        raise TestReleaseError("测试发行 checkpoint 需要有效 owned test scope")
+    return requested
+
+
+def _stop(point):
+    if os.environ.get(TXN_STOP_ENV) != point:
+        return
+    sys.stderr.write(f"WF-TEST-RELEASE-TXN-STOP: {point} pid={os.getpid()}\n")
+    sys.stderr.flush()
+    sys.stdout.flush()
+    os._exit(97)
+
+
+def _write_material_owner(material, kind, real, version, transaction):
+    payload = {"schema_version": MATERIAL_SCHEMA, "owner": MATERIAL_TAG,
+               "material_root": os.path.realpath(material),
+               "entry_root": os.path.realpath(real), "version": version,
+               "transaction": transaction, "kind": kind, "uid": os.getuid()}
+    path = material_owner_path(material)
+    if os.path.lexists(path):
+        raise TestReleaseError(f"材料 marker 已存在（碰撞拒绝）：{path}")
+    write_text_atomic(path, json.dumps(payload, ensure_ascii=False, indent=2,
+                                       sort_keys=True) + "\n")
+
+
+def read_material_owner(material):
+    try:
+        with open(material_owner_path(material), encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def material_owner_matches(material, kind, real):
+    record = read_material_owner(material)
+    if not record or record.get("schema_version") != MATERIAL_SCHEMA or \
+            record.get("owner") != MATERIAL_TAG or record.get("kind") != kind:
+        return False
+    if record.get("material_root") != os.path.realpath(material):
+        return False
+    if record.get("entry_root") != os.path.realpath(real):
+        return False
+    try:
+        return os.stat(material).st_uid == os.getuid()
+    except OSError:
+        return os.path.exists(material_owner_path(material))
+
+
+def _strict_remove(path):
+    if not path or not os.path.lexists(path):
+        return
+    if os.path.islink(path) or os.path.isfile(path):
+        os.unlink(path)
+    else:
+        shutil.rmtree(path)
+    if os.path.lexists(path):
+        raise TestReleaseError(f"材料删除失败，保留现场：{path}")
+
+
+def _remove_material_tree(material):
+    _strict_remove(material)
+    _strict_remove(material_owner_path(material))
+
+
+def _finish_transaction(real, journal):
+    """材料/ marker 确认清理后才删 journal；失败保留 journal 以便再次收尾。"""
+    new = journal.get("new") or {}
+    staging = new.get("staging")
+    for path in (staging, new.get("backup")):
+        if path and os.path.lexists(path):
+            try:
+                _remove_material_tree(path)
+            except (OSError, TestReleaseError) as exc:
+                raise TestReleaseError(f"事务材料未清理：{path}: {exc}") from exc
+    parent = os.path.dirname(staging) if staging else ""
+    if parent and os.path.basename(parent).startswith(os.path.basename(real) + ".staging-"):
+        try:
+            _strict_remove(material_owner_path(parent))
+            _strict_remove(parent)
+        except (OSError, TestReleaseError) as exc:
+            raise TestReleaseError(f"staging 父目录/材料 marker 未清理：{parent}: {exc}") from exc
+    _stop("after-material-cleanup-before-journal-remove")
+    try:
+        os.unlink(journal_path(real))
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        raise TestReleaseError(f"journal 删除失败（材料已清，可重试收尾）：{exc}") from exc
+
+
+def _undo_first_publication(real, journal):
+    new = journal.get("new") or {}
+    for path in (new.get("staging"), new.get("backup"), real):
+        if path and os.path.lexists(path):
+            try:
+                _remove_material_tree(path)
+            except (OSError, TestReleaseError) as exc:
+                raise TestReleaseError(f"撤销首次发布失败，保留 journal：{path}: {exc}") from exc
+    return "rolled-back-absent"
+
+
+# ---- inventory / observe ----------------------------------------------------
+
+
+def _material_kind(name, real):
+    base = os.path.basename(real)
+    if name.startswith(base + ".staging-"):
+        return "release-staging"
+    if name.startswith(base + ".backup-"):
+        return "release-backup"
+    if name.startswith(base + ".stale-") or name.endswith(".build"):
+        return "release-stale"
+    return None
+
+
+def inventory(cache_root):
+    root = os.path.realpath(os.path.abspath(cache_root))
+    entries, unknown = [], []
+    try:
+        names = sorted(os.listdir(root))
+    except FileNotFoundError:
+        return {"schema_version": 1, "domain": "test-release-cache", "root": root,
+                "status": "absent", "entries": [], "unknown": []}
+    except OSError as exc:
+        return {"schema_version": 1, "domain": "test-release-cache", "root": root,
+                "status": "partial", "error": str(exc), "entries": [], "unknown": []}
+    import re
+    for name in names:
+        path = os.path.join(root, name)
+        if os.path.islink(path):
+            unknown.append({"path": path, "reason": "symlink（不跟随）"})
+            continue
+        if name.endswith(".lock"):
+            continue  # 固定 .lock 永不作为清单对象
+        if name.endswith(".journal.json"):
+            real = path[:-len(".journal.json")]
+            journal = read_json(path)
+            blocked = "journal-active"
+            if journal is None:
+                blocked = "journal unreadable（需完整 key reset）"
+            entries.append({"root": root, "path": path, "kind": "journal",
+                            "key": os.path.realpath(real),
+                            "provenance": "owned", "blocked": blocked,
+                            "uid": os.stat(path).st_uid,
+                            "digest": "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()})
+            continue
+        if name.endswith((".meta.json", ".owner")):
+            continue  # 附属记录：随所属 entry/材料处置
+        material = re.match(r"^(?P<version>\d+\.\d+\.\d+)\.(?P<kind>staging|backup|stale)-", name)
+        if material or name.endswith(".build"):
+            kind = ("release-build" if name.endswith(".build") else
+                    "release-" + (material.group("kind") if material else "stale"))
+            version = material.group("version") if material else (
+                name[:-len(".build")] if name.endswith(".build") else "")
+            entry_root = os.path.join(root, version)
+            owned = material_owner_matches(path, "staging" if kind == "release-staging" else (
+                "backup" if kind == "release-backup" else "staging"), entry_root)
+            entries.append({"root": root, "path": path, "kind": kind,
+                            "key": os.path.realpath(entry_root),
+                            "provenance": "owned" if owned else "unproven",
+                            "blocked": None, "uid": os.stat(path).st_uid
+                            if os.path.exists(path) else None,
+                            "digest": _tree_digest_or_none(path),
+                            "marker": material_owner_path(path) if os.path.exists(
+                                material_owner_path(path)) else None})
+            continue
+        if not os.path.isdir(path):
+            unknown.append({"path": path, "reason": "未知文件"})
+            continue
+        real = path
+        key = os.path.basename(real)
+        journal = read_json(journal_path(real))
+        if journal is not None:
+            provenance, blocked = "owned", "journal-active（先 ensure 恢复）"
+        else:
+            meta = read_json(meta_path(real))
+            owner = read_owner(real)
+            if meta and owner and owner.get("owner") == OWNER_TAG and \
+                    meta.get("schema_version") == META_SCHEMA and \
+                    meta.get("root") == real and \
+                    _tree_digest_or_none(real) == meta.get("output_tree_digest"):
+                provenance, blocked = "owned", None
+            else:
+                provenance, blocked = "unknown-entry", "meta/owner/树不可验证"
+        entries.append({"root": root, "path": real, "kind": "release-entry",
+                        "key": os.path.realpath(real),
+                        "provenance": provenance, "blocked": blocked,
+                        "uid": os.stat(path).st_uid, "digest": _tree_digest_or_none(path)})
+    status = "partial" if unknown or any(item.get("blocked") for item in entries) else "complete"
+    return {"schema_version": 1, "domain": "test-release-cache", "root": root,
+            "status": status, "entries": entries, "unknown": unknown,
+            "capacity": "not-measured"}
+
+
+def _read_control(path):
+    try:
+        if os.path.islink(path) or os.path.getsize(path) > 1024 * 1024:
+            return None
+    except OSError:
+        return None
+    return read_json(path)
+
+
+def observe(cache_root):
+    """root 维护前的浅层观察：只读直接子项/控制记录，不递归、不算树摘要。"""
+    root = os.path.realpath(os.path.abspath(cache_root))
+    observed_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    if not os.path.exists(root):
+        return {"root": root, "status": "absent", "counts": {}, "capacity": "not-measured",
+                "observed_at": observed_at,
+                "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
+                                  f"--cache-root {root} --json"}
+    counts, unverified, unknown = {}, [], []
+    try:
+        names = sorted(os.listdir(root))
+    except OSError as exc:
+        return {"root": root, "status": "unverified", "counts": {}, "error": str(exc),
+                "capacity": "not-measured", "observed_at": observed_at,
+                "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
+                                  f"--cache-root {root} --json"}
+    import re
+    for name in names:
+        path = os.path.join(root, name)
+        if os.path.islink(path):
+            unverified.append(name)
+            continue
+        if name.endswith(".lock"):
+            continue
+        if name.endswith(".journal.json"):
+            journal = _read_control(path)
+            counts["journal"] = counts.get("journal", 0) + 1
+            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
+            continue
+        if name.endswith((".meta.json", ".owner")):
+            continue
+        if re.match(r"^\d+\.\d+\.\d+\.(staging|backup|stale)-", name) or name.endswith(".build"):
+            counts["orphan-like"] = counts.get("orphan-like", 0) + 1
+            if not os.path.exists(material_owner_path(path)):
+                counts["unproven"] = counts.get("unproven", 0) + 1
+            continue
+        if not os.path.isdir(path):
+            counts["unknown"] = counts.get("unknown", 0) + 1
+            continue
+        journal = _read_control(journal_path(path))
+        if journal is not None:
+            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
+            continue
+        meta = _read_control(meta_path(path))
+        owner = read_owner(path)
+        if meta is not None and owner is not None and owner.get("owner") == OWNER_TAG and \
+                meta.get("schema_version") == META_SCHEMA:
+            counts["valid"] = counts.get("valid", 0) + 1
+        else:
+            counts["unknown"] = counts.get("unknown", 0) + 1
+    status = "partial" if unverified or counts.get("unknown") or counts.get("recovery-required") \
+        else "complete"
+    return {"root": root, "status": status, "counts": counts,
+            "unverified": unverified, "capacity": "not-measured",
+            "observed_at": observed_at,
+            "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
+                              f"--cache-root {root} --json"}
+
+
+# ---- retire -----------------------------------------------------------------
+
+
+def _guard_locks():
+    inherited = os.environ.get("WF_TEST_RELEASE_LEASE_FD")
+    if inherited:
+        verify_lease()
+        return
+    root = os.environ.get("WF_RETIRE_LOCK_ROOT") or CACHE_ROOT
+    path = os.path.join(root, ".maintenance.lock")
+    os.makedirs(root, exist_ok=True)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError as exc:
+        os.close(fd)
+        raise TestReleaseError("测试发行为维护忙：另一个进程持有维护锁") from exc
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+        except OSError:
+            pass
+
+
+def _delete_release_entry(item):
+    path = item["path"]
+    if item["kind"] == "journal":
+        os.unlink(path)
+        return
+    if os.path.islink(path) or os.path.isfile(path):
+        os.unlink(path)
+        return
+    _remove_material_tree(path)
+    # entry 的正式 meta/owner 与材料 marker 一并清除；journal 最后删。
+    for sidecar in (meta_path(path), owner_path(path), material_owner_path(path)):
+        _strict_remove(sidecar)
+
+
+def _selection_order(entries):
+    order = {"release-staging": 0, "release-backup": 0, "release-stale": 0,
+             "release-build": 0, "release-entry": 1, "journal": 2}
+    return sorted(entries, key=lambda item: order.get(item["kind"], 1))
+
+
+def _require_in_scope(path):
+    scope = os.environ.get("WF_TEST_SCOPE_ROOT")
+    if scope:
+        import fixture_scope
+        fixture_scope.ensure_in_scope(Path(path))
+
+
+def retire(args):
+    cache_root = os.path.realpath(os.path.abspath(args.cache_root))
+    _require_in_scope(args.selection)
+    _require_in_scope(args.report)
+    document = read_json(args.selection)
+    if document is None:
+        raise TestReleaseError(f"selection 不可读：{args.selection}")
+    selected = lifecycle.selection_entries(document, "test-release-cache")
+    current = {os.path.realpath(item["path"]): item
+               for item in inventory(cache_root)["entries"]}
+    chosen = []
+    for item in selected:
+        found = current.get(os.path.realpath(item["path"]))
+        if found is None or found["kind"] != item["kind"]:
+            raise TestReleaseError(f"selection 项不存在/漂移：{item['path']}")
+        if item.get("provenance") and found.get("provenance") != item["provenance"]:
+            raise TestReleaseError(f"selection provenance 漂移：{item['path']}")
+        if found.get("blocked") == "journal-active" and found["kind"] != "journal":
+            raise TestReleaseError(f"journal 未收尾，必须先 ensure 恢复：{item['path']}")
+        chosen.append(found)
+    for item in chosen:
+        live = lifecycle.live_references(item["path"])
+        if live:
+            raise TestReleaseError(f"存在活引用（{live[0]['pid']}）拒绝删除：{item['path']}")
+    selected = {os.path.realpath(item["path"]) for item in chosen}
+    for key in {item.get("key") for item in chosen if item["kind"] == "journal"}:
+        group = [item for item in current.values() if item.get("key") == key]
+        missing = sorted(item["path"] for item in group
+                         if os.path.realpath(item["path"]) not in selected)
+        if missing:
+            raise TestReleaseError(f"cache key 重置集合不完整（缺 {missing}）；不得只删 journal")
+    if args.retirement_mode == "safe-legacy":
+        for item in chosen:
+            if item["kind"] in ("release-entry", "journal"):
+                raise TestReleaseError(f"safe-legacy 不能退役正式代/journal：{item['path']}")
+            if item.get("provenance") != "owned":
+                raise TestReleaseError(f"safe-legacy 只接受可验证材料 marker：{item['path']}")
+    os.environ["WF_RETIRE_LOCK_ROOT"] = cache_root
+    try:
+        report = lifecycle.execute_retirement(
+            "test-release-cache", cache_root, _selection_order(chosen),
+            args.retirement_mode, args.report, _delete_release_entry, _guard_locks, True)
+    finally:
+        os.environ.pop("WF_RETIRE_LOCK_ROOT", None)
+    print(json.dumps({"state": "retired", "mode": args.retirement_mode,
+                      "report": os.path.abspath(args.report),
+                      "entries": len(report["results"])}, ensure_ascii=False, sort_keys=True))
+    return 0
 
 
 if __name__ == "__main__":

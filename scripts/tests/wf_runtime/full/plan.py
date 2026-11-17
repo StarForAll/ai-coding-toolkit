@@ -62,6 +62,7 @@ FAKE_TREE_COPY = (
     "plan.py",
     "units.json",
     "repro/groups.json",
+    "repro/cli.py",
     "repro/repro_select.py",
     "results_gate.py",
     "execution.py",
@@ -76,6 +77,7 @@ FAKE_TREE_COPY = (
     "results_summary.py",
     "library_source.py",
     "runner_cleanup.py",
+    "resource_lifecycle.py",
 )
 FAKE_TREE_STUB = (
     "run_one.sh",

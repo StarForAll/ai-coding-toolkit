@@ -400,5 +400,151 @@ class SupervisionTest(unittest.TestCase):
             os.close(probe)
 
 
+class DeterministicFaultPointTest(unittest.TestCase):
+    """受限 G/S 固定点（AC08）：点名 + scope + 动作枚举，不靠 delay/外部 kill 竞速。"""
+
+    @classmethod
+    def setUpClass(cls):
+        import sys as _sys
+        if str(FULL) not in _sys.path:
+            _sys.path.insert(0, str(FULL))
+        import fixture_scope
+        cls.scope = fixture_scope.create_test_scope()
+
+    @classmethod
+    def tearDownClass(cls):
+        import shutil
+        shutil.rmtree(cls.scope, ignore_errors=True)
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="case-", dir=self.scope)
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.log = self.root / "command.log"
+        self.execution = _load_execution()
+        self.saved = {key: os.environ.get(key) for key in
+                      ("WF_TEST_SCOPE_ROOT", "WF_TEST_FAULT_INJECTION",
+                       "WF_EXECUTION_FAULT_TARGET", "WF_EXECUTION_FAULT_POINT",
+                       "WF_EXECUTION_FAULT_ACTION")}
+        self.addCleanup(self.restore)
+        os.environ["WF_TEST_SCOPE_ROOT"] = str(self.scope)
+        os.environ["WF_TEST_FAULT_INJECTION"] = "1"
+
+    def restore(self):
+        for key, value in self.saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+    def select(self, target="unit:u1", point="supervisor-before-ready", action="exception"):
+        os.environ["WF_EXECUTION_FAULT_TARGET"] = target
+        os.environ["WF_EXECUTION_FAULT_POINT"] = point
+        os.environ["WF_EXECUTION_FAULT_ACTION"] = action
+
+    def test_unknown_point_action_or_missing_scope_is_refused_before_start(self):
+        marker = self.root / "started"
+        self.select(point="bogus")
+        with self.assertRaises(self.execution.EvidenceError):
+            self.execution.run([sys.executable, "-c", "print('x')"], self.log,
+                               timeout=5, fault_identity="unit:u1")
+        self.assertFalse(marker.exists())
+        self.select(point="supervisor-before-ready", action="nuke")
+        with self.assertRaises(self.execution.EvidenceError):
+            self.execution.run([sys.executable, "-c", "print('x')"], self.log,
+                               timeout=5, fault_identity="unit:u1")
+        os.environ.pop("WF_TEST_SCOPE_ROOT", None)
+        self.select()
+        with self.assertRaises(self.execution.EvidenceError):
+            self.execution.run([sys.executable, "-c", "print('x')"], self.log,
+                               timeout=5, fault_identity="unit:u1")
+
+    def test_selector_only_fires_for_the_named_identity(self):
+        self.select(target="unit:other", point="supervisor-before-ready", action="exception")
+        result = self.execution.run([sys.executable, "-c", "print('ok')"], self.log,
+                                    timeout=5, fault_identity="unit:u1")
+        self.assertEqual((result["status"], result["rc"]), ("passed", 0))
+
+    def test_before_ready_fault_never_starts_the_target(self):
+        pidfile = self.root / "pid"
+        self.select(point="supervisor-before-ready", action="exception")
+        result = self.execution.run(
+            [sys.executable, "-c", f"open({str(pidfile)!r},'w').write('x')"],
+            self.log, timeout=5, fault_identity="unit:u1")
+        self.assertEqual(result["status"], "failed")
+        self.assertTrue(result["supervision"]["infrastructure_error"])
+        self.assertEqual(result["supervision"]["cleanup_state"], "cleaned")
+        self.assertFalse(pidfile.exists(), "READY 前故障不得启动目标")
+
+    def test_after_started_fault_cleans_the_real_target(self):
+        for action in ("exception", "exit", "kill"):
+            with self.subTest(action=action):
+                pidfile = self.root / f"pid-{action}"
+                read_fd, write_fd = os.pipe()
+                self.addCleanup(os.close, read_fd)
+                self.select(point="supervisor-after-started", action=action)
+                os.environ["WF_EXECUTION_FAULT_READY_FD"] = str(write_fd)
+                self.addCleanup(lambda: os.environ.pop("WF_EXECUTION_FAULT_READY_FD", None))
+                result = self.execution.run(
+                    [sys.executable, "-c",
+                     f"import os,time\nopen({str(pidfile)!r},'w').write(str(os.getpid()))\n"
+                     f"os.write({write_fd}, b'r')\ntime.sleep(30)"],
+                    self.root / f"{action}.log", timeout=10, fault_identity="unit:u1",
+                    pass_fds=[write_fd])
+                os.close(write_fd)
+                self.assertEqual(result["status"], "failed", result["reason"])
+                self.assertTrue(pidfile.exists())
+                pid = int(pidfile.read_text())
+                self.assertTrue(self._gone(pid), f"S 故障({action})后目标必须被回收")
+                self.assertEqual(result["supervision"]["cleanup_state"], "cleaned")
+
+    def test_guardian_lost_after_started_is_reported_unknown(self):
+        pidfile = self.root / "pid-g"
+        read_fd, write_fd = os.pipe()
+        self.addCleanup(os.close, read_fd)
+        self.select(point="guardian-after-started", action="kill")
+        os.environ["WF_EXECUTION_FAULT_READY_FD"] = str(write_fd)
+        self.addCleanup(lambda: os.environ.pop("WF_EXECUTION_FAULT_READY_FD", None))
+        result = self.execution.run(
+            [sys.executable, "-c",
+             f"import os,time\nopen({str(pidfile)!r},'w').write(str(os.getpid()))\n"
+             f"os.write({write_fd}, b'r')\ntime.sleep(30)"],
+            self.root / "g.log", timeout=2, fault_identity="unit:u1", pass_fds=[write_fd])
+        os.close(write_fd)
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["supervision"]["cleanup_state"], "unknown",
+                         "G 丢失时 C 不得替 S 猜 cleaned")
+        self.assertTrue(pidfile.exists())
+        try:
+            os.kill(int(pidfile.read_text()), signal.SIGKILL)
+        except (ProcessLookupError, ValueError):
+            pass
+
+    def test_selector_environment_is_stripped_from_the_target(self):
+        self.select(target="unit:other", point="supervisor-before-ready", action="exception")
+        probe = self.root / "env.json"
+        result = self.execution.run(
+            [sys.executable, "-c",
+             "import json,os; json.dump(dict(os.environ), open(%r,'w'))" % str(probe)],
+            self.log, timeout=10, fault_identity="unit:u1")
+        self.assertEqual(result["status"], "passed")
+        env = json.loads(probe.read_text())
+        for key in ("WF_EXECUTION_FAULT_TARGET", "WF_EXECUTION_FAULT_POINT",
+                    "WF_EXECUTION_FAULT_ACTION"):
+            self.assertNotIn(key, env, "目标不得继承 root 侧故障选择器")
+
+    def _gone(self, pid):
+        for _ in range(100):
+            try:
+                if Path(f"/proc/{pid}/stat").read_text().split()[2] == "Z":
+                    return True
+            except (FileNotFoundError, ProcessLookupError, IndexError):
+                return True
+            time.sleep(0.02)
+        return False
+
+
+
+
 if __name__ == "__main__":
     unittest.main()
