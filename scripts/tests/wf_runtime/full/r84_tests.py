@@ -118,8 +118,16 @@ writer_path = os.path.join(F, ".wf/writer.json")
 rc2, payload2, _ = wfdrive.run(["task-new", "--kind", "ordinary", "--title", "R84 恢复",
                                 "--template", f"{F}/.wf/templates/task", "--json"], None, "sess-R84",
                                instance_id="ffffffffffffffffffffffffffffffff")
-rec("A3-agent 恢复在有绑定时拦实例不符", "WF_BINDING_MISMATCH 或 WF_OK（无绑定可续）",
-    (payload2 or {}).get("code"), True)
+writer_after = json.load(open(writer_path, encoding="utf-8")) \
+    if os.path.exists(writer_path) else {}
+# 现场是「无绑定 + 残留 prepared 动作 + 不同实例」：恢复入口不得靠"无绑定"绕过实例一致性，
+# 也不得把别人的 prepared 动作当成已续做。
+rec("A3-agent 无绑定恢复不绕过实例一致性", "WF_BINDING_MISMATCH 且动作未推进",
+    f"code={(payload2 or {}).get('code')} task={((payload2 or {}).get('facts') or {}).get('task_id')} "
+    f"action={(writer_after.get('action') or {}).get('state')}",
+    (payload2 or {}).get("code") == "WF_BINDING_MISMATCH"
+    and not ((payload2 or {}).get("facts") or {}).get("task_id")
+    and (writer_after.get("action") or {}).get("state") == "prepared")
 
 # 有绑定 + 实例不符 → 必须拒绝
 # 换一个会话建立"有绑定 + 待恢复动作"的现场

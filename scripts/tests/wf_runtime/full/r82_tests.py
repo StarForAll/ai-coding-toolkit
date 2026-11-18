@@ -134,8 +134,12 @@ rec("A7 平台在册放行", "None", wf_session.check_platforms(["dsh"], sess)[0
 rec("A7b 宿主不在平台里被拒", "WF_IDENTITY_UNRESOLVED",
     wf_session.check_platforms(["codex"], sess)[0],
     wf_session.check_platforms(["codex"], sess)[0] == "WF_IDENTITY_UNRESOLVED")
-rec("A7c 只读诊断不需要平台（由调用方判断命令类别）", "平台判定只返回身份结论",
-    wf_session.check_platforms(["codex"], sess)[0], True)
+check_code, _check_facts = wf_session.check_platforms(["codex"], sess)
+_status_rc, status_payload, _ = wfdrive.run(["status", "--json"], None, "sess-A7c", show=False)
+rec("A7c 只读诊断不依赖平台判定", "平台判定拒绝 codex、status 仍只读成功",
+    f"check={check_code} status_rc={_status_rc} code={(status_payload or {}).get('code')}",
+    check_code == "WF_IDENTITY_UNRESOLVED" and _status_rc == 0
+    and (status_payload or {}).get("code") == "WF_OK")
 
 # ---- 其他 agent 6：恢复分支按多路径解析授权 ----
 task_with_grants = {"commit_grants": [{"subject": "pkg/a.py, pkg/b.py", "choice": "commit"}]}

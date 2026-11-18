@@ -51,8 +51,10 @@ rec("D1-2 同身份重入保持绑定", "object.id 等于任务",
 
 # ---- 3. 压缩边界：activation 丢失 ----
 rc, payload, _ = run(["status", "--json"], {"generation": gen}, REAL, activation=False)
-rec("D1-3 压缩未携带 activation → 需重新 start", "WF_NOT_ENABLED 或 WF_OK(只读)",
-    (payload or {}).get("code"), True)  # 只读诊断允许；下表按业务动作再验
+code = (payload or {}).get("code")
+rec("D1-3 压缩未携带 activation → 只读诊断可继续", "WF_OK（只读）或 WF_NOT_ENABLED",
+    f"code={code} rc={rc}",
+    code in ("WF_OK", "WF_NOT_ENABLED") and (code != "WF_OK" or rc == 0))
 
 rc, payload, _ = run(["task-start", "--task", task_id, "--json"], {"generation": gen}, REAL, activation=False)
 rec("D1-3b 无 activation 推进业务被拒", "WF_NOT_ENABLED", (payload or {}).get("code"),

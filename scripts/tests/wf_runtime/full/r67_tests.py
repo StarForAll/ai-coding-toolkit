@@ -202,7 +202,11 @@ rec("3b 缺 mode 被拒", "WF_ASSET_DECISION", declared_with(drop_mode),
 rec("3c 重复声明被拒", "WF_ASSET_DECISION", declared_with(dup),
     declared_with(dup) == "WF_ASSET_DECISION")
 open(manifest_path, "w", encoding="utf-8").write(manifest_backup)
-rec("3d 恢复后可用", "有义务", bool(wf_gates.declared_step_specs(wf_cli.Context(F, ["--envelope", env_path]))), True)
+restored = wf_gates.declared_step_specs(wf_cli.Context(F, ["--envelope", env_path]))
+restored_ids = [entry.get("id") for entry in restored]
+rec("3d 恢复后可用", "含 task.plan-approved 且义务 id 唯一",
+    f"count={len(restored_ids)} has={'task.plan-approved' in restored_ids}",
+    "task.plan-approved" in restored_ids and len(restored_ids) == len(set(restored_ids)))
 
 # ---- 4. 聚合脚本：失败必须传播 ----
 # 假环境按**真实 run_all 的契约**搭建：run_all 把选择交给 plan.py，

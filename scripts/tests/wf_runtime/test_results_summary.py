@@ -234,5 +234,68 @@ class BuildTest(unittest.TestCase):
                          {"mode": "full"}, "full", "run-1")
 
 
+class SummaryProjectionTest(unittest.TestCase):
+    """R4：candidate_commit / repro_phase_counts 只从已核上下文与相位核验报告投影。"""
+
+    def setUp(self):
+        self.ws = Workspace()
+        self.addCleanup(self.ws.cleanup)
+
+    def plan(self, **overrides):
+        plan = {"mode": "full", "full_mode": 1, "fixture_deploy": "candidate",
+                "repro_enabled": 1, "repro_mode": "green", "repro_groups": ["install"]}
+        plan.update(overrides)
+        return plan
+
+    def counted_report(self, counts, ok=True):
+        value = report(ok=ok)
+        value["repro"] = {"enabled": True, "phase_counts": counts}
+        return value
+
+    def test_candidate_commit_comes_from_the_verified_context(self):
+        counts = {"green": {"planned": 2, "passed": 2, "failed": 0, "unverified": 0},
+                  "red": {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}}
+        payload = module.build(self.ws.results, self.counted_report(counts), None, {},
+                               self.plan(), "full", "run-1",
+                               context={"candidate": {"commit": "c" * 40}})
+        self.assertEqual(payload["candidate_commit"], "c" * 40)
+        self.assertEqual(payload["repro_phase_counts"], counts)
+        self.assertEqual(payload["status"], "ok")
+        missing = module.build(self.ws.results, self.counted_report(counts), None, {},
+                               self.plan(), "full", "run-2", context=None)
+        self.assertIsNone(missing["candidate_commit"])
+        self.assertEqual(missing["status"], "failed", "候选成功摘要必须有已核提交")
+        dev = module.build(self.ws.results, self.counted_report(counts), None, {},
+                           self.plan(fixture_deploy="dev"), "full", "run-3", context=None)
+        self.assertIsNone(dev["candidate_commit"], "dev 摘要的候选提交必须是 null")
+
+    def test_disabled_repro_reports_zero_counts_and_no_bundle_reports_null(self):
+        zeros = {phase: {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}
+                 for phase in ("green", "red")}
+        disabled = module.build(self.ws.results, report(), None, {},
+                                self.plan(repro_enabled=0, repro_mode="none"), "full", "run-1",
+                                context={"candidate": {"commit": "c" * 40}})
+        self.assertEqual(disabled["repro_phase_counts"], zeros)
+        unbundled = module.build(self.ws.results, report(), None, {},
+                                 self.plan(), "full", "run-1",
+                                 context={"candidate": {"commit": "c" * 40}})
+        self.assertIsNone(unbundled["repro_phase_counts"],
+                          "启用 repro 但没有合法 bundle 时必须为 null，不能计零通过")
+
+    def test_phase_counts_must_add_up_and_are_cross_checked(self):
+        bad = {"green": {"planned": 3, "passed": 2, "failed": 0, "unverified": 0},
+               "red": {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}}
+        with self.assertRaises(module.SummaryError):
+            module.build(self.ws.results, self.counted_report(bad), None, {},
+                         self.plan(), "full", "run-1",
+                         context={"candidate": {"commit": "c" * 40}})
+        negative = {"green": {"planned": 1, "passed": 1, "failed": 0, "unverified": 0},
+                    "red": {"planned": 0, "passed": 0, "failed": -1, "unverified": 1}}
+        with self.assertRaises(module.SummaryError):
+            module.build(self.ws.results, self.counted_report(negative), None, {},
+                         self.plan(), "full", "run-1",
+                         context={"candidate": {"commit": "c" * 40}})
+
+
 if __name__ == "__main__":
     unittest.main()

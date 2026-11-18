@@ -850,6 +850,26 @@ def _apply_fault(spec, where):
     raise EvidenceError(f'unknown fault action: {action!r}')
 
 
+class FinalDecision:
+    """最终成功决策边界的一次观测结果（此后只渲染/发布，不再改变结论）。"""
+
+    def __init__(self, cancelled, signum=None, reason=None):
+        self.cancelled = bool(cancelled)
+        self.signum = signum
+        self.reason = reason
+
+
+CANCEL_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+
+
+def _pending_signals():
+    """内核待处理取消信号集合（读取点唯一；测试在屏蔽生效后、读取前注入信号）。"""
+    try:
+        return set(signal.sigpending()) & set(CANCEL_SIGNALS)
+    except (AttributeError, OSError, ValueError):
+        return set()
+
+
 class CancellationScope:
     """共享取消作用域：controller 建立一次，内部 run 复用同一对象。
 
@@ -894,6 +914,29 @@ class CancellationScope:
         if self._saved_mask is not None:
             signal.pthread_sigmask(signal.SIG_SETMASK, self._saved_mask)
         self._installed = False
+
+    def consume_cancel(self, cancel_file=None):
+        """非阻塞消费：返回本代取消事实（锁存值优先，其次已发布的取消标记）。"""
+        if not self.latched and _read_cancel_file(cancel_file):
+            self.latch(0, f'cancelled by {cancel_file}')
+        return FinalDecision(self.latched, self.signum, self.reason)
+
+    def final_decision(self, cancel_file=None):
+        """最终成功决策边界：阻塞取消信号，观测标记/锁存/待处理信号后固定结论。
+
+        决策后在本代 handler 仍有效时恢复原屏蔽状态，调用方随后只按已定结论发布与读回。
+        """
+        saved = signal.pthread_sigmask(signal.SIG_BLOCK, set(CANCEL_SIGNALS))
+        try:
+            if _read_cancel_file(cancel_file):
+                self.latch(self.signum or 0, f'cancelled by {cancel_file}')
+            pending = _pending_signals()
+            if pending and not self.latched:
+                signum = sorted(pending)[0]
+                self.latch(signum, f'cancelled by pending signal {signum}')
+            return FinalDecision(self.latched, self.signum, self.reason)
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, saved)
 
 
 def _check_anchor(path):
@@ -1032,12 +1075,14 @@ def _record_local(evidence_path, command_id, home, state, reason=None, origin='l
 
 def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pass_fds=(),
         scope=None, isolated_user=False, runner_control=False, receipt_path=None,
-        local_dirs=(), fault_identity=None):
+        local_dirs=(), fault_identity=None, retain_local=False):
     """Run one command under the C→G→S→W supervision described in the module docstring.
 
     `scope` 由 controller 传入时复用同一取消作用域；`isolated_user` 在本 command 的
     command_id 下建立唯一 HOME，并在 supervision 结论之后决定删除/保留；`runner_control`
-    只由 root controller 使用（证据写 `.runner.json`）。
+    只由 root controller 使用（证据写 `.runner.json`）。`retain_local=True` 表示调用方显式
+    请求保留本 command 的局部路径（repro 的 `WF_REPRO_KEEP=1`）：supervision 清理已确认后
+    仍按 `retained-keep` 登记，且该相位不进入 proof。
     """
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError('command timeout must be positive and finite')
@@ -1066,6 +1111,7 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
     result['command_id'] = command_id
     result['evidence_path'] = evidence_path
     result['local_dirs'] = [os.path.abspath(item) for item in local_dirs]
+    result['local_keep'] = bool(retain_local)
     cancel_file = os.environ.get('WF_CANCEL_FILE')
     log_fd = -1
     guardian = None
@@ -1329,6 +1375,9 @@ def _finalize_evidence(result, evidence_path, command_id, home, log_path):
         if local_paths:
             if result.get('local_prepare_failed'):
                 local_state, retained = 'failed', list(local_paths)
+            elif result.get('local_keep'):
+                # 显式 KEEP：保留真实路径，并让相位证据明确“未确认回收”。
+                local_state, retained = 'retained-keep', list(local_paths)
             elif supervision.get('cleanup_state') == 'cleaned' and result.get('status') in (
                     'passed', 'failed', 'cancelled', 'timeout'):
                 failed = []
@@ -1345,6 +1394,7 @@ def _finalize_evidence(result, evidence_path, command_id, home, log_path):
                                else 'retained-unknown')
                 retained = list(local_paths)
         result['local_cleanup'] = local_state
+        result['retained_paths'] = retained
         updates = {'state': 'finished',
                    'finished_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                    'result': _result_projection(result),
@@ -1453,9 +1503,27 @@ def _controller_refuse(message):
     return 1
 
 
+def _read_plan_bytes(path, limit=1 << 20):
+    """有界、拒绝符号链接地读取一次冻结计划（token 与内容必须来自同一份字节）。"""
+    if not os.path.isfile(path) or os.path.islink(path):
+        raise EvidenceError(f'frozen plan is not a plain file: {path}')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        data = os.read(fd, limit)
+        if os.read(fd, 1):
+            raise EvidenceError(f'frozen plan exceeds {limit} bytes: {path}')
+    finally:
+        os.close(fd)
+    return data
+
+
 def _verify_controller_context(args, lifecycle):
-    """核 controller 的租约/owner/run-state/冻结 plan；任何不符都拒绝，不重做初始化。"""
+    """核 controller 的租约/owner/run-state/冻结 plan；任何不符都拒绝，不重做初始化。
+
+    两个 role 都必须带同一份已冻结计划：独立 repro 不再从环境合成执行请求。
+    """
     import fixture_scope
+    import runner_protocol
     fixture_scope.verify_lease()
     fixture_scope.verify_results_lock()
     root = lifecycle.canonical_root(args.results_root)
@@ -1471,20 +1539,24 @@ def _verify_controller_context(args, lifecycle):
     state = lifecycle.classify_run_state(root)
     if state['kind'] != 'active' or state['payload']['run_id'] != args.run_id:
         raise EvidenceError('run-state is not the active generation of this run_id')
-    if args.runner_role == 'repro':
-        # 独立 repro 没有 run_all 的冻结 plan：证据来自本代 bundle/records 与 receipts。
-        return root, {"mode": "repro", "full_mode": 0,
-                      "fixture_deploy": os.environ.get('WF_FIXTURE_DEPLOY') or 'dev',
-                      "repro_enabled": 1, "units": []}
     if not args.plan_file or not args.plan_sha256 or not args.plan_size:
         raise EvidenceError('controller requires the frozen plan identity')
-    data = Path(args.plan_file).read_bytes()
+    data = _read_plan_bytes(args.plan_file)
     digest = hashlib.sha256(data).hexdigest()
     if digest != args.plan_sha256 or str(len(data)) != str(args.plan_size):
         raise EvidenceError('frozen plan bytes do not match the controller token')
-    plan = json.loads(data)
-    if not isinstance(plan, dict):
-        raise EvidenceError('frozen plan must be a JSON object')
+    try:
+        plan = json.loads(data)
+    except ValueError as exc:
+        raise EvidenceError(f'frozen plan is not JSON: {exc}') from exc
+    try:
+        runner_protocol.validate_plan(plan, role=args.runner_role, run_id=args.run_id,
+                                      results_dir=root,
+                                      scope_root=os.environ.get('WF_TEST_SCOPE_ROOT') or None)
+    except runner_protocol.FrameError as exc:
+        raise EvidenceError(f'frozen plan rejected: {exc}') from exc
+    if os.path.realpath(args.plan_file) != os.path.join(root, 'plan.json'):
+        raise EvidenceError('frozen plan must live at <results root>/plan.json')
     return root, plan
 
 
@@ -1517,13 +1589,15 @@ def _repro_bundle_fact(root):
     return record.get('sha256'), record.get('size')
 
 
-def _repro_gate_report(root, plan):
+def _repro_gate_report(root, plan, run_id=None, evidence_root=None):
     """独立 repro：只用本代 bundle/records（不造 lines/units，也不读 full metrics）。"""
     import results_gate
     bundle = Path(root) / 'inputs.json'
     if not bundle.is_file():
         raise EvidenceError('repro bundle is missing')
-    report = results_gate.repro_report(str(root))
+    report = results_gate.repro_report(
+        str(root), run_id=run_id,
+        evidence_root=evidence_root or str(Path(root) / 'commands'))
     counts = {"suite_ran": 0, "flow_ran": 0, "repro_ran": int(report.get('total') or 0),
               "units_total": int(report.get('total') or 0),
               "fail": int(report.get('failed') or 0), "bad": 0, "extra_failures": 0,
@@ -1544,10 +1618,12 @@ def _gate_report(root, plan, plan_path):
     # 取消/早退仍按真实清理事实收口（不签成功）。
     legacy = _legacy_snapshot(plan)
     repro_root = Path(root) / 'repro' if plan.get('repro_enabled') else None
-    bundle_sha, bundle_size = (_repro_bundle_fact(root) if repro_root else (None, None))
-    return results_gate.assess_run_results(str(plan_path), str(lines),
-                                           str(repro_root) if repro_root else None,
-                                           bundle_sha, bundle_size, legacy)
+    bundle_sha, bundle_size = (_repro_bundle_fact(str(repro_root))
+                               if repro_root else (None, None))
+    return results_gate.assess_run_results(
+        str(plan_path), str(lines), str(repro_root) if repro_root else None,
+        bundle_sha, bundle_size, legacy, run_id=os.environ.get('WF_RUN_ID'),
+        evidence_root=str(Path(root) / 'commands'))
 
 
 def _unknown_assessment(gate_report, reason):
@@ -1650,8 +1726,221 @@ def validate_execution_selector():
         raise EvidenceError('execution fault injection requires an owned test scope')
 
 
+def _log_json(log_path):
+    """准备/终结命令从自己的监督日志读回唯一 JSON 结果行（stdout 已被监督日志捕获）。"""
+    try:
+        text = Path(log_path).read_text(encoding='utf-8', errors='replace')
+    except OSError:
+        return None
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line.startswith('{'):
+            continue
+        try:
+            value = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(value, dict):
+            return value
+    return None
+
+
+def _release_identity(plan):
+    """冻结计划 → 本次发行消费身份（C 是唯一解析与持有者）。"""
+    if plan.get('fixture_deploy') == 'candidate':
+        return {'deploy': 'candidate', 'root': plan['release_root'], 'ref': plan['release_ref'],
+                'version': plan['release_version'], 'meta': plan['release_meta'],
+                'rebuild': False}
+    return {'deploy': 'dev', 'root': plan['test_release_root'], 'ref': plan['test_release_ref'],
+            'version': plan['test_release_version'], 'meta': '',
+            'rebuild': not int(plan.get('no_build') or 0)}
+
+
+def _release_cli_path():
+    here = os.path.dirname(os.path.abspath(__file__))
+    return os.environ.get('WF_TEST_RELEASE_CLI') or os.path.normpath(
+        os.path.join(here, '..', '..', 'wf_test_release.py'))
+
+
+def _candidate_validator_path():
+    return os.environ.get('WF_CANDIDATE_VALIDATOR') or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'prepare_candidate_repo.py')
+
+
+def _candidate_facts(meta, label):
+    commit = meta.get('commit')
+    tree = meta.get('tree_digest')
+    if not isinstance(commit, str) or not commit:
+        raise EvidenceError(f'{label}: candidate validator returned no verified commit')
+    if not isinstance(tree, str) or not tree:
+        raise EvidenceError(f'{label}: candidate validator returned no tree digest')
+    return {'commit': commit, 'tree_digest': tree,
+            'meta_digest': _meta_digest(meta.get('root') or '')}
+
+
+def _meta_digest(root):
+    try:
+        return 'sha256:' + hashlib.sha256(
+            Path(root + '.meta.json').read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def _prepare_release(plan, root, args, scope):
+    """C 取得的唯一发行消费锁 + 一次受监督准备 + 上下文交接。"""
+    import release_context
+    import release_lock
+    started = time.monotonic()
+    identity = _release_identity(plan)
+    try:
+        fd = release_lock.acquire(identity['root'], exclusive=True)
+    except (release_lock.Busy, release_lock.LockError) as exc:
+        raise EvidenceError(f'release lock refused: {exc}') from exc
+    try:
+        release_lock.write_env(fd, identity['root'])
+        logs = Path(root) / 'logs'
+        logs.mkdir(parents=True, exist_ok=True)
+        log = logs / 'release-prepare.log'
+        if identity['deploy'] == 'dev':
+            command = [sys.executable, _release_cli_path(),
+                       '--ensure' if identity['rebuild'] else '--check', '--no-lock',
+                       '--root', identity['root'], '--version', identity['version'], '--json']
+            label = 'TEST-RELEASE-BUILD-FAILED' if identity['rebuild'] else 'TEST-RELEASE-STALE'
+        else:
+            command = [sys.executable, _candidate_validator_path(), '--check',
+                       '--out', identity['root'], '--version', identity['version'], '--json']
+            label = 'CANDIDATE-REPO-INVALID'
+        result = run(command, log, timeout=args.timeout, scope=scope,
+                     fault_identity='release:prepare')
+        if result.get('status') != 'passed':
+            raise EvidenceError(
+                f"{label}: {result.get('reason') or 'release preparation failed'} (see {log})")
+        meta = _log_json(log) or {}
+        if identity['deploy'] == 'dev':
+            status = meta.get('status')
+            if status not in ('built', 'reused', 'checked'):
+                raise EvidenceError(f'release CLI returned unknown status: {status!r}')
+            release_build, candidate = status, None
+        else:
+            candidate = _candidate_facts(meta, 'CANDIDATE-REPO-INVALID')
+            if os.path.realpath(meta.get('root') or identity['root']) != os.path.realpath(
+                    identity['root']):
+                raise EvidenceError('candidate validator verified another repository root')
+            release_build = 'checked'
+        context = release_context.build_context(
+            deploy=identity['deploy'], root=identity['root'], ref=identity['ref'],
+            version=identity['version'], candidate=candidate, release_build=release_build,
+            plan_sha256=args.plan_sha256, plan_size=args.plan_size, results_dir=root)
+        context_path = os.path.join(root, 'release-context.json')
+        digest, size = release_context.write_context_atomic(context_path, context)
+        os.environ['WF_BUILD_SECONDS'] = str(int(time.monotonic() - started))
+        return {'fd': fd, 'identity': identity, 'context': context,
+                'context_path': context_path, 'context_sha256': digest, 'context_size': size}
+    except BaseException:
+        release_lock.release(fd)
+        raise
+
+
+def _candidate_final_check(identity, prepared, args, root, scope):
+    """worker 退出后、proof/摘要/终态发布之前：同一 validator 再核一次同一身份。"""
+    expected = prepared['context'].get('candidate') or {}
+    log = Path(root) / 'logs' / 'candidate-final.log'
+    command = [sys.executable, _candidate_validator_path(), '--check',
+               '--out', identity['root'], '--version', identity['version'], '--json']
+    result = run(command, log, timeout=args.timeout, scope=scope,
+                 fault_identity='release:final')
+    if result.get('status') != 'passed':
+        raise EvidenceError(
+            'CANDIDATE-REPO-CHANGED: final verification failed ('
+            + (result.get('reason') or 'validator returned non-zero') + f'); see {log}')
+    facts = _candidate_facts(_log_json(log) or {}, 'CANDIDATE-REPO-CHANGED')
+    comparable = ('commit', 'tree_digest')
+    for key in comparable:
+        if facts.get(key) != expected.get(key):
+            raise EvidenceError(
+                f'CANDIDATE-REPO-CHANGED: persistent {key} drift during the run '
+                f'({facts.get(key)!r} != {expected.get(key)!r})')
+
+
+def _assert_inner_program(role, command):
+    """controller 只把已冻结的 plan/context frame 交给该 role 的唯一入口脚本。"""
+    here = os.path.dirname(os.path.abspath(__file__))
+    expected = {'full': os.path.join(here, 'run_all.sh'),
+                'repro': os.path.join(here, 'repro', 'run.sh')}[role]
+    if len(command) != 2 or os.path.basename(command[0]) != 'bash':
+        raise EvidenceError('controller command must be `bash <entry script>`')
+    if os.path.realpath(command[1]) != os.path.realpath(expected):
+        raise EvidenceError(
+            f'controller entry script for role {role} must be {expected}（收到 {command[1]}）')
+
+
+def _scope_field(plan):
+    scope = plan.get('scope_root')
+    return scope or '-'
+
+
+def _inner_command(role, plan, prepared, args):
+    """由 C 组装唯一的消费 frame：plan/context token 与位置只在这一处交接。"""
+    import runner_protocol
+    here = os.path.dirname(os.path.abspath(__file__))
+    explicit = os.environ.get('WF_FRAME_RESULTS_EXPLICIT') or '1'
+    if explicit not in ('0', '1'):
+        raise EvidenceError(f'invalid WF_FRAME_RESULTS_EXPLICIT: {explicit!r}')
+    fields = {'--entry-pid': str(os.getpid()),
+              '--results-root': os.path.realpath(plan['results_dir']),
+              '--results-explicit': explicit,
+              '--scope-root': _scope_field(plan),
+              '--plan-file': os.path.realpath(args.plan_file),
+              '--plan-sha256': args.plan_sha256,
+              '--plan-size': str(args.plan_size),
+              '--context-file': prepared['context_path'],
+              '--context-sha256': prepared['context_sha256'],
+              '--context-size': str(prepared['context_size'])}
+    if role == 'full':
+        frame = runner_protocol.encode('execute', fields, [])
+        program = os.path.join(here, 'run_all.sh')
+    else:
+        frame = runner_protocol.encode_repro('repro-inner', fields)
+        program = os.path.join(here, 'repro', 'run.sh')
+    return ['bash', program, *frame]
+
+
+def _proof_root(role, plan, root):
+    if role == 'full':
+        return Path(root) / 'repro' if plan.get('repro_enabled') else None
+    return Path(root)
+
+
+def _commit_repro_proof(role, plan, root, run_id):
+    """C 的唯一一次 proof 提交：结束发行核验与取消观测之后、摘要发布之前。"""
+    repro_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'repro')
+    if repro_dir not in sys.path:
+        sys.path.insert(0, repro_dir)
+    import repro_select
+    proof_root = _proof_root(role, plan, root)
+    if proof_root is None:
+        return None
+    bundle = proof_root / 'inputs.json'
+    if not bundle.is_file() or bundle.is_symlink():
+        raise EvidenceError(f'repro bundle is missing: {bundle}')
+    sha, size = _repro_bundle_fact(str(proof_root))
+    import fixture_scope
+    try:
+        return repro_select.commit_state(
+            str(proof_root), str(bundle), sha, size, run_id=run_id,
+            evidence_root=str(Path(root) / 'commands'))
+    except (repro_select.SelectError, fixture_scope.FixtureError) as exc:
+        raise EvidenceError(f'repro proof refused: {exc}') from exc
+
+
+def _cancel_report(report, decision):
+    reasons = list(report.get('reasons') or [])
+    reasons.append(decision.reason or 'cancelled before the success boundary')
+    return dict(report, ok=False, reasons=reasons[:50])
+
+
 def runner_control(args):
-    """外层 controller：同 C 进程核验 → root started → 监督 → 聚合 → finalize → 摘要 → 终态。"""
+    """外层 controller：同 C 进程核验 → 取发行锁/准备 → root started → 监督 → 聚合 → finalize → 摘要 → 终态。"""
     lifecycle, cleanup = _local_modules()
     try:
         fault = cleanup.validate_fault_selector()
@@ -1663,15 +1952,20 @@ def runner_control(args):
     except (EvidenceError, lifecycle.LifecycleError, OSError, ValueError,
             _path_error_class()) as exc:
         return _controller_refuse(str(exc))
+    role = args.runner_role
+    command = args.command[1:] if args.command[:1] == ['--'] else args.command
+    try:
+        _assert_inner_program(role, command)
+    except EvidenceError as exc:
+        return _controller_refuse(str(exc))
     try:
         import results_summary
     except ImportError as exc:
         return _controller_refuse(f'summary module unavailable: {exc}')
-    role = args.runner_role
-    command = args.command[1:] if args.command[:1] == ['--'] else args.command
-    if not command:
-        return _controller_refuse('controller command is required')
     result_path = Path(args.result) if args.result else Path(root) / lifecycle.CONTROL_NAME
+    cancel_path = os.path.join(root, 'cancel-request')
+    os.environ['WF_CANCEL_FILE'] = cancel_path
+    os.environ.setdefault('WF_RUN_ID', args.run_id)
     try:
         observe = cleanup.observe_roots(root, plan, role)
     except Exception as exc:  # 观察失败只是诊断缺口，不扩大为当前 run 的恢复失败
@@ -1681,6 +1975,8 @@ def runner_control(args):
     print(f'OBSERVE: {observe["status"]} (enabled={observe["enabled"]}, '
           f'calls={observe["calls"]}, roots={observe["roots"]})', file=sys.stderr, flush=True)
     scope = CancellationScope().install()
+    import release_lock
+    release_fd = None
     success = False
     publish_failure = False
     final_rc = 1
@@ -1691,43 +1987,88 @@ def runner_control(args):
     control_doc = None
     gate_report = None
     payload = None
+    context = None
     try:
-        control_result = run(command, args.log, timeout=args.timeout, inherit_output=True,
-                             pass_fds=[item for item in (args.pass_fds or '').split(',') if item],
+        try:
+            prepared = _prepare_release(plan, root, args, scope)
+        except (EvidenceError, lifecycle.LifecycleError, OSError, ValueError,
+                release_lock.LockError) as exc:
+            cancelled = scope.latched
+            early_status = 'cancelled' if cancelled else 'failed'
+            print(f'RUNNER-RELEASE-FAILED: {exc}', file=sys.stderr)
+            try:
+                lifecycle.finish_run(root, args.run_id, role, 'unknown', early_status,
+                                     'incomplete', reasons=[str(exc)])
+            except lifecycle.LifecycleError as state_exc:
+                print(f'RUNNER-STATE-FAILED: {state_exc}', file=sys.stderr)
+            print('GATE-FAIL: 发行准备未完成，worker 未启动', file=sys.stderr)
+            if cancelled:
+                return 128 + int(scope.signum or 0) if scope.signum else 1
+            return 1
+        release_fd = prepared['fd']
+        import release_context
+        os.environ.update(release_context.release_env(prepared['context']))
+        inner = _inner_command(role, plan, prepared, args)
+        pass_fds = [item for item in (args.pass_fds or '').split(',') if item]
+        pass_fds.append(str(release_fd))
+        control_result = run(inner, args.log, timeout=args.timeout, inherit_output=True,
+                             pass_fds=pass_fds,
                              scope=scope, runner_control=True, receipt_path=str(result_path),
                              env=_child_environment(fault, results_summary))
         try:
-            gate_report = (_repro_gate_report(root, plan) if role == 'repro'
-                           else _gate_report(root, plan, args.plan_file))
+            # 结束发行校验：候选必须与初核同一身份；在 proof/摘要/终态之前完成。
+            if prepared['identity']['deploy'] == 'candidate':
+                _candidate_final_check(prepared['identity'], prepared, args, root, scope)
+            else:
+                release_lock.verify_lease(prepared['identity']['root'])
+            repro_root = _proof_root(role, plan, root)
+            if role == 'full':
+                gate_report = _gate_report(root, plan, args.plan_file)
+                context_path = Path(root) / lifecycle.RELEASE_CONTEXT_NAME
+            else:
+                repro_root = Path(root)
+                gate_report = _repro_gate_report(root, plan, run_id=args.run_id,
+                                                 evidence_root=str(Path(root) / 'commands'))
+                context_path = Path(root, lifecycle.RELEASE_CONTEXT_NAME)
             assessment = _assess_with_faults(root, args.run_id, plan, control_result,
                                              gate_report, fault, cleanup)
             # 清理已确认才删除；证据/摘要失败不影响“真实清理”的事实，但不得签成功。
+            # 取消可能让内层来不及写 metrics/摘要：先收口清理，再消费证据，避免把“没清理”
+            # 误记成证据缺失，也避免为失败证据保留现场。
             cleanup_report = cleanup.finalize(root, plan, assessment)
-            metrics = None
-            input_evidence = None
+            bundle_sha, bundle_size = (_repro_bundle_fact(str(repro_root))
+                                       if repro_root else (None, None))
             if role == 'full':
-                context_path = Path(root) / lifecycle.RELEASE_CONTEXT_NAME
-                repro_root = Path(root) / 'repro' if plan.get('repro_enabled') else None
-                bundle_sha, bundle_size = (_repro_bundle_fact(root) if repro_root else (None, None))
                 metrics, input_evidence = results_summary.read_metrics(
                     Path(root) / lifecycle.METRICS_NAME, args.run_id, root, role,
                     args.plan_file, str(context_path), str(repro_root) if repro_root else None,
                     bundle_sha, bundle_size)
-                context = results_summary._json_object(
-                    Path(context_path).read_bytes(), 'release context')
             else:
-                context = None
-                bundle_sha, bundle_size = _repro_bundle_fact(root)
+                metrics = None
                 input_evidence = results_summary.repro_input_evidence(
-                    str(root), bundle_sha, bundle_size)
+                    str(repro_root), bundle_sha, bundle_size)
+            context = results_summary._json_object(
+                Path(context_path).read_bytes(), 'release context')
+            # 结束发行校验/清理/取消都有结论后，才提交唯一一次 proof（取消到达即不提交）。
+            cancel_before_proof = scope.consume_cancel(cancel_path)
+            if not cancel_before_proof.cancelled:
+                _commit_repro_proof(role, plan, root, args.run_id)
             report = _summary_report(gate_report, assessment, cleanup_report, control_result)
-            status = 'ok' if report["ok"] else (
-                'cancelled' if control_result.get('status') in ('cancelled', 'timeout') else 'failed')
+            # 最终成功决策边界：材料已备好、正式发布之前固定结论。
+            decision = scope.final_decision(cancel_path)
+            if decision.cancelled:
+                report = _cancel_report(report, decision)
+                status = 'cancelled'
+            else:
+                status = 'ok' if report["ok"] else (
+                    'cancelled' if control_result.get('status') in ('cancelled', 'timeout')
+                    else 'failed')
             payload = results_summary.build(root, report, metrics, input_evidence,
-                                            plan, role, args.run_id, fault=fault)
+                                            plan, role, args.run_id, fault=fault,
+                                            context=context)
             success = report["ok"] and payload.get('status') == 'ok'
         except (EvidenceError, cleanup.CleanupError, results_summary.SummaryError,
-                lifecycle.LifecycleError, OSError, ValueError) as exc:
+                lifecycle.LifecycleError, release_lock.LockError, OSError, ValueError) as exc:
             print(f'RUNNER-FINALIZE-FAILED: {exc}', file=sys.stderr)
             success = False
             publish_failure = True
@@ -1783,8 +2124,11 @@ def runner_control(args):
                 publish_failure = True
                 final_evidence = 'incomplete'
         # 控制结果已终写后，才计算并写 run-state（run-state 是最后一个终态记录）。
+        # 终态只在“本次 run 完整闭合”时保留 cleaned：证据/摘要/控制发布失败一律降为
+        # unknown（真实清理明细仍在 `.runner.json` 的 cleanup 报告里），避免失败 run 留下
+        # 与成功相同的 finished-cleaned 签名；取消分支保留真实清理结论。
         state_cleanup = (cleanup_report or {}).get('cleanup_state') or 'unknown'
-        cancelled = control_result.get('status') in ('cancelled', 'timeout')
+        cancelled = status == 'cancelled' or control_result.get('status') in ('cancelled', 'timeout')
         if not success and not cancelled and state_cleanup != 'failed':
             state_cleanup = 'unknown'
         final_evidence = ('incomplete' if publish_failure else assessment['evidence_state'])
@@ -1814,6 +2158,11 @@ def runner_control(args):
         return final_rc if 0 <= final_rc <= 255 else 1
     finally:
         scope.restore()
+        if release_fd is not None:
+            try:
+                release_lock.release(release_fd)
+            except OSError:
+                pass
 
 
 def main(argv=None):

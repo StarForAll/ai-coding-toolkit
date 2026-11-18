@@ -99,8 +99,13 @@ def repro_gate(root, bundle_path=None, expected_sha=None, expected_size=None):
     return 0 if report.get("ok") else 1
 
 
-def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None):
-    """结构化 repro 结构报告：唯一校验点（gate/writer/controller 共用）。"""
+def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None, run_id=None,
+                 evidence_root=None):
+    """结构化 repro 结构报告：唯一校验点（gate/writer/controller 共用）。
+
+    相位计数来自同一份相位核验报告（`repro_select.validate_repro`）：planned 取冻结 bundle，
+    passed/failed/unverified 取 receipt + 断言 + 清理判定；缺失证据不能计为通过。
+    """
     root = Path(root)
     bundle_file = Path(bundle_path or os.environ.get('WF_REPRO_INPUTS_FILE') or (root / 'inputs.json'))
     try:
@@ -116,12 +121,17 @@ def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None):
     if bundle_size is not None and str(len(data)) != str(bundle_size):
         structural = False
         reasons.append("bundle size changed")
+    if run_id is None:
+        run_id = os.environ.get('WF_RUN_ID')
+    if evidence_root is None:
+        evidence_root = os.environ.get('WF_COMMAND_EVIDENCE_ROOT') or str(root / 'commands')
     try:
         bundle = json.loads(data)
         if not isinstance(bundle, dict):
             raise ValueError('bundle must be a JSON object')
         bundle['__sha256'] = sha
-        report = repro_select.validate_repro(str(root), bundle)
+        report = repro_select.validate_repro(str(root), bundle, evidence_root=evidence_root,
+                                             run_id=run_id)
     except (ValueError, TypeError, KeyError, repro_select.SelectError) as exc:
         return {"enabled": True, "ok": False, "reason": str(exc),
                 "bundle_sha256": sha, "bundle_size": len(data)}
@@ -142,17 +152,18 @@ def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None):
                 continue
             total += value
         seconds[phase] = int(total)
+    phase_counts = {phase: dict(counts) for phase, counts in report.get('phases', {}).items()}
     ok = failed == 0 and structural
     return {"enabled": True, "ok": ok, "structural": structural,
             "total": len(expected), "passed": passed, "failed": failed,
             "malformed": report['malformed'], "missing": report['missing'],
             "green_seconds": seconds['green'], "red_seconds": seconds['red'],
-            "bundle_sha256": sha, "bundle_size": len(data),
+            "phase_counts": phase_counts, "bundle_sha256": sha, "bundle_size": len(data),
             "bundle_path": str(bundle_file), "reasons": reasons}
 
 
 def assess_run_results(plan_path, lines_path, repro_results=None, bundle_sha=None,
-                       bundle_size=None, known_legacy=""):
+                       bundle_size=None, known_legacy="", run_id=None, evidence_root=None):
     """纯判定：冻结 plan × 五列 lines × 本代 repro 报告 → 最终计数/门禁/债务。
 
     controller 与内层诊断共用这一份实现；不采信 shell 的 fail/extra 数字，也不从 metrics
@@ -174,7 +185,8 @@ def assess_run_results(plan_path, lines_path, repro_results=None, bundle_sha=Non
         names.append(unit["name"])
         kinds[unit["name"]] = unit.get("kind")
     gate_result = gate(lines_path, " ".join(names))
-    repro = (repro_report(repro_results, bundle_sha=bundle_sha, bundle_size=bundle_size)
+    repro = (repro_report(repro_results, bundle_sha=bundle_sha, bundle_size=bundle_size,
+                          run_id=run_id, evidence_root=evidence_root)
              if repro_results else {"enabled": False, "ok": True, "total": 0, "failed": 0,
                                     "green_seconds": 0, "red_seconds": 0})
     suite_ran = sum(1 for name in names if kinds.get(name) in ("suite", "candidate"))

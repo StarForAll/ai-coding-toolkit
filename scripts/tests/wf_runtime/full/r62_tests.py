@@ -71,8 +71,9 @@ satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
 rec("P1-2 有复盘即可满足", "满足", satisfied, satisfied is True)
 
 # ---------- P1-3：spec-update 不再自动满足 knowledge 门禁 ----------
-rec("P1-3 门禁按 plan 事实而非入口写入", "work_satisfied 不写 knowledge",
-    "knowledge" not in json.dumps(investigation.get("execution") or {}), True)
+satisfied, code, facts = wf_gates.verify_step(Ctx(), investigation, "task.knowledge-disposed")
+rec("P1-3 knowledge 门禁按记录事实判定", "未处置 → WF_SEMANTIC_DECISION",
+    f"{satisfied} {code}", satisfied is False and code == "WF_SEMANTIC_DECISION")
 
 # ---------- P1-4：启动校验有落点（status 报告启动核对面） ----------
 clean()

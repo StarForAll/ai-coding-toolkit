@@ -55,9 +55,14 @@ def version_ref(args):
 
 def inputs_digest(args):
     subject = args.subject or ""
-    if args.deploy == "candidate" and not subject:
-        subject = common.release_subject(args.release_root, args.version, args.ref)["digest"]
-    return common.fixture_template_inputs_digest(args.deploy, args.version, args.ref, subject)
+    if args.deploy == "candidate":
+        if not getattr(args, "commit", None):
+            raise CacheError("candidate 模板身份需要已核验的 release commit（缺失即不可复用）")
+        if not subject:
+            subject = common.release_subject(args.release_root, args.version, args.ref)["digest"]
+    return common.fixture_template_inputs_digest(
+        args.deploy, args.version, args.ref, subject,
+        candidate_commit=getattr(args, "commit", None))
 
 
 def key_for(args, inputs):
@@ -122,6 +127,8 @@ def _check_identity(entry, args):
     command = [PY, os.path.join(HERE, "template_check.py"), entry, "--quiet"]
     if version:
         command += ["--version", version, "--ref", ref]
+    if args.deploy == "candidate" and getattr(args, "commit", None):
+        command += ["--commit", args.commit]
     check = subprocess.run(command, capture_output=True, text=True)
     if check.returncode != 0:
         return f"空态/安装身份校验失败：{check.stderr.strip()[:200]}"
@@ -190,9 +197,15 @@ def migrate(args):
 
 
 def _migrate(args):
-    """只在同一 Python/deploy/release 槽位、owner/root/身份完整匹配时把 legacy key 改名到新 key。"""
+    """只在同一 Python/deploy/release 槽位、owner/root/身份完整匹配时把 legacy key 改名到新 key。
+
+    候选条目自身份换代起还需要已核 commit：旧条目没有这项证据，因此自然不命中，
+    只留作盘点/精确退役，不自动改名冒充新身份。
+    """
     inputs = inputs_digest(args)
     key = key_for(args, inputs)
+    if args.deploy == "candidate":
+        return key
     target = os.path.join(args.cache_root, key)
     if os.path.exists(target):
         return key
@@ -431,7 +444,8 @@ def publish(args):
                    "--expect-repoint-min", "1", "--quiet"]
         if args.deploy == "candidate":
             repoint = [PY, os.path.join(HERE, "template_check.py"), entry, "--version", args.version,
-                       "--ref", args.ref, "--repoint-from", staging, "--expect-repoint-min", "1", "--quiet"]
+                       "--ref", args.ref, "--commit", args.commit,
+                       "--repoint-from", staging, "--expect-repoint-min", "1", "--quiet"]
         done = subprocess.run(repoint, capture_output=True, text=True)
         if done.returncode != 0:
             raise CacheError(f"TEMPLATE-REPOINT-MISMATCH: 记录未指向构建路径 {done.stderr.strip()[:200]}")
@@ -444,6 +458,7 @@ def publish(args):
             "deploy": args.deploy,
             "version": args.version or "",
             "ref": args.ref or "",
+            "commit": (args.commit or "") if args.deploy == "candidate" else "",
             "root": os.path.realpath(entry),
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
             # 累计构建次数（additive 诊断字段，读取方不依赖）：等同槽位重建才增长。
@@ -487,6 +502,7 @@ def main(argv=None):
         command.add_argument("--ref", default=None)
         command.add_argument("--release-root", default=None)
         command.add_argument("--subject", default=None, help="已核候选 release subject（candidate）")
+        command.add_argument("--commit", default=None, help="已核候选 tag commit（candidate）")
         command.add_argument("--results-dir", default=None)
     inventory_parser = sub.add_parser("inventory")
     inventory_parser.add_argument("--cache-root", required=True)
@@ -504,6 +520,10 @@ def main(argv=None):
             print(key_for(args, inputs_digest(args)))
             return 0
         if args.command == "lookup":
+            if args.deploy == "candidate" and not args.commit:
+                print("TEMPLATE-CACHE-MISS: candidate 模板需要已核验的 release commit",
+                      file=sys.stderr)
+                return 10
             return lookup(args)
         if args.command == "migrate":
             return migrate(args)

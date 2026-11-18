@@ -92,12 +92,13 @@ task = {"id": "2026-" + "d" * 32,
 kinds = [t["kind"] for t in wf_gates.retrospective_triggers(F, task, 3)]
 rec("R4 前轮 fail 不被后轮 pass 覆盖", "含 review_fail", kinds, "review_fail" in kinds)
 
-# R5：execution 无 spec_changes
-schema_keys = {"required_steps", "actions", "human_decisions", "debug_declarations"}
-sample = {"id": "2026-" + "e" * 32, "execution": {"required_steps": [], "actions": [], "human_decisions": [],
-                                                  "debug_declarations": []}}
+# R5：execution 无 spec_changes（核真实任务记录生成器的字段，而不是自证一个字面量样本）
+schema_keys = {"required_steps", "actions", "human_decisions", "debug_declarations",
+               "workspace_exclusions"}
+real_execution = wf_tasks.new_task_record("ordinary", "R65 schema")["execution"]
+unknown = sorted(set(real_execution) - schema_keys)
 rec("R5 execution 未引入未登记字段", "无 spec_changes",
-    [k for k in sample["execution"] if k not in schema_keys], True)
+    f"unknown={unknown} keys={sorted(real_execution)}", not unknown)
 
 # R6：调查任务成果收紧
 investigation = {"id": "2026-" + "f" * 32, "plan": {"touch_paths": []},

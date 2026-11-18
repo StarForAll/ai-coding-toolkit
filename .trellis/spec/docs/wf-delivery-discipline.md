@@ -403,8 +403,8 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 - `runner_cleanup.assess_execution/assess_run/finalize`：supervision→cleaned/unknown/failed 的唯一解释；cleanup 与 evidence 分开归因；只有 cleaned 才按 FIX→LEGACY_FIXTURE_ROOT→RUN_TEMPLATE 删除，首次失败即停。root controller（`execution.runner_control`，同 C 进程）负责聚合、finalize、schema3 摘要发布与 run-state 终态；`execute` shell 无成功出口。
 - `results_summary.write_metrics/read_metrics/build/publish`：schema1 测量交接（绑定 run_id/root/role 与 plan/context/lines/units/repro 输入摘要），schema3 摘要原子发布并全对象读回；gate/cleanup/成功结论只来自 controller 当前证据。
 - `template_cache acquire|inventory|retire` 与 `wf_test_release --inventory/--retire`：恢复→迁移/命中→发布收拢为一个修改型入口；F1 只有材料确已删除才删 journal；测试发行 staging/backup 用独立 material-owner（schema1、owner=`wf-test-release-material`）先写后建/改名；O1 按 marker/material-owner 判归属，unproven 只可 manual-retained（TTY+集合摘要，缓存另加 `unproven-cache`）。
-- `repro_select execution_context()`、`public_inputs()`（source/helpers/executor/runner 的唯一产生点）、`local_inputs(case, groups_doc)`、`red_subject(case, local, public, context)`、`input_fingerprint(case, local, public, context)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle)`（gate/writer 共用的纯校验，不重算公共摘要）、`commit_state(results_dir, bundle, expected_sha, expected_size)`（唯一 writer：先验租约/bundle/context，最终 barrier 各重算一次 public/context 后逐 case 核局部输入，candidate 再跑最终 validator）、`write_bundle(path, document)`、`reset_scans()/scans()`（测试专用公共扫描计数）。
-- `wf_test_release --ensure|--check|--lease|--verify-lease`（`--no-lock` 供已持同一 root 锁的调用方）与 `scripts/release_lock.py`：canonical root 固定 sidecar inode、非阻塞独占/共享 flock、busy 退出 75、`/proc` 祖先/FD/flock/mount 域核验。
+- `repro_select execution_context()`、`public_inputs()`（source/helpers/executor/runner 的唯一产生点）、`local_inputs(case, groups_doc)`、`red_subject(case, local, public, context)`、`input_fingerprint(case, local, public, context)`、`auto_modes(cases, groups_doc, fixture_deploy="dev")`、`validate_repro(root, bundle, evidence_root, run_id)`（gate/writer 共用的纯校验：结构 + 逐相位 receipt 终态/错代/路径/命令身份/监督清理/本地回收，返回 `phases{planned,passed,failed,unverified}`，不重算公共摘要）、`commit_state(results_dir, bundle, expected_sha, expected_size, run_id, evidence_root)`（唯一 writer，只由 root controller 在结束校验/清理/取消都有结论后调用一次；只接收 `verified` 且逐相位 passed 的用例，没有新证明就不写状态文件）、`write_bundle(path, document)`、`list_selection(...)`（纯清单，不读 release/proof/state）、`reset_scans()/scans()`（测试专用公共扫描计数）。
+- `wf_test_release --ensure|--check|--lease|--verify-lease`（`--no-lock` 只供已持同一 root 租约的调用方：先用 `release_lock.verify_lease` 证真实持锁，再走 locked 实现）与 `scripts/release_lock.py`：canonical root 固定 sidecar inode、非阻塞独占/共享 flock、busy 退出 75、`/proc` 祖先/FD/flock/mount 域核验。
 
 ### 3. Contracts
 
@@ -420,9 +420,11 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 计数不变式：`lines == suite_ran + flow_ran`、`units_total == suite_ran + flow_ran + repro_ran`、
 `repro_ran == repro 执行体的 REPRO_TOTAL`（repro 用例不写 `lines`，不与行数比较）。
 `template_reused` 的口径是“本次 run 内共用同一夹具源”（run 内构建或缓存条目都算），跨 run 命中看
-`template_cache_hit`/`template_source`。成本账目另有 `release_build`（`built|reused|checked`，从
-controlled 阶段的 `release-context.json` 搬运）与 `template_build_sequences`（缓存命中=0、本次发布=1、
+`template_cache_hit`/`template_source`。成本账目另有 `release_build`（`built|reused|checked`，由 root
+controller 准备后写进 `release-context.json`）与 `template_build_sequences`（缓存命中=0、本次发布=1、
 模板机制关闭=0）；测试发行 meta（schema 2）与模板条目 meta（schema 1）各带 additive 诊断字段 `builds`。
+证据字段 `candidate_commit` 只取自已核 context（dev/未核为 null，候选成功必须非空且等于 tag commit），
+`repro_phase_counts` 取自同一份相位核验报告（`planned` 来自冻结 bundle）；未报告的相位不能计为通过。
 契约测试的隔离边界：单 class 一个 owned scope（marker 用 `read_scope()` 验回）+ 空 pool；每 case 独立
 `WF_TEST_RUN_CACHE`，每次调用独立 `results`/`fixture`/`pycache`；**HOME 不 scope 化**——SUT 的
 执行器确认（`~/.wf/interpreters.json`）与 check/归档判据依赖用户级环境，实测换成 scope 内 HOME 会让
@@ -431,11 +433,11 @@ controlled 阶段的 `release-context.json` 搬运）与 `template_build_sequenc
 （执行器确认 + git 身份）写在 `full/README.md` 的「宿主前置条件」段。
 每个逻辑 case 共享**同一个** 900 秒单调 deadline（`CaseWorkspace.budget`，不是每调用新建），子调用
 按剩余量收紧、耗尽即失败；账目写 `<scope>/evidence/class-cost.json`。
-`stages`（`public,lease,controlled,execute` 四行）与 `plan-calls`（preflight + final 两行）是每 run 证据，
+`stages`（`public,lease,execute` 三行；发行准备与消费锁都在 root controller 内完成）与 `plan-calls`（preflight + final 两行）是每 run 证据，
 只在本进程真的完成一次阶段/计划计算时追加，仅当结果目录可写才写、失败不阻断；它们与 `lines` 一样
 由 `begin-run` 的 prepare 在 owner/state 写入后清空，**复用显式结果目录时从本轮重新计数**。`init_seconds/suite_seconds` 是**全部执行单元**累计，`total_seconds` 是墙钟。shell 阶段时间用 `/proc/uptime`（10ms 粒度），单命令与**套件耗时**用 `time.monotonic`（run_one 的套件段读 execution 结果 JSON 的 `seconds`，init 段不经 execution 保留本地计时）；不要以伪毫秒整数宣称测量精度。
 
-repro state schema 3，每个用例的 `green` 与 `red` 相位独立：green 记 `execution_fingerprint`，
+repro state schema 5，每个用例的 `green` 与 `red` 相位独立且带清理确认：green 记 `execution_fingerprint`，
 red 另记 `red_subject` + 产生它的 dev execution fingerprint。identity 拆两件——`red_subject` 是内容主体
 （case/脚本/helper/协议/source/targets/build 输入/tool/SUT/平台/release 内容），`execution_fingerprint`
 是本 case 输入 + 完整执行 context。candidate auto 只对 candidate-clean 用例要求同 subject **且**同
@@ -443,7 +445,8 @@ release 内容/version/ref/runtime 的 dev red，否则拒绝（出口是 dev �
 red。未知 targets 与旧 schema 1/2 只算 both/legacy，不推导；损坏/未知 schema 不覆盖。冻结来源只有
 `inputs.json`（schema 2，原子写一次），env 只传路径；公共输入在 freeze 一次算齐并冻结，worker 只重算
 case 局部输入（script/targets/case_meta）并比对 context，gate 只读结构报告不写 state、不重算公共摘要；
-唯一全局 writer 是 R 启动的 `commit-state` 子进程，S/库/CLI 都先验真实租约（candidate 加最终 validator）。
+唯一全局 writer 是 root controller 在收尾阶段的**一次** `commit_state`；它只接收本代 receipt 终态、
+监督清理与本地回收都已确认的用例，candidate 的结束校验由 controller 在写前完成（writer 不重复跑 validator）。
 公共扫描次数不随 case 数增长（3 与 30 个 case 都是 source/helpers/release 各一次），旧 schema 1 bundle
 明确拒绝、不做兼容层。运行前冻结、运行后与提交前重核同一 bundle 与输入。
 

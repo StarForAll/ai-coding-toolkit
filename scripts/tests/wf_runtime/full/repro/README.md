@@ -36,8 +36,8 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --list       # 列出用例
 内层 `INNER-TARGET-OK` 不是成功出口；机器可读汇总为
 `REPRO_TOTAL= / REPRO_PASSED= / REPRO_FAILED= / REPRO_GREEN_SECONDS= / REPRO_RED_SECONDS=`，
 另有结构性事实 `REPRO_STRUCTURAL_OK= / REPRO_ELIGIBLE= / REPRO_BUNDLE_SHA256=`。`run_all.sh`
-委托本脚本，并**一律**用 `--_wf-inherited-release` frame 交接已核发行身份（默认构建与
-`--no-build` 都一样），内层不再 `ensure`/`check`/`check --json`。
+委托本脚本时只交接父冻结计划与父 release-context（`--_wf-repro-inner` frame），内层不再
+`ensure`/`check`/`check --json`，也不再重传公开 argv。
 
 CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重建产品发行树。通过本入口运行，避免直接执行单条脚本时借用旧发行。
 
@@ -55,21 +55,28 @@ CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重�
   冻结进 bundle；worker 只重算 case 局部输入（script/targets/case_meta）并比对 context；只读 gate 不重算任何
   公共摘要；唯一 writer 在最终 barrier 各重算一次 `public_inputs()` 与 `execution_context()` 并与冻结值比对，
   随后逐 case 只核局部输入与 subject。旧 schema 1 bundle 一律拒绝（每 run 产物，不迁移）。
-- 拓扑（独立入口）：R 取租约/layout → `resource_lifecycle.begin-run(role=repro)` 写 schema2 owner +
-  active run-state → root controller（同 C 进程，`execution.py --runner-control --runner-role repro`）
-  监督发行准备与 worker/gate/writer → finalize → schema3 repro 投影 + run-state 终态，最后才输出
-  `GATE-OK`。内嵌入口复用父 run_id/receipts/release context，不另起 controller、不发布父摘要。
+- 拓扑（独立入口）：R 在公开阶段**唯一一次**解析参数并把规范计划对象交给 lease frame →
+  lease 内 `resource_lifecycle.begin-run(role=repro)` 写 schema2 owner + active run-state 并原子冻结
+  `plan.json` → root controller（同 C 进程，`execution.py --runner-control --runner-role repro`）
+  取发行消费锁、监督唯一的发行准备，再以 `--_wf-repro-inner` frame 交接 plan/context token →
+  worker/gate → 结束发行校验/清理/取消都有结论后提交一次 proof → schema3 repro 投影 + run-state
+  终态，最后才输出 `GATE-OK`。内嵌入口复用父 run_id/receipts/release context，不另起 controller、
+  不发布父摘要。
 - 命令证据：每个 phase `execution.run` 先写 receipt（managed→父/本 run `commands/<command_id>.json`；
   独立 API→log 同目录隐藏 sibling），相位 TMPDIR 在 supervision=cleaned 后回收，否则保留并在
-  `retained_paths` 报告。只读 gate 不写 state；唯一 state writer 仍是 `commit-state` 子进程。
-- candidate 最终 barrier 与直接 CLI/库调用的租约核验不变；candidate 的独立入口只调用 validator 一次
-  （起始/结束由父 run 负责），内嵌入口不再重复校验。
-- 状态 schema 3：`green` 与 `red` 相位独立；旧 1/2 只作 legacy 保留，未知/损坏不覆盖。
+  `retained_paths` 报告。只读 gate 不写 state；唯一 state writer 是 root controller 在收尾阶段的
+  一次 `commit_state`，且只接收本代 receipt 终态、监督清理与相位回收都已确认的用例。
+- candidate 最终 barrier 由 root controller 在 worker 退出后、proof/摘要发布前再核一次同一身份；
+  独立入口的初核/终核都走同一只读 validator，内嵌入口不重复校验。
+- 状态 schema 5：`green` 与 `red` 相位独立且带清理确认；旧 1-4 只作 legacy 保留（不命中 auto，
+  首次成功写入才转格式），未知/损坏不覆盖。`--list` 只做组/用例选择，不计算 release subject、
+  不读 proof/state/缓存。
 
 ## 租约、测试域与 namespace
 
-- R 先取 fixture → 当前域结果锁 → dev release 独占锁（均同 PID exec 持有）；独立入口才初始化发行，
-  继承入口只 verify 并派生 locator。结果锁是**域**锁：生产 `/tmp/wf-test-results-<uid>.lock`，
+- R 先取 fixture → 当前域结果锁；dev/candidate 的发行消费锁由 root controller 自己取得并贯穿
+  整次运行（准备、各 case、收尾、proof 与终态发布），继承入口只 verify 并派生 locator。结果锁是
+  **域**锁：生产 `/tmp/wf-test-results-<uid>.lock`，
   测试域 `<scope>/locks/results-<uid>.lock`，不为每 run 建 sidecar。
 - 设 `WF_TEST_SCOPE_ROOT` 时，repro 的结果/pycache/state/cache 必须在 scope 内（独立入口对
   `WF_RESULTS_CACHE`/`WF_TEST_RUN_CACHE` 也过 `check-scope`；未注入时默认落在 `<scope>/cache`、

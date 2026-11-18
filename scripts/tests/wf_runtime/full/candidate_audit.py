@@ -172,13 +172,14 @@ def record_suite(entry, results_dir, workdir=None, invocation_id=None):
     }
 
 
-def _audit_env(workdir, candidate, version, ref, template=None):
+def _audit_env(workdir, candidate, version, ref, template=None, commit=None):
     env = {
         **os.environ,
         "WF_FIXTURE_DEPLOY": "candidate",
         "WF_RELEASE_ROOT": candidate,
         "WF_RELEASE_REF": ref,
         "WF_RELEASE_VERSION": version,
+        "WF_RELEASE_COMMIT": commit or "",
         "WF_RELEASE_REPO": candidate,
         "WF_RELEASE_TREE": candidate,
         "SHARED_RELEASE": candidate,
@@ -206,9 +207,9 @@ def _audit_env(workdir, candidate, version, ref, template=None):
     return env
 
 
-def build_template(workdir, candidate, version, ref):
+def build_template(workdir, candidate, version, ref, commit=None):
     template = os.path.join(workdir, "template")
-    env = _audit_env(workdir, candidate, version, ref)
+    env = _audit_env(workdir, candidate, version, ref, commit=commit)
     subprocess.run([PY, str(HERE / "fixture_scope.py"), "reset", template], env=env, check=True)
     subprocess.run(["bash", str(HERE / "wf_fixture.sh"), template, "--deploy", "candidate",
                     "--release-root", candidate, "--release-ref", ref,
@@ -226,20 +227,23 @@ def generate(tree, version, ref, workdir, out, candidate_root=None, template=Non
     os.makedirs(results, exist_ok=True)
     if candidate_root:
         candidate = os.path.abspath(candidate_root)
-        prepare_candidate_repo.check(tree, version, candidate)
+        meta, _status = prepare_candidate_repo.check(tree, version, candidate)
     else:
         candidate = os.path.join(workdir, "candidate")
         if os.path.exists(candidate):
-            prepare_candidate_repo.check(tree, version, candidate)
+            meta, _status = prepare_candidate_repo.check(tree, version, candidate)
         else:
-            prepare_candidate_repo.ensure(tree, version, candidate)
+            candidate, meta, _status = prepare_candidate_repo.ensure(tree, version, candidate)
+    commit = meta.get("commit")
+    if not commit:
+        raise AuditError("候选 meta 没有已核 tag commit，审计身份不成立")
     if template is None:
-        template = build_template(workdir, candidate, version, ref)
+        template = build_template(workdir, candidate, version, ref, commit)
     else:
         template = os.path.abspath(template)
     units = json.loads((HERE / "units.json").read_text(encoding="utf-8"))["units"]
     isolated = [entry["name"] for entry in units if entry.get("isolated_user")]
-    env = _audit_env(workdir, candidate, version, ref, template)
+    env = _audit_env(workdir, candidate, version, ref, template, commit)
     env["WF_ISOLATED_UNITS"] = " ".join(isolated)
     records = {}
     for entry in units:

@@ -26,12 +26,23 @@ import fixture_scope  # noqa: E402
 import release_lock  # noqa: E402
 
 
-def plan_document(results_dir, deploy="dev"):
-    return {"mode": "subset", "list_only": 0, "units": [], "fix": "/tmp/fix",
-            "results_dir": str(results_dir), "fixture_deploy": deploy,
-            "test_release_root": "/tmp/release",
-            "release_root": "/tmp/candidate" if deploy == "candidate" else "/tmp/release",
-            "release_version": "0.1.2", "release_ref": "refs/tags/wf-v0.1.2"}
+RUN_ID = "run-gate-1"
+CANDIDATE_ROOT = "/tmp/candidate"
+
+
+def plan_document(results_dir, deploy="dev", candidate_root=CANDIDATE_ROOT):
+    candidate = deploy == "candidate"
+    return {"schema_version": 1, "role": "full", "run_id": RUN_ID,
+            "results_dir": str(results_dir), "scope_root": None,
+            "mode": "subset", "full_mode": 0, "list_only": 0,
+            "units": [{"name": "r70_tests", "kind": "suite"}], "fix": "/tmp/fix",
+            "fixture_deploy": deploy, "no_build": 1,
+            "test_release_root": "/tmp/release", "test_release_version": "0.1.2",
+            "test_release_ref": "refs/tags/wf-v0.1.2",
+            "release_root": candidate_root if candidate else "",
+            "release_version": "0.1.2" if candidate else "",
+            "release_ref": "refs/tags/wf-v0.1.2" if candidate else "",
+            "release_meta": candidate_root + ".meta.json" if candidate else ""}
 
 
 class Base(unittest.TestCase):
@@ -39,12 +50,16 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix="wf-execute-gate-")
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
-        os.environ["WF_RESULTS_DIR"] = str(self.root)
-        os.environ["WF_RUNNER_CONTROL_PID"] = str(os.getpid())
         saved = {key: os.environ.get(key) for key in ("WF_RESULTS_DIR", "WF_RUNNER_CONTROL_PID",
-                                                      "WF_FIXTURE_DEPLOY")}
+                                                      "WF_FIXTURE_DEPLOY", "WF_RUN_ID")}
         self.addCleanup(lambda: [os.environ.pop(key, None) if value is None else
                                  os.environ.__setitem__(key, value) for key, value in saved.items()])
+        os.environ["WF_RESULTS_DIR"] = str(self.root)
+        os.environ["WF_RUNNER_CONTROL_PID"] = str(os.getpid())
+        os.environ["WF_RUN_ID"] = RUN_ID
+        self.candidate = self.root / "candidate"
+        self.candidate.mkdir()
+        (self.root / "candidate.meta.json").write_text("{}\n", encoding="utf-8")
         for module in (fixture_scope, release_lock):
             for name in ("verify_lease", "verify_results_lock"):
                 if hasattr(module, name):
@@ -59,7 +74,7 @@ class Base(unittest.TestCase):
 
     def context(self, deploy="dev", **overrides):
         payload = {"schema_version": 2, "deploy": deploy,
-                   "release_root": "/tmp/candidate" if deploy == "candidate" else "/tmp/release",
+                   "release_root": str(self.candidate) if deploy == "candidate" else "/tmp/release",
                    "version": "0.1.2", "ref": "refs/tags/wf-v0.1.2",
                    "release_subject": "sha256:subject", "tree_digest": "sha256:tree",
                    "runtime": {"tool": {"role": "tool", "path_identity": "sha256:t",
@@ -88,7 +103,8 @@ class Base(unittest.TestCase):
     def test_valid_dev_handoff_passes_and_emits_release_env(self):
         code = self.run_gate(plan_document(self.root), self.context())
         self.assertEqual(code, 0)
-        code = self.run_gate(plan_document(self.root, "candidate"), self.context("candidate"))
+        code = self.run_gate(plan_document(self.root, "candidate", str(self.candidate)),
+                             self.context("candidate"))
         self.assertEqual(code, 0)
 
     def test_tampered_or_truncated_plan_is_refused(self):
@@ -104,7 +120,7 @@ class Base(unittest.TestCase):
         self.assertEqual(self.run_gate(plan, self.context()), 2)
 
     def test_context_mismatch_is_refused(self):
-        base = plan_document(self.root, "candidate")
+        base = plan_document(self.root, "candidate", str(self.candidate))
         self.assertEqual(self.run_gate(base, self.context("candidate", version="9.9.9")), 2)
         self.assertEqual(self.run_gate(base, self.context("candidate", release_subject="")), 2)
         self.assertEqual(self.run_gate(base, self.context(**{"deploy": "dev"})), 2)

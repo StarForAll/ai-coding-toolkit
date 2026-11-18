@@ -137,17 +137,21 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   证据完整。计时/并发/模板事实经 **schema 1 `summary-metrics.json`** 交接（绑定本代 run_id/root/role
   与输入摘要），controller 侧 `read_metrics` 重算并逐项比对；旧无 ID metrics 只作历史展示。
   模板来源三键、`pycache_root` 与 60s/65s `budget` 仍只报告不硬失败。
-  成本账目另有两个只读字段：`release_build`（controlled 阶段从 `release-context.json` 搬运的
+  成本账目另有两个只读字段：`release_build`（root controller 准备后写进 `release-context.json` 的
   `built|reused|checked`）与 `template_build_sequences`（模板缓存命中=0、本次发布一次=1、模板机制关闭=0）。
+  另有三个证据字段：`candidate_commit`（已核 tag commit；dev 或候选初核前失败为 null，候选成功必须有值）、
+  `repro_phase_counts`（`green|red` 各自 `planned/passed/failed/unverified`，`planned` 取冻结 bundle，
+  缺失/错代/清理未确认一律计 `unverified`；repro 禁用时全零、启用但无合法 bundle 时为 null）。
 - `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
 - 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
 - **阶段与 frame**：入口先是 `public`（记原始 results 显式性、一次禁写 pyc 的 preflight；list/dry-run 在此结束），
   然后 `exec` 进 `lease`（fixture→当前域结果锁、**一次 `resource_lifecycle.begin-run`** 写 schema2 owner →
   active run-state → 按旧代许可 prepare、唯一一次 final plan 并写 `plan.json` 字节 + token），
-  controller 起 `controlled`（取并保持 release 独占锁、ensure/核验、原子写 `release-context.json`），
-  最后 `exec` 成 `execute`（第三次脚本重入、最终 consumer：核祖先/三把锁/两处冻结字节后才执行，不再 plan/ensure；
-  内层只写目标结果与 schema1 metrics，没有成功出口）。
-  内部 frame 由 `runner_protocol.py` 唯一编解码，语法 `--_wf-internal <lease|controlled|execute> <固定键> -- <用户参数>`；
+  `exec` 成 root controller（同 C 进程：核计划身份 → 取并保持 release 独占锁 → 受监督准备一次 →
+  原子写 `release-context.json` → 以 `execute` frame 交接 plan/context token）。`execute` 是最终 consumer：
+  核祖先/三把锁/两处冻结字节后才执行，不再 plan/ensure；内层只写目标结果与 schema1 metrics，没有成功出口。
+  内部 frame 由 `runner_protocol.py` 唯一编解码，语法 `--_wf-internal <lease|execute> <固定键> -- <用户参数>`
+  （repro 用 `--_wf-repro-lease`/`--_wf-repro-inner`，内层不接受用户 argv）；
   用户 argv 出现保留 `--_wf-*` 即拒绝。异常和取消由 controller 统一等后代退出后清理。
 - **结果锁域**：生产域固定 `/tmp/wf-test-results-<uid>.lock`（一个 UID 一把，不为每个 run/目录建 sidecar，
   prune 不回收）。显式镜像只短期持结果锁写 plan/owner marker；普通无显式结果的 list/dry-run 不取锁。
@@ -225,14 +229,14 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   teardown 与剩余 deadline 写进 `<scope>/evidence/class-cost.json`；`WF_CONTRACT_KEEP_SCOPE=1` 保留现场。
 - **阶段与计划计数文件**（证据，不是门禁）：`run_all` 在每个阶段入口向 `$WF_RESULTS_DIR/stages` 追加名字；
   `public` 阶段在 begin-run 之前不能写结果目录，由 `lease` 阶段在 owner/state/prepare 之后补记，因此一次真实 run
-  是 `public,lease,controlled,execute` 四行。计划计数不再创建 bootstrap 文件：preflight 的阶段行只留在
+  是 `public,lease,execute` 三行（发行准备与锁都在 controller 内完成，不再有单独阶段）。计划计数不再创建 bootstrap 文件：preflight 的阶段行只留在
   内存里，`lease` begin-run 之后与 final plan 一起写 `$WF_RESULTS_DIR/plan-calls`，一次真实 run
   合计 2 行；`--list`/`--dry-run` 全程零写入。
 - **调用计数注入点**（默认值不变，仅测试使用；不劫持 PATH）：`WF_TEST_RELEASE_CLI`（测试发行 CLI，
-  `release_context.py` 与 `repro/run.sh` 都消费）、`WF_CANDIDATE_VALIDATOR`（候选校验，
-  `release_context.py`、`repro/run.sh`、repro 最终 writer barrier 都消费）、`WF_GIT_BIN`
+  root controller 的准备阶段消费）、`WF_CANDIDATE_VALIDATOR`（候选校验，controller 的初核/终核消费，
+  独立 repro 入口不重复校验）、`WF_GIT_BIN`
   （`wf_release_common.git_head/git_describe`）。契约用计数 shim（记录 argv 后 exec 真实入口）断言：
-  内嵌 repro 不再 ensure/check（一次 run 只剩 controlled 阶段那一次）、独立 repro 入口 1 次、
+  内嵌 repro 不再 ensure/check（一次 run 只剩 controller 准备那一次）、独立 repro 入口 1 次、
   候选 validator 起始与结束 barrier 各 1 次、坏候选只有起始 1 次且不启动 worker。
 - **release/模板构建次数**：测试发行 meta（schema 2）与模板条目 meta（schema 1）都有一个 additive
   诊断字段 `builds`（首建=1，同输入复用不增）；`wf_test_release.py --ensure --json` 的 `status` 为
@@ -358,9 +362,10 @@ after-material-cleanup-before-journal-remove`；重入真实入口（acquire / e
 SIGKILL、卡住）都判为设施失败而不是成功。控制面是两条匿名 socketpair 上的有界长度帧
 （READY/START/STARTED/CANCEL/CANCELLED_ACK/DONE），W 不继承控制 FD。
 
-- shell trap 不再递归强杀监督进程：它只写一次 `WF_CANCEL_FILE`（`$RESULTS_DIR/cancel-request`），
-  每个 owned `execution.py` 调用在事件循环里读到后经私有通道取消，`run_one.sh` 在启动新单元前检查
-  同一请求并停止调度；
+- 取消标记由 root controller 指定（本代 `$RESULTS_DIR/cancel-request`）并交接给 shell；
+  shell 收到 INT/TERM/HUP 时只用排他创建发布请求（不派生路径、不删除、不改写已有请求），
+  每个 owned `execution.py` 调用在事件循环里读到后经私有通道取消，调度循环在启动新单元前检查
+  同一请求并停止调度；controller 在 proof 写入前与最终成功决策前各消费一次锁存值；
 - 正常取消由 S 清理，S 卡住时 G 在有界宽限后终止 S 并接管；G 猝死时 S 看到 EOF 仍须清理，但
   C 只报告 `cleanup=unknown` 与设施失败，不声称已释放锁；
 - 最后有效监督方丢失/宿主断电仍是明确的能力边界：保留现场、报告最后观测身份与恢复步骤，

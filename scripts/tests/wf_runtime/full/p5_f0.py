@@ -27,7 +27,14 @@ task_id, gen = facts.get("task_id"), facts.get("generation")
 if not task_id:
     print("task-new failed", payload); raise SystemExit(1)
 directory = os.path.join(F, facts.get("directory", ""))
-rec("无 Git 时仍可创建规划", "pass（创建任务/起草规划不被阻断）", "task-new ok", True)
+record_path = os.path.join(directory, "task.json")
+try:
+    task_record = json.load(open(record_path, encoding="utf-8"))
+except (OSError, ValueError):
+    task_record = {}
+rec("无 Git 时仍可创建规划", "pass（任务记录落盘且 id 一致）",
+    f"rc={rc} id={task_record.get('id')}",
+    rc == 0 and bool(task_id) and task_record.get("id") == task_id)
 
 prd = '''# 初始化项目基线
 

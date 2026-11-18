@@ -17,7 +17,8 @@ bundle schema 2 是唯一冻结来源（`inputs.json`），env 只传它的路�
 公共输入（source/helpers/executor/runner）在 freeze 计算一次并冻结进 bundle；worker 只重算
 case 局部输入，gate 不重算任何公共摘要，唯一 writer 在最终 barrier 各重算一次公共输入与
 execution context 并与冻结值比对。旧 schema bundle 一律拒绝（每 run 产物，不迁移）。
-gate 只读调用 `validate_repro()`；唯一全局 writer 是 `commit-state` 子进程。
+gate 只读调用 `validate_repro()`；唯一全局 writer 是 root controller 在收尾阶段调用的一次
+`commit_state()`，它要求每个相位都有本代 receipt、监督清理已确认且本地清理为 `removed`。
 """
 from __future__ import annotations
 
@@ -47,15 +48,18 @@ HELPERS = ("cli.py", "_harness.py", "_release.py", "_review_flow.py", "_review_l
            "../../../../wf_test_paths.py")
 RUNNER_FILES = ("cli.py", "repro_select.py", "run.sh")
 # 协议成组升级：bundle/state/context 一次性换代，旧证明只作 legacy（不静默兼容）。
-STATE_SCHEMA = 4
+# v5 起 red/green 证明必须带清理已确认的相位证据；v1-v4 一律只读作历史。
+STATE_SCHEMA = 5
+LEGACY_STATE_SCHEMAS = (1, 2, 3, 4)
 BUNDLE_SCHEMA = 3
 # 结果根里的生命周期/摘要文件：不是 repro case 结果，禁止被 validate_repro 当记录读取。
 NON_CASE_FILES = {".wf-results-owner.json", "inputs.json", "run-state.json", "summary.json",
                   "summary-metrics.json", "summary-measurements.json", "release-context.json",
-                  "repro.bundle.json", "source-hygiene.before.json"}
+                  "repro.bundle.json", "source-hygiene.before.json", "plan.json"}
 CONTEXT_SCHEMA = 2
 RELEASE_CONTEXT_SCHEMA = 2
 PHASES = {"green": ("green",), "red": ("red",), "both": ("green", "red")}
+PHASE_STATES = ("planned", "passed", "failed", "unverified")
 
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import wf_test_paths  # noqa: E402
@@ -182,41 +186,36 @@ def _runtime_identity():
 
 
 def release_context():
-    """已核发行身份：优先用父 runner 的 handoff，独立 repro 从 env 自算。"""
+    """已核发行身份：只接受 controller 写在结果根里的 release-context。
+
+    独立与内嵌 repro 都不再从环境变量合成发行事实：候选 commit、树摘要、runtime 身份必须
+    来自同一份已核验上下文，否则旧证明/无提交猜测会冒充本代证据。
+    """
     SCAN_COUNTS["release"] += 1
     path = os.environ.get("WF_RELEASE_CONTEXT")
-    if path:
-        try:
-            with open(path, encoding="utf-8") as handle:
-                context = json.load(handle)
-        except (OSError, ValueError) as exc:
-            raise SelectError(f"release context unreadable: {path}") from exc
-        if context.get("schema_version") != RELEASE_CONTEXT_SCHEMA:
-            raise SelectError(
-                f"release context schema must be {RELEASE_CONTEXT_SCHEMA}; "
-                "old contexts are not accepted (re-run the runner)")
-        if not context.get("release_subject") or not isinstance(context.get("runtime"), dict):
-            raise SelectError("release context schema/subject/runtime invalid")
-        return context
-    root = os.environ.get("WF_RELEASE_TREE")
-    version = os.environ.get("WF_RELEASE_VERSION") or ""
-    ref = os.environ.get("WF_RELEASE_REF") or ""
-    if not root:
-        # --list 等纯计划面：无 context 时用产品发行树只读派生一个可比较的 subject。
-        product = os.path.join(REPO, "docs", "workflows", "wf-release")
-        if not os.path.isdir(product):
-            raise SelectError("no release context and no WF_RELEASE_TREE")
-        root = product
-    sys.path.insert(0, os.path.join(REPO, "scripts"))
-    import wf_release_common as common
-    subject = common.release_subject(root, version, ref)
-    return {"schema_version": RELEASE_CONTEXT_SCHEMA,
-            "deploy": os.environ.get("WF_FIXTURE_DEPLOY", "dev"),
-            "release_root": os.path.realpath(root), "version": version, "ref": ref,
-            "release_subject": subject["digest"], "tree_digest": subject["subject"]["tree"],
-            "manifest_digest": subject["subject"]["manifest"],
-            "runtime": _runtime_identity(),
-            "candidate": ({"commit": None} if os.environ.get("WF_FIXTURE_DEPLOY") == "candidate" else None)}
+    if not path:
+        raise SelectError(
+            "release context is required (controller must hand off release-context.json)")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            context = json.load(handle)
+    except (OSError, ValueError) as exc:
+        raise SelectError(f"release context unreadable: {path}") from exc
+    if context.get("schema_version") != RELEASE_CONTEXT_SCHEMA:
+        raise SelectError(
+            f"release context schema must be {RELEASE_CONTEXT_SCHEMA}; "
+            "old contexts are not accepted (re-run the runner)")
+    if not context.get("release_subject") or not isinstance(context.get("runtime"), dict):
+        raise SelectError("release context schema/subject/runtime invalid")
+    if context.get("deploy") not in ("dev", "candidate"):
+        raise SelectError(f"release context deploy invalid: {context.get('deploy')!r}")
+    if not context.get("release_root") or not context.get("version") or not context.get("ref"):
+        raise SelectError("release context release identity is incomplete")
+    if context["deploy"] == "candidate":
+        commit = (context.get("candidate") or {}).get("commit")
+        if not commit or not isinstance(commit, str):
+            raise SelectError("candidate release context has no verified commit")
+    return context
 
 
 def execution_context():
@@ -224,12 +223,12 @@ def execution_context():
     context = release_context()
     return {
         "schema_version": CONTEXT_SCHEMA,
-        "deploy": context.get("deploy") or os.environ.get("WF_FIXTURE_DEPLOY", "dev"),
+        "deploy": context["deploy"],
         "release_subject": context["release_subject"],
         "release_root_identity": digest({"root": context.get("release_root"),
                                          "tree": context.get("tree_digest")}),
         "candidate_commit": ((context.get("candidate") or {}).get("commit")
-                             if context.get("deploy") == "candidate" else None),
+                             if context["deploy"] == "candidate" else None),
         "runtime": _runtime_identity(),
         "platform": sys.platform,
     }
@@ -383,42 +382,75 @@ def read_state():
         raise SelectError(f"repro state is unreadable; refusing to replace it: {path}") from exc
     if not isinstance(state, dict) or not isinstance(state.get("cases"), dict):
         raise SelectError(f"repro state has an invalid shape; refusing to replace it: {path}")
-    if state.get("schema_version") in (1, 2, 3):
-        # 旧内容保留但不算证明：旧 green/red 一律只作 legacy，不推导 context/subject。
-        state = {"schema_version": STATE_SCHEMA,
-                 "cases": {name: {"legacy": record} for name, record in state["cases"].items()}}
-    elif state.get("schema_version") != STATE_SCHEMA:
+    schema = state.get("schema_version")
+    if schema in LEGACY_STATE_SCHEMAS:
+        # 旧内容保留但不算证明：v1-v4 的 green/red 都缺少本规则要求的清理证据。
+        return {"schema_version": STATE_SCHEMA,
+                "cases": {name: {"legacy": record} for name, record in state["cases"].items()}}
+    if schema != STATE_SCHEMA:
         raise SelectError(f"unsupported repro state schema; refusing to replace it: {path}")
     return state
 
 
 def write_state(state):
+    """原子写：读/写/落盘/replace 失败都保持旧文件字节，原先没有就仍不创建。"""
     path = state_path()
     try:
         wf_test_paths.require_in_scope(path)
     except wf_test_paths.PathError as exc:
         raise SelectError(f'repro state path escapes the test scope: {exc}') from exc
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=os.path.dirname(path),
-                                         prefix=".state-", delete=False, suffix=".json")
+    directory = os.path.dirname(path) or "."
     try:
-        json.dump(state, handle, ensure_ascii=False, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
-    finally:
-        handle.close()
-    os.replace(handle.name, path)
+        os.makedirs(directory, exist_ok=True)
+    except OSError as exc:
+        raise SelectError(f"repro state directory is unusable; previous state is unchanged: "
+                          f"{directory}: {exc}") from exc
+    temporary = None
+    failure = None
+    try:
+        handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=directory,
+                                             prefix=".state-", delete=False, suffix=".json")
+        temporary = handle.name
+        try:
+            json.dump(state, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        finally:
+            handle.close()
+        os.replace(temporary, path)
+        temporary = None
+    except (OSError, ValueError, TypeError) as exc:
+        failure = exc
+    orphan = None
+    if temporary is not None:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+        except OSError as exc:
+            orphan = temporary
+            failure = failure or exc
+    if failure is not None:
+        detail = f"{failure}"
+        if orphan:
+            detail += f"; temporary file left behind: {orphan}"
+        raise SelectError(
+            f"repro state write failed; the previous state file is unchanged: {detail}") from failure
     return path
 
 
 def auto_modes(cases, groups_doc, fixture_deploy="dev"):
-    """dev：同 subject 的有效 dev red 才免注入；candidate：必须已有同主体 dev red。"""
+    """dev：同 subject 且清理已确认的有效 dev red 才免注入；candidate 还要求同主体 dev red。
+
+    v5 之前的状态只作历史：旧 red 没有本代相位清理证明，`auto` 不命中（必须重验）。
+    """
     state = read_state()
     modes, missing = {}, []
     for case, record in cases.items():
         proof = ((state.get("cases") or {}).get(case) or {}).get("red") or {}
         usable = (proof.get("subject") == record["red_subject_digest"]
+                  and proof.get("cleanup") == "removed"
                   and record["local_inputs"]["targets"] is not None)
         if usable and fixture_deploy != "dev":
             usable = bool(proof.get("fingerprint"))
@@ -481,11 +513,74 @@ def validate_bundle(bundle):
     return context, cases
 
 
-def validate_repro(root, bundle):
-    """纯校验：gate 与 writer 共用同一份 PASS/phase 规则，不复制第二套。"""
+def _phase_verdict(root, case, phase, record, evidence_root, run_id):
+    """单相位判定：断言事实、receipt 归属与清理确认同一条规则。
+
+    返回 (state, reason)。state ∈ {passed, failed, unverified}：
+    - 断言证据完整且通过、本代 receipt 终态、监督调用清理且相位目录已回收 → passed；
+    - 断言证据完整且不通过 → failed；
+    - 其余（缺 receipt/错代/路径或相位错配/清理未确认/显式保留）→ unverified。
+    """
+    log = os.path.join(root, "logs", f"{case}.{phase}.log")
+    actual = (record.get("phases") or {}).get(phase)
+    if not isinstance(actual, dict):
+        return "unverified", f"{case}.{phase}: phase execution evidence missing"
+    if not os.path.isfile(log):
+        return "unverified", f"{case}.{phase}: phase log missing"
+    sys.path.insert(0, FULL)
+    import execution
+    assertion = execution.verdict(log, actual.get("rc"), "repro", phase=phase)
+    if not assertion["ok"]:
+        return "failed", f"{case}.{phase}: target assertion failed ({assertion['reason'].strip()})"
+    command_id = actual.get("command_id")
+    if not isinstance(command_id, str) or not command_id:
+        return "unverified", f"{case}.{phase}: phase command identity missing"
+    if not evidence_root or not run_id:
+        return "unverified", f"{case}.{phase}: phase receipt domain is not available"
+    import resource_lifecycle as lifecycle
+    receipt_path = lifecycle.receipt_path(evidence_root, command_id)
+    try:
+        receipt = lifecycle.read_receipt(receipt_path)
+    except (OSError, lifecycle.LifecycleError) as exc:
+        return "unverified", f"{case}.{phase}: phase receipt unusable ({exc})"
+    problems = []
+    if receipt.get("run_id") != run_id:
+        problems.append(f"receipt belongs to run_id={receipt.get('run_id')!r}")
+    if receipt.get("command_id") != command_id:
+        problems.append("receipt command_id mismatch")
+    if os.path.realpath(receipt.get("log_path") or "") != os.path.realpath(log):
+        problems.append("receipt log path mismatch")
+    if receipt.get("state") != "finished":
+        problems.append(f"receipt is {receipt.get('state')!r}")
+    result = receipt.get("result") or {}
+    if result.get("rc") != actual.get("rc") or result.get("status") != actual.get("status"):
+        problems.append("receipt result differs from the phase record")
+    argv = receipt.get("argv") or []
+    script = os.path.join(HERE, case + ".py")
+    if script not in argv or phase not in argv:
+        problems.append("receipt command identity does not name this case/phase")
+    supervision = receipt.get("supervision") or {}
+    if supervision.get("cleanup_state") != "cleaned":
+        problems.append(f"supervision cleanup is {supervision.get('cleanup_state')!r}")
+    if receipt.get("local_cleanup") != "removed":
+        problems.append(f"phase cleanup is {receipt.get('local_cleanup')!r}")
+    if problems:
+        return "unverified", f"{case}.{phase}: " + "; ".join(problems)
+    return "passed", ""
+
+
+def validate_repro(root, bundle, evidence_root=None, run_id=None):
+    """纯校验：gate 与 writer 共用同一份 PASS/phase/清理规则，不复制第二套。
+
+    `evidence_root` 是本代 receipt 目录（父根或独立结果根的 `commands/`），`run_id` 是本代
+    运行标识；两者缺失时相位一律记为 unverified —— 没有本代清理证据就没有 proof。
+    """
     context, expected = validate_bundle(bundle)
     root = os.path.abspath(root)
     records, malformed = {}, []
+    phases = {phase: {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}
+              for phase in ("green", "red")}
+    case_states = {}
     for path in sorted(glob.glob(os.path.join(root, "*.json"))):
         # 结果根同时承载生命周期证据（schema2 owner/run-state/摘要/控制记录）；
         # 它们不是 case 结果，由 bundle 或对应 reader 单独核验。
@@ -496,42 +591,53 @@ def validate_repro(root, bundle):
                 record = json.load(handle)
             case = record["case"]
             mode = record["mode"]
-            phases = PHASES.get(mode)
+            planned = PHASES.get(mode)
             if (not isinstance(case, str) or os.path.basename(path) != case + ".json"
                     or case in records or case not in expected or mode != expected[case]["mode"]
                     or type(record.get("verified")) is not bool
                     or record.get("execution_fingerprint") != expected[case]["execution_fingerprint"]
                     or record.get("bundle_sha256") != bundle["__sha256"]
-                    or any(record.get(p) not in ("pass", "fail") for p in phases)
-                    or record["verified"] != all(record.get(p) == "pass" for p in phases)):
+                    or any(record.get(p) not in ("pass", "fail") for p in planned)
+                    or record["verified"] != all(record.get(p) == "pass" for p in planned)):
                 raise SelectError("contradictory case/mode/phase result")
             for phase in ("green", "red"):
                 seconds = record.get(phase + "_seconds", 0)
                 if (not isinstance(seconds, (int, float)) or isinstance(seconds, bool)
                         or not math.isfinite(seconds) or seconds < 0):
                     raise SelectError("invalid duration")
-                if phase not in phases and record.get(phase, "skip") != "skip":
+                if phase not in planned and record.get(phase, "skip") != "skip":
                     raise SelectError(f"{phase} is not part of mode {mode} but carries a result")
-            if record["verified"]:
-                sys.path.insert(0, FULL)
-                import execution
-                for phase in phases:
-                    actual = (record.get("phases") or {}).get(phase) or {}
-                    log = os.path.join(root, "logs", f"{case}.{phase}.log")
-                    if (actual.get("rc") != 0 or actual.get("status") != "passed"
-                            or not execution.verdict(log, actual["rc"], "repro",
-                                                     phase=phase)["ok"]):
-                        raise SelectError("phase evidence contradicts execution or log")
+            states = {}
+            for phase in planned:
+                states[phase], _reason = _phase_verdict(root, case, phase, record,
+                                                        evidence_root, run_id)
+                phases[phase]["passed" if states[phase] == "passed"
+                              else "failed" if states[phase] == "failed" else "unverified"] += 1
+            all_passed = all(states[phase] == "passed" for phase in planned)
+            if record["verified"] and not all_passed:
+                # 断言记录说“通过”但本代清理/收据证据不成立：不是可复用的证明。
+                record["verified"] = False
+                record["evidence_problem"] = "; ".join(
+                    f"{phase}:{states[phase]}" for phase in planned if states[phase] != "passed")
+            case_states[case] = states
             records[case] = record
         except (OSError, ValueError, TypeError, KeyError) as exc:
             malformed.append(os.path.basename(path))
             continue
     missing = [case for case in expected if case not in records]
-    return {"records": records, "malformed": malformed, "missing": missing, "expected": expected}
+    for case, record in expected.items():
+        for phase in PHASES[record["mode"]]:
+            phases[phase]["planned"] += 1
+    return {"records": records, "malformed": malformed, "missing": missing,
+            "expected": expected, "phases": phases, "case_states": case_states}
 
 
-def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size=None):
-    """唯一 writer：先验租约/输入，再重读**同一** bundle 与结果，最后原子合并 state。"""
+def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size=None,
+                 run_id=None, evidence_root=None):
+    """唯一 writer：先验租约/输入，再重读**同一** bundle 与结果，最后原子合并 state。
+
+    只接收本代、相位证据齐全（receipt 终态 + 监督清理 + 本地回收）且断言通过的用例。
+    """
     sys.path.insert(0, FULL)
     import fixture_scope
 
@@ -544,18 +650,10 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
         import release_lock
 
         release_lock.verify_lease(release_root)
-    elif deploy == "candidate" and release_root:
-        # candidate 不走 dev release flock，改在最终 barrier 重跑完整 validator（含 tag/clean/meta/tree）。
-        import subprocess
-
-        validator = (os.environ.get("WF_CANDIDATE_VALIDATOR")
-                     or os.path.join(FULL, "prepare_candidate_repo.py"))
-        check = subprocess.run([sys.executable, validator, "--check", "--out", release_root,
-                                "--version", os.environ.get("WF_RELEASE_VERSION", "")],
-                               capture_output=True, text=True)
-        if check.returncode != 0:
-            raise SelectError("candidate final barrier failed: " +
-                              (check.stderr.strip() or check.stdout.strip())[:200])
+    # candidate 的结束校验由 root controller 在调用本 writer 之前完成（同一只读 validator、
+    # 同一身份）；这里不再重复调用，避免同一 run 出现第二个结束 barrier 判定点。
+    if not run_id:
+        raise SelectError("repro proof requires the current run_id")
     path = bundle_path or os.environ.get("WF_REPRO_INPUTS_FILE")
     if not path:
         raise SelectError("bundle path is required")
@@ -568,7 +666,7 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
         raise SelectError("bundle size changed since freeze")
     bundle = json.loads(data)
     bundle["__sha256"] = sha
-    report = validate_repro(results_dir, bundle)
+    report = validate_repro(results_dir, bundle, evidence_root=evidence_root, run_id=run_id)
     if report["malformed"] or report["missing"]:
         raise SelectError("malformed/missing repro results: " +
                           " ".join(report["malformed"] + report["missing"]))
@@ -594,13 +692,17 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
             raise SelectError(f"{case}: case inputs changed since freeze")
         entry = state["cases"].get(case) or {}
         if "green" in PHASES[record["mode"]]:
-            entry["green"] = {"fingerprint": expected["execution_fingerprint"], "verified_at": now()}
+            entry["green"] = {"fingerprint": expected["execution_fingerprint"],
+                              "cleanup": "removed", "verified_at": now()}
         if "red" in PHASES[record["mode"]] and context["deploy"] == "dev":
             entry["red"] = {"subject": subject, "fingerprint": expected["execution_fingerprint"],
-                            "verified_at": now()}
+                            "cleanup": "removed", "verified_at": now()}
         state["cases"][case] = entry
         updated.append(case)
     kept = [case for case in state["cases"] if case not in updated]
+    if not updated:
+        # 没有合格用例就等于没有新证明：不改写状态文件（v1-v4 也不因本次运行转格式）。
+        return None, [], kept
     return write_state(state), updated, kept
 
 
@@ -638,6 +740,19 @@ def emit(selection, fmt):
     print("REPRO_SELECT_OK=1")
 
 
+def list_selection(group_names=(), only="", fixture_deploy="dev", groups_doc=None):
+    """纯清单：只读组/用例登记，不计算 release subject，不读 proof/state/缓存。
+
+    dev 默认两个面都跑（both），候选只跑 candidate-clean 用例的 green 面。
+    """
+    groups_doc = groups_doc or load_groups()
+    check_candidate_manifest(groups_doc)
+    chosen, skipped = _chosen(group_names, only, fixture_deploy, groups_doc)
+    mode = "green" if fixture_deploy == "candidate" else "both"
+    return {"cases": {case: mode for case in chosen}, "skipped_non_candidate": skipped,
+            "fixture_deploy": fixture_deploy}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="repro 用例选择/冻结/状态")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -649,12 +764,10 @@ def main(argv=None):
     plan_p.add_argument("--format", default="sh", choices=("sh", "json"))
     plan_p.add_argument("--bundle", default=None, help="原子写出唯一冻结 bundle")
     plan_p.add_argument("--freeze", action="store_true", help="按 --bundle 冻结并输出摘要/长度")
-    commit_p = sub.add_parser("commit-state")
-    commit_p.add_argument("--results", required=True)
-    commit_p.add_argument("--bundle", default=None)
-    commit_p.add_argument("--bundle-sha256", default=None)
-    commit_p.add_argument("--bundle-size", default=None)
-    commit_p.add_argument("--format", default="sh", choices=("sh", "json"))
+    list_p = sub.add_parser("list")
+    list_p.add_argument("--group", action="append", default=[])
+    list_p.add_argument("--only", default="")
+    list_p.add_argument("--fixture-deploy", default="dev", choices=("dev", "candidate"))
     describe_p = sub.add_parser("describe")
     describe_p.add_argument("--group", action="append", default=[])
     describe_p.add_argument("--fixture-deploy", default="dev", choices=("dev", "candidate"))
@@ -669,14 +782,13 @@ def main(argv=None):
                 print(f"REPRO_BUNDLE_SIZE={size}")
             emit(selection, args.format)
             return 0
-        if args.command == "commit-state":
-            path, updated, kept = commit_state(args.results, args.bundle, args.bundle_sha256,
-                                               args.bundle_size)
-            if args.format == "json":
-                print(json.dumps({"state": path, "updated": updated, "kept": kept},
-                                 ensure_ascii=False, sort_keys=True))
-            else:
-                print(f"REPRO_STATE={path} updated={len(updated)} kept={len(kept)}")
+        if args.command == "list":
+            listed = list_selection(args.group, args.only, args.fixture_deploy)
+            for case, mode in listed["cases"].items():
+                print(f"{case}\t{mode}")
+            if listed["skipped_non_candidate"]:
+                print("repro: skipped_non_candidate: " +
+                      " ".join(listed["skipped_non_candidate"]), file=sys.stderr)
             return 0
         groups_doc = load_groups()
         for name in sorted(groups_doc["groups"]):

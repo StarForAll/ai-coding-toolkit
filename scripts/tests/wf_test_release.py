@@ -742,7 +742,13 @@ def main(argv=None):
             lease_run(root, version, command, rebuild=not args.no_build, dev_manifest=dev_manifest)
             return 0
         if args.no_lock:
-            # 调用方已持同一把 root 锁：只走 locked 实现，不重复开锁。
+            # 调用方声称持同一把 root 锁：先证真实持锁租约，再走 locked 实现（不重复开锁）。
+            # 没有可核验的租约就拒绝——`--no-lock` 不是“绕过锁”的开关。
+            try:
+                lock.verify_lease(root)
+            except lock.LockError as exc:
+                raise TestReleaseError(
+                    f"--no-lock 需要同根独占消费租约：{exc}") from exc
             if args.check:
                 meta = check_meta_locked(root, version, dev_manifest)
                 status = "checked"

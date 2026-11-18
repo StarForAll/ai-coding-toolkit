@@ -33,6 +33,26 @@ def line(suite, rc=0, seconds=1, status="ok", tail="saved 1 / 1"):
     return f"{suite}\t{rc}\t{seconds}\t{status}\t{tail}\n"
 
 
+RUN_ID = "run-gate-0001"
+
+
+def write_receipt(repro, case, phase, log_path):
+    """本代相位 receipt：gate 只认可终态、同代、清理已确认的命令证据。"""
+    commands = repro / "commands"
+    commands.mkdir(exist_ok=True)
+    command_id = f"{case}-{phase}-receipt"
+    receipt = {"schema_version": 1, "command_id": command_id, "run_id": RUN_ID,
+               "evidence_scope": "managed-child", "state": "finished",
+               "log_path": str(log_path),
+               "argv": [sys.executable, str(FULL / "repro" / (case + ".py")),
+                        "--expect", phase],
+               "result": {"rc": 0, "status": "passed"},
+               "supervision": {"cleanup_state": "cleaned"},
+               "local_cleanup": "removed", "retained_paths": []}
+    (commands / (command_id + ".json")).write_text(json.dumps(receipt))
+    return command_id
+
+
 class GateTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp(prefix="wf-gate-")
@@ -88,15 +108,23 @@ class GateTest(unittest.TestCase):
         (repro / "inputs.json").write_bytes(data)
         sha = hashlib.sha256(data).hexdigest()
         (repro / "logs").mkdir()
+        phases = {}
         for phase in ("green", "red"):
-            (repro / "logs" / f"case-a.{phase}.log").write_text(f"PASS {phase}: target verified\n")
+            log = repro / "logs" / f"case-a.{phase}.log"
+            log.write_text(f"PASS {phase}: target verified\n")
+            phases[phase] = {"rc": 0, "status": "passed",
+                             "command_id": write_receipt(repro, "case-a", phase, log)}
         result = repro / "case-a.json"
         record = {"case": "case-a", "mode": "both", "green": "pass", "red": "pass", "verified": True,
                   "execution_fingerprint": "fp", "bundle_sha256": sha,
-                  "green_seconds": 0.1, "red_seconds": 0.2,
-                  "phases": {"green": {"rc": 0, "status": "passed"},
-                             "red": {"rc": 0, "status": "passed"}}}
+                  "green_seconds": 0.1, "red_seconds": 0.2, "phases": phases}
         result.write_text(json.dumps(record))
+        saved_run = os.environ.get("WF_RUN_ID")
+        os.environ["WF_RUN_ID"] = RUN_ID
+        self.addCleanup(lambda: os.environ.pop("WF_RUN_ID", None) if saved_run is None
+                        else os.environ.__setitem__("WF_RUN_ID", saved_run))
+        self.addCleanup(lambda: os.environ.pop("WF_COMMAND_EVIDENCE_ROOT", None))
+        os.environ["WF_COMMAND_EVIDENCE_ROOT"] = str(repro / "commands")
         spec = importlib.util.spec_from_file_location("wf_results_gate_repro", FULL / "results_gate.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -158,12 +186,18 @@ class GateTest(unittest.TestCase):
         (repro / "inputs.json").write_bytes(data)
         sha = hashlib.sha256(data).hexdigest()
         (repro / "logs").mkdir()
-        (repro / "logs" / "case-a.green.log").write_text("PASS green: target verified\n")
+        log = repro / "logs" / "case-a.green.log"
+        log.write_text("PASS green: target verified\n")
         (repro / "case-a.json").write_text(json.dumps(
             {"case": "case-a", "mode": "green", "green": "pass", "red": "skip", "verified": True,
              "execution_fingerprint": "fp", "bundle_sha256": sha, "green_seconds": 0.1,
              "red_seconds": 0.0,
-             "phases": {"green": {"rc": 0, "status": "passed"}}}))
+             "phases": {"green": {"rc": 0, "status": "passed",
+                                  "command_id": write_receipt(repro, "case-a", "green", log)}}}))
+        os.environ["WF_RUN_ID"] = RUN_ID
+        self.addCleanup(lambda: os.environ.pop("WF_RUN_ID", None))
+        os.environ["WF_COMMAND_EVIDENCE_ROOT"] = str(repro / "commands")
+        self.addCleanup(lambda: os.environ.pop("WF_COMMAND_EVIDENCE_ROOT", None))
         repro_select.reset_scans()
         self.assertEqual(gate_mod.repro_gate(str(repro), str(repro / "inputs.json"), sha,
                                              str(len(data))), 0)

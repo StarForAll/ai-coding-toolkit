@@ -36,6 +36,7 @@ DEFAULT_FIX = os.path.join(  # 无 scope 时的历史默认（scope 下由 wf_te
     "/tmp", "wf-fixtures", f"run-{os.getpid()}")
 DEFAULT_JOBS = min(8, os.cpu_count() or 4)   # 执行单元默认并行数（不超过物理核，防少核机器超订）
 DEFAULT_REPRO_JOBS = min(8, os.cpu_count() or 4)  # repro 用例层默认并行数（同上）
+PLAN_SCHEMA = 1  # 与 runner_protocol.PLAN_SCHEMA 同一数值（独立 repro 计划共用）
 DEV_VERSION_PLACEHOLDER = "0.0.0-dev"
 TEST_RELEASE_FALLBACK = "0.1.0"
 REPRO_MODES = ("green", "red", "both", "none", "auto")
@@ -440,9 +441,16 @@ def plan(argv=None, env=None):
         if missing:
             raise PlanError("candidate 模式必须同时给出 " + " ".join(missing))
         release_root = os.path.realpath(release_root)
-        release_meta = release_meta or release_root + ".meta.json"
         if not os.path.isdir(release_root):
             raise PlanError(f"--release-root 不存在：{release_root}")
+        release_meta = os.path.realpath(release_meta or release_root + ".meta.json")
+        canonical_meta = os.path.realpath(release_root + ".meta.json")
+        if release_meta != canonical_meta:
+            raise PlanError(
+                f"候选 release-meta 必须指向 canonical sidecar：{release_meta} != {canonical_meta}"
+                "（另一文件即使内容相同也拒绝，避免同一候选出现两份身份）")
+        if not os.path.isfile(release_meta):
+            raise PlanError(f"候选 release-meta 不存在：{release_meta}")
     else:
         if release_root or release_ref or release_version or release_meta:
             raise PlanError("dev 模式不接受 --release-root/--release-ref/--release-version/--release-meta")
@@ -584,9 +592,18 @@ def plan(argv=None, env=None):
     isolated_units = [entry["name"] for entry in unit_entries if entry.get("isolated_user")]
 
     results_dir = env.get("WF_RESULTS_DIR") or str(layout["results_dir"])
+    results_dir = os.path.realpath(results_dir)
     fix = env.get("WF_FIX") or str(layout["fixture"])
+    scope_root = env.get("WF_TEST_SCOPE_ROOT") or None
     list_only = bool(args.list or args.dry_run)
     return {
+        "schema_version": PLAN_SCHEMA,
+        "role": "full",
+        # 执行身份：lease 阶段 begin-run 之后唯一一次 final plan 才带 run_id；
+        # preflight/list/dry-run 的镜像计划不冒充执行依据。
+        "run_id": env.get("WF_RUN_ID") or "",
+        "results_dir": results_dir,
+        "scope_root": os.path.realpath(scope_root) if scope_root else None,
         "mode": mode,
         "full_mode": 1 if mode == "full" else 0,
         "parallel": 1 if jobs > 1 else 0,

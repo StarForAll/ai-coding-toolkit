@@ -159,9 +159,9 @@ def collect_inputs(results_dir, run_id, role, plan_path, context_path=None, repr
     results_dir = Path(results_dir)
     plan_data = _read_bytes(plan_path, "frozen plan")
     plan = _json_object(plan_data, "frozen plan")
-    names, _kinds = plan_units(plan)
     inputs = {"plan": {"sha256": hashlib.sha256(plan_data).hexdigest(), "size": len(plan_data)}}
     if role == "full":
+        names, _kinds = plan_units(plan)
         if not context_path:
             raise SummaryError("full metrics require the verified release context")
         context_data = _read_bytes(context_path, "release context")
@@ -182,6 +182,7 @@ def collect_inputs(results_dir, run_id, role, plan_path, context_path=None, repr
         else:
             inputs["repro"] = {"state": "not-applicable"}
     else:
+        # 独立 repro 的冻结计划不携带执行单元：它只用本代 bundle/records 作为输入证据。
         if not repro_results:
             raise SummaryError("repro role requires its own results root")
         inputs["repro"] = _repro_inputs(repro_results, bundle_sha, bundle_size)
@@ -368,7 +369,43 @@ def repro_input_evidence(repro_root, bundle_sha=None, bundle_size=None):
     return {"repro": _repro_inputs(repro_root, bundle_sha, bundle_size)}
 
 
-def build(results_dir, report, metrics, input_evidence, plan, role, run_id, fault=None):
+def _candidate_commit(plan, context):
+    """候选提交的唯一投影：dev/未完成候选核验时为 null，候选成功时必须非空。"""
+    if plan.get("fixture_deploy") != "candidate":
+        return None
+    if not isinstance(context, dict):
+        return None
+    commit = (context.get("candidate") or {}).get("commit")
+    return commit if isinstance(commit, str) and commit else None
+
+
+def _repro_phase_counts(plan, report):
+    """repro 相位统计：禁用时全零；启用但本代没有合法 bundle 时为 null。"""
+    if not plan.get("repro_enabled"):
+        return {phase: {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}
+                for phase in ("green", "red")}
+    counts = (report.get("repro") or {}).get("phase_counts")
+    if counts is None:
+        return None
+    clean = {}
+    for phase in ("green", "red"):
+        entry = counts.get(phase)
+        if not isinstance(entry, dict):
+            raise SummaryError(f"repro phase counts missing {phase}")
+        values = {}
+        for key in ("planned", "passed", "failed", "unverified"):
+            value = entry.get(key)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise SummaryError(f"repro phase count {phase}.{key} is invalid")
+            values[key] = value
+        if values["planned"] != values["passed"] + values["failed"] + values["unverified"]:
+            raise SummaryError(f"repro phase counts for {phase} do not add up to planned")
+        clean[phase] = values
+    return clean
+
+
+def build(results_dir, report, metrics, input_evidence, plan, role, run_id, fault=None,
+          context=None):
     """一次构造最终 schema3；publish 负责原子落盘与全对象读回。"""
     if role not in RUN_ROLES:
         raise SummaryError(f"summary role invalid: {role!r}")
@@ -387,7 +424,11 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
         raise SummaryError("summary evidence_state is invalid")
     if not isinstance(input_evidence, dict):
         raise SummaryError("summary input_evidence is missing")
+    candidate_commit = _candidate_commit(plan, context)
+    repro_phase_counts = _repro_phase_counts(plan, report)
     ok = bool(report.get("ok")) and cleanup_state == "cleaned" and evidence_state == "complete"
+    if plan.get("fixture_deploy") == "candidate" and not candidate_commit:
+        ok = False
     status = "ok" if ok else "failed"
     payload = {
         "schema_version": SUMMARY_SCHEMA,
@@ -400,8 +441,10 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
         "flow_ran": counts["flow_ran"],
         "repro_ran": counts["repro_ran"],
         "units_total": counts["units_total"],
-        "repro_mode": metrics["repro_mode"] if metrics else "none",
-        "repro_groups": metrics["repro_groups"] if metrics else [],
+        "repro_mode": metrics["repro_mode"] if metrics else (plan.get("repro_mode") or "none"),
+        "repro_groups": metrics["repro_groups"] if metrics else list(plan.get("repro_groups") or []),
+        "candidate_commit": candidate_commit,
+        "repro_phase_counts": repro_phase_counts,
         "jobs": _number(metrics, "effective_jobs") if metrics else 1,
         "requested_jobs": _number(metrics, "requested_jobs") if metrics else 1,
         "effective_jobs": _number(metrics, "effective_jobs") if metrics else 1,

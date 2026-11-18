@@ -282,5 +282,36 @@ class EnsureAndCheckTest(unittest.TestCase):
         self.assertEqual(run("--check")["status"], "checked")
 
 
+class NoLockLeaseTest(unittest.TestCase):
+    """R1：`--no-lock` 不是绕过锁的开关，必须先证明同根独占消费租约。"""
+
+    def test_no_lock_requires_a_verified_lease(self):
+        root = Path(tempfile.mkdtemp(prefix="wf-no-lock-")) / "release"
+        self.addCleanup(lambda: __import__("shutil").rmtree(root.parent, ignore_errors=True))
+        buffer = io.StringIO()
+        with mock.patch.object(test_release.lock, "verify_lease",
+                               side_effect=test_release.lock.LockError("no lease")), \
+                contextlib.redirect_stderr(buffer):
+            code = test_release.main(["--check", "--no-lock", "--root", str(root),
+                                      "--version", "0.1.0"])
+        self.assertEqual(code, 1)
+        self.assertIn("no-lock", buffer.getvalue())
+        self.assertFalse(Path(str(root) + ".meta.json").exists(),
+                         "租约不成立时不得写入任何发行产物")
+
+    def test_no_lock_passes_through_when_the_lease_is_valid(self):
+        root = Path(tempfile.mkdtemp(prefix="wf-no-lock-ok-")) / "release"
+        self.addCleanup(lambda: __import__("shutil").rmtree(root.parent, ignore_errors=True))
+        with mock.patch.object(test_release.lock, "verify_lease", return_value=True), \
+                mock.patch.object(test_release, "check_meta_locked",
+                                  return_value={"version": "0.1.0",
+                                                "release_ref": "refs/tags/wf-v0.1.0"}) as checked, \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = test_release.main(["--check", "--no-lock", "--root", str(root),
+                                      "--version", "0.1.0"])
+        self.assertEqual(code, 0)
+        checked.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()

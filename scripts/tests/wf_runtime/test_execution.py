@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """The runner must bound commands and retain their actual failure output."""
+import contextlib
 import fcntl
+import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -11,6 +14,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 FULL = Path(__file__).parent / "full"
 
@@ -151,6 +155,208 @@ class ExecutionTest(unittest.TestCase):
         self.assertEqual((results / "returned").read_text(), "ok")
         self.assertFalse((template / "write-probe").exists())
         self.assertFalse((release / "write-probe").exists())
+
+
+class FinalDecisionTest(unittest.TestCase):
+    """R3：最终成功决策边界只观测一次，之后只按已定结果发布。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-final-decision-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def module(self):
+        path = FULL / "execution.py"
+        spec = importlib.util.spec_from_file_location("wf_execution_decision_test", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def scope(self, module):
+        scope = module.CancellationScope().install()
+        self.addCleanup(scope.restore)
+        return scope
+
+    def test_pending_signal_is_consumed_under_the_blocked_mask(self):
+        module = self.module()
+        scope = self.scope(module)
+        real = module._pending_signals
+
+        def probe():
+            os.kill(os.getpid(), signal.SIGTERM)
+            return real()
+
+        with mock.patch.object(module, "_pending_signals", side_effect=probe):
+            decision = scope.final_decision(None)
+        self.assertTrue(decision.cancelled)
+        self.assertEqual(decision.signum, signal.SIGTERM)
+
+    def test_decision_is_fixed_and_later_signals_do_not_change_it(self):
+        module = self.module()
+        scope = self.scope(module)
+        decision = scope.final_decision(None)
+        self.assertFalse(decision.cancelled)
+        os.kill(os.getpid(), signal.SIGTERM)
+        self.assertFalse(decision.cancelled, "已固定的决策不得被后续信号改写")
+        self.assertTrue(scope.latched, "后续信号仍由本代 handler 锁存，交由收尾归因")
+
+    def test_published_cancel_marker_blocks_the_success_boundary(self):
+        module = self.module()
+        scope = self.scope(module)
+        marker = self.root / "cancel-request"
+        marker.write_text("cancelled by signal 15\n")
+        decision = scope.final_decision(str(marker))
+        self.assertTrue(decision.cancelled)
+        self.assertIn("cancel-request", decision.reason)
+
+
+
+class ControllerRefusalTest(unittest.TestCase):
+    """R1/R4：冻结计划身份不符时 C 在取发行锁/启动 worker 之前拒绝。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-controller-refusal-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name) / "results"
+        if str(FULL) not in sys.path:
+            sys.path.insert(0, str(FULL))
+        self.lifecycle = self.load_lifecycle()
+        self.run = self.lifecycle.begin_run(str(self.root), "execution", "full")
+        self.run_id = self.run["run_id"]
+
+    def load_execution(self):
+        spec = importlib.util.spec_from_file_location("wf_execution_refusal_test",
+                                                      FULL / "execution.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def load_lifecycle(self):
+        spec = importlib.util.spec_from_file_location("wf_lifecycle_refusal_test",
+                                                      FULL / "resource_lifecycle.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def plan_bytes(self, **overrides):
+        plan = {"schema_version": 1, "role": "full", "run_id": self.run_id,
+                "results_dir": str(self.root), "scope_root": None,
+                "mode": "subset", "full_mode": 0, "fixture_deploy": "dev",
+                "release_root": "", "release_ref": "",
+                "release_version": "", "release_meta": "",
+                "test_release_root": "/tmp/release/0.1.0",
+                "test_release_version": "0.1.0",
+                "test_release_ref": "refs/tags/wf-v0.1.0", "no_build": 1,
+                "repro_enabled": 0, "repro_mode": "none", "repro_groups": [],
+                "units": [{"name": "r70_tests", "kind": "suite"}], "jobs": 1}
+        plan.update(overrides)
+        return (json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
+
+    def args(self, plan_file, sha, size, run_id=None):
+        import argparse
+        return argparse.Namespace(
+            results_root=str(self.root), run_id=run_id or self.run_id, runner_role="full",
+            plan_file=str(plan_file), plan_sha256=sha, plan_size=str(size),
+            command=["bash", str(FULL / "run_all.sh")], log=str(self.root / "logs/c.log"),
+            result=str(self.root / ".runner.json"), pass_fds="", timeout=5, name="x",
+            kind="raw", expected=None, phase=None, isolated_user=False,
+            runner_control=True)
+
+    def refused(self, data, *, sha=None, size=None, run_id=None):
+        module = self.load_execution()
+        plan_file = self.root / "plan.json"
+        plan_file.write_bytes(data)
+        digest = hashlib.sha256(data).hexdigest()
+        args = self.args(plan_file, sha if sha is not None else digest,
+                         size if size is not None else len(data), run_id)
+        import fixture_scope
+        buffer = io.StringIO()
+        with mock.patch.object(fixture_scope, "verify_lease", return_value=True), \
+                mock.patch.object(fixture_scope, "verify_results_lock", return_value=True), \
+                mock.patch.object(module, "_prepare_release") as prepare, \
+                contextlib.redirect_stderr(buffer):
+            code = module.runner_control(args)
+        self.assertEqual(code, 1)
+        self.assertIn("RUNNER-CONTROL-REFUSED", buffer.getvalue())
+        prepare.assert_not_called()
+        return buffer.getvalue()
+
+    def test_bad_token_or_path_is_refused_before_preparation(self):
+        data = self.plan_bytes()
+        self.refused(data, sha="0" * 64)
+        self.refused(data, size=len(data) + 1)
+        other = self.root / "other-plan.json"
+        other.write_bytes(data)
+        module = self.load_execution()
+        args = self.args(other, hashlib.sha256(data).hexdigest(), len(data))
+        import fixture_scope
+        with mock.patch.object(fixture_scope, "verify_lease", return_value=True), \
+                mock.patch.object(fixture_scope, "verify_results_lock", return_value=True), \
+                mock.patch.object(module, "_prepare_release") as prepare, \
+                contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(module.runner_control(args), 1)
+        prepare.assert_not_called()
+
+    def test_plan_identity_mismatch_is_refused(self):
+        self.refused(self.plan_bytes(role="repro"), run_id=self.run_id)
+        self.refused(self.plan_bytes(run_id="other-run"))
+        self.refused(self.plan_bytes(results_dir=str(self.root / "elsewhere")))
+        self.refused(self.plan_bytes(schema_version=2))
+        self.refused(self.plan_bytes(units=[]))
+
+    def test_controller_entry_program_is_pinned_to_the_role(self):
+        module = self.load_execution()
+        with self.assertRaises(module.EvidenceError):
+            module._assert_inner_program("full", ["bash", str(FULL / "repro" / "run.sh")])
+        with self.assertRaises(module.EvidenceError):
+            module._assert_inner_program("repro", ["bash", str(FULL / "run_all.sh")])
+        module._assert_inner_program("full", ["bash", str(FULL / "run_all.sh")])
+
+
+class CandidateFinalCheckTest(unittest.TestCase):
+    """R1：候选结束核验必须与初核同一 commit/tree；持久漂移在 proof 前阻断。"""
+
+    def module(self):
+        path = FULL / "execution.py"
+        spec = importlib.util.spec_from_file_location("wf_execution_candidate_check", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def prepared(self, commit="a" * 40, tree="sha256:tree"):
+        return {"identity": {"root": "/tmp/candidate", "version": "0.1.0"},
+                "context": {"candidate": {"commit": commit, "tree_digest": tree}}}
+
+    def check(self, module, facts):
+        with mock.patch.object(module, "run", return_value={"status": "passed"}), \
+                mock.patch.object(module, "_log_json", return_value=facts):
+            module._candidate_final_check(self.prepared()["identity"], self.prepared(),
+                                          type("Args", (), {"timeout": 5})(), "/tmp/results",
+                                          None)
+
+    def test_final_check_accepts_the_same_verified_identity(self):
+        module = self.module()
+        self.check(module, {"commit": "a" * 40, "tree_digest": "sha256:tree",
+                            "root": "/tmp/candidate"})
+
+    def test_final_check_refuses_persistent_commit_or_tree_drift(self):
+        module = self.module()
+        for facts in ({"commit": "b" * 40, "tree_digest": "sha256:tree", "root": "/tmp/candidate"},
+                      {"commit": "a" * 40, "tree_digest": "sha256:other", "root": "/tmp/candidate"}):
+            with self.assertRaises(module.EvidenceError) as caught:
+                self.check(module, facts)
+            self.assertIn("CANDIDATE-REPO-CHANGED", str(caught.exception))
+
+    def test_final_check_refuses_a_failed_validator(self):
+        module = self.module()
+        with mock.patch.object(module, "run", return_value={"status": "failed",
+                                                            "reason": "dirty"}), \
+                mock.patch.object(module, "_log_json", return_value={}):
+            with self.assertRaises(module.EvidenceError) as caught:
+                module._candidate_final_check(self.prepared()["identity"], self.prepared(),
+                                              type("Args", (), {"timeout": 5})(), "/tmp/results",
+                                              None)
+        self.assertIn("CANDIDATE-REPO-CHANGED", str(caught.exception))
 
 
 class EvidenceTest(unittest.TestCase):

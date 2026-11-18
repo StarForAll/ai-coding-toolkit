@@ -368,7 +368,7 @@ def full_runner_files(full_root=None):
 
 
 def fixture_template_inputs_digest(deploy, version=None, ref=None, release_subject_digest=None,
-                                   source_root=SOURCE_ROOT):
+                                   source_root=SOURCE_ROOT, candidate_commit=None):
     """模板 build inputs：发行 build inputs + full 子树 + 部署/运行时 helper + tool/SUT 身份。
 
     dev 另绑定完整 HEAD；candidate 另绑定实际 release subject。两者都用同一批观测构造，
@@ -396,8 +396,11 @@ def fixture_template_inputs_digest(deploy, version=None, ref=None, release_subje
     if deploy == "dev":
         payload["dev_head"] = git_head() or ""
     else:
+        # 候选模板身份 = 内容主体 + 已核 tag commit：同内容不同提交必须是不同条目，
+        # 否则 B 的首跑会命中 A 的模板并用 A 的 source_commit 安装。
         payload["candidate"] = {"version": version or "", "ref": ref or "",
-                                "release_subject": release_subject_digest or ""}
+                                "release_subject": release_subject_digest or "",
+                                "commit": candidate_commit or ""}
     return _canonical_digest(payload)
 
 

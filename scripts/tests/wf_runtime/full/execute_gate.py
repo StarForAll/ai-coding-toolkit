@@ -83,6 +83,13 @@ def _verify_plan(plan_file, plan_sha, plan_size):
         raise GateError("final plan 仍是计划模式（list_only=1）")
     if os.path.realpath(frozen["results_dir"]) != os.path.realpath(os.environ["WF_RESULTS_DIR"]):
         raise GateError("final plan 的 results_dir 与当前 lease 不符")
+    try:
+        runner_protocol.validate_plan(frozen, role="full",
+                                      run_id=os.environ.get("WF_RUN_ID") or "",
+                                      results_dir=os.environ["WF_RESULTS_DIR"],
+                                      scope_root=os.environ.get("WF_TEST_SCOPE_ROOT") or None)
+    except runner_protocol.FrameError as exc:
+        raise GateError(f"final plan 身份不符：{exc}") from exc
     return frozen
 
 

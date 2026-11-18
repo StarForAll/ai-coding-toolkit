@@ -32,7 +32,7 @@ INPUTS = "sha256:" + "a" * 64
 
 class Args:
     def __init__(self, cache_root, deploy="dev", version=None, ref=None, release_root=None,
-                 subject=None, results_dir=None):
+                 subject=None, results_dir=None, commit=None):
         self.cache_root = str(cache_root)
         self.deploy = deploy
         self.version = version
@@ -40,6 +40,7 @@ class Args:
         self.release_root = release_root
         self.subject = subject
         self.results_dir = results_dir
+        self.commit = commit
 
 
 class Base(unittest.TestCase):
@@ -179,16 +180,31 @@ class MigrateTest(Base):
         self.assertTrue(other.is_dir())
         self.assertTrue(source.exists() is False)
 
-    def test_candidate_migration_requires_same_version_and_ref(self):
+    def test_candidate_legacy_entries_are_not_migrated_without_a_verified_commit(self):
+        # 旧候选 key 没有 commit 证据：不能改名冒充新身份，只能留作盘点/精确退役。
         source = self.legacy(f"aaaaaaaabbbb-{self.pyver}-candidate-0.1.2-refs-tags-wf-v0.1.2",
                              deploy="candidate", version="0.1.2", ref="refs/tags/wf-v0.1.2")
-        target = Args(self.root, "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "/candidate")
+        target = Args(self.root, "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "/candidate",
+                      commit="c" * 40)
         with mock.patch.object(cache, "inputs_digest", return_value=INPUTS):
             key = self.migrate(target)
-            self.assertTrue((self.root / key).is_dir())
-            self.assertFalse(source.exists())
-            mismatch = Args(self.root, "candidate", "0.1.3", "refs/tags/wf-v0.1.3", "/candidate")
+            self.assertFalse((self.root / key).is_dir())
+            self.assertTrue(source.exists())
+            mismatch = Args(self.root, "candidate", "0.1.3", "refs/tags/wf-v0.1.3", "/candidate",
+                            commit="c" * 40)
             self.assertEqual(self.migrate(mismatch), self.key(mismatch))
+
+    def test_candidate_identity_requires_the_verified_commit(self):
+        args = Args(self.root, "candidate", "0.1.2", "refs/tags/wf-v0.1.2", "/candidate")
+        with self.assertRaises(cache.CacheError) as caught:
+            cache.inputs_digest(args)
+        self.assertIn("commit", str(caught.exception))
+        buffer = io.StringIO()
+        with contextlib.redirect_stderr(buffer):
+            code = cache.main(["lookup", "--cache-root", str(self.root), "--deploy", "candidate",
+                               "--version", "0.1.2", "--ref", "refs/tags/wf-v0.1.2"])
+        self.assertEqual(code, 10, "缺 commit 的候选查找是 miss，不是复用")
+        self.assertIn("TEMPLATE-CACHE-MISS", buffer.getvalue())
 
 
 class PublishCostTest(Base):
@@ -509,6 +525,51 @@ class RecoveryTest(Base):
         with self.assertRaises(cache.CacheError):
             self.recover(entry)
         self.assertTrue(Path(cache.journal_path(str(self.root), "k1")).exists())
+
+
+class CandidateCommitIdentityTest(unittest.TestCase):
+    """R1：候选模板身份 = 内容主体 + 已核 commit；缺 commit / 身份不符不得复用。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-template-commit-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def args(self, commit, version="0.1.2", ref="refs/tags/wf-v0.1.2"):
+        # 已核候选的 release subject 由 controller 提供，模板身份只消费该冻结值。
+        return Args(self.root, "candidate", version, ref, "/candidate",
+                    subject="sha256:" + "5" * 64, commit=commit)
+
+    def test_commit_moves_the_input_digest_and_key(self):
+        first = self.args("a" * 40)
+        second = self.args("b" * 40)
+        digest_a = cache.inputs_digest(first)
+        digest_b = cache.inputs_digest(second)
+        self.assertNotEqual(digest_a, digest_b, "同内容不同提交必须是不同模板身份")
+        self.assertNotEqual(cache.key_for(first, digest_a), cache.key_for(second, digest_b))
+        self.assertEqual(cache.inputs_digest(self.args("a" * 40)), digest_a,
+                         "同一提交与同样输入仍可复用同一 key")
+
+    def test_template_check_requires_the_installed_source_commit(self):
+        spec = importlib.util.spec_from_file_location(
+            "wf_template_check_commit", FULL / "template_check.py")
+        check = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(check)
+        target = self.root / "project"
+        (target / ".wf" / "bin").mkdir(parents=True)
+        (target / ".wf" / "bin" / "wf.py").write_text("")
+        (target / ".wf" / "install").mkdir()
+        (target / ".wf" / "install" / "installation.json").write_text(json.dumps({
+            "version": "0.1.2", "release_ref": "refs/tags/wf-v0.1.2",
+            "source_commit": "a" * 40}))
+        self.assertEqual(check.check(str(target), version="0.1.2",
+                                     ref="refs/tags/wf-v0.1.2", commit="a" * 40), [])
+        problems = check.check(str(target), version="0.1.2",
+                               ref="refs/tags/wf-v0.1.2", commit="b" * 40)
+        self.assertTrue(problems)
+        self.assertIn("source_commit", problems[0])
+        missing = check.check(str(target), version="0.1.2", ref="refs/tags/wf-v0.1.2")
+        self.assertEqual(missing, [], "未声明 commit 时保持原有版本/ref 校验语义")
 
 
 if __name__ == "__main__":

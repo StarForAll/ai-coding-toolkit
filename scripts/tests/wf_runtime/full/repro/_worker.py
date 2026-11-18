@@ -59,9 +59,12 @@ def run_phase(case, phase):
     if phase == 'red':
         env['WF_REPRO_INJECT'] = '1'
     try:
+        # 显式 KEEP：回收决定仍由 execution 的 cleanup 所有者做，但它按 `retained-keep`
+        # 登记并保留真实路径；这样的相位不能签清理完成，也不能进入 proof。
+        keep_local = os.environ.get("WF_REPRO_KEEP") == "1"
         execution_result = execution.run([PY, os.path.join(HERE, case + ".py"), "--expect", phase],
                                          log_path, timeout=TIMEOUT, env=env,
-                                         local_dirs=[temporary],
+                                         local_dirs=[temporary], retain_local=keep_local,
                                          fault_identity=f"repro:{case}:{phase}")
     except (OSError, ValueError) as exc:
         # 启动前拒绝（证据域/路径）：保留相位目录并报告，绝不伪造清理。

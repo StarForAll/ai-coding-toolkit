@@ -159,6 +159,11 @@ class FixtureDeployTest(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="wf-plan-candidate-")
         self.addCleanup(lambda: __import__("shutil").rmtree(self.root, ignore_errors=True))
+        # 候选计划的 meta sidecar 必须真实存在且是 canonical 路径（R1）。
+        with open(self.root + ".meta.json", "w", encoding="utf-8") as handle:
+            handle.write("{}\n")
+        self.addCleanup(lambda: os.path.exists(self.root + ".meta.json")
+                        and os.unlink(self.root + ".meta.json"))
 
     def candidate_args(self, **over):
         args = ["--fixture-deploy", "candidate", "--release-root", self.root,

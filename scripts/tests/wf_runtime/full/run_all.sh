@@ -5,7 +5,7 @@
 set -uo pipefail
 # 路径/scope 校验完成之前一律禁写 pyc，并丢弃外部注入的 pycache 前缀：
 # public/preflight/--list/--dry-run 不得在任何位置（含域外 WF_PYCACHE）产生写入。
-# 内部 frame 重入（lease/controlled/execute）继承父阶段已批准的 pycache，不得清除。
+# 内部 frame 重入（lease/execute）继承父阶段已批准的 pycache，不得清除。
 if [ "${1:-}" != "--_wf-internal" ]; then
   export PYTHONDONTWRITEBYTECODE=1
   unset PYTHONPYCACHEPREFIX
@@ -46,7 +46,7 @@ SCOPE_HELPER="$HERE/fixture_scope.py"
 PATH_HELPER="$REPO_ROOT/scripts/wf_test_paths.py"
 
 # ---- 内部 frame：先整体剥离/校验，再处理用户 argv（非法不 fallback）------------
-# public 没有前缀；lease/controlled/execute 是同一脚本的三次重入，只有两次计划。
+# public 没有前缀；lease/execute 是同一脚本的两次重入，只有两次计划。
 if ! frame_out=$("$PY" "$HERE/runner_protocol.py" strip -- "$@"); then
   exit 2
 fi
@@ -189,14 +189,8 @@ case "$STAGE" in
     mkdir -p "$RESULTS_DIR"
     "$PY" "$SCOPE_HELPER" reset "$LEGACY_FIXTURE_ROOT" --forbid "$RESULTS_DIR" \
       --forbid "$PLAN_TEST_RELEASE_ROOT" --forbid "$PLAN_RELEASE_ROOT" || exit 1
-    # controlled frame 由同一 encoder 组装（父字段原样搬运，只换 stage）。
-    FRAME=()
-    controlled_frame=$("$PY" "$HERE/runner_protocol.py" encode --stage controlled -- \
-      --entry-pid "$WF_FRAME_ENTRY_PID" --results-root "$WF_FRAME_RESULTS_ROOT" \
-      --results-explicit "$WF_FRAME_RESULTS_EXPLICIT" --scope-root "$WF_FRAME_SCOPE_ROOT" \
-      --plan-file "$PLAN_FILE" --plan-sha256 "$TOKEN_SHA256" --plan-size "$TOKEN_SIZE" -- "$@") || exit 2
-    eval "$controlled_frame" || { echo "FRAME-EVAL-FAILED" >&2; exit 2; }
     # controller 显式白名单继承 fixture/result FD：不依赖 Popen 默认，也不传其他 FD。
+    # 发行消费锁由 controller 自己取得并贯穿整次运行（不在受监督子链里再次取锁）。
     pass_fds="${WF_FIXTURE_LEASE_FD},${WF_RESULTS_LOCK_FD}"
     export WF_RUNNER_CONTROL_PID=$$
     exec "$PY" "$HERE/execution.py" --runner-control --name wf-runner \
@@ -204,28 +198,7 @@ case "$STAGE" in
       --plan-file "$PLAN_FILE" --plan-sha256 "$TOKEN_SHA256" --plan-size "$TOKEN_SIZE" \
       --timeout "${WF_RUN_TIMEOUT:-1800}" --log "$RESULTS_DIR/.runner.log" \
       --result "$RESULTS_DIR/.runner.json" --pass-fds "$pass_fds" -- \
-      bash "$0" "${FRAME[@]}"
-    ;;
-  controlled)
-    apply_frame_env
-    verify_inherited_locks
-    note_stage controlled
-    RESULTS_DIR="$WF_RESULTS_DIR"
-    eval "$("$PY" "$HERE/plan.py" --plan-file "$WF_FRAME_PLAN_FILE")" || { echo "PLAN-EVAL-FAILED" >&2; exit 2; }
-    release_args=(--deploy "$PLAN_FIXTURE_DEPLOY" --results-dir "$WF_RESULTS_DIR"
-      --entry-pid "$WF_FRAME_ENTRY_PID" --results-root "$WF_FRAME_RESULTS_ROOT"
-      --results-explicit "$WF_FRAME_RESULTS_EXPLICIT" --scope-root "$WF_FRAME_SCOPE_ROOT"
-      --plan-file "$WF_FRAME_PLAN_FILE" --plan-sha256 "$WF_FRAME_PLAN_SHA256"
-      --plan-size "$WF_FRAME_PLAN_SIZE")
-    if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
-      release_args+=(--release-root "$PLAN_RELEASE_ROOT" --release-ref "$PLAN_RELEASE_REF"
-                     --release-version "$PLAN_RELEASE_VERSION")
-    else
-      release_args+=(--release-root "$PLAN_TEST_RELEASE_ROOT" --release-ref "$PLAN_TEST_RELEASE_REF"
-                     --release-version "$PLAN_TEST_RELEASE_VERSION")
-      if [ "$PLAN_NO_BUILD" = "1" ]; then release_args+=(--no-build); fi
-    fi
-    exec "$PY" "$HERE/release_context.py" "${release_args[@]}" -- bash "$0" -- "$@"
+      bash "$0"
     ;;
   execute)
     apply_frame_env
@@ -281,16 +254,26 @@ WF_TEMPLATE=""
 WF_TEMPLATE_READY=0
 # run 内模板（结果目录里）由本 run 拥有、结束即删；跨 run 缓存条目绝不在此删除。
 RUN_TEMPLATE=""
-# 取消协议：shell 不再递归强杀监督进程（那会绕过 G 的最终核验）；它只写一次性取消请求，
-# 每个 owned `execution.py` 调用（C）在自己的事件循环里读到后经私有通道取消 G/S，
-# 并等到 G 的最终 DONE+退出才返回。run_one 在启动新单元前检查同一请求，停止调度。
-CANCEL_REQUEST="$RESULTS_DIR/cancel-request"
-rm -f "$CANCEL_REQUEST" 2>/dev/null || true
-export WF_CANCEL_FILE="$CANCEL_REQUEST"
-# 本 shell 不再拥有资源删除：root controller 在同一 C 进程 finalize。
-trap 'request_cancel; exit 143' TERM
-trap 'request_cancel; exit 130' INT
-trap 'request_cancel; exit 129' HUP
+# 取消协议：本代唯一标记由 root controller 指定并交接（WF_CANCEL_FILE），shell 既不派生也不
+# 删除它。收到 INT/TERM/HUP 时只用排他创建发布请求并保留信号退出码；已有标记视为已发布。
+publish_cancel() {   # publish_cancel <signum>
+  local sig=$1 path="${WF_CANCEL_FILE:-}"
+  if [ -z "$path" ]; then
+    echo "CANCEL-PUBLISH-FAILED: WF_CANCEL_FILE 未交接（sig=$sig）" >&2
+    return 0
+  fi
+  if ( set -o noclobber; printf 'cancelled by signal %s\n' "$sig" > "$path" ) 2>/dev/null; then
+    echo "CANCEL-PUBLISHED: sig=$sig path=$path" >&2
+  elif [ -f "$path" ]; then
+    echo "CANCEL-KEPT: 本代取消请求已存在（sig=$sig）" >&2
+  else
+    echo "CANCEL-PUBLISH-FAILED: 无法创建取消标记 $path（sig=$sig）" >&2
+  fi
+}
+# 本 shell 不再拥有资源删除或取消标记重置：root controller 在同一 C 进程收口。
+trap 'publish_cancel TERM; exit 143' TERM
+trap 'publish_cancel INT; exit 130' INT
+trap 'publish_cancel HUP; exit 129' HUP
 
 # ---- 源树卫生：运行前快照（唯一实现 source_hygiene.py）----------------------
 # 只对**新增**失败（本地存量以警告 + 清理命令呈现）；AC3 的绝对判据另行用 find 复核。
@@ -323,7 +306,7 @@ PY
 
 PRODUCT_BEFORE=$(product_digest)
 
-# 发行准备已在 controlled 阶段完成（release_context.py）：execute 只消费已核 env。
+# 发行准备已由 root controller 完成并交接 release-context：execute 只消费已核 env。
 build_seconds=${WF_BUILD_SECONDS:-0}
 BUILD_OK=1
 RELEASE_REPO="$WF_RELEASE_REPO"
@@ -366,8 +349,12 @@ build_template_tree() {   # build_template_tree <root> <log>
 
 template_check() {   # template_check <root> [extra args...]
   local root=$1; shift
-  local args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF")
-  if [ "$PLAN_FIXTURE_DEPLOY" != "candidate" ]; then args=(); fi
+  local args=()
+  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
+    # 候选模板身份还包含已核 tag commit：缺它就不能复用/接受已消费模板。
+    args=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF"
+          --commit "${WF_RELEASE_COMMIT:?candidate template requires the verified commit}")
+  fi
   "$PY" "$HERE/template_check.py" "$root" "${args[@]}" --quiet "$@"
 }
 
@@ -388,7 +375,8 @@ template_cache_cli() {  # template_cache_cli <subcommand> [extra args...]
               --results-dir "$RESULTS_DIR")
   if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
     args+=(--version "$PLAN_RELEASE_VERSION" --ref "$PLAN_RELEASE_REF"
-           --release-root "$PLAN_RELEASE_ROOT" --subject "$RELEASE_SUBJECT")
+           --release-root "$PLAN_RELEASE_ROOT" --subject "$RELEASE_SUBJECT"
+           --commit "${WF_RELEASE_COMMIT:?candidate template requires the verified commit}")
   fi
   "$PY" "$HERE/template_cache.py" "$sub" "${args[@]}" "$@"
 }
@@ -490,23 +478,19 @@ add_init_millis() {
 
 run_repro() {
   # 只有一条实现：repro/run.sh（也可单独/CI 运行）。这里只消费它的机器可读汇总。
+  # 内嵌 repro 复用父 C 的租约与 context：参数全部来自父冻结计划，不再重传公开 argv。
   # 失败计数写进 repro_fail（不直接改 STRUCTURAL_FAIL）：并发开关下它跑在子 shell 里，父进程按计数器合并。
-  local args=(--mode "$PLAN_REPRO_MODE" --jobs "$PLAN_REPRO_JOBS"
-              --fixture-deploy "$PLAN_FIXTURE_DEPLOY" --results-dir "$RESULTS_DIR/repro")
-  local g
-  for g in $PLAN_REPRO_GROUPS; do args+=(--group "$g"); done
-  if [ "$PLAN_FIXTURE_DEPLOY" = "candidate" ]; then
-    args+=(--release-root "$PLAN_RELEASE_ROOT" --release-ref "$PLAN_RELEASE_REF"
-           --release-version "$PLAN_RELEASE_VERSION")
-  fi
-  if [ "$PLAN_NO_BUILD" = "1" ]; then args+=(--no-build); fi
-  # 内嵌 repro 一律走 inherited release frame（默认构建与 --no-build 都一样），
-  # 不靠 --no-build 让内层再 ensure/check 一次。
   FRAME=()
-  inherited_frame=$("$PY" "$HERE/runner_protocol.py" encode-inherited \
-    --context "$WF_FRAME_CONTEXT_FILE" --sha256 "$WF_FRAME_CONTEXT_SHA256" \
-    --size "$WF_FRAME_CONTEXT_SIZE" -- "${args[@]}") || { echo "REPRO-FRAME-FAILED"; repro_fail=$((repro_fail + 1)); repro_rc=1; return; }
-  eval "$inherited_frame" || { echo "REPRO-FRAME-EVAL-FAILED"; repro_fail=$((repro_fail + 1)); repro_rc=1; return; }
+  repro_frame=$("$PY" "$HERE/runner_protocol.py" encode-repro --stage repro-inner \
+    --entry-pid "${WF_RUNNER_CONTROL_PID:?missing controller pid}" \
+    --results-root "$WF_RESULTS_DIR" --results-explicit "${WF_FRAME_RESULTS_EXPLICIT:-0}" \
+    --scope-root "${WF_FRAME_SCOPE_ROOT:--}" \
+    --plan-file "$WF_FRAME_PLAN_FILE" --plan-sha256 "$WF_FRAME_PLAN_SHA256" \
+    --plan-size "$WF_FRAME_PLAN_SIZE" \
+    --context-file "$WF_FRAME_CONTEXT_FILE" --context-sha256 "$WF_FRAME_CONTEXT_SHA256" \
+    --context-size "$WF_FRAME_CONTEXT_SIZE") \
+    || { echo "REPRO-FRAME-FAILED"; repro_fail=$((repro_fail + 1)); repro_rc=1; return; }
+  eval "$repro_frame" || { echo "REPRO-FRAME-EVAL-FAILED"; repro_fail=$((repro_fail + 1)); repro_rc=1; return; }
   local out rc
   out=$(bash "$HERE/repro/run.sh" "${FRAME[@]}" 2>&1); rc=$?
   printf '%s\n' "$out" > "$RESULTS_DIR/repro.raw"
@@ -544,7 +528,7 @@ run_repro() {
     *) case "$bundle_size" in
          ''|*[!0-9]*) : ;;
          *) printf '{"sha256":"%s","size":%s}\n' "$bundle_sha" "$bundle_size" \
-              > "$RESULTS_DIR/repro.bundle.json" ;;
+              > "$RESULTS_DIR/repro/repro.bundle.json" ;;
        esac ;;
   esac
 }
@@ -629,7 +613,7 @@ else
   JOBS=1
   # 串行域 = 宿主 /tmp + 无 unshare（与今天 --serial 的可观测语义一致，是 AC1 的对拍面）。
   for rec in "${UNIT_RECORDS[@]}"; do
-    if [ -f "$CANCEL_REQUEST" ]; then
+    if [ -n "${WF_CANCEL_FILE:-}" ] && [ -f "$WF_CANCEL_FILE" ]; then
       echo "CANCEL-REQUESTED: 停止调度剩余单元"
       break
     fi
@@ -717,7 +701,7 @@ if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_
 fi
 
 # ---- 取消请求在收口前出现：内层只报告，不删除、不签成功 ------------------------
-if [ -f "$CANCEL_REQUEST" ]; then
+if [ -n "${WF_CANCEL_FILE:-}" ] && [ -f "$WF_CANCEL_FILE" ]; then
   echo "CANCEL-REQUESTED: 运行被取消，root controller 继续按真实终态收口"
   INNER_FAIL=1
 fi
@@ -745,7 +729,7 @@ import json, os
 
 
 def release_build():
-    """从 controlled 阶段的 release-context 搬运构建状态（built/reused/checked）。"""
+    """从 controller 写的 release-context 搬运构建状态（built/reused/checked）。"""
     path = os.environ.get("WF_RELEASE_CONTEXT")
     if not path:
         return None
@@ -808,9 +792,9 @@ BUNDLE_SHA=""
 BUNDLE_SIZE=""
 if [ "$PLAN_REPRO_ENABLED" = "1" ]; then
   REPRO_DIR="$RESULTS_DIR/repro"
-  if [ -f "$RESULTS_DIR/repro.bundle.json" ]; then
-    BUNDLE_SHA=$(sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' "$RESULTS_DIR/repro.bundle.json" | head -1)
-    BUNDLE_SIZE=$(sed -n 's/.*"size": *\([0-9]*\).*/\1/p' "$RESULTS_DIR/repro.bundle.json" | head -1)
+  if [ -f "$REPRO_DIR/repro.bundle.json" ]; then
+    BUNDLE_SHA=$(sed -n 's/.*"sha256": *"\([0-9a-f]*\)".*/\1/p' "$REPRO_DIR/repro.bundle.json" | head -1)
+    BUNDLE_SIZE=$(sed -n 's/.*"size": *\([0-9]*\).*/\1/p' "$REPRO_DIR/repro.bundle.json" | head -1)
   fi
 fi
 diag_rc=0

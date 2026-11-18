@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """第四十轮 R76：回收候选语义、周期触发基数、存活探测的恢复闭环。"""
-import hashlib, json, os, subprocess, sys
+import hashlib, json, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
@@ -74,12 +74,31 @@ candidates = {item["path"] for item in summary["spec_usage"]["reclaim_candidates
 rec("1e 活动任务引用则不作候选", "不含 idle.md",
     ".wf/spec/rules/idle.md" in candidates, ".wf/spec/rules/idle.md" not in candidates)
 
-# 样本不足 → unknown，不当零
-for extra in (".wf/tasks/archive/2026-11",):
-    pass
+# 样本不足 → unknown，不当零（独立稀疏根：2 个正常归档 < 窗口 5）
+sparse = tempfile.mkdtemp(prefix="wf-r76-sparse-")
+import atexit, shutil  # noqa: E402
+atexit.register(shutil.rmtree, sparse, ignore_errors=True)
+os.makedirs(os.path.join(sparse, ".wf/spec/rules"), exist_ok=True)
+open(os.path.join(sparse, ".wf/spec/rules/fresh.md"), "w").write("# fresh\n")
+for index in range(2):
+    tid = f"2026-{index:032x}"
+    directory = os.path.join(sparse, ".wf/tasks/archive/2026-11", f"{tid}-样本")
+    os.makedirs(directory, exist_ok=True)
+    json.dump({"schema_version": 1, "id": tid, "title": "样本", "status": "archived",
+               "terminal": "normal", "archived_at": f"2026-11-0{index + 1}T00:00:00.000000Z",
+               "curation": []},
+              open(os.path.join(directory, "task.json"), "w", encoding="utf-8"),
+              ensure_ascii=False)
+sparse_tasks = list(wf_tasks.iter_tasks(sparse))
+sparse_summary = wf_tasks._governance_summary(sparse, sparse_tasks, wf_tasks._task_dirs(sparse)[1])
+sparse_usage = sparse_summary["spec_usage"]
+rec("1f 窗口内样本不足不静默当零", "unknown 含样本不足且不给候选/结论",
+    f"unknown={sparse_usage['unknown']} candidates={len(sparse_usage['reclaim_candidates'])}",
+    any(item.get("reason") == "not enough normal-archived samples"
+        for item in sparse_usage["unknown"])
+    and sparse_usage["reclaim_candidates"] == []
+    and sparse_usage["statistic_complete"] is False)
 summary = governance()
-rec("1f 窗口内样本不足不静默当零", "unknown 非空或样本足够",
-    summary["spec_usage"]["unknown"], True)
 
 # 周期触发基数：正常归档 6 个、异常 1 个 → every=5 时 6 % 5 != 0
 inspection = summary["inspection"]

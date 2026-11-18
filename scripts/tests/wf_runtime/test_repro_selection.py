@@ -79,6 +79,7 @@ class Base(unittest.TestCase):
         os.environ["WF_FIXTURE_DEPLOY"] = "dev"
         os.environ.pop("WF_RELEASE_CONTEXT", None)
         self.addCleanup(self._restore, saved)
+        self.run_id = "run-test-0001"
         self.context = context_for()
         patcher = mock.patch.object(select, "release_context", side_effect=lambda: dict(self.context))
         patcher.start()
@@ -110,14 +111,33 @@ class Base(unittest.TestCase):
         record = {"case": case, "mode": mode, "verified": verified,
                   "execution_fingerprint": fingerprint,
                   "bundle_sha256": sha, "green_seconds": 0.1, "red_seconds": 0.2, "phases": {}}
+        commands = self.results / "commands"
+        commands.mkdir(exist_ok=True)
         for phase in ("green", "red"):
             record[phase] = ("pass" if verified else "fail") if phase in phases else "skip"
             if phase in phases:
                 (self.results / "logs").mkdir(exist_ok=True)
-                (self.results / "logs" / f"{case}.{phase}.log").write_text(f"PASS {phase}: target\n")
-                record["phases"][phase] = {"rc": 0, "status": "passed"}
+                log = self.results / "logs" / f"{case}.{phase}.log"
+                log.write_text(f"PASS {phase}: target\n")
+                command_id = f"{case}-{phase}-{sha[:8]}"
+                receipt = {"schema_version": 1, "command_id": command_id,
+                           "run_id": self.run_id, "evidence_scope": "managed-child",
+                           "state": "finished", "log_path": str(log),
+                           "argv": [sys.executable, str(REPRO / (case + ".py")), "--expect", phase],
+                           "result": {"rc": 0, "status": "passed" if verified else "failed"},
+                           "supervision": {"cleanup_state": "cleaned"},
+                           "local_cleanup": "removed", "retained_paths": []}
+                (commands / (command_id + ".json")).write_text(json.dumps(receipt))
+                record["phases"][phase] = {"rc": 0,
+                                           "status": "passed" if verified else "failed",
+                                           "command_id": command_id}
         (self.results / (case + ".json")).write_text(json.dumps(record))
         return self.results / (case + ".json")
+
+    def commit(self, path, sha, size, **overrides):
+        values = {"run_id": self.run_id, "evidence_root": str(self.results / "commands")}
+        values.update(overrides)
+        return select.commit_state(str(self.results), str(path), sha, str(size), **values)
 
     def verify(self, case, mode):
         selection, path, sha, size = self.bundle(case, mode)
@@ -218,21 +238,21 @@ class AutoModeTest(Base):
 
     def test_unchanged_case_runs_green_only(self):
         path, sha, size = self.verify("review-count-reject", "both")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         result = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                mode="auto")
         self.assertEqual(result["cases"]["review-count-reject"]["mode"], "green")
 
     def test_green_does_not_certify_red(self):
         path, sha, size = self.verify("review-count-reject", "green")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         result = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                mode="auto")
         self.assertEqual(result["cases"]["review-count-reject"]["mode"], "both")
 
     def test_helper_or_source_change_invalidates_red(self):
         path, sha, size = self.verify("review-count-reject", "both")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         with mock.patch.object(select, "helpers_digest", return_value="sha256:new-helpers"):
             result = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                    mode="auto")
@@ -244,7 +264,7 @@ class AutoModeTest(Base):
 
     def test_target_change_and_unknown_targets(self):
         path, sha, size = self.verify("review-count-reject", "both")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         with mock.patch.object(select, "targets_digest", return_value="sha256:target-v2"):
             result = select.select(["review"], only="review-count-reject", fixture_deploy="dev",
                                    mode="auto")
@@ -258,7 +278,7 @@ class AutoModeTest(Base):
     def test_candidate_auto_requires_matching_dev_red(self):
         # candidate-clean 用例：dev red 成功后可被同主体 candidate auto 复用。
         path, sha, size = self.verify("release-identity-commit", "both")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         self.context = context_for("candidate")
         result = select.select(["install"], only="release-identity-commit",
                                fixture_deploy="candidate", mode="auto")
@@ -271,7 +291,7 @@ class AutoModeTest(Base):
                           mode="auto")
         self.assertIn("dev", str(caught.exception))
         path, sha, size = self.verify("release-identity-commit", "both")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         self.context = context_for("candidate", subject="sha256:other-release")
         with self.assertRaises(select.SelectError):
             select.select(["install"], only="release-identity-commit", fixture_deploy="candidate",
@@ -294,7 +314,7 @@ class AutoModeTest(Base):
             {case: {"red_subject_digest": "x", "local_inputs": {"targets": "t"}}},
             select.load_groups())[case], "both")
         path, sha, size = self.verify(case, "green")
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         self.assertIn("legacy", select.read_state()["cases"][case])
 
     def test_corrupt_state_is_not_silently_replaced(self):
@@ -311,7 +331,7 @@ class CommitTest(Base):
         """唯一 writer 在最终 barrier 各重算一次 public/context（不随 case 数增长）。"""
         path, sha, size = self.verify("review-count-reject", "both")
         select.reset_scans()
-        select.commit_state(str(self.results), str(path), sha, str(size))
+        self.commit(path, sha, size)
         counts = select.scans()
         # 本 class 把 release_context 打了桩（固定 context），所以 release 计数恒为 0；
         # 真实 release 扫描次数由 ScanCountTest（用真实 context 文件）覆盖。
@@ -329,7 +349,7 @@ class CommitTest(Base):
                     first["cases"]["review-count-reject"]["execution_fingerprint"])
         self.record("review-unavailable", "both", sha,
                     second["cases"]["review-unavailable"]["execution_fingerprint"], verified=False)
-        path, updated, _kept = select.commit_state(str(self.results), str(path), sha, str(size))
+        path, updated, _kept = self.commit(path, sha, size)
         self.assertEqual(updated, ["review-count-reject"])
         entry = select.read_state()["cases"]["review-count-reject"]
         self.assertEqual(entry["red"]["subject"],
@@ -342,31 +362,31 @@ class CommitTest(Base):
         with mock.patch.object(fixture_scope, "verify_lease",
                                side_effect=fixture_scope.FixtureError("no lease")):
             with self.assertRaises(fixture_scope.FixtureError):
-                select.commit_state(str(self.results), str(path), sha, str(size))
+                self.commit(path, sha, size)
         with mock.patch.object(fixture_scope, "verify_results_lock",
                                side_effect=fixture_scope.FixtureError("no lease")):
             with self.assertRaises(fixture_scope.FixtureError):
-                select.commit_state(str(self.results), str(path), sha, str(size))
+                self.commit(path, sha, size)
 
     def test_bundle_token_mismatch_is_refused(self):
         path, sha, size = self.verify("review-count-reject", "both")
         with self.assertRaises(select.SelectError):
-            select.commit_state(str(self.results), str(path), "0" * 64, str(size))
+            self.commit(path, "0" * 64, size)
 
     def test_changed_context_is_refused_at_commit(self):
         path, sha, size = self.verify("review-count-reject", "both")
         self.context = context_for(subject="sha256:other-release")
         with self.assertRaises(select.SelectError):
-            select.commit_state(str(self.results), str(path), sha, str(size))
+            self.commit(path, sha, size)
 
     def test_malformed_or_missing_results_block_the_writer(self):
         path, sha, size = self.verify("review-count-reject", "both")
         (self.results / "review-count-reject.json").unlink()
         with self.assertRaises(select.SelectError):
-            select.commit_state(str(self.results), str(path), sha, str(size))
+            self.commit(path, sha, size)
         self.record("review-count-reject", "both", sha, "wrong-fingerprint")
         with self.assertRaises(select.SelectError):
-            select.commit_state(str(self.results), str(path), sha, str(size))
+            self.commit(path, sha, size)
 
 
 RELEASE_CONTEXT_DOC = {
@@ -503,8 +523,151 @@ class BundleSchemaTest(Base):
         self.record("review-count-reject", "both", new_sha,
                     selection["cases"]["review-count-reject"]["execution_fingerprint"])
         with self.assertRaises(select.SelectError) as caught:
-            select.commit_state(str(self.results), str(path), new_sha, str(len(data)))
+            self.commit(path, new_sha, len(data))
         self.assertIn("public inputs changed", str(caught.exception))
+
+
+
+class ProofGateTest(Base):
+    """R2：proof 只接收本代、相位证据齐全且清理已确认的用例。"""
+
+    def bundle_for(self, case="review-count-reject", mode="both"):
+        selection, path, sha, size = self.bundle(case, mode)
+        self.record(case, mode, sha, selection["cases"][case]["execution_fingerprint"])
+        bundle = json.loads(path.read_bytes())
+        bundle["__sha256"] = sha
+        return bundle, path, sha, size
+
+    def phase_report(self, bundle):
+        return select.validate_repro(str(self.results), bundle,
+                                     evidence_root=str(self.results / "commands"),
+                                     run_id=self.run_id)
+
+    def receipt_path(self, case, phase):
+        record = json.loads((self.results / (case + ".json")).read_text())
+        return self.results / "commands" / (record["phases"][phase]["command_id"] + ".json")
+
+    def mutate_receipt(self, case, phase, **fields):
+        path = self.receipt_path(case, phase)
+        record = json.loads(path.read_text())
+        record.update(fields)
+        path.write_text(json.dumps(record))
+        return path
+
+    def test_clean_case_is_eligible_and_proof_is_written(self):
+        bundle, bundle_path, sha, size = self.bundle_for()
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["green"]["passed"], 1)
+        self.assertEqual(report["phases"]["red"]["passed"], 1)
+        path, updated, _kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, ["review-count-reject"])
+        self.assertTrue(str(path).endswith("repro-state.json"))
+
+    def test_local_cleanup_failure_keeps_the_phase_unverified(self):
+        bundle, bundle_path, sha, size = self.bundle_for()
+        self.mutate_receipt("review-count-reject", "green", local_cleanup="failed")
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["green"]["unverified"], 1)
+        self.assertEqual(report["phases"]["red"]["passed"], 1)
+        path, updated, _kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, [], "清理未确认的相位不得进入 proof")
+        self.assertIsNone(path)
+        self.assertFalse(Path(select.state_path()).exists(), "没有新证明就不创建状态文件")
+
+    def test_explicit_keep_is_never_proof_eligible(self):
+        bundle, bundle_path, sha, size = self.bundle_for()
+        self.mutate_receipt("review-count-reject", "red", local_cleanup="retained-keep")
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["red"]["unverified"], 1)
+        _path, updated, _kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, [])
+
+    def test_mixed_phase_outcome_has_no_case_proof(self):
+        # both 模式的部分通过：green 成立、red 断言失败 → 该 case 没有任何可复用证明。
+        selection, path, sha, size = self.bundle("review-count-reject", "both")
+        fingerprint = selection["cases"]["review-count-reject"]["execution_fingerprint"]
+        record = json.loads(self.record("review-count-reject", "both", sha, fingerprint).read_text())
+        record["red"] = "fail"
+        record["verified"] = False
+        (self.results / "review-count-reject.json").write_text(json.dumps(record))
+        (self.results / "logs" / "review-count-reject.red.log").write_text(
+            "FAIL red: target assertion still green\n")
+        bundle = json.loads(path.read_bytes())
+        bundle["__sha256"] = sha
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["green"]["passed"], 1)
+        self.assertEqual(report["phases"]["red"]["failed"], 1)
+        _path, updated, _kept = self.commit(path, sha, size)
+        self.assertEqual(updated, [], "部分通过的 case 不得留下半套证明")
+
+    def test_missing_or_foreign_receipt_is_unverified(self):
+        bundle, bundle_path, sha, size = self.bundle_for()
+        self.receipt_path("review-count-reject", "green").unlink()
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["green"]["unverified"], 1)
+        self.mutate_receipt("review-count-reject", "red", run_id="another-run")
+        report = self.phase_report(bundle)
+        self.assertEqual(report["phases"]["red"]["unverified"], 1)
+        _path, updated, _kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, [])
+
+    def test_state_write_failure_keeps_the_previous_bytes(self):
+        state = Path(select.state_path())
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text('{"schema_version": 5, "cases": {}}\n')
+        before = state.read_bytes()
+        with mock.patch.object(select.os, "replace", side_effect=OSError("disk full")):
+            with self.assertRaises(select.SelectError) as caught:
+                select.write_state({"schema_version": 5, "cases": {}})
+        self.assertIn("previous state file is unchanged", str(caught.exception))
+        self.assertEqual(state.read_bytes(), before)
+        self.assertEqual(sorted(name for name in os.listdir(state.parent)
+                                if name.startswith(".state-")), [],
+                         "写入失败不得留下临时文件")
+
+    def test_temp_file_or_fsync_failure_keeps_the_previous_bytes(self):
+        state = Path(select.state_path())
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text('{"schema_version": 5, "cases": {}}\n')
+        before = state.read_bytes()
+        with mock.patch.object(select.tempfile, "NamedTemporaryFile",
+                               side_effect=OSError("no space")):
+            with self.assertRaises(select.SelectError):
+                select.write_state({"schema_version": 5, "cases": {}})
+        self.assertEqual(state.read_bytes(), before)
+        with mock.patch.object(select.os, "fsync", side_effect=OSError("io error")):
+            with self.assertRaises(select.SelectError):
+                select.write_state({"schema_version": 5, "cases": {}})
+        self.assertEqual(state.read_bytes(), before)
+        self.assertEqual(sorted(name for name in os.listdir(state.parent)
+                                if name.startswith(".state-")), [])
+
+    def test_v4_state_is_legacy_and_converts_only_on_a_successful_write(self):
+        case = "review-count-reject"
+        legacy = {"schema_version": 4,
+                  "cases": {case: {"green": {"fingerprint": "old"},
+                                   "red": {"subject": "old", "fingerprint": "old"}}}}
+        Path(select.state_path()).parent.mkdir(parents=True, exist_ok=True)
+        Path(select.state_path()).write_text(json.dumps(legacy))
+        self.assertEqual(select.auto_modes(
+            {case: {"red_subject_digest": "x", "local_inputs": {"targets": "t"}}},
+            select.load_groups())[case], "both", "v4 证明不能直接命中 auto")
+        bundle, bundle_path, sha, size = self.bundle_for(mode="green")
+        path, updated, kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, [case])
+        self.assertEqual(kept, [], "被重新验证的用例由本代证据替换，不再单列保留")
+        stored = json.loads(Path(select.state_path()).read_text())
+        self.assertEqual(stored["schema_version"], 5)
+        self.assertIn("legacy", stored["cases"][case])
+        self.assertEqual(stored["cases"][case]["green"]["cleanup"], "removed")
+
+    def test_list_selection_needs_no_release_context(self):
+        with mock.patch.object(select, "release_context",
+                               side_effect=AssertionError("must not read")):
+            listed = select.list_selection(["install"], "", "dev")
+            self.assertEqual(listed["cases"]["install-lock-realpath"], "both")
+            candidate = select.list_selection(["install"], "release-identity", "candidate")
+            self.assertEqual(candidate["cases"]["release-identity-commit"], "green")
 
 
 if __name__ == "__main__":

@@ -97,7 +97,8 @@ case "$fixture" in
       # 夹具模板只读：每单元复制独立一份，再核对空态（重锚定 + 无残留 + 至少改写 1 个）。
       check_args=(--quiet)
       if [ "$WF_FIXTURE_DEPLOY" = "candidate" ]; then
-        check_args=(--quiet --version "$WF_RELEASE_VERSION" --ref "$WF_RELEASE_REF")
+        check_args=(--quiet --version "$WF_RELEASE_VERSION" --ref "$WF_RELEASE_REF"
+                    --commit "${WF_RELEASE_COMMIT:?candidate template requires the verified commit}")
       fi
       "$PY" "$HERE/fixture_scope.py" clone "$WF_TEMPLATE" "$FIX" >>"$out" 2>&1 || prep_rc=3
       if [ "$prep_rc" -eq 0 ]; then

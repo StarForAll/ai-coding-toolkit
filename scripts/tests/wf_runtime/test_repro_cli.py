@@ -7,6 +7,8 @@
 - 内部 frame 仍由 runner_protocol 先剥离，公开 parser 看不到保留选项。
 """
 
+import contextlib
+import io
 import os
 import subprocess
 import sys
@@ -133,17 +135,28 @@ class CompatibilityTest(unittest.TestCase):
         self.assertEqual(values["GROUP_NAMES"], [])
 
     def test_environment_defaults_are_preserved_and_explicit_wins(self):
-        env = {"WF_REPRO_JOBS": "3", "WF_FIXTURE_DEPLOY": "candidate",
-               "WF_RELEASE_ROOT": "/tmp/root", "WF_RELEASE_REF": "refs/tags/wf-v0.1.0",
-               "WF_RELEASE_VERSION": "0.1.0", "WF_REPRO_RESULTS": "/tmp/results"}
+        env = {"WF_REPRO_JOBS": "3", "WF_REPRO_RESULTS": "/tmp/results"}
         values = eval_assignments(parse_direct([], env=env).stdout)
-        self.assertEqual((values["JOBS"], values["DEPLOY"]), ("3", "candidate"))
-        self.assertEqual((values["RELEASE_ROOT"], values["RELEASE_REF"],
-                          values["RELEASE_VERSION"], values["RESULTS"]),
-                         ("/tmp/root", "refs/tags/wf-v0.1.0", "0.1.0", "/tmp/results"))
-        values = eval_assignments(parse_direct(["--jobs", "5", "--release-root", "/tmp/explicit"],
-                                               env=env).stdout)
-        self.assertEqual((values["JOBS"], values["RELEASE_ROOT"]), ("5", "/tmp/explicit"))
+        self.assertEqual(values["JOBS"], "3")
+        self.assertEqual(values["RESULTS"], "/tmp/results")
+        values = eval_assignments(parse_direct(["--jobs", "5", "--mode", "green"], env=env).stdout)
+        self.assertEqual((values["JOBS"], values["MODE"]), ("5", "green"))
+
+    def test_candidate_environment_defaults_are_plan_inputs(self):
+        with tempfile.TemporaryDirectory() as root:
+            meta = os.path.join(root + ".meta.json")
+            open(meta, "w").write("{}\n")
+            env = {"WF_FIXTURE_DEPLOY": "candidate", "WF_RELEASE_ROOT": root,
+                   "WF_RELEASE_REF": "refs/tags/wf-v0.1.0", "WF_RELEASE_VERSION": "0.1.0",
+                   "WF_RELEASE_META": meta}
+            result = parse_direct(["--mode", "green"], env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            values = eval_assignments(result.stdout)
+            self.assertEqual((values["DEPLOY"], values["RELEASE_ROOT"], values["RELEASE_META"]),
+                             ("candidate", root, meta))
+            self.assertIn("PLAN_B64", result.stdout)
+            # 候选默认 both 与真实入口一致：必须在解析/计划期就拒绝，而不是跑到一半才发现。
+            self.assertEqual(parse_direct([], env=env).returncode, 2)
 
     def test_empty_environment_values_fall_back(self):
         values = eval_assignments(parse_direct([], env={"WF_REPRO_JOBS": "",
@@ -199,6 +212,55 @@ class HelperRegistrationTest(unittest.TestCase):
         self.assertIn("cli.py", repro_select.RUNNER_FILES)
         self.assertIn("repro/cli.py", plan.FAKE_TREE_COPY)
         self.assertTrue(CLI.is_file())
+
+
+class PlanHandoffTest(unittest.TestCase):
+    """R4：公开解析只发生一次；内部子命令只消费冻结对象/字节。"""
+
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("wf_repro_cli_plan", CLI)
+        self.cli = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.cli)
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-repro-plan-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def test_only_the_public_path_parses_user_argv(self):
+        from unittest import mock
+        document = self.cli.plan_document(
+            dict(self.cli.resolve(["--mode", "green", "--results-dir", str(self.root),
+                                   "--no-build"])), os.getpid())
+        encoded = self.cli.plan_b64(document)
+        with mock.patch.object(self.cli, "resolve") as resolve_mock, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.cli.main(["plan-fields", "--plan-b64", encoded]), 0)
+            raw = self.root / "raw.json"
+            self.assertEqual(self.cli.main(["freeze-plan", "--plan-b64", encoded,
+                                            "--results-root", str(self.root),
+                                            "--run-id", "run-1"]), 0)
+            self.assertEqual(self.cli.main(["read-plan", "--plan-file", str(self.root / "plan.json"),
+                                            "--run-id", "run-1",
+                                            "--results-root", str(self.root)]), 0)
+        resolve_mock.assert_not_called()
+        with mock.patch.object(self.cli, "resolve", return_value=self.cli.resolve(
+                ["--mode", "green", "--results-dir", str(self.root)])) as resolve_mock, \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(self.cli.main(["--mode", "green", "--results-dir", str(self.root)]), 0)
+        resolve_mock.assert_called_once()
+
+    def test_read_plan_refuses_wrong_token_or_scope(self):
+        document = self.cli.plan_document(
+            dict(self.cli.resolve(["--mode", "green", "--results-dir", str(self.root)])),
+            os.getpid())
+        path, sha, size = self.cli.freeze_plan(document, str(self.root), "run-1")
+        self.cli.read_plan(path, sha, size, "run-1", str(self.root), None)
+        with self.assertRaises(self.cli.CliError):
+            self.cli.read_plan(path, "0" * 64, size, "run-1", str(self.root), None)
+        with self.assertRaises(self.cli.CliError):
+            self.cli.read_plan(path, sha, size + 1, "run-1", str(self.root), None)
+        with self.assertRaises(self.cli.CliError):
+            self.cli.read_plan(path, sha, size, "other-run", str(self.root), None)
 
 
 if __name__ == "__main__":

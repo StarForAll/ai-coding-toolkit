@@ -29,7 +29,7 @@ def text_files(root, suffixes=TEXT_SUFFIXES):
                 yield os.path.join(base, name)
 
 
-def check(root, leak_from=None, version=None, ref=None):
+def check(root, leak_from=None, version=None, ref=None, commit=None):
     problems = []
     if not os.path.isdir(root):
         return [f"项目目录不存在：{root}"]
@@ -50,6 +50,10 @@ def check(root, leak_from=None, version=None, ref=None):
             problems.append(f"安装记录 version={record.get('version')!r} 期望 {version!r}")
         if ref and record.get("release_ref") != ref:
             problems.append(f"安装记录 release_ref={record.get('release_ref')!r} 期望 {ref!r}")
+        if commit and record.get("source_commit") != commit:
+            # 候选模板的身份包含已核 tag commit：同内容不同提交的模板不得混用。
+            problems.append(
+                f"安装记录 source_commit={record.get('source_commit')!r} 期望 {commit!r}")
         if record.get("version") == "0.0.0-dev" and version:
             problems.append("安装记录仍是 dev 占位版本 0.0.0-dev")
     if leak_from:
@@ -99,6 +103,8 @@ def main(argv=None):
                         help="把记录里指向该模板路径的绝对路径改写为当前项目路径（复制后必做）")
     parser.add_argument("--version", default=None)
     parser.add_argument("--ref", default=None)
+    parser.add_argument("--commit", default=None,
+                        help="候选模式下安装记录必须指向的 tag commit")
     parser.add_argument("--expect-repoint-min", type=int, default=None,
                         help="要求 --repoint-from 至少改写 N 个文件（0 = 静默 no-op，属异常）")
     parser.add_argument("--quiet", action="store_true")
@@ -116,7 +122,9 @@ def main(argv=None):
         leak = args.repoint_from
     else:
         leak = args.leak_from
-    problems = check(args.root, leak, args.version, args.ref)
+    if args.commit and not args.version:
+        parser.error("--commit 需要同时给出 --version/--ref")
+    problems = check(args.root, leak, args.version, args.ref, args.commit)
     if (repointed is not None and args.expect_repoint_min is not None
             and repointed < args.expect_repoint_min):
         problems.insert(0, f"改写数 {repointed} < 期望最小 {args.expect_repoint_min}"
