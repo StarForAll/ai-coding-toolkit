@@ -1270,3 +1270,39 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 
 - D3 指向只做人工核对；check-wf-analysis.py 的完整编号规则需与新测试同步维护
 - wf-evidence-snapshot.py:257/267 的裸读按范围边界留在独立证据工具维护项
+
+
+## Session 414: wf 运行器候选身份、相位证明与取消终态收口
+<!-- trellis-session: v=2 fp=37de9f0d646ec82f -->
+
+**Date**: 2026-11-18
+**Task**: wf 运行器候选身份、相位证明与取消终态收口
+**Branch**: `main`
+
+### Summary
+
+收口 wf 测试运行器的发行消费锁/唯一准备、同代计划交接、相位 proof 与 v5 状态、取消标记与最终决策边界、纯清单与摘要字段，并修实 D1/R84/R67/R65/R62/R76/R82/P5 的空断言；重跑候选审计证据。
+
+### Main Changes
+
+- 发行消费锁与唯一准备迁入 root controller；独立 repro 冻结同代 plan，内层只消费已核 plan/context
+- proof 只接收本代 receipt 终态、监督清理与本地回收已确认的用例；state v5，旧 1-4 只作 legacy
+- 取消标记由 C 交接、shell 只排他发布；新增最终成功决策边界并保留真实清理事实
+- --list 纯选择；summary 增列 candidate_commit/repro_phase_counts；候选模板身份含已核 commit
+- 修正空断言并重跑 candidate-audit；更新 runner README 与 wf 交付/取证 spec
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `03a9cf48` | fix(test): wf 运行器候选身份、相位证明与取消终态收口 |
+
+### Testing
+
+- [OK] 全量单测 1272 OK / 34 skipped；慢契约 test_run_all_contract 33 OK
+- [OK] full green 并行/串行/both、独立 repro、KEEP、候选无 repro 与候选 A/B 模板均符合预期；逐 ID 对拍一致
+- [OK] build-wf-release --verify 字节复现 OK；skills/library/design/文档引用校验通过
+
+### Status
+
+[OK] **Completed**
