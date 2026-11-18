@@ -95,7 +95,8 @@ class ReadyRunsTest(unittest.TestCase):
         root = tempfile.mkdtemp(prefix="wf-ready-")
         _task(root, TASK_A, run_id=RUN_ID)
         record_path = os.path.join(root, ".wf", "tasks", TASK_A, "task.json")
-        record = json.load(open(record_path, encoding="utf-8"))
+        with open(record_path, encoding="utf-8") as stream:
+            record = json.load(stream)
         record["independent_resume"] = {"decision": "keep", "termination_action": "term-1"}
         _write(record_path, record)
         _run(root, RUN_ID, terminal="abnormal")

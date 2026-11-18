@@ -72,7 +72,8 @@ def owner_prefix(line: str, ref_start: int) -> str | None:
 
 
 def check(path: str) -> list[str]:
-    lines = open(path, encoding="utf-8").read().split("\n")
+    with open(path, encoding="utf-8") as stream:
+        lines = stream.read().split("\n")
     heads = {m.group(1) for m in map(HEADING.match, lines) if m}
     mode = file_mode(path)
     in_exempt = False

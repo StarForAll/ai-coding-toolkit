@@ -31,14 +31,16 @@ class RulesDigestParityTest(unittest.TestCase):
     def test_install_matches_runtime(self):
         from wflib import assets as wf_assets
 
-        manifest = json.load(open(MANIFEST, encoding="utf-8"))
+        with open(MANIFEST, encoding="utf-8") as stream:
+            manifest = json.load(stream)
         installed = _load("wf_install_rules", os.path.join(PAYLOAD, "install.py"))
         self.assertEqual(installed.compute_rules_digest(manifest), wf_assets.compute_rules_digest(manifest))
 
     def test_digest_is_domain_separated(self):
         from wflib import assets as wf_assets
 
-        manifest = json.load(open(MANIFEST, encoding="utf-8"))
+        with open(MANIFEST, encoding="utf-8") as stream:
+            manifest = json.load(stream)
         digest = wf_assets.compute_rules_digest(manifest)
         self.assertTrue(digest.startswith("sha256:"))
 

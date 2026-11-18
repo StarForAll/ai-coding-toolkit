@@ -196,11 +196,13 @@ class ProtocolInvariantTest(unittest.TestCase):
         """
         from wflib import protocol as protocol_mod
 
-        payload = json.load(open(os.path.join(PROTOCOL_DIR, "thresholds.json"), encoding="utf-8"))
+        with open(os.path.join(PROTOCOL_DIR, "thresholds.json"), encoding="utf-8") as stream:
+            payload = json.load(stream)
         forbidden = set((payload.get("not_thresholds") or {}).get("forbidden_cap_names") or ())
         self.assertTrue(forbidden, "thresholds.json 必须登记禁止回流的 cap 名")
         self.assertEqual(forbidden & set(protocol_mod.thresholds()), set(), "禁止的 cap 名出现在阈值键里")
-        body = open(os.path.join(LIB, "wflib", "config.py"), encoding="utf-8").read()
+        with open(os.path.join(LIB, "wflib", "config.py"), encoding="utf-8") as stream:
+            body = stream.read()
         for name in forbidden:
             self.assertNotIn(name, body, f"config.py 仍出现已删除的 cap：{name}")
 

@@ -7,8 +7,33 @@ DOC = os.path.join(ROOT, "docs/workflows/wf/analysis/proposal-repairing-state.md
 CODE_BASE = os.path.join(ROOT, "docs/workflows/wf/payload/lib/wflib/")
 WITHDRAWN = ["preferred", "in_flight", "latest_launch", "eligible_blockers", "reusable_rounds", "certain"]
 
+# 编号由数字段与可选的小写字母后缀组成；点后紧跟数字才属于编号（`§2.` 的末尾句点不计入）
+NUMBER = r"\d+[a-z]?(?:\.\d+[a-z]?)*"
+HEADING = re.compile(r"^#{2,3} (" + NUMBER + r")(?:\.|\s|$)")
+REFERENCE = re.compile(r"§(" + NUMBER + r")")
+MAX_REFERENCE_DEPTH = 2
+
+def heading_number(line):
+    """`##`/`###` 标题的完整编号；不是编号标题时返回 None。"""
+    match = HEADING.match(line)
+    return match.group(1) if match else None
+
+def history_span(lines):
+    """§9 历史小节的行区间 [start, end)；没有 §9 标题时返回 (0, 0)。"""
+    start = next((i for i, l in enumerate(lines)
+                  if l.startswith("## ") and heading_number(l) == "9"), None)
+    if start is None:
+        return 0, 0
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    return start, end
+
+def line_count(path):
+    with open(path, encoding="utf-8") as stream:
+        return sum(1 for _ in stream)
+
 def main():
-    text = open(DOC, encoding="utf-8").read()
+    with open(DOC, encoding="utf-8") as stream:
+        text = stream.read()
     lines = text.splitlines()
     problems = []
 
@@ -32,18 +57,21 @@ def main():
         else:
             i += 1
 
-    # 2) 引用可达
-    heads = set(re.findall(r"^(?:##|###) (\d+[a-z]?(?:\.\d+[a-z]?)?)(?:\.|\s)", text, re.M))
-    refs = set(re.findall(r"§(\d+(?:\.\d+)?[a-z]?)", text))
-    live = "\n".join(lines[:hist_start])
-    for r in sorted(refs):
-        if r not in heads and ("§" + r) in live and hist_start == 0:
-            problems.append(("引用", 0, "§%s 不存在（不回退到上级小节）" % r))
-    # 逐行检查：历史小节之前出现的 §N.M 必须存在
-    for i, l in enumerate(lines[:hist_start]):
-        for mm in re.finditer(r"§(\d+\.\d+[a-z]?)", l):
-            if mm.group(1) not in heads:
-                problems.append(("引用", i + 1, "§%s 不存在（历史小节前）" % mm.group(1)))
+    # 2) 引用可达：完整编号必须由 `##`/`###` 标题登记；§9 历史小节内豁免
+    heads = {n for n in map(heading_number, lines)
+             if n and n.count(".") + 1 <= MAX_REFERENCE_DEPTH}
+    exempt_start, exempt_end = history_span(lines)
+    for i, line in enumerate(lines):
+        if exempt_start <= i < exempt_end:
+            continue
+        for mm in REFERENCE.finditer(line):
+            ref = mm.group(1)
+            if ref in heads:
+                continue
+            if ref.count(".") + 1 > MAX_REFERENCE_DEPTH:
+                problems.append(("引用", i + 1, "§%s 超过两级（不登记为章节目标）" % ref))
+            else:
+                problems.append(("引用", i + 1, "§%s 不存在（不回退到上级小节）" % ref))
 
     # 3) 跨视图字段：schema 顶层字段 ↔ 判据表行
     m = re.search(r"```json\n(.*?)```", text, re.S)
@@ -78,7 +106,7 @@ def main():
             problems.append(("计数", 0, "%s 档编号不连续" % tag))
 
     # 5) 代码行号边界
-    sizes = {f: sum(1 for _ in open(CODE_BASE + f, encoding="utf-8"))
+    sizes = {f: line_count(CODE_BASE + f)
              for f in os.listdir(CODE_BASE) if f.endswith(".py")}
     for mm in re.finditer(r"`?([a-z]+)\.py:(\d+)", text):
         f, ln = mm.group(1) + ".py", int(mm.group(2))

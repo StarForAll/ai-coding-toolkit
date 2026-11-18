@@ -371,6 +371,6 @@ v42：K10（阶段含 `fixing`）、S4（`fail → fixing`）、S5（`plan → e
 | D1 | 不可核实证据阻断用哪个码 | 复用 `WF_REVIEW_INVALID` + `facts.reason = "unverifiable_evidence"` |
 | D2 | 人裁是否引入签名 | 不引入；沿用声明式 attestation（残余风险见 §2.2） |
 | **E3（已定：甲）** | 「已全部处置的 fail」是否也满足 complex 归档？ | **不满足**：`review-passed` 语义不变，复杂任务仍需一次 pass；AI 的否定只清 C2、不改 verdict |
-| **D3（已定：选 A）** | light 关闭单个问题是否必须整轮审查？ | **接受成本**：A8 归 backlog 后补；⑥ 不声称交付「light 自主闭环修复」，该口径已写进 §4.1 |
+| **D3（已定：选 A）** | light 关闭单个问题是否必须整轮审查？ | **接受成本**：A8 归 backlog 后补；⑥ 不声称交付「light 自主闭环修复」，该口径已写进 §4 的 C2 行 |
 
 > Q1=乙、Q2=甲 亦已定；D3 裁为**选 A**、E3 裁为**甲**（2026-11-11）。**本文无待决项。**

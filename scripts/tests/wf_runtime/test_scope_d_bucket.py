@@ -34,10 +34,12 @@ def _repo_with_dirty_file(relative="pkg/a.py"):
     _git(root, "config", "user.name", "t")
     os.makedirs(os.path.join(root, "pkg"), exist_ok=True)
     path = os.path.join(root, relative)
-    open(path, "w", encoding="utf-8").write("base\n")
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.write("base\n")
     _git(root, "add", "-A")
     _git(root, "commit", "-qm", "base")
-    open(path, "w", encoding="utf-8").write("changed\n")
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.write("changed\n")
     return root
 
 
