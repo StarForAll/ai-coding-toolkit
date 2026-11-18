@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 412
-- **Last Active**: 2026-11-17
+- **Total Sessions**: 413
+- **Last Active**: 2026-11-18
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1233 | Active |
+| `journal-8.md` | ~1272 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 413 | 2026-11-18 | 修正 wf 方案引用校验与文件句柄收口 | `3cc23a54` | `main` |
 | 412 | 2026-11-17 | wf 运行器生命周期、缓存恢复与 controller 收口 | `ea03b20d` | `main` |
 | 411 | 2026-11-16 | wf 运行器证据隔离与监督收口 | `183ecff6` | `main` |
 | 410 | 2026-11-16 | wf 运行器恢复窗口/公共摘要 barrier/契约隔离收口 + 11-14 完成度审计 | `f8659567` | `main` |

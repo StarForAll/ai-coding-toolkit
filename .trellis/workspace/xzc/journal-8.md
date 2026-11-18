@@ -1231,3 +1231,42 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 413: 修正 wf 方案引用校验与文件句柄收口
+<!-- trellis-session: v=2 fp=0ae46f8292202040 -->
+
+**Date**: 2026-11-18
+**Task**: 修正 wf 方案引用校验与文件句柄收口
+**Branch**: `main`
+
+### Summary
+
+按完整编号校验 wf 方案的小节引用并显式关闭作者侧命令与测试的文件句柄；两处 D3 改指现行 §4 的 C2 行。
+
+### Main Changes
+
+- 引用检查合并为单一路径：完整编号必须由 ##/### 标题登记，深度上限两级，§9 历史小节内豁免、其后仍受检（§10 的旧 §4.1 因此暴露并订正）
+- 新增 scripts/tests/test_check_wf_analysis.py 12 条隔离副本回归；旧实现 6 条目标断言失败，新实现 12/12 通过
+- 按 R2 清单收口 2 个作者侧命令与 4 个测试文件共 9 处裸 open；夹具写入在 Git 读取前关闭
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3cc23a54` | fix(scripts): 方案引用按完整编号校验，收口未关闭的文件句柄 |
+
+### Testing
+
+- [OK] 资源验收门槛：修正前 exit=1（unclosed_file=True），修正后三项 exit=0 且全日志 0 条 ResourceWarning；-W error::ResourceWarning 下两个命令 stderr 为空
+- [OK] 1235 tests OK（新增 12）；validate-wf-design / validate-skills / build-wf-release --verify / trellis-library validate 均 exit=0
+- [OK] run_all.sh --full --repro green：149 单元（59 suite/5 flow/85 repro）fail=0，GATE-OK
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- D3 指向只做人工核对；check-wf-analysis.py 的完整编号规则需与新测试同步维护
+- wf-evidence-snapshot.py:257/267 的裸读按范围边界留在独立证据工具维护项
