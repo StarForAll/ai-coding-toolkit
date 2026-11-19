@@ -43,6 +43,25 @@ function setInvalid(key) {
   balances.delete(key)
 }
 
+/**
+ * 多币种余额：官方 `/user/balance` 会按币种给多行，顺序不保证稳定。
+ * 这里刻意把 0.00 的 USD 行排在前面，复现「新 Key 一刷新就消失」的现场。
+ */
+function setMultiBalance(key, rows, { isAvailable = true } = {}) {
+  balances.set(key, {
+    status: 200,
+    body: {
+      is_available: isAvailable,
+      balance_infos: rows.map(([currency, total, granted = total]) => ({
+        currency,
+        total_balance: total.toFixed(2),
+        granted_balance: granted.toFixed(2),
+        topped_up_balance: '0.00',
+      })),
+    },
+  })
+}
+
 // ---- 假 credentials ---------------------------------------------------------
 const refs = new Map()
 const credentials = {
@@ -428,6 +447,62 @@ check('清空后条目仍全部保留', spilled.entries.length === entriesBefore
 check('凭证一条都没少', [...spilled.entries].every((entry) => refs.get(entry.ref) !== undefined), 'missing')
 const extra = (await rpc('remove', { id: 'no-such-id' })).data
 check('移出不存在的 id 不报错', extra.removed === null, extra.removed)
+
+// ---- 13. 多币种余额：0.00 的次要钱包不能把一把还有钱的 Key 判死 ----------------
+// 官方余额接口按币种给多行，顺序不保证稳定。旧实现只取 balance_infos[0]，
+// 一旦第一行是空的 USD 钱包，就把 is_available: true 的 Key 当成「余额为 0」隐藏。
+const store3 = join(workdir, 'state3.json')
+const KEY_MULTI = 'sk-multi-aaaaaaaaaaaaaaaaaaaa'
+const KEY_MULTI_2 = 'sk-multi-bbbbbbbbbbbbbbbbbbbb'
+const KEY_TRUE_EMPTY = 'sk-zero-cccccccccccccccccccc'
+await writeState(store3, JSON.stringify({ version: 1, activeId: 'm1', entries: [
+  { id: 'm1', ref: 'DEEPSEEK_KEYRING_M1', label: '多币种在用', expiry: null, addedAt: 1, hidden: false, exhaustedAt: null, invalidAt: null, balance: null, balances: null, checkedAt: null, error: null },
+  { id: 'm2', ref: 'DEEPSEEK_KEYRING_M2', label: '多币种备用', expiry: null, addedAt: 2, hidden: false, exhaustedAt: null, invalidAt: null, balance: null, balances: null, checkedAt: null, error: null },
+  { id: 'm3', ref: 'DEEPSEEK_KEYRING_M3', label: '真空池', expiry: null, addedAt: 3, hidden: false, exhaustedAt: null, invalidAt: null, balance: null, balances: null, checkedAt: null, error: null },
+] }))
+refs.set('DEEPSEEK_KEYRING_M1', KEY_MULTI)
+refs.set('DEEPSEEK_KEYRING_M2', KEY_MULTI_2)
+refs.set('DEEPSEEK_KEYRING_M3', KEY_TRUE_EMPTY)
+// 空的 USD 行故意排在第一行：这正是现场的形态。
+setMultiBalance(KEY_MULTI, [['USD', 0], ['CNY', 6.01]])
+setMultiBalance(KEY_MULTI_2, [['USD', 0], ['CNY', 2.5]])
+setMultiBalance(KEY_TRUE_EMPTY, [['USD', 0], ['CNY', 0]], { isAvailable: false })
+
+const { apply: applyMulti } = await import('./index.js')
+applyMulti(ctx, { apiBase: `http://127.0.0.1:${balancePort}`, storePath: store3, pollIntervalMs: 3600000, minRefreshGapMs: 3000, importExisting: false })
+await new Promise((resolve) => setTimeout(resolve, 80))
+
+let multi = (await rpc('refresh')).data
+check('多币种 Key 刷新后仍在列表', multi.keys.some((view) => view.id === 'm1'), multi.keys.map((view) => view.id))
+check('多币种 Key 状态为在用', multi.activeId === 'm1', multi.activeId)
+check('多币种 Key 显示非零余额', multi.active?.balance?.total === 6.01, multi.active?.balance)
+check('多币种 Key 不会被判为耗尽', !multi.keys.some((view) => view.id === 'm1' && view.status === 'empty'), multi.keys.map((view) => [view.id, view.status]))
+check('多币种备用 Key 同样保留', multi.keys.some((view) => view.id === 'm2'), multi.keys.map((view) => view.id))
+check('合计按币种分别累加', multi.totals.length === 1 && multi.totals[0].currency === 'CNY' && multi.totals[0].amount === 8.51, multi.totals)
+check('恒为零的币种不占版面', !multi.totals.some((item) => item.currency === 'USD'), multi.totals)
+check('真正欠费的 Key 仍被隐藏', !multi.keys.some((view) => view.id === 'm3'), multi.keys.map((view) => view.id))
+
+// is_available: false 但某个钱包还有残留数字：官方判定优先，不复活。
+setMultiBalance(KEY_MULTI, [['USD', 0], ['CNY', 6.01]], { isAvailable: false })
+multi = (await rpc('refresh')).data
+check('is_available=false 时即便有钱也隐藏', !multi.keys.some((view) => view.id === 'm1'), multi.keys.map((view) => view.id))
+check('隐藏后换到备用 Key', multi.activeId === 'm2', multi.activeId)
+
+// 反过来：is_available 报 true 但所有钱包都是 0，仍然算没钱。
+setMultiBalance(KEY_MULTI, [['USD', 0], ['CNY', 0]], { isAvailable: true })
+multi = (await rpc('refresh')).data
+check('全部钱包为 0 时仍判为耗尽', !multi.keys.some((view) => view.id === 'm1'), multi.keys.map((view) => view.id))
+
+// 恢复额度后能被「检查隐藏」找回，说明判定是可逆的而不是永久报废。
+setMultiBalance(KEY_MULTI, [['USD', 0], ['CNY', 6.01]])
+const revivedMulti = (await rpc('recheck')).data
+check('多币种 Key 可被检查隐藏找回', revivedMulti.restored.some((item) => item.id === 'm1'), revivedMulti.restored)
+check('找回时余额取自非零钱包', revivedMulti.restored.find((item) => item.id === 'm1')?.total === 6.01, revivedMulti.restored)
+
+// 导出里也应当把它算作有效 Key。
+const multiValid = (await rpc('export', { scope: 'valid' })).data
+check('多币种 Key 计入有效导出', multiValid.text.includes(KEY_MULTI), multiValid.text)
+
 await new Promise((resolve) => rpcServer.close(resolve))
 await new Promise((resolve) => balanceServer.close(resolve))
 

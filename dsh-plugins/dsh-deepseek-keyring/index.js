@@ -92,6 +92,58 @@ function toAmount(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+/**
+ * 条目里的钱包列表。
+ *
+ * 官方 `/user/balance` 会按币种给出多行 `balance_infos`（例如 CNY 有 6.01、USD 为 0.00），
+ * **行的顺序不保证稳定**，所以不能只看第一行。新记录同时保存 `balances`（全量）与
+ * `balance`（展示用的主钱包）；老记录只有 `balance`，按单钱包处理。
+ * @param {object} entry - 池内条目。
+ * @returns {Array<{currency: string, total: number|null, granted: number|null, toppedUp: number|null}>} 钱包列表。
+ */
+function walletsOf(entry) {
+  const list = Array.isArray(entry?.balances) ? entry.balances : []
+  const wallets = list.filter((wallet) => wallet !== null && typeof wallet === 'object')
+  if (wallets.length > 0) return wallets
+  const single = entry?.balance
+  return single !== null && single !== undefined && typeof single === 'object' ? [single] : []
+}
+
+/** 所有已知余额都不大于 0 才算空；数字未知时保持乐观，由下一次轮询校正。 */
+function walletsEmpty(wallets) {
+  const known = wallets.filter((wallet) => typeof wallet?.total === 'number')
+  return known.length > 0 && known.every((wallet) => wallet.total <= 0)
+}
+
+/** 展示用的主钱包：余额最大的一行；都为 0 时取第一行。 */
+function primaryWallet(wallets) {
+  let best = wallets[0] ?? null
+  for (const wallet of wallets) {
+    if (typeof wallet?.total !== 'number') continue
+    if (best === null || typeof best.total !== 'number' || wallet.total > best.total) best = wallet
+  }
+  return best
+}
+
+/**
+ * 一次余额查询结果是否说明「这把 Key 还能用」。
+ *
+ * 两条独立的否决，任一命中即判死：
+ * 1. `is_available: false` —— 官方明确说不可用，即使某个币种还残留数字也不再派用场；
+ * 2. 全部币种钱包都为 0 —— 确实没钱了。
+ *
+ * 关键点在于**两条都不是「第一个钱包为 0」**：`balance_infos` 按币种给多行且顺序不稳定，
+ * 只读 `balance_infos[0]` 会把「USD 0.00 + CNY 6.01」这种 Key 判死，这就是
+ * 「新加的 Key 一点刷新就消失」的成因。数字未知时保持乐观，由下一次轮询校正。
+ * @param {{ok: boolean, isAvailable: boolean|null, balances?: object[]}} result - 查询结果。
+ * @returns {boolean} 是否可用。
+ */
+function balanceUsable(result) {
+  if (result === null || result === undefined || result.ok !== true) return false
+  if (result.isAvailable === false) return false
+  return !walletsEmpty(Array.isArray(result.balances) ? result.balances : [])
+}
+
 function errorText(error) {
   if (error instanceof Error) return error.message
   return String(error)
@@ -117,8 +169,7 @@ function isExpired(entry, nowMs) {
 }
 
 function isBalanceEmpty(entry) {
-  const total = entry.balance === null || entry.balance === undefined ? null : entry.balance.total
-  return typeof total === 'number' && total <= 0
+  return walletsEmpty(walletsOf(entry))
 }
 
 /** 有效（可以成为当前 Key）的判定。余额未知时先乐观放行，由下一次轮询校正。 */
@@ -143,8 +194,8 @@ function comparePriority(a, b) {
   const rankOf = (entry) => {
     const end = expiryEndMs(entry.expiry)
     if (end !== null) return { tier: 0, window: end }
-    const granted = typeof entry.balance?.granted === 'number' ? entry.balance.granted : 0
-    return { tier: granted > 0 ? 1 : 2, window: 0 }
+    const granted = walletsOf(entry).some((wallet) => typeof wallet.granted === 'number' && wallet.granted > 0)
+    return { tier: granted ? 1 : 2, window: 0 }
   }
   const left = rankOf(a)
   const right = rankOf(b)
@@ -352,6 +403,7 @@ class DeepSeekKeyring {
         exhaustedAt: entry.exhaustedAt ?? null,
         invalidAt: entry.invalidAt ?? null,
         balance: entry.balance && typeof entry.balance === 'object' ? entry.balance : null,
+        balances: Array.isArray(entry.balances) ? entry.balances : null,
         checkedAt: entry.checkedAt ?? null,
         error: typeof entry.error === 'string' ? entry.error : null,
       })),
@@ -421,14 +473,20 @@ class DeepSeekKeyring {
           error: typeof payload?.error?.message === 'string' ? payload.error.message : `HTTP ${response.status}`,
         }
       }
-      const info = Array.isArray(payload?.balance_infos) ? payload.balance_infos[0] : null
+      const infos = Array.isArray(payload?.balance_infos) ? payload.balance_infos : []
+      const balances = infos
+        .filter((info) => info !== null && typeof info === 'object')
+        .map((info) => ({
+          currency: typeof info.currency === 'string' ? info.currency : 'CNY',
+          total: toAmount(info.total_balance),
+          granted: toAmount(info.granted_balance),
+          toppedUp: toAmount(info.topped_up_balance),
+        }))
       return {
         ok: true,
-        isAvailable: payload?.is_available !== false,
-        currency: typeof info?.currency === 'string' ? info.currency : 'CNY',
-        total: toAmount(info?.total_balance),
-        granted: toAmount(info?.granted_balance),
-        toppedUp: toAmount(info?.topped_up_balance),
+        // 三态：true / false 是官方明确判定，null 表示这次响应里没有这个字段。
+        isAvailable: typeof payload?.is_available === 'boolean' ? payload.is_available : null,
+        balances,
       }
     } catch (error) {
       return { ok: false, error: error?.name === 'AbortError' ? 'timeout' : errorText(error) }
@@ -437,21 +495,19 @@ class DeepSeekKeyring {
     }
   }
 
-  /** 把一次余额结果写回条目：有效则更新数字，欠费/失效则隐藏。 */
+  /** 把一次余额结果写回条目：可用则更新数字，欠费/失效则隐藏。 */
   recordBalance(entry, result) {
     entry.checkedAt = Date.now()
     if (result.ok === true) {
-      entry.error = null
-      entry.balance = {
-        currency: result.currency,
-        total: result.total,
-        granted: result.granted,
-        toppedUp: result.toppedUp,
-      }
-      if (result.isAvailable === false || (typeof result.total === 'number' && result.total <= 0)) {
+      const wallets = Array.isArray(result.balances) ? result.balances : []
+      entry.balances = wallets
+      entry.balance = primaryWallet(wallets)
+      if (!balanceUsable(result)) {
         entry.exhaustedAt = entry.exhaustedAt ?? Date.now()
         entry.hidden = true
+        return
       }
+      entry.error = null
       return
     }
     if (result.status === 401 || result.status === 403) {
@@ -568,6 +624,7 @@ class DeepSeekKeyring {
       exhaustedAt: null,
       invalidAt: null,
       balance: null,
+      balances: null,
       checkedAt: null,
       error: null,
     })
@@ -705,6 +762,7 @@ class DeepSeekKeyring {
         exhaustedAt: null,
         invalidAt: null,
         balance: null,
+        balances: null,
         checkedAt: null,
         error: null,
       }
@@ -750,9 +808,10 @@ class DeepSeekKeyring {
           failed.push({ id: entry.id, masked: maskKey(key), reason: probe.error ?? 'unreachable' })
           continue
         }
-        if (probe.isAvailable === false || (probe.total ?? 0) <= 0) {
+        const masked = maskKey(key)
+        if (!balanceUsable(probe)) {
           this.recordBalance(entry, probe)
-          kept.push({ id: entry.id, masked: maskKey(key), total: probe.total })
+          kept.push({ id: entry.id, masked, total: primaryWallet(walletsOf(entry))?.total ?? null })
           continue
         }
         const hadExpiry = typeof entry.expiry === 'string'
@@ -763,7 +822,7 @@ class DeepSeekKeyring {
         entry.invalidAt = null
         entry.error = null
         if (expired) entry.expiry = null
-        restored.push({ id: entry.id, masked: maskKey(key), total: probe.total, clearedExpiry: expired && hadExpiry })
+        restored.push({ id: entry.id, masked, total: primaryWallet(walletsOf(entry))?.total ?? null, clearedExpiry: expired && hadExpiry })
       }
     }
 
@@ -830,15 +889,25 @@ class DeepSeekKeyring {
     for (const entry of visible) keys.push(await this.viewOf(entry, activeId))
     const sums = new Map()
     let unverified = 0
-    for (const view of keys) {
-      const total = view.balance?.total
-      if (typeof total !== 'number') {
+    for (const entry of visible) {
+      // 按币种分开累加全部钱包：多币种的条目在合计里也要算上它另一个币种的钱。
+      const wallets = walletsOf(entry).filter((wallet) => typeof wallet.total === 'number')
+      if (wallets.length === 0) {
         unverified += 1
         continue
       }
-      const currency = view.balance.currency ?? 'CNY'
-      sums.set(currency, (sums.get(currency) ?? 0) + total)
+      for (const wallet of wallets) {
+        const currency = wallet.currency ?? 'CNY'
+        sums.set(currency, (sums.get(currency) ?? 0) + wallet.total)
+      }
     }
+    // 恒为 0 的币种（例如多币种响应里那条空的 USD 钱包）不占版面；全都为 0 时照常显示。
+    const rows = [...sums]
+    const nonZero = rows.filter(([, amount]) => amount !== 0)
+    const totals = (nonZero.length > 0 ? nonZero : rows).map(([currency, amount]) => ({
+      currency,
+      amount: Math.round(amount * 100) / 100,
+    }))
     return {
       revision: STORE_VERSION,
       provider: this.config.provider,
@@ -846,7 +915,7 @@ class DeepSeekKeyring {
       activeId,
       active: active === null ? null : await this.viewOf(active, activeId),
       keys,
-      totals: [...sums].map(([currency, amount]) => ({ currency, amount: Math.round(amount * 100) / 100 })),
+      totals,
       unverified,
       hiddenCount: this.store.entries.length - visible.length,
       pollIntervalMs: this.config.pollIntervalMs,
@@ -1030,11 +1099,9 @@ class DeepSeekKeyring {
   markExhausted(entry) {
     entry.exhaustedAt = entry.exhaustedAt ?? Date.now()
     entry.hidden = true
-    if (entry.balance === null || entry.balance === undefined) {
-      entry.balance = { currency: 'CNY', total: 0, granted: 0, toppedUp: 0 }
-    } else {
-      entry.balance = { ...entry.balance, total: 0 }
-    }
+    const wallets = walletsOf(entry).map((wallet) => ({ ...wallet, total: 0, granted: 0, toppedUp: 0 }))
+    entry.balances = wallets.length > 0 ? wallets : [{ currency: 'CNY', total: 0, granted: 0, toppedUp: 0 }]
+    entry.balance = { ...entry.balances[0] }
     entry.checkedAt = Date.now()
   }
 }
