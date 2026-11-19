@@ -170,7 +170,8 @@ def _layout(entry_pid):
     import wf_test_paths
 
     try:
-        return wf_test_paths.resolve_layout("repro", entry_pid, env=os.environ)
+        return wf_test_paths.resolve_layout("repro", entry_pid, env=os.environ,
+                                            identity=os.environ.get("WF_RUN_IDENTITY"))
     except wf_test_paths.PathError as exc:
         raise CliError(f"scope 路径校验失败：{exc}") from exc
 

@@ -32,6 +32,7 @@ REPO = HERE.parents[3]
 REPRO = HERE / "repro"
 BASELINE = HERE / "coverage-baseline.json"
 sys.path.insert(0, str(HERE))
+import plan as plan_module  # noqa: E402  （候选资格唯一实现）
 sys.path.insert(0, str(REPRO))
 
 
@@ -113,11 +114,18 @@ def _unit_disposition(entry, meta_state, evidence, audit):
         return {"migration_status": "manual", "can_run_installed": "not-applicable",
                 "not_migratable_reason": None,
                 "installed_assertion": "notes: 需真实宿主条件（见 units.json notes）"}
-    if kind in ("flow", "extra"):
-        return {"migration_status": "not-a-candidate-suite",
+    reason = plan_module.candidate_reason(entry, "candidate")
+    if reason and kind in ("flow", "extra"):
+        # 资格由同一个 candidate_reason 决定；审计记录（若有）作为实际来源证据附上。
+        record = (audit.get("units") or {}).get(entry["name"]) or {}
+        evidence = ""
+        if record:
+            evidence = (f"；candidate audit status={record.get('status')} "
+                        f"{record.get('tail') or ''}").rstrip()
+        return {"migration_status": "kept-dev-only",
                 "can_run_installed": "not-applicable",
-                "not_migratable_reason": "flow/extra 由 full/representative 选择，不参与 candidate 套件过滤",
-                "installed_assertion": "contract full/representative 路径"}
+                "not_migratable_reason": reason + evidence,
+                "installed_assertion": "none in candidate mode（dev 入口保留）"}
     record = (audit.get("units") or {}).get(entry["name"]) or {}
     # audit 必须对应当前脚本字节；脚本改动后旧 audit 自动失效。
     if record and record.get("script_sha256") != evidence.get("script_sha256"):

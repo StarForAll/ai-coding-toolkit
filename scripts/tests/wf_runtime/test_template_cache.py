@@ -277,30 +277,30 @@ class ObserveTest(Base):
         return next(name for name in os.listdir(self.cache_root)
                     if name.endswith("-cHkzLjE0-ZGV2"))
 
-    def test_observe_is_shallow_and_names_the_control_records(self):
+    def test_inventory_is_read_only_and_names_the_control_records(self):
         self.assertEqual(self.publish().returncode, 0)
-        import wf_release_common as common
-        with mock.patch.object(common, "tree_digest",
-                               side_effect=AssertionError("observe must not walk trees")):
-            report = cache.observe(str(self.cache_root))
+        before = sorted(os.listdir(self.cache_root))
+        report = cache.inventory(str(self.cache_root))
         self.assertEqual(report["status"], "complete", report)
-        self.assertEqual(report["counts"].get("valid"), 1)
-        self.assertEqual(report["capacity"], "not-measured")
-        self.assertTrue(report["observed_at"])
-        self.assertIn("inventory --cache-root", report["inventory_hint"])
+        self.assertEqual([item["kind"] for item in report["entries"]],
+                         ["template-entry"])
+        self.assertEqual(sorted(os.listdir(self.cache_root)), before, "盘点必须零写")
 
-    def test_observe_reports_pending_journal_and_materials_without_recovery(self):
+    def test_inventory_reports_pending_journal_and_materials_without_recovery(self):
         self.assertEqual(self.publish().returncode, 0)
         key = self.key()
         journal = Path(cache.journal_path(str(self.cache_root), key))
         journal.write_text('{"schema_version": 1, "key": "broken"}')
         staging = Path(str(self.cache_root / key) + ".staging-tx")
         staging.mkdir()
-        report = cache.observe(str(self.cache_root))
+        before = sorted(os.listdir(self.cache_root))
+        report = cache.inventory(str(self.cache_root))
         self.assertEqual(report["status"], "partial")
-        self.assertGreaterEqual(report["counts"].get("recovery-required", 0), 1)
-        self.assertGreaterEqual(report["counts"].get("orphan-like", 0), 1)
-        self.assertTrue(journal.exists(), "observe 不得恢复/删除")
+        kinds = [item["kind"] for item in report["entries"]]
+        self.assertIn("journal", kinds)
+        self.assertIn("template-staging", kinds)
+        self.assertEqual(sorted(os.listdir(self.cache_root)), before, "盘点不得恢复/删除")
+        self.assertTrue(journal.exists())
 
 
 class LookupJournalTest(Base):
@@ -883,11 +883,10 @@ class CheckpointTest(unittest.TestCase):
         saved = json.loads((self.root / "unproven-ok.json").read_text())
         self.assertEqual(saved["selected"][0]["provenance"], "unproven")
 
-    def test_observe_reports_counts_without_writing(self):
+    def test_inventory_reports_entries_without_writing(self):
         self.assertEqual(self.publish().returncode, 0)
-        template_cache = cache
-        report = template_cache.observe(str(self.cache_root))
+        before = sorted(os.listdir(self.cache_root))
+        report = cache.inventory(str(self.cache_root))
         self.assertEqual(report["status"], "complete")
-        self.assertGreater(sum(report["counts"].values()), 0)
-        self.assertIn("inventory", report["inventory_hint"])
-        self.assertFalse((self.cache_root / "obs.json").exists())
+        self.assertTrue(report["entries"])
+        self.assertEqual(sorted(os.listdir(self.cache_root)), before)

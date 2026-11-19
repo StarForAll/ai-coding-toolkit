@@ -38,14 +38,14 @@ class FixtureScopeTest(unittest.TestCase):
             scope.reset(target)
         self.assertEqual(sentinel.read_text(), "do not delete")
 
-    def test_unowned_results_directory_is_rejected_without_cleanup(self):
+    def test_existing_nonempty_results_directory_is_not_claimed(self):
         target = self.root / "results"
         target.mkdir()
         sentinel = target / "report.json"
         sentinel.write_text('{"user": true}')
         scope = self.scope()
         with self.assertRaises(scope.FixtureError):
-            scope.prepare_results(target)
+            scope.claim_results(target)
         self.assertEqual(sentinel.read_text(), '{"user": true}')
 
     def lifecycle(self):
@@ -65,37 +65,27 @@ class FixtureScopeTest(unittest.TestCase):
                 path.mkdir(exist_ok=True)
             else:
                 path.write_text("x")
-        life.finish_run(str(root), out["run_id"], "full", "cleaned", "ok", "complete")
+        life.finish_run(str(root), out["run_id"], "full", "cleaned", "complete")
         return out
 
-    def test_finished_cleaned_generation_is_reset_through_begin_run(self):
+    def test_finished_generation_is_preserved_and_refused(self):
         scope = self.scope()
         target = self.root / "results"
         self.finished_run(target, ["old.json", "lines", "logs/old.log", "commands/a.json"])
-        scope.begin_run(str(target))
-        self.assertFalse((target / "old.json").exists())
-        self.assertFalse((target / "commands" / "a.json").exists())
-        self.assertFalse((target / "logs" / "old.log").exists())
-        self.assertTrue((target / "logs").is_dir())
-        self.assertEqual(json.loads((target / ".wf-results-owner.json").read_text())["intent"],
-                         "execution")
+        before = sorted(os.listdir(target))
+        with self.assertRaises(scope.FixtureError):
+            scope.begin_run(str(target))
+        self.assertEqual(sorted(os.listdir(target)), before,
+                         "已有结果材料不得被认领/清理；换新结果目录")
 
-    def test_unknown_top_level_entry_blocks_reuse_without_deletion(self):
+    def test_unknown_top_level_entry_blocks_claim_without_deletion(self):
         scope = self.scope()
         target = self.root / "results"
-        self.finished_run(target)
+        target.mkdir()
         (target / "notes.txt").write_text("keep")
         with self.assertRaises(scope.FixtureError):
             scope.begin_run(str(target))
         self.assertEqual((target / "notes.txt").read_text(), "keep")
-
-    def test_reused_results_drop_stale_runner_control_record(self):
-        scope = self.scope()
-        results = self.root / 'results'
-        self.finished_run(results, ['.runner.json'])
-        scope.begin_run(str(results))
-        self.assertFalse((results / '.runner.json').exists(),
-                         "上一轮的 .runner.json 不得跨轮污染 cleanup 聚合")
 
     def test_dangling_log_link_is_refused_without_creating_its_target(self):
         scope = self.scope()
@@ -109,14 +99,7 @@ class FixtureScopeTest(unittest.TestCase):
         self.assertTrue(link.is_symlink())
         self.assertFalse(outside.exists())
 
-    def test_prepare_results_is_no_longer_a_standalone_entry(self):
-        scope = self.scope()
-        target = self.root / "results"
-        self.finished_run(target)
-        with self.assertRaises(scope.FixtureError):
-            scope.prepare_results(target)
-
-    def test_claim_results_writes_plan_only_owner(self):
+    def test_claim_results_writes_plan_only_owner_once(self):
         scope = self.scope()
         target = self.root / "results"
         scope.claim_results(target)
@@ -124,6 +107,14 @@ class FixtureScopeTest(unittest.TestCase):
         self.assertEqual((owner["schema_version"], owner["intent"], owner["run_id"]),
                          (2, "plan-only", None))
         self.assertFalse((target / "run-state.json").exists())
+        with self.assertRaises(scope.FixtureError):
+            scope.claim_results(target)
+
+    def test_prepare_results_command_is_removed(self):
+        proc = subprocess.run([sys.executable, str(FULL / "fixture_scope.py"),
+                               "prepare-results", "/tmp/x"], capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("invalid choice", proc.stderr)
 
     def test_fixture_lease_rejects_parallel_root_invocation(self):
         command = [sys.executable, str(FULL / "fixture_scope.py"), "lease", "--",
@@ -228,7 +219,7 @@ class PruneResultsTest(unittest.TestCase):
             run = life.begin_run(str(directory), "execution", "full")
             (directory / "lines").write_text("stub")
             if state == "finished":
-                life.finish_run(str(directory), run["run_id"], "full", cleanup, "ok", evidence)
+                life.finish_run(str(directory), run["run_id"], "full", cleanup, evidence)
             marker = directory / ".wf-results-owner.json"
             _os.utime(marker, (mtime, mtime))
         else:
@@ -236,67 +227,73 @@ class PruneResultsTest(unittest.TestCase):
             (directory / "lines").write_text("stub")
         return directory
 
-    def test_prunes_oldest_owned_beyond_keep_and_prefix_isolated(self):
+    def _prune(self, *args, **kwargs):
+        import contextlib
+        import io
+        stderr = io.StringIO()
+        module = getattr(self, "_module", None) or self.scope()
+        self._module = module
+        with contextlib.redirect_stderr(stderr):
+            rc = module.prune_results(*args, **kwargs)
+        return rc, stderr.getvalue()
+
+    def test_rotation_only_reports_candidates_and_prefix_isolated(self):
         scope = self.scope()
         for i in range(5):
             self._make_run(f"run-{100 + i}", mtime=i)
         repro_dir = self._make_run("repro-green-1", mtime=1)
-        scope.prune_results(self.cache, "run", keep=2)
-        # 保留最新 2 个（mtime 3/4），删除最旧 3 个；repro-* 不被 run scope 越界回收
-        self.assertTrue((self.cache / "run-103").exists())
-        self.assertTrue((self.cache / "run-104").exists())
-        self.assertFalse((self.cache / "run-100").exists())
-        self.assertFalse((self.cache / "run-102").exists())
+        rc, output = self._prune(self.cache, "run", keep=2)
+        self.assertEqual(rc, 0)
+        self.assertIn("PRUNE-CANDIDATES=3", output)
+        self.assertIn("PRUNE-KEPT=2", output)
+        for i in range(5):
+            self.assertTrue((self.cache / f"run-{100 + i}").exists(),
+                            "轮转只报告，不删除任何结果目录")
         self.assertTrue(repro_dir.exists())
 
     def test_unowned_and_excluded_directories_survive(self):
-        scope = self.scope()
         unowned = self._make_run("run-200", owned=False)
         excluded = self._make_run("run-201", mtime=1)
-        scope.prune_results(self.cache, "run", keep=0, exclude=[excluded])
-        # 无 marker：普通 prune 一律不删（bootstrap 才有资格，见下一个用例）
+        rc, output = self._prune(self.cache, "run", keep=0, exclude=[excluded])
+        self.assertEqual(rc, 0)
+        self.assertNotIn("run-201", output, "exclude 项不得进入报告")
         self.assertTrue(unowned.exists())
         self.assertTrue(excluded.exists())
 
     def test_bootstrap_only_reports_unowned_entries_and_never_deletes_them(self):
-        scope = self.scope()
         eligible = self._make_run("run-300", owned=False)
-        (eligible / "logs").mkdir()  # 已知子目录（无 marker）
+        (eligible / "logs").mkdir()
         unknown = self._make_run("run-301", owned=False)
         (unknown / "flows").write_text("x")
         active = self._make_run("run-302", state="active")
         retained = self._make_run("run-303", cleanup="unknown")
         keep_marker = self._make_run("run-304", mtime=5)
-        rc = scope.prune_results(self.cache, "run", keep=20, bootstrap=True)
-        self.assertEqual(rc, 1, "无主/非终态条目必须报告待退役复核并以非零退出")
-        self.assertTrue(eligible.exists(), "已知形状不等于删除许可")
-        self.assertTrue(unknown.exists())
-        self.assertTrue(active.exists())
-        self.assertTrue(retained.exists())
-        self.assertTrue(keep_marker.exists())
+        rc, output = self._prune(self.cache, "run", keep=20, bootstrap=True)
+        self.assertEqual(rc, 0, "轮转报告不承担删除许可，恒为可成功报告")
+        self.assertIn("PRUNE-REVIEW", output)
+        for path in (eligible, unknown, active, retained, keep_marker):
+            self.assertTrue(path.exists())
 
-    def test_legacy_owner_is_not_auto_pruned(self):
-        scope = self.scope()
+    def test_legacy_owner_is_never_a_rotation_candidate(self):
         legacy = self.cache / "run-400"
         legacy.mkdir()
         (legacy / "lines").write_text("x")
         (legacy / ".wf-results-owner.json").write_text(json.dumps(
             {"owner": "wf-test-fixture-v1", "root": str(legacy)}))
-        rc = scope.prune_results(self.cache, "run", keep=0, bootstrap=True)
-        self.assertEqual(rc, 1)
-        self.assertTrue(legacy.exists(), "旧格式 owner 不能凭名字自动轮转")
+        rc, output = self._prune(self.cache, "run", keep=0, bootstrap=True)
+        self.assertEqual(rc, 0)
+        self.assertIn("PRUNE-REVIEW run-400", output)
+        self.assertTrue(legacy.exists(), "旧格式 owner 不能凭名字进入退役候选")
 
     def test_invalid_root_and_scope_are_refused(self):
-        scope = self.scope()
+        scope = self._module = self.scope()
         outside = Path(self.tmp.name) / "elsewhere" / "wf-test-run"
         outside.mkdir(parents=True)
-        # 临时目录之下但名字不是标准根：允许（validate 的边界），真正拒绝的是
-        # 非临时、非标准根路径与非法 scope。
         with self.assertRaises(scope.FixtureError):
-            scope.prune_results(Path(self.tmp.name) / "wf-test-run", "both")
+            self._prune(Path(self.tmp.name) / "wf-test-run", "both")
         home_like = Path("/definitely/not/a/tmp/path")
         with self.assertRaises(scope.FixtureError):
-            scope.prune_results(home_like, "run")
+            self._prune(home_like, "run")
 
     def test_repro_state_json_is_never_touched(self):
         scope = self.scope()
@@ -510,7 +507,7 @@ class ResultsInventoryTest(unittest.TestCase):
         path = self.cache / name
         out = life.begin_run(str(path), "execution", "full")
         if finish:
-            life.finish_run(str(path), out["run_id"], "full", "cleaned", "ok", "complete")
+            life.finish_run(str(path), out["run_id"], "full", "cleaned", "complete")
         return path
 
     def legacy_run(self, name):
@@ -520,6 +517,19 @@ class ResultsInventoryTest(unittest.TestCase):
         (path / ".wf-results-owner.json").write_text(json.dumps(
             {"owner": "wf-test-fixture-v1", "root": str(path)}))
         return path
+
+    def legacy_shell(self, name):
+        path = self.cache / name
+        path.mkdir()
+        (path / ".wf-results-owner.json").write_text(json.dumps(
+            {"owner": "wf-test-fixture-v1", "root": str(path)}))
+        return path
+
+    def precise(self, path):
+        proc = results_cli(self.scope, ["inventory-results", "--results-root", str(path),
+                                        "--format", "json"])
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        return json.loads(proc.stdout)["entries"][0]
 
     def inventory(self, *extra):
         proc = results_cli(self.scope, ["inventory-results", "--cache-root", str(self.cache),
@@ -544,58 +554,93 @@ class ResultsInventoryTest(unittest.TestCase):
         self.assertEqual(by_path[os.path.realpath(active)]["class"], "active")
         for path in (cleaned, legacy, active):
             item = by_path[os.path.realpath(path)]
-            self.assertTrue(item.get("digest"), f"{path} 的身份快照必须存在")
+            self.assertTrue(item.get("digest"), f"{path} 的身份摘要必须存在")
+        precise = self.precise(cleaned)
+        self.assertTrue(precise.get("snapshot_digest"), "精确盘点必须给出整树内容摘要")
+        self.assertTrue(precise.get("entries"), "精确盘点必须列出全部条目")
 
-    def test_safe_legacy_only_accepts_strict_old_results(self):
-        legacy = self.legacy_run("repro-2")
+    def test_safe_legacy_only_accepts_empty_shells(self):
+        shell = self.legacy_shell("repro-2")
+        content = self.legacy_run("run-5")
         cleaned = self.new_run("run-1")
+        empty = self.cache / "run-6"
+        empty.mkdir()
         proc, report = self.inventory()
         self.assertEqual(proc.returncode, 0)
-        legacy_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(legacy))
-        cleaned_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(cleaned))
-        selection = self.root / "legacy.json"
-        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
-                                         "root": report["root"], "entries": [legacy_entry]}))
-        report_path = self.root / "legacy-retire.json"
-        proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
-                                        "--retirement-mode", "safe-legacy",
-                                        "--confirm-retirement", "--report", str(report_path)])
-        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
-        self.assertFalse(legacy.exists())
-        self.assertTrue(cleaned.exists())
-        # 新协议结果不得走 safe-legacy。
-        selection = self.root / "new.json"
-        selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
-                                         "root": report["root"], "entries": [cleaned_entry]}))
-        proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
-                                        "--retirement-mode", "safe-legacy",
-                                        "--confirm-retirement",
-                                        "--report", str(self.root / "new-retire.json")])
-        self.assertNotEqual(proc.returncode, 0)
-        self.assertTrue(cleaned.exists())
+        by_path = {item["path"]: item for item in report["entries"]}
 
-    def test_manual_retained_requires_tty_and_exact_results_digest(self):
+        def retire(entry, name):
+            selection = self.root / f"{name}.json"
+            selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
+                                             "root": report["root"], "entries": [entry]}))
+            return results_cli(self.scope, ["retire-results", "--selection", str(selection),
+                                            "--retirement-mode", "safe-legacy",
+                                            "--confirm-retirement",
+                                            "--report", str(self.root / f"{name}.out")])
+
+        proc = retire(by_path[os.path.realpath(shell)], "shell")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(shell.exists())
+        proc = retire(by_path[os.path.realpath(empty)], "empty")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertFalse(empty.exists(), "空目录仅以空目录操作移除")
+        # 有内容的旧结果树与新协议结果都不得走 safe-legacy。
+        for path in (content, cleaned):
+            proc = retire(by_path[os.path.realpath(path)], path.name)
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertTrue(path.exists())
+
+    def test_manual_retained_requires_full_tree_authorization(self):
         cleaned = self.new_run("run-1")
-        proc, report = self.inventory()
-        entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(cleaned))
+        (cleaned / "logs" / "user-notes.log").write_text("hand-written")
+        entry = self.precise(cleaned)
+        self.assertTrue(entry.get("snapshot_digest"))
         selection = self.root / "selection.json"
         selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
-                                         "root": report["root"], "entries": [entry]}))
+                                         "root": "precise", "entries": [entry]}))
         plain = results_cli(self.scope, ["retire-results", "--selection", str(selection),
                                          "--retirement-mode", "manual-retained",
                                          "--confirm-retirement",
                                          "--report", str(self.root / "plain.json")])
         self.assertNotEqual(plain.returncode, 0)
         self.assertIn("TTY", plain.stderr)
-        self.assertTrue(cleaned.exists())
+        self.assertTrue(cleaned.exists(), "未确认前零删除")
         digest = self.lifecycle().selection_digest([entry])
-        phrase = f"results {report['root']} {digest} abandon"
+        phrase = f"results precise {digest} abandon"
         rc, stdout, stderr = retire_results_pty(
             self.scope, ["--selection", str(selection), "--retirement-mode", "manual-retained",
                          "--confirm-retirement", "--report", str(self.root / "manual.json")],
             phrase)
         self.assertEqual(rc, 0, stdout + stderr)
-        self.assertFalse(cleaned.exists())
+        self.assertFalse(cleaned.exists(), "确认后的清单内条目逐项删除")
+        self.assertFalse((cleaned / "logs" / "user-notes.log").exists())
+
+    def test_content_change_after_confirmation_cancels_whole_retirement(self):
+        life = self.lifecycle()
+        cleaned = self.new_run("run-1")
+        (cleaned / "logs").mkdir(exist_ok=True)
+        (cleaned / "logs" / "kept.log").write_text("old")
+        snapshot = life.tree_snapshot(str(cleaned))
+        (cleaned / "logs" / "late.log").write_text("late")
+        with self.assertRaises(life.RetireError):
+            life.delete_confirmed_tree(str(cleaned), snapshot)
+        self.assertTrue(cleaned.exists())
+        self.assertTrue((cleaned / "logs" / "kept.log").exists())
+        self.assertTrue((cleaned / "logs" / "late.log").exists())
+
+    def test_tree_snapshot_digest_binds_relative_paths_and_links(self):
+        life = self.lifecycle()
+        cleaned = self.new_run("run-1")
+        (cleaned / "logs").mkdir(exist_ok=True)
+        (cleaned / "logs" / "a.log").write_text("a")
+        (cleaned / "a-link.log").symlink_to("logs/a.log")
+        first = life.tree_snapshot(str(cleaned))
+        second = life.tree_snapshot(str(cleaned))
+        self.assertEqual(first, second)
+        digest = life.snapshot_digest(first)
+        (cleaned / "logs" / "a.log").write_text("b")
+        self.assertNotEqual(life.snapshot_digest(life.tree_snapshot(str(cleaned))), digest)
+        self.assertEqual((cleaned / "a-link.log").readlink(), Path("logs/a.log"))
 
     def test_unowned_results_and_unowned_fixtures_are_refused(self):
         unowned = self.cache / "run-9"
@@ -604,11 +649,13 @@ class ResultsInventoryTest(unittest.TestCase):
         fixture = self.root / "loose-fixture"
         fixture.mkdir()
         (fixture / "payload").write_text("x")
-        proc, report = self.inventory()
-        result_entry = next(i for i in report["entries"] if i["path"] == os.path.realpath(unowned))
+        report = json.loads(results_cli(
+            self.scope, ["inventory-results", "--results-root", str(unowned),
+                         "--format", "json"]).stdout)
+        result_entry = report["entries"][0]
         selection = self.root / "bad.json"
         selection.write_text(json.dumps({"schema_version": 1, "domain": "results",
-                                         "root": report["root"], "entries": [result_entry]}))
+                                         "root": "precise", "entries": [result_entry]}))
         proc = results_cli(self.scope, ["retire-results", "--selection", str(selection),
                                         "--retirement-mode", "manual-retained",
                                         "--confirm-retirement",
@@ -643,11 +690,10 @@ class ResultsInventoryTest(unittest.TestCase):
         self.assertEqual(rc, 0, stdout + stderr)
         self.assertFalse(fixture.exists())
 
-    def test_observe_excludes_current_results(self):
+    def test_default_paths_are_not_observed_or_rotated(self):
+        # 默认执行不观察历史材料；维护只由显式 inventory/prune 报告。
         cleaned = self.new_run("run-1")
-        current = self.new_run("run-2")
-        import fixture_scope as scope_module
-        report = scope_module.observe_results(str(self.cache), exclude=[str(current)])
-        self.assertIn("finished-cleaned", report["counts"])
-        self.assertEqual(report["counts"].get("finished-cleaned"), 1)
-        self.assertIn("inventory-results", report["inventory_hint"])
+        proc, report = self.inventory()
+        self.assertEqual(proc.returncode, 0)
+        self.assertEqual(report["entries"][0]["class"], "finished-cleaned")
+        self.assertTrue(cleaned.exists(), "盘点只读，不删除")

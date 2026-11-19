@@ -884,6 +884,24 @@ def _remove_material_tree(material):
     _strict_remove(material_owner_path(material))
 
 
+def cleanup_private_release(root):
+    """回收本次 run 私有测试发行：只接受本代归属、无未完成事务的材料。
+
+    固定锁 sidecar 不 unlink（协议要求固定 inode），只移除树、owner marker、meta 与 journal。
+    任何归属/事务不成立都拒绝并保留现场，由调用方记入清理事实。
+    """
+    real = check_output_root(root)
+    owner = read_owner(real)
+    if not owner or owner.get("owner") != OWNER_TAG or owner.get("root") != real:
+        raise TestReleaseError(f"私有发行没有本代归属 marker，保留现场：{real}")
+    if os.path.lexists(journal_path(real)):
+        raise TestReleaseError(f"私有发行仍有未完成事务，保留现场（先恢复/退役）：{real}")
+    _strict_remove(real)
+    _strict_remove(owner_path(real))
+    _strict_remove(meta_path(real))
+    return real
+
+
 def _finish_transaction(real, journal):
     """材料/ marker 确认清理后才删 journal；失败保留 journal 以便再次收尾。"""
     new = journal.get("new") or {}
@@ -1012,75 +1030,6 @@ def inventory(cache_root):
     return {"schema_version": 1, "domain": "test-release-cache", "root": root,
             "status": status, "entries": entries, "unknown": unknown,
             "capacity": "not-measured"}
-
-
-def _read_control(path):
-    try:
-        if os.path.islink(path) or os.path.getsize(path) > 1024 * 1024:
-            return None
-    except OSError:
-        return None
-    return read_json(path)
-
-
-def observe(cache_root):
-    """root 维护前的浅层观察：只读直接子项/控制记录，不递归、不算树摘要。"""
-    root = os.path.realpath(os.path.abspath(cache_root))
-    observed_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-    if not os.path.exists(root):
-        return {"root": root, "status": "absent", "counts": {}, "capacity": "not-measured",
-                "observed_at": observed_at,
-                "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
-                                  f"--cache-root {root} --json"}
-    counts, unverified, unknown = {}, [], []
-    try:
-        names = sorted(os.listdir(root))
-    except OSError as exc:
-        return {"root": root, "status": "unverified", "counts": {}, "error": str(exc),
-                "capacity": "not-measured", "observed_at": observed_at,
-                "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
-                                  f"--cache-root {root} --json"}
-    import re
-    for name in names:
-        path = os.path.join(root, name)
-        if os.path.islink(path):
-            unverified.append(name)
-            continue
-        if name.endswith(".lock"):
-            continue
-        if name.endswith(".journal.json"):
-            journal = _read_control(path)
-            counts["journal"] = counts.get("journal", 0) + 1
-            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
-            continue
-        if name.endswith((".meta.json", ".owner")):
-            continue
-        if re.match(r"^\d+\.\d+\.\d+\.(staging|backup|stale)-", name) or name.endswith(".build"):
-            counts["orphan-like"] = counts.get("orphan-like", 0) + 1
-            if not os.path.exists(material_owner_path(path)):
-                counts["unproven"] = counts.get("unproven", 0) + 1
-            continue
-        if not os.path.isdir(path):
-            counts["unknown"] = counts.get("unknown", 0) + 1
-            continue
-        journal = _read_control(journal_path(path))
-        if journal is not None:
-            counts["recovery-required"] = counts.get("recovery-required", 0) + 1
-            continue
-        meta = _read_control(meta_path(path))
-        owner = read_owner(path)
-        if meta is not None and owner is not None and owner.get("owner") == OWNER_TAG and \
-                meta.get("schema_version") == META_SCHEMA:
-            counts["valid"] = counts.get("valid", 0) + 1
-        else:
-            counts["unknown"] = counts.get("unknown", 0) + 1
-    status = "partial" if unverified or counts.get("unknown") or counts.get("recovery-required") \
-        else "complete"
-    return {"root": root, "status": status, "counts": counts,
-            "unverified": unverified, "capacity": "not-measured",
-            "observed_at": observed_at,
-            "inventory_hint": f"python3 {os.path.abspath(__file__)} --inventory "
-                              f"--cache-root {root} --json"}
 
 
 # ---- retire -----------------------------------------------------------------

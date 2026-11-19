@@ -26,8 +26,8 @@
 ## 一键运行（CI 可用）
 
 ```bash
-bash scripts/tests/wf_runtime/full/repro/run.sh              # 默认 both、单并发，构建/复用测试发行缓存
-bash scripts/tests/wf_runtime/full/repro/run.sh --no-build   # 已有新鲜缓存时校验并复用
+bash scripts/tests/wf_runtime/full/repro/run.sh              # 默认 both、单并发，构建本代私有测试发行
+bash scripts/tests/wf_runtime/full/repro/run.sh --no-build   # 显式消费预备好的共享发行（校验输入/树摘要）
 bash scripts/tests/wf_runtime/full/repro/run.sh --only bind  # 只跑名字含子串的
 bash scripts/tests/wf_runtime/full/repro/run.sh --list       # 列出用例
 ```
@@ -39,7 +39,8 @@ bash scripts/tests/wf_runtime/full/repro/run.sh --list       # 列出用例
 委托本脚本时只交接父冻结计划与父 release-context（`--_wf-repro-inner` frame），内层不再
 `ensure`/`check`/`check --json`，也不再重传公开 argv。
 
-CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重建产品发行树。通过本入口运行，避免直接执行单条脚本时借用旧发行。
+CLI 级用例由运行器传入本次私有发行或候选仓库；T1/T2 不重建产品发行树，也不写共享测试发行缓存
+（`--no-build` 是唯一的显式共享消费入口）。通过本入口运行，避免直接执行单条脚本时借用旧发行。
 
 ## 双身份、冻结 bundle 与唯一 writer
 
@@ -56,16 +57,22 @@ CLI 级用例由运行器传入测试发行缓存或候选仓库；T1/T2 不重�
   公共摘要；唯一 writer 在最终 barrier 各重算一次 `public_inputs()` 与 `execution_context()` 并与冻结值比对，
   随后逐 case 只核局部输入与 subject。旧 schema 1 bundle 一律拒绝（每 run 产物，不迁移）。
 - 拓扑（独立入口）：R 在公开阶段**唯一一次**解析参数并把规范计划对象交给 lease frame →
-  lease 内 `resource_lifecycle.begin-run(role=repro)` 写 schema2 owner + active run-state 并原子冻结
+  lease 内 `resource_lifecycle.begin-run(role=repro)` 只认领空/不存在的结果根、写 schema2 owner +
+active run-state 并原子冻结
   `plan.json` → root controller（同 C 进程，`execution.py --runner-control --runner-role repro`）
-  取发行消费锁、监督唯一的发行准备，再以 `--_wf-repro-inner` frame 交接 plan/context token →
-  worker/gate → 结束发行校验/清理/取消都有结论后提交一次 proof → schema3 repro 投影 + run-state
-  终态，最后才输出 `GATE-OK`。内嵌入口复用父 run_id/receipts/release context，不另起 controller、
+  取发行消费锁、监督唯一的发行准备（默认在本代结果目录构建私有发行；`--no-build` 才校验并
+  消费共享发行），再以 `--_wf-repro-inner` frame 交接 plan/context token →
+  worker/gate → 结束发行校验/清理/取消都有结论后提交一次 proof（取消或证据失败不提交）→
+  summary schema 4 投影 + run-state schema 2 终态（无整次 status），最后才输出 `GATE-OK`。内嵌入口复用父 run_id/receipts/release context，不另起 controller、
   不发布父摘要。
 - 命令证据：每个 phase `execution.run` 先写 receipt（managed→父/本 run `commands/<command_id>.json`；
   独立 API→log 同目录隐藏 sibling），相位 TMPDIR 在 supervision=cleaned 后回收，否则保留并在
   `retained_paths` 报告。只读 gate 不写 state；唯一 state writer 是 root controller 在收尾阶段的
-  一次 `commit_state`，且只接收本代 receipt 终态、监督清理与相位回收都已确认的用例。
+  一次 `commit_state`，且只接收本代 receipt 终态、监督清理与相位回收都已确认、
+  并且属于 dev 且含 red 相位的用例（green-only/candidate 不读写共享 proof）；
+  某个用例缺记录/坏记录/错代只把它的相位记为 `unverified`，其余合格用例照常写入；计划外记录
+  单列结构问题并拒绝整次写证明。冻结 bundle 的每个预期相位都有一条应答，报告保证
+  `planned = passed + failed + unverified`。
 - candidate 最终 barrier 由 root controller 在 worker 退出后、proof/摘要发布前再核一次同一身份；
   独立入口的初核/终核都走同一只读 validator，内嵌入口不重复校验。
 - 状态 schema 5：`green` 与 `red` 相位独立且带清理确认；旧 1-4 只作 legacy 保留（不命中 auto，

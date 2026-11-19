@@ -63,7 +63,7 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(counts["repro_ungrouped"], 31)
         self.assertEqual(counts["repro_with_metadata"], 10)
         self.assertEqual(counts["repro_candidate_clean"], 3)
-        self.assertEqual(counts["units_candidate_verified"], 57)
+        self.assertEqual(counts["units_candidate_verified"], 62)
         self.assertEqual(counts["units_kept_dev_only"], 3)
         self.assertEqual(counts["units_pending_promotion"], 0)
         self.assertEqual(counts["units_not_tested"], 0)
@@ -105,16 +105,23 @@ class CoverageTest(unittest.TestCase):
         for row in self.result["rows"]["units"].values():
             units[row["kind"]] += 1
         self.assertEqual(units["flow"], 4)
-        # 4 个 flow 未声明 candidate_clean：不得改写成显式 false。
-        flows = [row for row in self.result["rows"]["units"].values() if row["kind"] == "flow"]
-        self.assertTrue(all(row["candidate_clean"] == "missing" for row in flows))
+        # 每个 flow 都按候选资格显式声明：代表链保留，未取证的显式 false。
+        flows = {name: row for name, row in self.result["rows"]["units"].items()
+                 if row["kind"] == "flow"}
+        self.assertEqual({name for name, row in flows.items()
+                          if row["candidate_clean"] == "true"},
+                         {"f0", "p5_spec", "p5_v2v3", "p5_v5"})
         explicit_false = [row for row in self.result["rows"]["units"].values()
                           if row["candidate_clean"] == "false"]
-        # 审计后只有 3 个 suite 未通过 candidate 实跑，加上 extra 1 + manual 2。
-        self.assertEqual(len(explicit_false), 6)
-        for name in ("r67_tests", "r90_tests", "p5_v1"):
+        # suite 2 + extra 1 + manual 2。
+        self.assertEqual(len(explicit_false), 5)
+        for name in ("r90_tests", "p5_v1", "r72_tests"):
             self.assertEqual(self.result["rows"]["units"][name]["migration_status"],
                              "kept-dev-only")
+        r72 = self.result["rows"]["units"]["r72_tests"]
+        self.assertIn("candidate audit status=ok", r72["not_migratable_reason"],
+                      "dev-only 的实际来源证据必须可追溯")
+        self.assertIn("源码安装器", r72["technical_note"] or "")
 
     def test_candidate_eligible_repro_cases_have_targets_in_the_release_lib(self):
         # 候选合格用例的断言对象必须是安装产物（wf-release/lib），不能是作者 payload。
@@ -132,15 +139,19 @@ class CandidateAuditTest(unittest.TestCase):
         self.result = coverage.coverage()
         self.audit = json.loads((FULL / "candidate-audit.json").read_text())
 
-    def test_audit_covers_every_suite_and_matches_current_script_bytes(self):
-        suites = [name for name, row in self.result["rows"]["units"].items()
-                  if row["kind"] == "suite"]
-        self.assertEqual(len(self.audit["units"]), len(suites))
-        for name in suites:
+    def test_audit_covers_every_plannable_unit_and_matches_script_bytes(self):
+        plannable = {name for name, row in self.result["rows"]["units"].items()
+                     if row["kind"] in ("suite", "candidate", "flow", "extra")}
+        self.assertEqual(set(self.audit["units"]), plannable,
+                         "审计必须覆盖全部可计划单元（含 dev-only 的实际来源证据）")
+        eligible = {name for name, row in self.result["rows"]["units"].items()
+                    if row["candidate_clean"] == "true"}
+        for name in sorted(eligible):
             record = self.audit["units"][name]
             self.assertEqual(record["script_sha256"],
                              self.result["rows"]["units"][name]["script_sha256"],
                              f"{name}: candidate audit 与当前脚本字节不一致")
+            self.assertEqual(record["status"], "ok", f"{name}: 合格单元审计必须为 ok")
 
     def test_every_suite_is_verified_or_has_a_concrete_candidate_failure(self):
         for name, row in self.result["rows"]["units"].items():
@@ -148,12 +159,8 @@ class CandidateAuditTest(unittest.TestCase):
                 continue
             self.assertIn(row["migration_status"], ("candidate-verified", "kept-dev-only"), name)
             if row["migration_status"] == "kept-dev-only":
-                if "fake-tree" in (row.get("technical_note") or ""):
-                    self.assertEqual(row["can_run_installed"], "not-applicable")
-                    self.assertIn("fake-tree", row["not_migratable_reason"])
-                else:
-                    self.assertTrue(row["not_migratable_reason"].startswith("candidate run failed"))
-                    self.assertTrue(row["installed_assertion"].startswith("none in candidate mode"))
+                self.assertTrue(row["not_migratable_reason"].startswith("candidate run failed"))
+                self.assertTrue(row["installed_assertion"].startswith("none in candidate mode"))
 
     def test_failed_suites_have_concrete_assertion_evidence(self):
         for name in ("r90_tests", "p5_v1"):
@@ -161,9 +168,10 @@ class CandidateAuditTest(unittest.TestCase):
             self.assertTrue(record["failures"], f"{name} 的 audit 必须有具体失败断言")
             row = self.result["rows"]["units"][name]
             self.assertIn(record["failures"][0], row["not_migratable_reason"])
-        self.assertEqual(self.result["rows"]["units"]["r67_tests"]["can_run_installed"],
-                         "not-applicable")
-        self.assertIn("fake-tree", self.result["rows"]["units"]["r67_tests"]["not_migratable_reason"])
+        # 运行器假树断言迁出后，R67 只剩产品侧断言并已通过候选实跑。
+        r67 = self.result["rows"]["units"]["r67_tests"]
+        self.assertEqual(r67["migration_status"], "candidate-verified")
+        self.assertEqual(self.audit["units"]["r67_tests"]["status"], "ok")
 
     def test_audit_version_and_tree_match_the_frozen_release(self):
         import wf_release_common as common

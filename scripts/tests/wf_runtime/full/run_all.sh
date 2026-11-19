@@ -28,13 +28,16 @@ usage() { cat <<'EOF'
     --release-root ~/.cache/wf-candidate-repo/0.1.2 \
     --release-ref refs/tags/wf-v0.1.2 --release-version 0.1.2
   bash run_all.sh --serial                                # 套件层串行（确定性/排障）
+  bash run_all.sh --template-cache                        # 显式申请跨 run 模板复用（默认只用本次模板）
   bash run_all.sh --list | --dry-run                      # 只输出计划
 
 环境：WF_JOBS（套件层并行，默认 min(8,cpu)；--serial 或 WF_JOBS=1 退回串行）、
       WF_REPRO_JOBS（repro 用例层并行，默认 min(8,cpu)）、
-      WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_RESULTS_CACHE（缓存轮转根，
-      默认 ~/.cache/wf-test-run）、WF_FIX、WF_NO_RUN=1（计划后即退出）、
+      WF_WITH_REPRO=1（子集模式开 repro）、WF_RESULTS_DIR、WF_RESULTS_CACHE（退役候选
+      报告根，默认 ~/.cache/wf-test-run）、WF_FIX、WF_NO_RUN=1（计划后即退出）、
       WF_NO_TEMPLATE=1（逐套件重建夹具；默认在 run 内构建一次夹具模板后逐套件 cp -a）
+默认只写本次结果/夹具/私有测试发行；跨 run 模板复用用 --template-cache 显式申请，
+历史结果轮转只由 prune-results 报告，删除走 inventory-results + retire-results。
 EOF
 }
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -76,9 +79,14 @@ case "$STAGE" in
     # pycache 只在 layout/scope 校验通过后启用；此前的 helper/preflight/list 全程禁写。
     # 显式性在此刻按原始环境记录一次，内部 frame 原样传递，重入不重新猜。
     if [ -n "${WF_RESULTS_DIR:-}" ]; then RESULTS_EXPLICIT=1; else RESULTS_EXPLICIT=0; fi
+    # 真实执行在冻结计划前只分配一次执行身份：隐式路径与 owner 共用它，PID 重用不会同名。
+    # public 每次调用都新建（不继承外层进程可能泄漏的旧身份）。
+    WF_RUN_IDENTITY=$("$PY" "$HERE/resource_lifecycle.py" new-id) || exit 2
+    export WF_RUN_IDENTITY
     # 管理路径的唯一规则（wf_test_paths）：scope 下默认值从 scope 派生，显式域外值在
     # 首次写前拒绝；无 scope 时保持历史默认。layout 只派生/校验，不写任何文件。
-    if ! layout_out=$("$PY" "$PATH_HELPER" layout --kind run --pid "$$" --format sh); then
+    if ! layout_out=$("$PY" "$PATH_HELPER" layout --kind run --pid "$$" \
+        --identity "$WF_RUN_IDENTITY" --format sh); then
       exit 2
     fi
     eval "$layout_out" || { echo "LAYOUT-EVAL-FAILED" >&2; exit 2; }
@@ -139,7 +147,8 @@ case "$STAGE" in
     verify_inherited_locks
     # 初始化只有一次：owner 意图 → active state → 按旧代许可 prepare（helper 内三个 checkpoint）。
     begin_out=$("$PY" "$HERE/resource_lifecycle.py" begin-run \
-        --results-root "$WF_RESULTS_DIR" --role full --intent execution --format sh)
+        --results-root "$WF_RESULTS_DIR" --role full --intent execution \
+        --run-id "$WF_RUN_IDENTITY" --format sh)
     begin_rc=$?
     if [ "$begin_rc" -ne 0 ]; then
       echo "RESULTS-INIT-FAILED: 初始化拒绝（rc=$begin_rc）；不启动 controller、不清理现场" >&2
@@ -158,15 +167,7 @@ case "$STAGE" in
     export WF_PLAN_LOG="$WF_RESULTS_DIR/plan-calls"
     export PYTHONPYCACHEPREFIX="${WF_PYCACHE:-$WF_RESULTS_DIR/pycache}"
     mkdir -p "$PYTHONPYCACHEPREFIX"
-    # 结果缓存轮转：只回收本 scope（run-*）的带 marker 目录，保留最近 20；root 可经
-    # WF_RESULTS_CACHE 注入（契约测试指向临时根，不触碰真实用户缓存）。
-    if [ -n "${WF_TEST_SCOPE_ROOT:-}" ]; then
-      RESULTS_CACHE="${WF_RESULTS_CACHE:-$WF_TEST_SCOPE_ROOT/cache}"
-    else
-      RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
-    fi
-    WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE_HELPER" prune-results "$RESULTS_CACHE" \
-      --scope run --exclude "$WF_RESULTS_DIR" || true
+    # 默认执行不盘点/不轮转/不观察历史材料：这些只在显式维护入口发生。
     # ---- 计划（唯一权威）：lease 内唯一一次 final plan，落盘后冻结字节 -------------
     "$PY" "$HERE/plan.py" --format json -- "$@" > "$WF_RESULTS_DIR/plan.json" \
       2>"$WF_RESULTS_DIR/plan.err" || {
@@ -180,6 +181,9 @@ case "$STAGE" in
     eval "$("$PY" "$HERE/plan.py" --plan-file "$PLAN_FILE")" || { echo "PLAN-EVAL-FAILED" >&2; exit 2; }
     FIX="$PLAN_FIX"
     RESULTS_DIR="$PLAN_RESULTS_DIR"
+    if [ -n "${PLAN_EXCLUDED_UNITS:-}" ]; then
+      echo "（候选资格排除：$PLAN_EXCLUDED_UNITS）"
+    fi
     export WF_FIX="$FIX" WF_ISOLATED_UNITS="${PLAN_ISOLATED_UNITS:-}"
     LEGACY_FIXTURE_ROOT="$FIX.legacy"
     WF_LEGACY_FIXTURE_ROOT="$LEGACY_FIXTURE_ROOT"
@@ -216,6 +220,9 @@ case "$STAGE" in
     eval "$("$PY" "$HERE/plan.py" --plan-file "$WF_FRAME_PLAN_FILE")" || { echo "PLAN-EVAL-FAILED" >&2; exit 2; }
     FIX="$PLAN_FIX"
     RESULTS_DIR="$PLAN_RESULTS_DIR"
+    if [ -n "${PLAN_EXCLUDED_UNITS:-}" ]; then
+      echo "（候选资格排除：$PLAN_EXCLUDED_UNITS）"
+    fi
     export WF_FIX="$FIX" WF_ISOLATED_UNITS="${PLAN_ISOLATED_UNITS:-}"
     export WF_RUN_ID="${WF_RUN_ID:?missing run id from lease begin_run}"
     export WF_COMMAND_EVIDENCE_ROOT="$RESULTS_DIR/commands"
@@ -696,7 +703,8 @@ fi
 
 # 模板缓存构建序列次数（design §3.3）：命中=0，发布一次=1；模板机制关闭=0。
 TEMPLATE_BUILD_SEQUENCES=0
-if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_CACHE_HIT" = "0" ]; then
+if [ "$PLAN_NO_TEMPLATE" != "1" ] && [ "$PLAN_NO_TEMPLATE_CACHE" = "0" ] \
+    && [ "$HEAD_READABLE" = "1" ] && [ "$TEMPLATE_CACHE_HIT" = "0" ]; then
   TEMPLATE_BUILD_SEQUENCES=1
 fi
 

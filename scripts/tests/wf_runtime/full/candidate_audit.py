@@ -37,6 +37,7 @@ REPO = HERE.parents[3]
 sys.path.insert(0, str(REPO / "scripts"))
 sys.path.insert(0, str(HERE))
 import prepare_candidate_repo  # noqa: E402
+import plan as plan_module  # noqa: E402
 
 PY = os.environ.get("PY") or sys.executable
 FAILURE_PATTERNS = (
@@ -220,7 +221,11 @@ def build_template(workdir, candidate, version, ref, commit=None):
     return template
 
 
-def generate(tree, version, ref, workdir, out, candidate_root=None, template=None):
+PLANNABLE = ("suite", "candidate", "flow", "extra")
+
+
+def generate(tree, version, ref, workdir, out, candidate_root=None, template=None,
+             only=()):
     workdir = os.path.abspath(workdir)
     os.makedirs(workdir, exist_ok=True)
     results = os.path.join(workdir, "results")
@@ -245,18 +250,35 @@ def generate(tree, version, ref, workdir, out, candidate_root=None, template=Non
     isolated = [entry["name"] for entry in units if entry.get("isolated_user")]
     env = _audit_env(workdir, candidate, version, ref, template, commit)
     env["WF_ISOLATED_UNITS"] = " ".join(isolated)
-    records = {}
+    previous = {}
+    if only and os.path.isfile(out):
+        try:
+            with open(out, encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict):
+                previous = loaded.get("units") or {}
+        except (OSError, ValueError):
+            previous = {}
+    records = dict(previous) if only else {}
+    wanted = set(only)
     for entry in units:
-        if entry.get("kind") != "suite":
+        if entry.get("kind") not in PLANNABLE:
+            continue
+        # 审计的目标覆盖是全部可计划单元（`--only` 只做增量补录，最终工件仍须齐全并由
+        # test_source_coverage 守护）：未认证条目的实际结果正是 candidate_clean 声明的来源证据
+        # （它们不进入候选分母，但必须留下可追溯的实际来源）。
+        if wanted and entry["name"] not in wanted:
             continue
         name = entry["name"]
+        fixture = entry.get("fixture", "template")
         fix = os.path.join(workdir, "fix-" + name)
         invocation = uuid.uuid4().hex
         run_env = {**env, "FIX": fix, "WF_UNIT_INVOCATION_ID": invocation}
         record = None
         proc = subprocess.run(
             ["bash", str(HERE / "run_one.sh"),
-             f"{name}:suite:{entry['expect']}:template:{entry.get('script', name + '.py')}"],
+             f"{name}:{entry['kind']}:{entry['expect']}:{fixture}:"
+             f"{entry.get('script', name + '.py')}"],
             env=run_env, capture_output=True, text=True, timeout=400)
         record = record_suite(entry, results, workdir, invocation)
         record["runner_rc"] = proc.returncode
@@ -288,6 +310,8 @@ def main(argv=None):
     parser.add_argument("--ref", default=None)
     parser.add_argument("--workdir", default=None)
     parser.add_argument("--out", default=str(HERE / "candidate-audit.json"))
+    parser.add_argument("--only", action="append", default=[],
+                        help="只审计指定单元并把记录合并进已有 --out")
     parser.add_argument("--candidate-root", default=None)
     parser.add_argument("--template", default=None)
     args = parser.parse_args(argv)
@@ -295,7 +319,7 @@ def main(argv=None):
     workdir = args.workdir or tempfile.mkdtemp(prefix="wf-candidate-audit-")
     try:
         payload = generate(args.tree, args.version, ref, workdir, args.out,
-                           args.candidate_root, args.template)
+                           args.candidate_root, args.template, only=args.only)
     except (AuditError, prepare_candidate_repo.CandidateError, subprocess.CalledProcessError) as exc:
         print(f"AUDIT-FAILED: {exc}", file=sys.stderr)
         return 1

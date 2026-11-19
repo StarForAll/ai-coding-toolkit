@@ -89,14 +89,6 @@ def begin_run(root, intent="execution", role="full", run_id=None):
         raise FixtureError(str(exc)) from exc
 
 
-def prepare_results(root):
-    """只在 begin_run 的旧代许可内清理；不提供独立“继续清理 active 目录”入口。"""
-    import resource_lifecycle
-    raise FixtureError(
-        'prepare-results 不再是公共入口：结果身份与准备统一由 resource_lifecycle.begin-run '
-        '在持有结果锁时完成；请换新结果目录或按盘点/退役流程处置旧现场')
-
-
 def reset(root, forbidden=()):
     root = validate(root, forbidden)
     owner = marker(root)
@@ -204,33 +196,33 @@ def _validate_cache_root(root):
     return root
 
 
-def _valid_results_owner(directory):
-    """新协议 owner 由 resource_lifecycle 判定；只有 finished+cleaned 可自动轮转。"""
+def _retention_candidate(directory):
+    """本前缀条目是否可进入退役候选报告（finished+cleaned 且无保留/证据完整）。"""
     import resource_lifecycle
     try:
-        return resource_lifecycle.classify_result(str(directory))['automatic_prune']
+        return resource_lifecycle.classify_result(str(directory))['retention_candidate']
     except (resource_lifecycle.LifecycleError, OSError):
         return False
 
 
 def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
-    """回收结果缓存：只删带有效所有权 marker 的目录（marker 校验兜底，宁可留着）。
+    """结果轮转：**只报告**退役候选，不删除任何目录。
 
     - root：标准缓存根（DEFAULT_CACHE）；scope：'run'|'repro' 前缀隔离，run_all 与
-      独立 repro 入口互不越界回收对方产物；
-    - bootstrap：额外允许删除"无主但顶层内容全部为运行器已知产物"的历史目录
-      （一次性存量收敛；无自动调用点，仅手工执行）；
-    - liveness 安全前提：全局 flock 只允许一个根运行器持有 lease（lock_run），
-      其他运行器无法创建有效 marker，故不存在"删到活目录"的窗口——该前提若被
-      破坏，prune 只会漏删不会误删；
-    - 单条删除失败跳过并计数，不中断；输出 PRUNED=<n> KEPT=<m>。
+      独立 repro 入口互不越界报告对方产物；
+    - keep：按最近完成时间保留的合格条目数（`--keep` 语义保留，但只影响报告分类）；
+    - bootstrap：额外把无主/非终态条目列为待复核（同样只报告）；
+    - 删除只经精确退役入口（inventory-results → retire-results），并需具体内容授权。
+    输出 `PRUNE-CANDIDATES=<n> PRUNE-KEPT=<m>`，每个候选一行 `PRUNE-CANDIDATE <name>`。
     """
     root = _validate_cache_root(root)
     if scope not in ('run', 'repro'):
         raise FixtureError(f'--scope 只接受 run|repro（收到 {scope!r}）')
+    if keep < 0:
+        raise FixtureError('--keep 不能为负')
     if not root.exists():
-        # 缓存根尚未建立（冷启动）：没有可回收条目，不是错误，也不创建目录。
-        print('PRUNED=0 KEPT=0', file=sys.stderr)
+        # 缓存根尚未建立（冷启动）：没有可报告条目，不是错误，也不创建目录。
+        print('PRUNE-CANDIDATES=0 PRUNE-KEPT=0', file=sys.stderr)
         return 0
     prefix = {'run': 'run-', 'repro': 'repro-'}[scope]
     exclude = {Path(item).absolute() for item in exclude}
@@ -243,34 +235,20 @@ def prune_results(root, scope, keep=20, exclude=(), bootstrap=False):
         if entry in exclude:
             continue
         candidates.append(entry)
-    owned = [entry for entry in candidates if _valid_results_owner(entry)]
-    owned.sort(key=lambda entry: (results_marker(entry).stat().st_mtime), reverse=True)
-    pruned = 0
-    kept = 0
-    for index, entry in enumerate(owned):
-        if index < keep:
-            kept += 1
-            continue
-        try:
-            shutil.rmtree(entry)
-            pruned += 1
-        except OSError as exc:
-            # marker 校验兜底的 fail-safe：删不掉就留着并报告，不中断后续回收。
-            print(f'PRUNE-SKIPPED {entry.name}: {exc}', file=sys.stderr)
-            kept += 1
-    review = []
+    # 深度检索只对合格条目发生：轮转报告不递归扫描、不取锁。
+    eligible = [entry for entry in candidates if _retention_candidate(entry)]
+    eligible.sort(key=lambda entry: (results_marker(entry).stat().st_mtime), reverse=True)
+    kept = eligible[:keep]
+    retire = eligible[keep:]
+    for entry in retire:
+        print(f'PRUNE-CANDIDATE {entry.name}: finished+cleaned → inventory-results 后 retire-results',
+              file=sys.stderr)
     if bootstrap:
-        # 无主目录不再凭“顶层看起来都是已知产物”删除：只报告待退役复核。
         for entry in candidates:
-            if entry in exclude or any(entry == item for item in owned):
+            if entry in exclude or entry in eligible:
                 continue
-            print(f'PRUNE-KEPT {entry.name}: needs-retirement-review（无主/非终态，见盘点退役流程）',
-                  file=sys.stderr)
-            review.append(entry.name)
-    print(f'PRUNED={pruned} KEPT={kept}', file=sys.stderr)
-    if review:
-        print('PRUNE-REVIEW=' + ' '.join(sorted(review)), file=sys.stderr)
-        return 1
+            print(f'PRUNE-REVIEW {entry.name}: 无主/非终态，需精确盘点后人工确认', file=sys.stderr)
+    print(f'PRUNE-CANDIDATES={len(retire)} PRUNE-KEPT={len(kept)}', file=sys.stderr)
     return 0
 
 
@@ -518,8 +496,6 @@ def main(argv=None):
     p.add_argument('target')
     p = sub.add_parser('claim-results')
     p.add_argument('root')
-    p = sub.add_parser('prepare-results')
-    p.add_argument('root')
     p = sub.add_parser('lease')
     p.add_argument('command', nargs=argparse.REMAINDER)
     sub.add_parser('check-lease')
@@ -584,8 +560,6 @@ def main(argv=None):
                 move(args.source, args.target)
             elif args.operation == 'claim-results':
                 claim_results(args.root)
-            elif args.operation == 'prepare-results':
-                prepare_results(args.root)
             elif args.operation == 'inventory-results':
                 report = inventory_results(args.cache_root, args.results_root, args.fixture)
                 if args.format == 'json':
@@ -611,38 +585,19 @@ def main(argv=None):
 DOMAIN = "results"
 
 
-def _result_entry(path, root_label):
+def _tree_projection(path, precise):
+    """精确模式返回整树快照与摘要；浅扫模式返回 None（退役前必须再精确盘点）。"""
     import resource_lifecycle
-    info = resource_lifecycle.classify_result(path)
-    entry = {"root": root_label, "path": os.path.realpath(path), "kind": "result-root",
-             "class": info["kind"], "provenance": {
-                 "legacy-owned": "legacy-owned",
-                 "finished-cleaned": "owned",
-                 "plan-only": "owned",
-                 "empty": "owned",
-                 "active": "owned",
-                 "incomplete-new": "owned",
-                 "unknown": "unknown-entry",
-                 "unowned": "unowned",
-                 "absent": "unknown-entry",
-                 "unreadable": "unowned",
-             }.get(info["kind"], "unknown-entry"),
-             "reusable": info["reusable"], "blocked": None if info["reusable"] else info["reason"],
-             "uid": os.stat(path).st_uid if os.path.exists(path) else None,
-             "owner": (info.get("owner") or {}).get("kind"),
-             "state": (info.get("state") or {}).get("kind"),
-             "retained_paths": ((info.get("state") or {}).get("payload") or {}).get(
-                 "retained_paths") or [],
-             "reasons": ((info.get("state") or {}).get("payload") or {}).get(
-                 "reasons") or [],
-             "allowed": (["safe-legacy"] if info["kind"] == "legacy-owned" else
-                         (["manual-retained"] if info["kind"] in
-                          ("finished-cleaned", "active", "incomplete-new", "plan-only", "empty")
-                          else [])),
-             "digest": None}
-    identity = Path(path) / ".wf-results-owner.json"
+    if not precise or not os.path.isdir(path):
+        return None, None
+    entries = resource_lifecycle.tree_snapshot(os.path.realpath(path))
+    return entries, resource_lifecycle.snapshot_digest(entries)
+
+
+def _identity_digest(path):
+    """owner/run-state 摘要：根级身份摘要，只用于展示，不是删除授权。"""
+    import hashlib
     try:
-        import hashlib
         blob = b""
         for name in (".wf-results-owner.json", "run-state.json"):
             candidate = Path(path) / name
@@ -650,13 +605,59 @@ def _result_entry(path, root_label):
                 continue
             if candidate.is_file() and candidate.stat().st_size <= 1024 * 1024:
                 blob += name.encode() + b"\0" + candidate.read_bytes() + b"\0"
-        entry["digest"] = "sha256:" + hashlib.sha256(blob).hexdigest() if blob else None
+        return "sha256:" + hashlib.sha256(blob).hexdigest() if blob else None
     except OSError:
-        entry["digest"] = None
-    return entry
+        return None
 
 
-def _fixture_entry(path, root_label):
+def _result_entry(path, root_label, precise=False):
+    import resource_lifecycle
+    info = resource_lifecycle.classify_result(path)
+    entries, digest = _tree_projection(path, precise)
+    import resource_lifecycle as lifecycle
+    empty_shell = bool(entries is not None and lifecycle.is_empty_shell(entries))
+    allowed = []
+    if entries is not None:
+        if not entries or empty_shell:
+            allowed.append("safe-legacy")
+        if info["kind"] != "unowned":
+            allowed.append("manual-retained")
+    try:
+        import results_summary
+        history = results_summary.historical_conclusion(path)
+    except Exception as exc:  # 历史结论只作报告；读不到就是 unknown，不猜
+        history = {"status": "unknown", "reason": str(exc), "schema_version": None}
+    return {"root": root_label, "path": os.path.realpath(path), "kind": "result-root",
+            "history": history,
+            "class": info["kind"], "provenance": {
+                "legacy-owned": "legacy-owned",
+                "finished-cleaned": "owned",
+                "plan-only": "owned",
+                "empty": "owned",
+                "active": "owned",
+                "incomplete-new": "owned",
+                "unknown": "unknown-entry",
+                "unowned": "unowned",
+                "absent": "unknown-entry",
+                "unreadable": "unowned",
+            }.get(info["kind"], "unknown-entry"),
+            "claimable": info["claimable"],
+            "blocked": None if info["claimable"] else info["reason"],
+            "uid": os.stat(path).st_uid if os.path.exists(path) else None,
+            "owner": (info.get("owner") or {}).get("kind"),
+            "state": (info.get("state") or {}).get("kind"),
+            "retained_paths": ((info.get("state") or {}).get("payload") or {}).get(
+                "retained_paths") or [],
+            "reasons": ((info.get("state") or {}).get("payload") or {}).get(
+                "reasons") or [],
+            "allowed": allowed,
+            "empty_shell": empty_shell if entries is not None else None,
+            "entries": entries,
+            "snapshot_digest": digest,
+            "digest": _identity_digest(path)}
+
+
+def _fixture_entry(path, root_label, precise=False):
     path = os.path.realpath(path)
     marker = Path(path).parent / ("." + Path(path).name + ".wf-owner.json")
     try:
@@ -665,12 +666,25 @@ def _fixture_entry(path, root_label):
         record = None
     owned = (record == {"owner": OWNER, "root": path}
              and (not os.path.exists(path) or os.stat(path).st_uid == os.getuid()))
+    entries, digest = _tree_projection(path, precise) if os.path.exists(path) else (None, None)
+    import resource_lifecycle
+    empty_shell = bool(entries is not None and resource_lifecycle.is_empty_shell(entries))
+    allowed = []
+    if owned:
+        if entries is not None:
+            if not entries:
+                allowed.append("safe-legacy")
+            allowed.append("manual-retained")
     return {"root": root_label, "path": path, "kind": "fixture",
             "class": "fixture-owned" if owned else "fixture-unowned",
             "provenance": "owned" if owned else "unowned",
             "blocked": None if owned else "no matching fixture marker",
             "uid": os.stat(path).st_uid if os.path.exists(path) else None,
             "marker": str(marker) if marker.is_file() else None,
+            "entries": entries,
+            "snapshot_digest": digest,
+            "empty_shell": empty_shell if entries is not None else None,
+            "allowed": allowed,
             "digest": None}
 
 
@@ -706,30 +720,16 @@ def inventory_results(cache_root=None, results_roots=(), fixtures=()):
             entries.append(_result_entry(path, root))
         return {"schema_version": 1, "domain": DOMAIN, "root": root,
                 "status": "partial" if unknown else "complete",
-                "entries": entries, "unknown": unknown, "capacity": "not-measured"}
+                "entries": entries, "unknown": unknown, "capacity": "not-measured",
+                "precision": "shallow"}
     label = "precise"
     for path in results_roots:
-        entries.append(_result_entry(path, label))
+        entries.append(_result_entry(path, label, precise=True))
     for path in fixtures:
-        entries.append(_fixture_entry(path, label))
+        entries.append(_fixture_entry(path, label, precise=True))
     return {"schema_version": 1, "domain": DOMAIN, "root": label, "status": "complete",
-            "entries": entries, "unknown": [], "capacity": "not-measured"}
-
-
-def observe_results(root, exclude=()):
-    """root controller 维护前一次浅扫（排除当前 results 与父子目录）。"""
-    report = inventory_results(cache_root=root)
-    excluded = {os.path.realpath(item) for item in exclude}
-    counts = {}
-    for item in report.get("entries") or []:
-        if item["path"] in excluded:
-            continue
-        key = item.get("class") or "unknown"
-        counts[key] = counts.get(key, 0) + 1
-    return {"root": report.get("root"), "status": report.get("status", "complete"),
-            "counts": counts, "capacity": "not-measured",
-            "inventory_hint": f"python3 {os.path.abspath(__file__)} inventory-results "
-                              f"--cache-root {report.get('root')} --format json"}
+            "entries": entries, "unknown": [], "capacity": "not-measured",
+            "precision": "precise"}
 
 
 def _results_guard():
@@ -742,17 +742,58 @@ def _results_guard():
 
 
 def _delete_results_entry(item):
+    """逐项删除：只删除确认快照里的条目（结果树与夹具树同一规则）。"""
     import resource_lifecycle
     path = item["path"]
-    if item["kind"] == "fixture":
-        remove(path)
-        return
+    entries = item.get("entries")
+    if not isinstance(entries, list):
+        raise OSError(f"缺少精确快照，拒绝删除：{path}")
     if os.path.islink(path) or not os.path.isdir(path):
-        raise OSError(f"结果根不是真实目录：{path}")
-    import shutil
-    shutil.rmtree(path)
+        raise OSError(f"删除根不是真实目录：{path}")
+    resource_lifecycle.delete_confirmed_tree(path, entries)
+    if item["kind"] == "fixture":
+        marker = Path(path).parent / ("." + Path(path).name + ".wf-owner.json")
+        marker.unlink(missing_ok=True)
     if os.path.lexists(path):
-        raise OSError(f"结果根删除失败：{path}")
+        raise OSError(f"删除后根仍存在：{path}")
+
+
+def _precise_entry(path, kind, root_label):
+    if kind == "fixture":
+        return _fixture_entry(path, root_label, precise=True)
+    return _result_entry(path, root_label, precise=True)
+
+
+def _verify_selected(resource_lifecycle, selected, snapshot_mode):
+    """按已核选择重新精确盘点；返回带快照的条目。任何漂移/无归属都拒绝。"""
+    chosen = []
+    for item in selected:
+        found = _precise_entry(item["path"], item["kind"], "precise")
+        if found["kind"] != item["kind"]:
+            raise FixtureError(f"selection 项类型漂移：{item['path']}")
+        if item.get("provenance") and found.get("provenance") != item["provenance"]:
+            raise FixtureError(f"selection provenance 漂移：{item['path']}")
+        if found["kind"] == "result-root":
+            if found.get("provenance") not in ("owned", "legacy-owned"):
+                raise FixtureError(f"结果根没有可验证 wf owner，拒绝退役：{item['path']}")
+            if found.get("snapshot_digest") is None:
+                raise FixtureError(f"结果根不是可精确盘点的真实目录：{item['path']}")
+        else:
+            if found.get("provenance") != "owned":
+                raise FixtureError(f"夹具没有可验证 marker，拒绝退役：{item['path']}")
+            if found.get("snapshot_digest") is None:
+                raise FixtureError(f"夹具不是可精确盘点的真实目录：{item['path']}")
+        if snapshot_mode == "manual-retained":
+            if item.get("snapshot_digest") and item["snapshot_digest"] != found["snapshot_digest"]:
+                raise FixtureError(f"selection 内容快照漂移（重新盘点后再确认）：{item['path']}")
+            if item.get("entries") and item["entries"] != found["entries"]:
+                raise FixtureError(f"selection 条目清单漂移：{item['path']}")
+        chosen.append(found)
+    for item in chosen:
+        live = resource_lifecycle.live_references(item["path"])
+        if live:
+            raise FixtureError(f"存在活引用（{live[0]['pid']}）拒绝删除：{item['path']}")
+    return chosen
 
 
 def retire_results(args):
@@ -763,38 +804,32 @@ def retire_results(args):
     except (OSError, ValueError) as exc:
         raise FixtureError(f"selection 不可读：{exc}") from exc
     selected = resource_lifecycle.selection_entries(document, DOMAIN)
-    # 重扫描：cache/precise 由 selection 的 root 字段决定；不信任输入提供的 digest 作为权限。
-    roots = {item.get("root") for item in selected}
-    if roots == {document.get("root")} and document.get("root") not in (None, "precise"):
-        current = inventory_results(cache_root=document["root"])
-    else:
-        results_roots = [item["path"] for item in selected if item["kind"] == "result-root"]
-        fixtures = [item["path"] for item in selected if item["kind"] == "fixture"]
-        current = inventory_results(results_roots=results_roots, fixtures=fixtures)
-    current_by_path = {os.path.realpath(item["path"]): item for item in current["entries"]}
-    chosen = []
-    for item in selected:
-        found = current_by_path.get(os.path.realpath(item["path"]))
-        if found is None or found["kind"] != item["kind"]:
-            raise FixtureError(f"selection 项不存在/漂移：{item['path']}")
-        if item.get("provenance") and found.get("provenance") != item["provenance"]:
-            raise FixtureError(f"selection provenance 漂移：{item['path']}")
-        if found["kind"] == "result-root" and found.get("provenance") not in ("owned", "legacy-owned"):
-            raise FixtureError(f"结果根没有可验证 wf owner，拒绝退役：{item['path']}")
-        chosen.append(found)
-    for item in chosen:
-        live = resource_lifecycle.live_references(item["path"])
-        if live:
-            raise FixtureError(f"存在活引用（{live[0]['pid']}）拒绝删除：{item['path']}")
     if args.retirement_mode == "safe-legacy":
-        for item in chosen:
-            if item["kind"] == "result-root" and item.get("provenance") != "legacy-owned":
-                raise FixtureError(f"safe-legacy 只接受严格旧格式 owner：{item['path']}")
-            if item["kind"] == "fixture" and item.get("provenance") != "owned":
-                raise FixtureError(f"safe-legacy 只接受可验证 fixture marker：{item['path']}")
+        # 只做可单独证明的空壳收尾：内容清单必须为空或只有根身份记录。
+        for item in selected:
+            found = _precise_entry(item["path"], item["kind"], "precise")
+            if "safe-legacy" not in (found.get("allowed") or []):
+                raise FixtureError(
+                    f"safe-legacy 只接受空目录或只有根身份记录的空壳；"
+                    f"存在其他条目的树须用 manual-retained 逐项确认：{item['path']}")
+        chosen = _verify_selected(resource_lifecycle, selected, "safe-legacy")
+    else:
+        # manual-retained：先精确盘点到具体条目与快照，再由 TTY 授权这份清单。
+        chosen = _verify_selected(resource_lifecycle, selected, "manual-retained")
+
+    def revalidate_after_confirm():
+        # 确认之后、删除之前：归属/活引用/精确快照再核一次；变化即取消整次删除。
+        again = _verify_selected(resource_lifecycle, selected, "manual-retained")
+        for before, after in zip(chosen, again):
+            if before["snapshot_digest"] != after["snapshot_digest"]:
+                raise resource_lifecycle.RetireError(
+                    f"内容在确认后变化，取消整次删除：{before['path']}")
+
     report = resource_lifecycle.execute_retirement(
         DOMAIN, document.get("root") or "precise", chosen,
-        args.retirement_mode, args.report, _delete_results_entry, _results_guard, False)
+        args.retirement_mode, args.report, _delete_results_entry, _results_guard, False,
+        revalidate=(revalidate_after_confirm if args.retirement_mode == "manual-retained"
+                    else None))
     print(json.dumps({"state": "retired", "mode": args.retirement_mode,
                       "report": os.path.abspath(args.report),
                       "entries": len(report["results"])}, ensure_ascii=False, sort_keys=True))

@@ -574,28 +574,50 @@ def validate_repro(root, bundle, evidence_root=None, run_id=None):
 
     `evidence_root` 是本代 receipt 目录（父根或独立结果根的 `commands/`），`run_id` 是本代
     运行标识；两者缺失时相位一律记为 unverified —— 没有本代清理证据就没有 proof。
+
+    冻结 bundle 的每个预期相位都会得到一个应答：断言失败计 failed；尚未运行（缺记录）、
+    记录坏损/矛盾、错代与清理未确认计 unverified。单个用例的异常只影响它自己的相位，
+    其余用例照常统计；计划外的记录单列结构问题（不冒充任何相位）。
     """
     context, expected = validate_bundle(bundle)
     root = os.path.abspath(root)
-    records, malformed = {}, []
+    records, malformed, missing, unexpected = {}, [], [], []
+    malformed_cases = set()
     phases = {phase: {"planned": 0, "passed": 0, "failed": 0, "unverified": 0}
               for phase in ("green", "red")}
     case_states = {}
+    seen = set()
     for path in sorted(glob.glob(os.path.join(root, "*.json"))):
         # 结果根同时承载生命周期证据（schema2 owner/run-state/摘要/控制记录）；
         # 它们不是 case 结果，由 bundle 或对应 reader 单独核验。
-        if os.path.basename(path) in NON_CASE_FILES:
+        base = os.path.basename(path)
+        if base in NON_CASE_FILES:
             continue
+        case = base[:-5] if base.endswith(".json") else base
         try:
             with open(path, encoding="utf-8") as handle:
                 record = json.load(handle)
-            case = record["case"]
-            mode = record["mode"]
-            planned = PHASES.get(mode)
-            if (not isinstance(case, str) or os.path.basename(path) != case + ".json"
-                    or case in records or case not in expected or mode != expected[case]["mode"]
+        except (OSError, ValueError) as exc:
+            if case in expected and case not in seen:
+                seen.add(case)
+                malformed.append(base)
+                malformed_cases.add(case)
+                case_states[case] = {phase: "unverified"
+                                     for phase in PHASES[expected[case]["mode"]]}
+            else:
+                unexpected.append(base)
+            continue
+        if not isinstance(record, dict) or record.get("case") not in expected or \
+                record.get("case") != case or case in seen:
+            unexpected.append(base)
+            continue
+        seen.add(case)
+        meta = expected[case]
+        planned = PHASES.get(meta["mode"])
+        try:
+            if (planned is None or record.get("mode") != meta["mode"]
                     or type(record.get("verified")) is not bool
-                    or record.get("execution_fingerprint") != expected[case]["execution_fingerprint"]
+                    or record.get("execution_fingerprint") != meta["execution_fingerprint"]
                     or record.get("bundle_sha256") != bundle["__sha256"]
                     or any(record.get(p) not in ("pass", "fail") for p in planned)
                     or record["verified"] != all(record.get(p) == "pass" for p in planned)):
@@ -606,37 +628,53 @@ def validate_repro(root, bundle, evidence_root=None, run_id=None):
                         or not math.isfinite(seconds) or seconds < 0):
                     raise SelectError("invalid duration")
                 if phase not in planned and record.get(phase, "skip") != "skip":
-                    raise SelectError(f"{phase} is not part of mode {mode} but carries a result")
-            states = {}
-            for phase in planned:
-                states[phase], _reason = _phase_verdict(root, case, phase, record,
-                                                        evidence_root, run_id)
-                phases[phase]["passed" if states[phase] == "passed"
-                              else "failed" if states[phase] == "failed" else "unverified"] += 1
-            all_passed = all(states[phase] == "passed" for phase in planned)
-            if record["verified"] and not all_passed:
-                # 断言记录说“通过”但本代清理/收据证据不成立：不是可复用的证明。
-                record["verified"] = False
-                record["evidence_problem"] = "; ".join(
-                    f"{phase}:{states[phase]}" for phase in planned if states[phase] != "passed")
-            case_states[case] = states
-            records[case] = record
-        except (OSError, ValueError, TypeError, KeyError) as exc:
-            malformed.append(os.path.basename(path))
+                    raise SelectError(f"{phase} is not part of mode {record.get('mode')} "
+                                      "but carries a result")
+        except (SelectError, TypeError, KeyError) as exc:
+            malformed.append(base)
+            malformed_cases.add(case)
+            case_states[case] = {phase: "unverified"
+                                 for phase in PHASES[meta["mode"]]}
             continue
-    missing = [case for case in expected if case not in records]
-    for case, record in expected.items():
-        for phase in PHASES[record["mode"]]:
+        states = {}
+        for phase in planned:
+            states[phase], _reason = _phase_verdict(root, case, phase, record,
+                                                    evidence_root, run_id)
+            phases[phase]["passed" if states[phase] == "passed"
+                          else "failed" if states[phase] == "failed" else "unverified"] += 1
+        all_passed = all(states[phase] == "passed" for phase in planned)
+        if record["verified"] and not all_passed:
+            # 断言记录说“通过”但本代清理/收据证据不成立：不是可复用的证明。
+            record["verified"] = False
+            record["evidence_problem"] = "; ".join(
+                f"{phase}:{states[phase]}" for phase in planned if states[phase] != "passed")
+        case_states[case] = states
+        records[case] = record
+    for case, meta in expected.items():
+        planned = PHASES[meta["mode"]]
+        for phase in planned:
             phases[phase]["planned"] += 1
+            if case in malformed_cases:
+                phases[phase]["unverified"] += 1
+        if case not in seen:
+            missing.append(case)
+            case_states[case] = {phase: "unverified" for phase in planned}
+            for phase in planned:
+                phases[phase]["unverified"] += 1
+    for phase, counts in phases.items():
+        if counts["planned"] != counts["passed"] + counts["failed"] + counts["unverified"]:
+            raise SelectError(f"repro phase counts for {phase} do not add up to planned")
     return {"records": records, "malformed": malformed, "missing": missing,
-            "expected": expected, "phases": phases, "case_states": case_states}
+            "unexpected": unexpected, "expected": expected, "phases": phases,
+            "case_states": case_states}
 
 
 def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size=None,
                  run_id=None, evidence_root=None):
     """唯一 writer：先验租约/输入，再重读**同一** bundle 与结果，最后原子合并 state。
 
-    只接收本代、相位证据齐全（receipt 终态 + 监督清理 + 本地回收）且断言通过的用例。
+    只接收本代、相位证据齐全（receipt 终态 + 监督清理 + 本地回收）且断言通过、
+    并且属于 dev 且含 red 相位的用例；green-only 与 candidate 都不读写共享 proof。
     """
     sys.path.insert(0, FULL)
     import fixture_scope
@@ -667,9 +705,8 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
     bundle = json.loads(data)
     bundle["__sha256"] = sha
     report = validate_repro(results_dir, bundle, evidence_root=evidence_root, run_id=run_id)
-    if report["malformed"] or report["missing"]:
-        raise SelectError("malformed/missing repro results: " +
-                          " ".join(report["malformed"] + report["missing"]))
+    if report["unexpected"]:
+        raise SelectError("unexpected repro results: " + " ".join(report["unexpected"]))
     groups_doc = load_groups()
     # final barrier：公共输入与执行上下文各重算**一次**（不随 case 数增长），与冻结值比对。
     context = bundle["execution_context"]
@@ -683,6 +720,9 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
     for case, record in report["records"].items():
         if not record.get("verified"):
             continue
+        # green 不读写共享 proof：只有 dev 且本 case 含 red 相位时才是可跨次消费的证明。
+        if context["deploy"] != "dev" or "red" not in PHASES[record["mode"]]:
+            continue
         expected = report["expected"][case]
         local = local_inputs(case, groups_doc)
         if local != expected["local_inputs"]:
@@ -691,11 +731,13 @@ def commit_state(results_dir, bundle_path=None, expected_sha=None, expected_size
         if subject != expected["red_subject_digest"]:
             raise SelectError(f"{case}: case inputs changed since freeze")
         entry = state["cases"].get(case) or {}
+        # 只写本次真正运行且已确认清理的相位：red-only 不得留下未运行的 green 证明。
         if "green" in PHASES[record["mode"]]:
             entry["green"] = {"fingerprint": expected["execution_fingerprint"],
                               "cleanup": "removed", "verified_at": now()}
-        if "red" in PHASES[record["mode"]] and context["deploy"] == "dev":
-            entry["red"] = {"subject": subject, "fingerprint": expected["execution_fingerprint"],
+        if "red" in PHASES[record["mode"]]:
+            entry["red"] = {"subject": subject,
+                            "fingerprint": expected["execution_fingerprint"],
                             "cleanup": "removed", "verified_at": now()}
         state["cases"][case] = entry
         updated.append(case)

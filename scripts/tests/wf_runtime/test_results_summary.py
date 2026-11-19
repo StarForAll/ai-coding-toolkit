@@ -1,4 +1,4 @@
-"""测量交接（schema1）与摘要唯一发布（schema3）的契约。
+"""测量交接（schema1）与摘要唯一发布（schema4）的契约。
 
 - 身份/输入快照：write_metrics 绑定本代 run_id/canonical root/role 与当前 plan/context/
   lines/unit/repro 输入的 sha256+size；read_metrics 用预期身份重算并逐项比对；
@@ -180,14 +180,22 @@ class BuildTest(unittest.TestCase):
 
     def test_status_ok_requires_gate_cleanup_and_evidence(self):
         payload = self.ws.build()
-        self.assertEqual(payload["schema_version"], 3)
+        self.assertEqual(payload["schema_version"], 4)
         self.assertEqual(payload["status"], "ok")
+        self.assertIsNone(payload["failure_kind"], "成功摘要不带失败归类")
         written = json.loads((self.ws.results / "summary.json").read_text())
         self.assertEqual(written, payload, "读回对象必须与返回对象完全一致")
         for report_value in (report(ok=False), report(cleanup="unknown"),
                              report(evidence="incomplete")):
             payload = self.ws.build(report_value)
             self.assertEqual(payload["status"], "failed")
+            self.assertEqual(payload["failure_kind"], "failed")
+
+    def test_cancelled_failure_kind_is_explicit(self):
+        value = report(ok=False)
+        value["failure_kind"] = "cancelled"
+        payload = self.ws.build(value)
+        self.assertEqual((payload["status"], payload["failure_kind"]), ("failed", "cancelled"))
 
     def test_counts_come_from_the_report_not_from_shell_numbers(self):
         payload = self.ws.build(report(fail=2))
@@ -232,6 +240,87 @@ class BuildTest(unittest.TestCase):
         with self.assertRaises(module.SummaryError):
             module.build(self.ws.results, report(), measurements(), None,
                          {"mode": "full"}, "full", "run-1")
+
+
+class HistoricalConclusionTest(unittest.TestCase):
+    """迁移表读者：新版 schema 4 与历史 schema 3 依各自事实判定，缺一即 unknown。"""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix="wf-summary-history-")
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        spec = importlib.util.spec_from_file_location(
+            "wf_results_summary_lifecycle", FULL / "resource_lifecycle.py")
+        self.lifecycle = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.lifecycle)
+        self.results = self.root / "results"
+
+    def start(self, run_id="run-1"):
+        return self.lifecycle.begin_run(str(self.results), "execution", "full", run_id)
+
+    def finish(self, run_id="run-1", cleanup="cleaned", evidence="complete"):
+        return self.lifecycle.finish_run(str(self.results), run_id, "full", cleanup, evidence)
+
+    def write_summary(self, status="ok", schema=4, failure_kind=None):
+        payload = {"schema_version": schema, "run_id": "run-1", "status": status,
+                   "failure_kind": failure_kind}
+        (self.results / "summary.json").write_text(json.dumps(payload))
+
+    def write_control(self, schema=2, cleanup="cleaned", evidence="complete", success=None,
+                      summary_status=None):
+        if schema == 2:
+            control = {"schema_version": 2, "cleanup": {"cleanup_state": cleanup},
+                       "assessment": {"evidence_state": evidence}}
+        else:
+            control = {"schema_version": 1, "success": success,
+                       "summary": {"status": summary_status}}
+        (self.results / ".runner.json").write_text(json.dumps({"control": control}))
+
+    def test_new_schema_ok_requires_all_same_generation_facts(self):
+        self.start()
+        self.write_summary()
+        self.write_control()
+        self.finish()
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "ok")
+        self.write_control(cleanup="unknown")
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "unknown")
+        self.write_control()
+        self.write_summary(status="failed", failure_kind="cancelled")
+        conclusion = module.historical_conclusion(self.results)
+        self.assertEqual((conclusion["status"], conclusion["failure_kind"]),
+                         ("failed", "cancelled"))
+
+    def test_historical_schema_3_reads_old_success_only_with_old_control_fact(self):
+        self.start()
+        state = json.loads((self.results / "run-state.json").read_text())
+        state["schema_version"] = 1
+        state["status"] = "ok"
+        (self.results / "run-state.json").write_text(json.dumps(state))
+        self.finish()
+        state = json.loads((self.results / "run-state.json").read_text())
+        state["schema_version"] = 1
+        state["status"] = "ok"
+        (self.results / "run-state.json").write_text(json.dumps(state))
+        self.write_summary(schema=3)
+        self.write_control(schema=1, success=True, summary_status="ok")
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "ok")
+        self.write_control(schema=1, success=False, summary_status="ok")
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "unknown",
+                         "缺旧控制成功事实时历史结论只能是未知")
+        self.write_control(schema=1, success=True, summary_status="failed")
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "unknown")
+
+    def test_finished_cleaned_without_committed_summary_is_unknown(self):
+        self.start()
+        self.write_control()
+        self.finish()
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "unknown",
+                         "finished+cleaned 且缺摘要不得判为成功")
+        self.write_summary()
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "ok")
+        self.write_summary(schema=2)
+        self.assertEqual(module.historical_conclusion(self.results)["status"], "unknown",
+                         "未知摘要 schema 不得冒充新版提交")
 
 
 class SummaryProjectionTest(unittest.TestCase):

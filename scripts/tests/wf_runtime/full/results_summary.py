@@ -8,7 +8,7 @@
   它只做测量交接，不携带 gate/cleanup/成功结论；
 - `read_metrics`：controller 侧唯一读取点，用自己持有的预期 run_id/root/role 与冻结输入
   重算并逐项比对；旧代/缺失/截断/错类型/输入不符一律拒绝；
-- `build`/`publish`：构造最终 schema3 对象一次原子发布（临时文件 → fsync → replace），
+- `build`/`publish`：构造最终 schema4 对象一次原子发布（临时文件 → fsync → replace），
   读回完整对象与之相等才返回成功；返回对象、落盘对象与 `summary_path` 是同一份事实。
 
 摘要的 gate/计数/债务来自 `results_gate.assess_run_results()`，cleanup 来自
@@ -27,7 +27,8 @@ import tempfile
 
 HERE = Path(__file__).resolve().parent
 METRICS_SCHEMA = 1
-SUMMARY_SCHEMA = 3
+SUMMARY_SCHEMA = 4
+LEGACY_SUMMARY_SCHEMAS = (3,)
 MAX_INPUT_BYTES = 1 << 20
 
 INT_MEASUREMENTS = ("full_mode", "jobs", "requested_jobs", "effective_jobs", "repro_jobs",
@@ -405,8 +406,9 @@ def _repro_phase_counts(plan, report):
 
 
 def build(results_dir, report, metrics, input_evidence, plan, role, run_id, fault=None,
-          context=None):
-    """一次构造最终 schema3；publish 负责原子落盘与全对象读回。"""
+          context=None, commit=True):
+    """一次构造最终 schema4；`commit=True` 立即原子发布，controller 用 `commit=False`
+    先写诊断/生命周期记录，再把 `publish` 作为唯一正式提交点。"""
     if role not in RUN_ROLES:
         raise SummaryError(f"summary role invalid: {role!r}")
     if not isinstance(report, dict) or not isinstance(report.get("counts"), dict):
@@ -430,6 +432,10 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
     if plan.get("fixture_deploy") == "candidate" and not candidate_commit:
         ok = False
     status = "ok" if ok else "failed"
+    failure_kind = None
+    if not ok:
+        requested = report.get("failure_kind")
+        failure_kind = "cancelled" if requested == "cancelled" else "failed"
     payload = {
         "schema_version": SUMMARY_SCHEMA,
         "run_id": run_id,
@@ -486,6 +492,7 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
             "over_hard": (_number(metrics, "total_millis") / 1000 > 65) if metrics else False,
         },
         "status": status,
+        "failure_kind": failure_kind,
         "gate": {
             "malformed": gate.get("malformed", 0),
             "missing": gate.get("missing") or [],
@@ -510,7 +517,8 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
     if fault == "summary-exception":
         raise SummaryError("injected summary build/publish exception")
     payload["summary_path"] = str(Path(results_dir) / "summary.json")
-    publish(results_dir, payload, fault=fault)
+    if commit:
+        publish(results_dir, payload, fault=fault)
     return payload
 
 
@@ -545,11 +553,88 @@ def publish(results_dir, payload, fault=None):
     return path
 
 
+def historical_conclusion(results_dir):
+    """历史/新版整次结论的**唯一**读取器（盘点与迁移核对用）。
+
+    - 新版：summary schema 4 `status=ok` 必须同时有同代 owner/run-state（finished、
+      cleanup=cleaned、evidence=complete）与同代控制记录的清理/证据事实；
+    - 历史：summary schema 3 + 控制 schema 1（旧事实按原意读） 的 `success=true`/`summary.status=ok` + run-state
+      schema 1 的 finished/cleaned/complete 一致才算通过；
+    - 字段缺失、不可读或跨代不一致一律 `unknown`（不猜、不把旧成功当新版提交）。
+    """
+    if str(HERE) not in sys.path:
+        sys.path.insert(0, str(HERE))
+    import resource_lifecycle as lifecycle
+
+    root = str(results_dir)
+    try:
+        owner = lifecycle.classify_owner(root)
+        state = lifecycle.classify_run_state(root)
+    except lifecycle.LifecycleError as exc:
+        return {"status": "unknown", "reason": str(exc), "schema_version": None}
+    try:
+        summary = _json_object(_read_bytes(Path(root) / "summary.json", "summary"), "summary")
+    except (SummaryError, OSError) as exc:
+        return {"status": "unknown", "reason": f"summary unreadable: {exc}",
+                "schema_version": None}
+    schema = summary.get("schema_version")
+    if isinstance(schema, bool) or schema not in (*LEGACY_SUMMARY_SCHEMAS, SUMMARY_SCHEMA):
+        return {"status": "unknown", "reason": f"unknown summary schema: {schema!r}",
+                "schema_version": schema}
+    run_id = summary.get("run_id")
+    if owner["kind"] != "schema2" or owner["payload"].get("intent") != "execution":
+        return {"status": "unknown", "reason": "results root has no execution owner",
+                "schema_version": schema}
+    if state["kind"] != "finished" or state["payload"].get("run_id") != run_id:
+        return {"status": "unknown", "reason": "run-state is not this generation's finish",
+                "schema_version": schema}
+    if owner["payload"].get("run_id") != run_id:
+        return {"status": "unknown", "reason": "owner/summary run_id mismatch",
+                "schema_version": schema}
+    control = None
+    receipt_path = Path(root) / ".runner.json"
+    try:
+        control = _json_object(_read_bytes(receipt_path, "control receipt"), "control receipt")
+    except (SummaryError, OSError):
+        control = None
+    status = summary.get("status")
+    if status == "failed":
+        return {"status": "failed", "reason": "", "schema_version": schema,
+                "failure_kind": summary.get("failure_kind")}
+    if status != "ok":
+        return {"status": "unknown", "reason": f"summary status invalid: {status!r}",
+                "schema_version": schema}
+    facts = {"cleanup_state": state["payload"].get("cleanup_state"),
+             "evidence_state": state["payload"].get("evidence_state")}
+    if facts != {"cleanup_state": "cleaned", "evidence_state": "complete"}:
+        return {"status": "unknown", "reason": "run-state facts do not support success",
+                "schema_version": schema}
+    record = (control or {}).get("control") or {}
+    record_schema = record.get("schema_version")
+    if schema == SUMMARY_SCHEMA:
+        if record_schema != 2:
+            return {"status": "unknown", "reason": "control record does not match summary schema",
+                    "schema_version": schema}
+        cleanup_state = ((record.get("cleanup") or {}).get("cleanup_state"))
+        evidence_state = ((record.get("assessment") or {}).get("evidence_state"))
+        if cleanup_state != "cleaned" or evidence_state != "complete":
+            return {"status": "unknown",
+                    "reason": "control facts do not support success",
+                    "schema_version": schema}
+    else:
+        if record_schema != 1 or record.get("success") is not True or \
+                (record.get("summary") or {}).get("status") != "ok":
+            return {"status": "unknown",
+                    "reason": "historical control record does not confirm success",
+                    "schema_version": schema}
+    return {"status": "ok", "reason": "", "schema_version": schema}
+
+
 # ---- CLI -------------------------------------------------------------------
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="测量交接（schema1）与摘要唯一发布（schema3）")
+    parser = argparse.ArgumentParser(description="测量交接（schema1）与摘要唯一发布（schema4）")
     parser.add_argument("--results-dir", required=True)
     parser.add_argument("--run-id")
     parser.add_argument("--role", choices=RUN_ROLES)

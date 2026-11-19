@@ -98,6 +98,18 @@ class LayoutTest(unittest.TestCase):
             self.assertTrue(wf_test_paths.contains(self.scope, layout[key]),
                             f"{key}={layout[key]} 不在 scope 内")
 
+    def test_execution_identity_names_default_paths_and_rejects_separators(self):
+        env = {key: value for key, value in os.environ.items() if not key.startswith("WF_")}
+        env["WF_TEST_SCOPE_ROOT"] = str(self.scope)
+        for kind in ("run", "repro"):
+            layout = wf_test_paths.resolve_layout(kind, mode="green", env=env,
+                                                  identity="run-1750000000-1-abc")
+            self.assertIn("run-1750000000-1-abc", str(layout["results_dir"]))
+            self.assertIn("run-1750000000-1-abc", str(layout["fixture"]))
+        for bad in ("../outside", "a/b", "/abs", "..", ".hidden"):
+            with self.subTest(identity=bad), self.assertRaises(wf_test_paths.PathError):
+                wf_test_paths.resolve_layout("run", env=env, identity=bad)
+
     def test_explicit_out_of_scope_cache_or_pycache_is_refused(self):
         outside = self.root / "outside"
         outside.mkdir()

@@ -1673,8 +1673,10 @@ def _summary_report(gate_report, assessment, cleanup_report, control):
     reasons = list(assessment.get('reasons') or []) + list(cleanup_report.get('reasons') or [])
     if control_failed:
         reasons.append(f"control status is {control.get('status')!r} (rc={control.get('rc')})")
+    cancelled = control.get('status') in ('cancelled', 'timeout')
     return {
         "ok": ok,
+        "failure_kind": (None if ok else ("cancelled" if cancelled else "failed")),
         "counts": counts,
         "gate": (gate_report or {}).get('gate') or {
             "malformed": 0, "missing": [], "duplicate": [], "unexpected": [],
@@ -1850,6 +1852,12 @@ def _candidate_final_check(identity, prepared, args, root, scope):
     result = run(command, log, timeout=args.timeout, scope=scope,
                  fault_identity='release:final')
     if result.get('status') != 'passed':
+        cancel_request = os.path.exists(os.path.join(root, 'cancel-request'))
+        if cancel_request or (scope is not None and getattr(scope, 'latched', False)):
+            # 已经取消（信号或已发布请求）时，终核只归因为“未完成/取消”；不冒充候选身份漂移。
+            raise EvidenceError(
+                'CANDIDATE-FINAL-INCOMPLETE: cancelled before final verification completed ('
+                + (result.get('reason') or 'validator interrupted') + f'); see {log}')
         raise EvidenceError(
             'CANDIDATE-REPO-CHANGED: final verification failed ('
             + (result.get('reason') or 'validator returned non-zero') + f'); see {log}')
@@ -1936,7 +1944,7 @@ def _commit_repro_proof(role, plan, root, run_id):
 def _cancel_report(report, decision):
     reasons = list(report.get('reasons') or [])
     reasons.append(decision.reason or 'cancelled before the success boundary')
-    return dict(report, ok=False, reasons=reasons[:50])
+    return dict(report, ok=False, failure_kind='cancelled', reasons=reasons[:50])
 
 
 def runner_control(args):
@@ -1966,14 +1974,7 @@ def runner_control(args):
     cancel_path = os.path.join(root, 'cancel-request')
     os.environ['WF_CANCEL_FILE'] = cancel_path
     os.environ.setdefault('WF_RUN_ID', args.run_id)
-    try:
-        observe = cleanup.observe_roots(root, plan, role)
-    except Exception as exc:  # 观察失败只是诊断缺口，不扩大为当前 run 的恢复失败
-        observe = {"enabled": True, "status": "partial", "calls": 1,
-                   "roots": [], "error": str(exc), "reports": {}}
-        print(f'OBSERVE-FAILED: {exc}', file=sys.stderr)
-    print(f'OBSERVE: {observe["status"]} (enabled={observe["enabled"]}, '
-          f'calls={observe["calls"]}, roots={observe["roots"]})', file=sys.stderr, flush=True)
+    # 默认执行不观察/不盘点历史材料：维护只由显式入口（inventory/prune/retire）发生。
     scope = CancellationScope().install()
     import release_lock
     release_fd = None
@@ -1997,7 +1998,7 @@ def runner_control(args):
             early_status = 'cancelled' if cancelled else 'failed'
             print(f'RUNNER-RELEASE-FAILED: {exc}', file=sys.stderr)
             try:
-                lifecycle.finish_run(root, args.run_id, role, 'unknown', early_status,
+                lifecycle.finish_run(root, args.run_id, role, 'unknown',
                                      'incomplete', reasons=[str(exc)])
             except lifecycle.LifecycleError as state_exc:
                 print(f'RUNNER-STATE-FAILED: {state_exc}', file=sys.stderr)
@@ -2015,27 +2016,39 @@ def runner_control(args):
                              pass_fds=pass_fds,
                              scope=scope, runner_control=True, receipt_path=str(result_path),
                              env=_child_environment(fault, results_summary))
+        repro_root = _proof_root(role, plan, root)
+        context_path = Path(root) / lifecycle.RELEASE_CONTEXT_NAME
+        gate_report = None
+        evidence_error = None
         try:
-            # 结束发行校验：候选必须与初核同一身份；在 proof/摘要/终态之前完成。
+            # 结束发行校验与取消状态无关：取消时只把终核归因为“未完成/取消”；
+            # 候选只有可核到的身份差异才报告漂移，且终核未通过不产生整次候选通过。
             if prepared['identity']['deploy'] == 'candidate':
                 _candidate_final_check(prepared['identity'], prepared, args, root, scope)
             else:
                 release_lock.verify_lease(prepared['identity']['root'])
-            repro_root = _proof_root(role, plan, root)
             if role == 'full':
                 gate_report = _gate_report(root, plan, args.plan_file)
-                context_path = Path(root) / lifecycle.RELEASE_CONTEXT_NAME
             else:
-                repro_root = Path(root)
                 gate_report = _repro_gate_report(root, plan, run_id=args.run_id,
                                                  evidence_root=str(Path(root) / 'commands'))
-                context_path = Path(root, lifecycle.RELEASE_CONTEXT_NAME)
+        except (EvidenceError, lifecycle.LifecycleError, release_lock.LockError,
+                OSError, ValueError) as exc:
+            evidence_error = exc
+            print(f'RUNNER-EVIDENCE-FAILED: {exc}', file=sys.stderr)
+        # 清理事实与证据成败分开：本代有依据就删，现场未知就保留。终核失败、取消短路
+        # 或相位报告坏损都不越过这个出口。
+        try:
             assessment = _assess_with_faults(root, args.run_id, plan, control_result,
                                              gate_report, fault, cleanup)
-            # 清理已确认才删除；证据/摘要失败不影响“真实清理”的事实，但不得签成功。
-            # 取消可能让内层来不及写 metrics/摘要：先收口清理，再消费证据，避免把“没清理”
-            # 误记成证据缺失，也避免为失败证据保留现场。
-            cleanup_report = cleanup.finalize(root, plan, assessment)
+        except Exception as exc:  # 聚合器崩溃也是“证据未知”，不跳过清理
+            print(f'RUNNER-ASSESS-FAILED: {exc}', file=sys.stderr)
+            assessment = _unknown_assessment(gate_report, f'assessment failed: {exc}')
+            evidence_error = evidence_error or exc
+        cleanup_report = cleanup.finalize(root, plan, assessment)
+        payload = None
+        report = None
+        try:
             bundle_sha, bundle_size = (_repro_bundle_fact(str(repro_root))
                                        if repro_root else (None, None))
             if role == 'full':
@@ -2049,11 +2062,15 @@ def runner_control(args):
                     str(repro_root), bundle_sha, bundle_size)
             context = results_summary._json_object(
                 Path(context_path).read_bytes(), 'release context')
-            # 结束发行校验/清理/取消都有结论后，才提交唯一一次 proof（取消到达即不提交）。
+            # 结束发行校验/清理/取消都有结论后，才提交唯一一次 proof（取消或证据失败即不提交）。
             cancel_before_proof = scope.consume_cancel(cancel_path)
-            if not cancel_before_proof.cancelled:
+            if not cancel_before_proof.cancelled and evidence_error is None:
                 _commit_repro_proof(role, plan, root, args.run_id)
             report = _summary_report(gate_report, assessment, cleanup_report, control_result)
+            if evidence_error is not None:
+                report = dict(report, ok=False,
+                              reasons=(list(report.get('reasons') or [])
+                                       + [f"evidence: {evidence_error}"])[:50])
             # 最终成功决策边界：材料已备好、正式发布之前固定结论。
             decision = scope.final_decision(cancel_path)
             if decision.cancelled:
@@ -2063,10 +2080,11 @@ def runner_control(args):
                 status = 'ok' if report["ok"] else (
                     'cancelled' if control_result.get('status') in ('cancelled', 'timeout')
                     else 'failed')
+            # 只构造，不提交：summary 的原子替换是唯一正式提交点，必须在诊断/生命周期
+            # 记录都已写入之后才发生。
             payload = results_summary.build(root, report, metrics, input_evidence,
                                             plan, role, args.run_id, fault=fault,
-                                            context=context)
-            success = report["ok"] and payload.get('status') == 'ok'
+                                            context=context, commit=False)
         except (EvidenceError, cleanup.CleanupError, results_summary.SummaryError,
                 lifecycle.LifecycleError, release_lock.LockError, OSError, ValueError) as exc:
             print(f'RUNNER-FINALIZE-FAILED: {exc}', file=sys.stderr)
@@ -2074,76 +2092,66 @@ def runner_control(args):
             publish_failure = True
             status = ('cancelled' if control_result.get('status') in ('cancelled', 'timeout')
                       else 'failed')
-            if assessment is None:
-                assessment = _unknown_assessment(gate_report, str(exc))
             cleanup_report = cleanup_report or {
                 "cleanup_state": "unknown", "removed": [], "failed": [],
                 "not_attempted": [], "retained_paths": [], "reasons": [str(exc)]}
-            control_doc = {
-                "schema_version": 1, "run_id": args.run_id, "role": role,
-                "target": {"status": control_result.get('status'), "rc": control_result.get('rc')},
-                "observe": observe, "failure": str(exc), "success": False,
-                "assessment": {"cleanup_state": assessment['cleanup_state'],
-                               "evidence_state": assessment['evidence_state'],
-                               "reasons": assessment.get('reasons') or [],
-                               "retained_paths": assessment.get('retained_paths') or []},
-                "cleanup": cleanup_report,
-            }
-        if payload is not None:
-            control_doc = {
-                "schema_version": 1, "run_id": args.run_id, "role": role,
-                "target": {"status": control_result.get('status'), "rc": control_result.get('rc')},
-                "observe": observe,
-                "assessment": {"cleanup_state": assessment['cleanup_state'],
-                               "evidence_state": assessment['evidence_state'],
-                               "reasons": assessment.get('reasons') or [],
-                               "retained_paths": assessment.get('retained_paths') or []},
-                "cleanup": cleanup_report,
-                "summary": {"path": payload.get('summary_path'), "status": payload.get('status'),
-                            "schema_version": payload.get('schema_version')},
-                "success": success,
-            }
-        if (cleanup_report or {}).get('cleanup_state') != 'cleaned' or not success:
-            print('CLEANUP-UNKNOWN: 本次 run 的清理/证据/发布未全部确认；'
+        control_doc = {
+            "schema_version": 2, "run_id": args.run_id, "role": role,
+            "target": {"status": control_result.get('status'), "rc": control_result.get('rc')},
+            "assessment": {"cleanup_state": assessment['cleanup_state'],
+                           "evidence_state": assessment['evidence_state'],
+                           "reasons": assessment.get('reasons') or [],
+                           "retained_paths": assessment.get('retained_paths') or []},
+            "cleanup": cleanup_report,
+        }
+        if evidence_error is not None:
+            control_doc["failure"] = str(evidence_error)
+        if (cleanup_report or {}).get('cleanup_state') != 'cleaned':
+            print('CLEANUP-UNKNOWN: 本次 run 的清理未确认；'
                   f'cleanup={(cleanup_report or {}).get("cleanup_state")} '
                   f'evidence={assessment["evidence_state"]} '
                   f'reasons={" ".join((cleanup_report or {}).get("reasons") or [])[:400]}',
                   file=sys.stderr)
+        # 诊断与生命周期记录先写，summary 发布是最后一步；任一步失败都不产生正式通过。
         if fault == 'control-write-oserror':
             print('RUNNER-CONTROL-FAILED: injected control write failure', file=sys.stderr)
-            success = False
             publish_failure = True
-            final_evidence = 'incomplete'
-        elif control_doc is not None:
+        else:
             try:
                 _finish_receipt(str(result_path), control_result.get('command_id') or '',
-                                {'control': control_doc, 'success': success})
+                                {'control': control_doc})
             except (lifecycle.LifecycleError, OSError) as exc:
                 print(f'RUNNER-CONTROL-FAILED: {exc}', file=sys.stderr)
-                success = False
                 publish_failure = True
-                final_evidence = 'incomplete'
-        # 控制结果已终写后，才计算并写 run-state（run-state 是最后一个终态记录）。
-        # 终态只在“本次 run 完整闭合”时保留 cleaned：证据/摘要/控制发布失败一律降为
-        # unknown（真实清理明细仍在 `.runner.json` 的 cleanup 报告里），避免失败 run 留下
-        # 与成功相同的 finished-cleaned 签名；取消分支保留真实清理结论。
         state_cleanup = (cleanup_report or {}).get('cleanup_state') or 'unknown'
         cancelled = status == 'cancelled' or control_result.get('status') in ('cancelled', 'timeout')
-        if not success and not cancelled and state_cleanup != 'failed':
+        if publish_failure and not cancelled and state_cleanup != 'failed':
             state_cleanup = 'unknown'
         final_evidence = ('incomplete' if publish_failure else assessment['evidence_state'])
         if fault == 'state-finish-oserror':
             print('RUNNER-STATE-FAILED: injected run-state finish failure', file=sys.stderr)
-            success = False
+            publish_failure = True
         else:
             try:
-                lifecycle.finish_run(root, args.run_id, role, state_cleanup, status,
+                lifecycle.finish_run(root, args.run_id, role, state_cleanup,
                                      final_evidence,
                                      retained_paths=(cleanup_report or {}).get('retained_paths') or [],
                                      reasons=(report or {}).get('reasons') or [])
             except lifecycle.LifecycleError as exc:
                 print(f'RUNNER-STATE-FAILED: {exc}', file=sys.stderr)
-                success = False
+                publish_failure = True
+        success = False
+        if payload is not None and not publish_failure:
+            try:
+                results_summary.publish(root, payload, fault=fault)
+                success = payload.get('status') == 'ok'
+            except (results_summary.SummaryError, OSError) as exc:
+                print(f'RUNNER-SUMMARY-FAILED: {exc}', file=sys.stderr)
+                publish_failure = True
+        if (report or {}).get('ok') and not success:
+            print('CLEANUP-UNKNOWN: 本次 run 的诊断/生命周期/摘要未全部确认；'
+                  f'cleanup={state_cleanup} evidence={assessment["evidence_state"]}',
+                  file=sys.stderr)
         final_rc = control_result.get('rc') or 0
         if final_rc == 0 and not success:
             final_rc = 1

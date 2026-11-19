@@ -171,16 +171,34 @@ def require_in_scope(*targets, scope=None) -> None:
                         f' (scope {scope_path})')
 
 
-def default_layout(scope, kind='run', pid=None, mode=None) -> dict:
+ALLOWED_IDENTITY = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-')
+
+
+def _execution_suffix(kind, pid, mode, identity):
+    """默认路径后缀：新执行身份优先（防 PID 重用同名），无身份时沿用 PID。
+
+    执行身份进入默认路径组件：只接受单段安全字符，拒绝分隔符/`..`/绝对路径。
+    """
+    if identity:
+        suffix = str(identity)
+        if (not suffix or '..' in suffix or suffix.startswith('.')
+                or any(char not in ALLOWED_IDENTITY for char in suffix)):
+            raise PathError(f'执行身份不能用作路径组件：{identity!r}')
+        return f'repro-{mode or "both"}-{suffix}' if kind == 'repro' else f'run-{suffix}'
+    pid = os.getpid() if pid is None else int(pid)
+    return f'repro-{mode or "both"}-{pid}' if kind == 'repro' else f'run-{pid}'
+
+
+def default_layout(scope, kind='run', pid=None, mode=None, identity=None) -> dict:
     """Managed path defaults for an active scope (pure derivation, no writes)."""
     scope_path = canonical(scope)
-    pid = os.getpid() if pid is None else int(pid)
+    name = _execution_suffix(kind, pid, mode, identity)
     if kind == 'run':
-        results = scope_path / f'run-{pid}'
-        fixture = scope_path / 'fixtures' / f'run-{pid}'
+        results = scope_path / name
+        fixture = scope_path / 'fixtures' / name
     elif kind == 'repro':
-        results = scope_path / f'repro-{mode or "both"}-{pid}'
-        fixture = scope_path / 'fixtures' / f'repro-{mode or "both"}-{pid}'
+        results = scope_path / name
+        fixture = scope_path / 'fixtures' / name
     else:
         raise PathError(f'unknown layout kind: {kind!r}')
     results_cache = scope_path / 'cache'
@@ -201,15 +219,15 @@ def default_layout(scope, kind='run', pid=None, mode=None) -> dict:
     }
 
 
-def production_layout(kind='run', pid=None, mode=None) -> dict:
-    """Legacy defaults used when no scope is active (unchanged behaviour)."""
-    pid = os.getpid() if pid is None else int(pid)
+def production_layout(kind='run', pid=None, mode=None, identity=None) -> dict:
+    """Legacy defaults used when no scope is active (same roots, identity-named)."""
+    name = _execution_suffix(kind, pid, mode, identity)
     if kind == 'run':
-        results = DEFAULT_RESULTS_CACHE / f'run-{pid}'
-        fixture = Path(f'/tmp/wf-fixtures/run-{pid}')
+        results = DEFAULT_RESULTS_CACHE / name
+        fixture = Path('/tmp/wf-fixtures') / name
     elif kind == 'repro':
-        results = DEFAULT_RESULTS_CACHE / f'repro-{mode or "both"}-{pid}'
-        fixture = Path(f'/tmp/wf-fixtures/repro-{mode or "both"}-{pid}')
+        results = DEFAULT_RESULTS_CACHE / name
+        fixture = Path('/tmp/wf-fixtures') / name
     else:
         raise PathError(f'unknown layout kind: {kind!r}')
     results_cache = DEFAULT_RESULTS_CACHE
@@ -230,7 +248,7 @@ def production_layout(kind='run', pid=None, mode=None) -> dict:
     }
 
 
-def resolve_layout(kind='run', pid=None, mode=None, env=None) -> dict:
+def resolve_layout(kind='run', pid=None, mode=None, env=None, identity=None) -> dict:
     """Final managed layout: explicit env values win, everything else derives.
 
     Every resolved value is scope-checked *before* any caller writes (mkdir, open,
@@ -241,9 +259,9 @@ def resolve_layout(kind='run', pid=None, mode=None, env=None) -> dict:
     value = env.get(ENV_SCOPE)
     if value:
         scope = read_scope(value)
-        layout = default_layout(scope, kind, pid, mode)
+        layout = default_layout(scope, kind, pid, mode, identity)
     else:
-        layout = production_layout(kind, pid, mode)
+        layout = production_layout(kind, pid, mode, identity)
     overrides = {
         'results_dir': env.get('WF_RESULTS_DIR'),
         'fixture': env.get('WF_FIX'),
@@ -296,6 +314,8 @@ def main(argv=None):
     layout.add_argument('--kind', choices=('run', 'repro'), default='run')
     layout.add_argument('--pid', type=int, default=None)
     layout.add_argument('--mode', default=None)
+    layout.add_argument('--identity', default=None,
+                        help='本代执行身份（默认路径后缀；缺省沿用 --pid）')
     layout.add_argument('--format', default='sh', choices=('sh', 'json'))
     scope = sub.add_parser('check-scope')
     scope.add_argument('paths', nargs='+')
@@ -305,7 +325,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.operation == 'layout':
-            resolved = resolve_layout(args.kind, args.pid, args.mode)
+            resolved = resolve_layout(args.kind, args.pid, args.mode, identity=args.identity)
             if args.format == 'json':
                 print(json.dumps({key: str(value) for key, value in resolved.items()},
                                  ensure_ascii=False, indent=2, sort_keys=True))

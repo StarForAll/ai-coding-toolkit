@@ -137,9 +137,15 @@ def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None, run_
                 "bundle_sha256": sha, "bundle_size": len(data)}
     expected = report['expected']
     passed = [case for case in expected if report['records'].get(case, {}).get('verified') is True]
-    failed = len(expected) - len(passed) + len(report['malformed']) + len(report['missing'])
-    if report['malformed'] or report['missing']:
+    # 用例级结论只数“完整通过”的用例；每相位守恒由 validate_repro 保证并单独上报。
+    failed = len(expected) - len(passed)
+    if report.get('unexpected'):
         structural = False
+        reasons.append('unexpected repro records: ' + ' '.join(report['unexpected']))
+    if report['malformed']:
+        reasons.append('malformed repro records: ' + ' '.join(report['malformed']))
+    if report['missing']:
+        reasons.append('missing repro records: ' + ' '.join(report['missing']))
     seconds = {}
     for phase in ('green', 'red'):
         total = 0
@@ -153,10 +159,11 @@ def repro_report(root, bundle_path=None, bundle_sha=None, bundle_size=None, run_
             total += value
         seconds[phase] = int(total)
     phase_counts = {phase: dict(counts) for phase, counts in report.get('phases', {}).items()}
-    ok = failed == 0 and structural
+    ok = (failed == 0 and structural and not report['malformed'] and not report['missing'])
     return {"enabled": True, "ok": ok, "structural": structural,
             "total": len(expected), "passed": passed, "failed": failed,
             "malformed": report['malformed'], "missing": report['missing'],
+            "unexpected": report.get('unexpected') or [],
             "green_seconds": seconds['green'], "red_seconds": seconds['red'],
             "phase_counts": phase_counts, "bundle_sha256": sha, "bundle_size": len(data),
             "bundle_path": str(bundle_file), "reasons": reasons}

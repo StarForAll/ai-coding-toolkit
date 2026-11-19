@@ -81,6 +81,11 @@ class IdentityTest(unittest.TestCase):
 
 
 class ClassificationTest(unittest.TestCase):
+    """目录认领：只有不存在或无主且完全为空的真实目录可认领；其余一律拒绝且不删。
+
+    `finished+cleaned` 只是历史事实，不再等于“可自动复用/轮转”。
+    """
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="wf-lifecycle-classify-")
         self.addCleanup(self.tmp.cleanup)
@@ -90,50 +95,46 @@ class ClassificationTest(unittest.TestCase):
         return lifecycle.begin_run(str(self.root), intent, role, run_id)
 
     def finish(self, run_id, cleanup="cleaned", evidence="complete", retained=()):
-        lifecycle.finish_run(str(self.root), run_id, "full", cleanup, "ok", evidence, retained)
+        lifecycle.finish_run(str(self.root), run_id, "full", cleanup, evidence, retained)
 
-    def test_absent_empty_and_plan_only(self):
+    def test_absent_empty_and_plan_only_are_claimed_once(self):
         self.assertEqual(lifecycle.classify_result(str(self.root))["kind"], "absent")
+        self.assertTrue(lifecycle.classify_result(str(self.root))["claimable"])
         out = self.begin("plan-only", "full")
-        self.assertEqual(lifecycle.classify_result(str(self.root))["kind"],
-                         "empty")
-        (self.root / "plan.json").write_text("{}")
         self.assertEqual(lifecycle.classify_result(str(self.root))["kind"], "plan-only")
-        (self.root / "commands").mkdir()
-        self.assertEqual(lifecycle.classify_result(str(self.root))["kind"], "incomplete-new")
+        self.assertFalse(lifecycle.classify_result(str(self.root))["claimable"],
+                         "已有计划镜像（含同一命令的预览）不得被再次认领")
         self.assertIsNone(out["run_id"])
+        with self.assertRaises(lifecycle.LifecycleError):
+            self.begin("plan-only", "full")
+        self.assertFalse((self.root / "plan.json").exists(), "拒绝不得写入预览")
 
-    def test_finished_cleaned_requires_complete_evidence_and_no_retention(self):
+    def test_empty_directory_without_owner_is_claimable(self):
+        self.root.mkdir(parents=True)
+        info = lifecycle.classify_result(str(self.root))
+        self.assertEqual(info["kind"], "empty")
+        self.assertTrue(info["claimable"])
+
+    def test_finished_cleaned_is_reported_but_never_reused(self):
         out = self.begin()
         self.finish(out["run_id"])
-        self.assertEqual(lifecycle.classify_result(str(self.root))["kind"], "finished-cleaned")
-        self.assertTrue(lifecycle.classify_result(str(self.root))["automatic_prune"])
-
-    def test_evidence_incomplete_or_retained_blocks_reuse(self):
-        out = self.begin()
-        self.finish(out["run_id"], evidence="incomplete")
-        self.assertFalse(lifecycle.classify_result(str(self.root))["reusable"])
+        info = lifecycle.classify_result(str(self.root))
+        self.assertEqual(info["kind"], "finished-cleaned")
+        self.assertFalse(info["claimable"])
+        self.assertTrue(info["retention_candidate"])
         with self.assertRaises(lifecycle.LifecycleError):
             self.begin()
-        import shutil
-        shutil.rmtree(self.root)
-        out = self.begin()
-        self.finish(out["run_id"], retained=["/tmp/kept"])
-        result = lifecycle.classify_result(str(self.root))
-        self.assertEqual(result["kind"], "active")
-        self.assertFalse(result["reusable"])
-        with self.assertRaises(lifecycle.LifecycleError):
-            self.begin()
+        self.assertTrue((self.root / lifecycle.RUN_STATE_NAME).exists(), "拒绝不得删材料")
 
-    def test_active_unknown_and_mismatch_refuse_without_deleting(self):
+    def test_active_incomplete_legacy_and_unowned_refuse_without_deleting(self):
         out = self.begin()
         (self.root / "lines").write_text("x")
         info = lifecycle.classify_result(str(self.root))
         self.assertEqual(info["kind"], "active")
+        self.assertFalse(info["claimable"])
         with self.assertRaises(lifecycle.LifecycleError):
             self.begin()
         self.assertTrue((self.root / "lines").exists())
-        # run_id 不匹配：owner 指向本代、state 指向别的代
         record = json.loads((self.root / lifecycle.RUN_STATE_NAME).read_text())
         record["run_id"] = "another-run"
         (self.root / lifecycle.RUN_STATE_NAME).write_text(json.dumps(record))
@@ -141,59 +142,38 @@ class ClassificationTest(unittest.TestCase):
                       ("incomplete-new", "unknown"))
         _ = out
 
-    def test_legacy_owner_with_content_is_not_reused(self):
+    def test_legacy_owner_alone_and_with_content_refuse(self):
         owner = {"owner": lifecycle.RESULT_OWNER,
                  "root": lifecycle.canonical_root(str(self.root))}
         self.root.mkdir(parents=True)
         (self.root / lifecycle.OWNER_NAME).write_text(json.dumps(owner))
+        info = lifecycle.classify_result(str(self.root))
+        self.assertEqual(info["kind"], "legacy-owned")
+        self.assertFalse(info["claimable"])
         (self.root / "lines").write_text("x")
         with self.assertRaises(lifecycle.LifecycleError):
             self.begin()
         self.assertTrue((self.root / "lines").exists())
 
-    def test_unknown_top_level_entry_refuses_reuse(self):
-        out = self.begin()
-        self.finish(out["run_id"])
+    def test_unknown_top_level_entry_refuses_claim(self):
+        self.root.mkdir(parents=True)
         (self.root / "user-notes.txt").write_text("keep")
+        info = lifecycle.classify_result(str(self.root))
+        self.assertEqual(info["kind"], "unknown")
         with self.assertRaises(lifecycle.LifecycleError):
             self.begin()
         self.assertTrue((self.root / "user-notes.txt").exists())
 
-    def test_begin_run_prepares_only_known_artifacts(self):
-        out = self.begin()
-        (self.root / "lines").write_text("x")
-        (self.root / "logs").mkdir(exist_ok=True)
-        (self.root / "logs" / "a.log").write_text("x")
-        (self.root / "commands").mkdir(exist_ok=True)
-        (self.root / "commands" / "c.json").write_text("{}")
-        self.finish(out["run_id"])
-        second = self.begin()
-        self.assertNotEqual(second["run_id"], out["run_id"])
-        self.assertFalse((self.root / "lines").exists())
-        self.assertFalse((self.root / "logs" / "a.log").exists())
-        self.assertFalse((self.root / "commands" / "c.json").exists())
-        self.assertTrue((self.root / "logs").is_dir())
-        self.assertTrue((self.root / "commands").is_dir())
-
-    def test_run_owned_pycache_is_a_registered_artifact(self):
-        out = self.begin()
-        (self.root / "pycache").mkdir()
-        (self.root / "pycache" / "x.pyc").write_text("bytecode")
-        self.finish(out["run_id"])
-        info = lifecycle.classify_result(str(self.root))
-        self.assertEqual(info["kind"], "finished-cleaned", info["reason"])
-        self.begin()
-        self.assertFalse((self.root / "pycache").exists())
-
     def test_finish_run_only_rewrites_this_generation(self):
         out = self.begin()
         with self.assertRaises(lifecycle.LifecycleError):
-            lifecycle.finish_run(str(self.root), "other-run", "full", "cleaned", "ok")
-        lifecycle.finish_run(str(self.root), out["run_id"], "full", "cleaned", "ok",
-                             "complete")
+            lifecycle.finish_run(str(self.root), "other-run", "full", "cleaned")
+        lifecycle.finish_run(str(self.root), out["run_id"], "full", "cleaned", "complete")
         state = json.loads((self.root / lifecycle.RUN_STATE_NAME).read_text())
-        self.assertEqual((state["state"], state["cleanup_state"], state["evidence_state"]),
-                         ("finished", "cleaned", "complete"))
+        self.assertEqual((state["schema_version"], state["state"], state["cleanup_state"],
+                          state["evidence_state"]),
+                         (2, "finished", "cleaned", "complete"))
+        self.assertNotIn("status", state, "run-state 不再承载整次成败")
 
 
 class UnitExecutionTest(unittest.TestCase):
@@ -344,33 +324,19 @@ class InitCheckpointTest(unittest.TestCase):
                 self.assertIn("WF-RESULTS-INIT-STOP", proc.stderr)
                 self.assertNotIn('"run_id"', proc.stdout, "死亡前不得给出成功 run_id")
                 # 每点只写一半：下一次 begin_run 必须拒绝而非吞掉（保留现场）。
-                if checkpoint != "after-prepare-before-controller":
-                    with self.assertRaises(lifecycle.LifecycleError):
-                        lifecycle.begin_run(str(self.root), "execution", "full")
+                with self.assertRaises(lifecycle.LifecycleError):
+                    lifecycle.begin_run(str(self.root), "execution", "full")
 
-    def test_first_plan_only_and_reuse_all_reach_the_checkpoint(self):
-        def complete():
-            out = lifecycle.begin_run(str(self.root), "execution", "full")
-            lifecycle.finish_run(str(self.root), out["run_id"], "full", "cleaned", "ok",
-                                 "complete")
-            import shutil
-            shutil.rmtree(self.root)
-            out = lifecycle.begin_run(str(self.root), "execution", "full")
-            lifecycle.finish_run(str(self.root), out["run_id"], "full", "cleaned", "ok",
-                                 "complete")
-
+    def test_fresh_and_plan_only_reach_the_checkpoint(self):
         for intent in ("execution", "plan-only"):
             with self.subTest(intent=intent):
                 import shutil
                 if self.root.exists():
                     shutil.rmtree(self.root)
-                out = lifecycle.begin_run(str(self.root), "execution", "full")
-                lifecycle.finish_run(str(self.root), out["run_id"], "full", "cleaned", "ok",
-                                     "complete")
                 proc = self.run_begin(intent=intent, point="after-owner-intent")
                 self.assertEqual(proc.returncode, 97, proc.stdout + proc.stderr)
-                self.assertFalse(lifecycle.classify_result(str(self.root))["reusable"],
-                                 "死亡窗口的意图不得被下一次运行当作可复用")
+                self.assertFalse(lifecycle.classify_result(str(self.root))["claimable"],
+                                 "死亡窗口的意图不得被下一次运行当作可认领")
                 with self.assertRaises(lifecycle.LifecycleError):
                     lifecycle.begin_run(str(self.root), "execution", "full")
 

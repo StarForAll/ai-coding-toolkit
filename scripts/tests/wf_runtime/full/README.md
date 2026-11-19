@@ -1,8 +1,10 @@
 # wf 运行期全流程用例（手动运行）
 
 这些脚本是 2026-11-03 各轮复核期间的三夹具验证资产，已固化进仓库以免随会话丢失。
-它们**不在** `unittest discover` 的默认范围内，需要显式运行。运行器会写测试发行缓存、
-结果目录和临时夹具；`cp3/r1r2` 的用户配置写入使用独立测试目录，结束后清理。
+它们**不在** `unittest discover` 的默认范围内，需要显式运行。默认执行只写本次结果目录、
+本次临时夹具与本次私有测试发行；共享测试发行缓存、跨 run 模板缓存、历史结果都只在显式
+`--no-build`/`--template-cache`/维护入口下读写。`cp3/r1r2` 的用户配置写入使用独立测试目录，
+结束后清理。
 
 ## 前置
 
@@ -127,10 +129,15 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   置 `"parallel": false` 并在 `notes` 登记理由（`plan.py::load_units` 校验 notes 非空）。
 - `cp3/r1r2` 的 `--isolated-user` 由 `units.json` 的 `isolated_user` 字段下发
   （`plan.py` → `PLAN_ISOLATED_UNITS` → `WF_ISOLATED_UNITS`，run_all/run_one 同一成员判定）。
-- 复用发行缓存：`--no-build`；会核对 build inputs 与实际发行树摘要，过期即拒绝。
+- **测试发行**：默认在本次结果目录里构建私有副本（`<results>/release`），不写共享缓存；
+  `--no-build` 显式消费预备好的共享发行（`WF_TEST_RELEASE_CACHE/<version>`），会核对 build
+  inputs 与实际发行树摘要，过期即拒绝。两种模式的发行消费锁都由 root controller 持到收尾。
+- **模板**：默认只构建本次 run-owned 模板（逐单元复制）；跨 run 复用用 `--template-cache`
+  显式申请，负开关 `--no-template-cache`/`WF_NO_TEMPLATE_CACHE=1` 仍禁止缓存，冲突在写前拒绝。
 - **repro 默认在主池之后串行**（决策：并发编排只值 3–6s 且引入抖动）；显式开关 `--repro-concurrent`
   才让 repro 与主池并发，预算按 5/3 分配（`plan.py` 一处推导）。两条路径都记录 `pool_seconds`/`repro_seconds`。
-- `summary.json` 采用 **schema 3**：`run_id/role` 与同代 `run-state`/`.runner.json` 一致，
+- `summary.json` 采用 **schema 4**（整次结论的唯一持久结果）：`run_id/role` 与同代
+  `run-state`/`.runner.json` 一致，`status=ok|failed`，失败时 `failure_kind=failed|cancelled`；
   `input_evidence` 记录实际消费的 metrics/plan/context/lines/unit/repro 快照（sha256+size），
   `cleanup_state/cleanup_report/evidence_state` 只来自当前 controller 证据；`gate` 与计数来自
   `results_gate.assess_run_results()` 这一处实现。`status=ok` 同时要求门禁、`cleanup=cleaned` 与
@@ -139,14 +146,19 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   模板来源三键、`pycache_root` 与 60s/65s `budget` 仍只报告不硬失败。
   成本账目另有两个只读字段：`release_build`（root controller 准备后写进 `release-context.json` 的
   `built|reused|checked`）与 `template_build_sequences`（模板缓存命中=0、本次发布一次=1、模板机制关闭=0）。
+  `run-state` 为 schema 2：只记录 run_id/root/role/state/cleanup_state/evidence_state/
+  retained_paths/reasons 与时间戳，不再有整次 `status`；`.runner.json` 的 `control.schema_version=2`
+  只保留 target/assessment/cleanup（不再复制 success/summary/observe）。历史 schema 1/3 依原意可读。
   另有三个证据字段：`candidate_commit`（已核 tag commit；dev 或候选初核前失败为 null，候选成功必须有值）、
   `repro_phase_counts`（`green|red` 各自 `planned/passed/failed/unverified`，`planned` 取冻结 bundle，
   缺失/错代/清理未确认一律计 `unverified`；repro 禁用时全零、启用但无合法 bundle 时为 null）。
 - `WF_COMMAND_TIMEOUT` 是单个运行器命令的秒数上界（默认 180）；repro 用 `WF_REPRO_TIMEOUT`（默认 120）；整次 run 用 `WF_RUN_TIMEOUT`（默认 1800）。超时结束子进程并计失败，日志与结果保留。
 - 全局 `flock` 拒绝重叠运行；worker 的私有 `/tmp` 不挂回宿主夹具目录，仅共享结果与只读发行/模板。缺结果直接计基础设施失败，不静默重跑。
 - **阶段与 frame**：入口先是 `public`（记原始 results 显式性、一次禁写 pyc 的 preflight；list/dry-run 在此结束），
-  然后 `exec` 进 `lease`（fixture→当前域结果锁、**一次 `resource_lifecycle.begin-run`** 写 schema2 owner →
-  active run-state → 按旧代许可 prepare、唯一一次 final plan 并写 `plan.json` 字节 + token），
+  然后 `exec` 进 `lease`（fixture→当前域结果锁、**一次 `resource_lifecycle.begin-run`**：只认领
+  不存在或无主且完全为空的安全路径 → 写 schema2 owner → active run-state → 建本代 logs/commands；
+  已有 plan-only/finished/active/残缺/旧格式/非空目录一律拒绝，不清理任何材料 → 唯一一次 final
+  plan 并写 `plan.json` 字节 + token），
   `exec` 成 root controller（同 C 进程：核计划身份 → 取并保持 release 独占锁 → 受监督准备一次 →
   原子写 `release-context.json` → 以 `execute` frame 交接 plan/context token）。`execute` 是最终 consumer：
   核祖先/三把锁/两处冻结字节后才执行，不再 plan/ensure；内层只写目标结果与 schema1 metrics，没有成功出口。
@@ -164,23 +176,29 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   清 locator 并标 `WF_UNIT_DOMAIN=unit`；生产锁 helper 在域不符时拒绝，不把私有 `/tmp` 同名 inode 当宿主锁。
   显式 scope 的 fake runner 可在自己 scope 内建测试锁，但不能声称继承宿主锁。
 - run 级删除只由同 C 进程的 root controller 在 `runner_cleanup.finalize` 执行（固定角色序
-  FIX → LEGACY_FIXTURE_ROOT → RUN_TEMPLATE，首次失败即停并报告 removed/failed/not-attempted）；
-  `execute` 的 EXIT trap 不再提前删除。结果目录必须为空或由本工具按协议创建；
-  上一代 `active`/证据不完整/有 KEEP 的现场不会自动复用，需用
-
-  `fixture_scope.py inventory-results` → `retire-results` 明确处置。
+  FIX → LEGACY_FIXTURE_ROOT → RUN_TEMPLATE → PRIVATE_RELEASE，首次失败即停并报告
+  removed/failed/not-attempted）；`execute` 的 EXIT trap 不再提前删除。
+  **结果目的地只认领不存在或无主且完全为空的真实目录**；已有 plan-only（含同一命令的预览）、
+  finished、active、残缺、旧格式或非空目录一律拒绝且保留原字节，重复执行请换新路径。
+  历史材料处置只走显式盘点/退役。
 - **测试发行消费期**：`<root>.lock` 是根外固定 inode，ensure/恢复/发布独占、check 共享只读；runner 在同一 PID
   保持独占到全部 worker/repro 结束，外部 ensure/check 得到明确 busy（退出 75）。`--check` 遇到未完成 journal
   返回 recovery-required（只读，不恢复）；恢复入口是 ensure。
 
-## 结果缓存轮转
+## 结果轮转报告与历史退役
 
-- run_all（`--scope run`）与独立 repro 入口（`--scope repro`）在 `begin-run` 之后各自回收
-  **本前缀且 `finished+cleaned+evidence=complete`** 的结果目录，保留最近 20（`--keep`）；
-  `active`/unknown/KEEP/无主/旧格式一律不自动轮转。root 经 `WF_RESULTS_CACHE` 注入
-  （默认 `~/.cache/wf-test-run`）——契约测试指向临时根，不触碰真实用户缓存。
-- `--bootstrap`（仅手工）不再凭“顶层看起来已知”删除无主目录：只报告
-  `needs-retirement-review` 并以非零退出，处置走 `retire-results`。prune 的 liveness 保障隐式依赖全局 flock 单运行器。
+- **默认执行不轮转、不观察历史结果**。`prune-results` 只读：按前缀/`--keep`/`--exclude`
+  把 `finished+cleaned+evidence=complete` 的条目列为退役候选并打印
+  `PRUNE-CANDIDATES=<n> PRUNE-KEPT=<m>`，同时指向 `inventory-results` → `retire-results`；
+  `--bootstrap` 只额外报告无主/非终态条目。它不删除任何目录。
+- 删除授权按内容而不是名字：`inventory-results --results-root/--fixture` 精确盘点整树
+  （相对路径/类型/文件摘要/链接目标 + `snapshot_digest`）；`retire-results` 重新盘点后：
+  - `safe-legacy` 只收空目录或只有根身份记录的空壳（空目录按空目录操作移除）；
+  - `manual-retained` 先展示所选根的全部条目与内容摘要，TTY 确认后、删除前再核归属/活引用/
+    精确快照；内容变化即取消整次删除。只删除确认清单里的条目，目录自底向上以空目录方式移除；
+    同名手工 `logs/`、替换的 `summary.json` 或新增条目不会被连带删除。
+- 模板/测试发行缓存的维护入口各自保留（`template_cache inventory|retire`、
+  `wf_test_release --inventory/--retire`）；默认执行对它们零读写。
 - **模板跨 run 缓存**（`<WF_RESULTS_CACHE>/template/<key>/` + 同级 `<key>.meta.json`，实现见
   `template_cache.py`）。身份 = `sha256` 规范 JSON：登记资产、dev-manifest、build/测试/runtime
   helper 字节、tool 与 SUT **路径字符串身份 + binary 字节**、full 受控子树、协议 schema、
@@ -200,7 +218,7 @@ layout、scope、cache、build 之前以 rc=2 退出，不产生任何写入；`
   miss/重建（candidate 同 version/ref 异内容同样），槽数量仍随版本/deploy 组合增长，没有全 cache 上限。
   克隆后 `--repoint-from <meta.root> --expect-repoint-min 1`，**0 改写 = 该单元失败**
   （`TEMPLATE-REPOINT-MISMATCH`）。开关：`--no-template`（整套模板机制，含缓存）与
-  `--no-template-cache`（只关跨 run 缓存）。
+  `--template-cache`（显式申请跨 run 缓存）与 `--no-template-cache`（显式禁止，二者互斥）。
 - **pyc 策略**：运行器统一下发 `PYTHONPYCACHEPREFIX`（默认 `$RESULTS_DIR/pycache`，`WF_PYCACHE` 可注入），
   不再使用 `PYTHONDONTWRITEBYTECODE`。pyc 不落源树、不落夹具；`source_hygiene.py` 在 run 前后做
   delta 对拍（新增即 `SOURCE-TREE-POLLUTED`），模板缓存条目用 strict 绝对判据。
@@ -294,10 +312,9 @@ python3 scripts/tests/wf_test_release.py --retire --cache-root <cache> \
   --confirm-retirement --report /tmp/retire-report.json
 ```
 
-root 每次真实运行只做一次**浅层** observe（`observe_roots`）：只枚举配置根的直接子项、读取
-owner/state/meta/journal 控制记录（单文件上限 1 MiB、不跟随链接），不递归模板树/发行树、不算
-字节摘要、不恢复不取锁；输出 `observed_at`/counts/`complete|partial|absent|unverified`/
-`capacity=not-measured` 与 shlex 正确的 inventory 命令。深层字节与确认摘要只由显式 inventory 产生。
+默认执行不再 observe 任何历史根；维护报告只由显式 `inventory` 入口产生（只读、不恢复、
+不取修改锁）。结果/夹具的深层清单与确认摘要由 `inventory-results --results-root/--fixture`
+生成；模板/发行缓存的 `inventory` 是各自的唯一报告面。
 
 模板/测试发行事务另提供确定性窗口（仅 `WF_TEST_FAULT_INJECTION=1` + owned scope）：
 `WF_TEMPLATE_TXN_STOP_AFTER` / `WF_TEST_RELEASE_TXN_STOP_AFTER` 取
@@ -329,8 +346,8 @@ after-material-cleanup-before-journal-remove`；重入真实入口（acquire / e
 - **运行身份**：`repro_select._runtime_identity()` 与 `release_context.py` 都用
   `python_runtime_identity.Resolver` 的完整投影（路径身份 + 调用文件字节 + 解释器二进制字节 +
   实现/版本）；同路径二进制或 SUT 版本变化会改变 red subject，旧证明失去资格。
-  bundle/state/release-context 成组升级（bundle 3、state 4、execution context 2、release context 2）；
-  schema 1/2/3 的 state 只作 legacy 保留，不作新协议证明。
+  bundle/state/release-context 成组升级（bundle 3、state 5、execution context 2、release context 2）；
+  state schema 1–4 只作 legacy 保留，不作新协议证明。
 - **公共 helper 身份**：`repro_select.HELPERS` 同时登记 repro 目录内的 8 个 helper（含公开参数
   解析器 `cli.py`）和 `library_source.py`、`prepare_candidate_repo.py`、`release_context.py`、
   `resource_lifecycle.py`、
@@ -342,16 +359,18 @@ after-material-cleanup-before-journal-remove`；重入真实入口（acquire / e
   仅 plan.json + owner marker）。显式域外 `WF_PYCACHE` 在首次写前被拒，实测域外目录保持不存在。
 - **成功出口（唯一）**：root controller 在同一 C 进程内聚合当前证据：`assess_execution/assess_run`
   把进程与本地资源事实和 unit/gate 证据完整性分开归因；`finalize` 只在 `cleanup=cleaned` 时按
-  FIX→LEGACY_FIXTURE_ROOT→RUN_TEMPLATE 删除，首次失败即停并报告 removed/failed/not-attempted；
-  `summary.json`（schema 3）由 controller 一次原子发布并全对象读回，`status=ok` 同时要求门禁、
+  FIX→LEGACY_FIXTURE_ROOT→RUN_TEMPLATE→PRIVATE_RELEASE 删除，首次失败即停并报告
+  removed/failed/not-attempted；
+  `summary.json`（schema 4）由 controller 一次原子发布并全对象读回，`status=ok` 同时要求门禁、
   清理与证据完整。任何发布/读回失败都非零且不打印 `GATE-OK`；`execute` shell 只写 schema1 metrics，
   不是成功出口。
-- **候选来源审计**：`candidate-audit.json` 由 `candidate_audit.py` 可复现生成，记录 59 个
-  suite 在 candidate 0.1.0 上的真实运行（逐 ID 的 `rc` 命令退出、`suite_rc` 目标进程退出、
-  `expected/observed`、失败断言、脚本摘要）。56 个通过的 suite 已把 `candidate_clean` 置为 true；
-  `r67_tests` 是 fake-tree runner 技术审计（模拟环境中的 candidate plan/scope 错误，不作为断言失败）；
-  `r90_tests`（R93 追加平台资产不一致）与 `p5_v1`（`[V1] 追加平台…: FAIL — False`）保留 dev-only，
-  覆盖表引用其具体失败断言。
+- **候选来源审计**：`candidate-audit.json` 由 `candidate_audit.py` 可复现生成，记录全部可计划单元
+  （suite/candidate/flow/extra）在 candidate 0.1.0 上的真实运行（逐 ID 的 `rc` 命令退出、`suite_rc`
+  目标进程退出、`expected/observed`、失败断言、脚本摘要）。候选合格集合由
+  `plan.candidate_reason()` 一处判定：审计通过的 suite/flow 与保留的候选安装链置
+  `candidate_clean=true`；`p5_v1`/`r90_tests`（具体失败断言见审计记录）与源码安装器/固定旧 ref 的
+  `r72_tests` 保留 dev-only，并在候选计划里披露排除原因。`r67_tests` 的运行器假树断言已迁到
+  `test_run_all_contract`（真实 run_all 契约入口），本套件只剩产品侧断言并已通过候选实跑。
   `source_coverage.py` 的逐 ID 行同时记录脚本摘要、真实来源层、可安装执行性、不可迁移理由/
   已安装断言；集合差集由 `coverage-baseline.json` 守护。
 

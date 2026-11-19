@@ -266,66 +266,6 @@ def assess_run(results_root, run_id, plan, control, gate_report):
     }
 
 
-def observe_roots(results_root, plan, role):
-    """root 维护前一次只读浅扫：按本次实际使用根去重，不恢复/不取锁/不递归容量。
-
-    C2 的 disabled 占位已由本实现替换；计划/内嵌/per-case 不调用（只有真实 root 调一次）。
-    """
-    import fixture_scope
-    import template_cache
-    import wf_test_release
-    roots, reports = [], {}
-    scope = os.environ.get("WF_TEST_SCOPE_ROOT") or ""
-    results_cache = os.environ.get("WF_RESULTS_CACHE") or (
-        os.path.join(scope, "cache") if scope else os.path.join(os.path.expanduser("~"),
-                                                                ".cache", "wf-test-run"))
-    results_cache = os.path.realpath(results_cache)
-    if results_cache not in roots:
-        roots.append(results_cache)
-        try:
-            reports[results_cache] = fixture_scope.observe_results(
-                results_cache, exclude=[results_root])
-        except Exception as exc:  # 无关根读失败只作诊断，不扩大为当前 run 故障
-            reports[results_cache] = {"root": results_cache, "status": "unverified",
-                                      "counts": {}, "capacity": "not-measured",
-                                      "error": str(exc)}
-    if role == "full" and not plan.get("no_template") and not plan.get("no_template_cache"):
-        template_root = os.path.realpath(os.path.join(results_cache, "template"))
-        if template_root not in roots:
-            roots.append(template_root)
-            try:
-                reports[template_root] = template_cache.observe(template_root)
-            except Exception as exc:
-                reports[template_root] = {"root": template_root, "status": "unverified",
-                                          "counts": {}, "capacity": "not-measured",
-                                          "error": str(exc)}
-    deploy = os.environ.get("WF_FIXTURE_DEPLOY") or plan.get("fixture_deploy") or "dev"
-    if deploy == "dev":
-        release_cache = os.environ.get("WF_TEST_RELEASE_CACHE") or (
-            os.path.join(scope, "test-release") if scope
-            else os.path.join(os.path.expanduser("~"), ".cache", "wf-test-release"))
-        release_cache = os.path.realpath(release_cache)
-        if release_cache not in roots:
-            roots.append(release_cache)
-            try:
-                reports[release_cache] = wf_test_release.observe(release_cache)
-            except Exception as exc:
-                reports[release_cache] = {"root": release_cache, "status": "unverified",
-                                          "counts": {}, "capacity": "not-measured",
-                                          "error": str(exc)}
-    import datetime
-    observed_at = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
-    for root, report in reports.items():
-        counts = report.get("counts") or {}
-        report.setdefault("observed_at", observed_at)
-        sys.stderr.write(f"OBSERVE-ROOT {root} observed_at={report.get('observed_at')} "
-                         f"status={report.get('status')} counts={counts} "
-                         f"capacity={report.get('capacity')} "
-                         f"inventory=\"{report.get('inventory_hint')}\"\n")
-    return {"enabled": True, "status": "enabled", "calls": 1,
-            "roots": sorted(roots), "reports": reports}
-
-
 def resource_plan(plan, results_root):
     """按固定角色序给出本次 run 实际存在的资源（路径只从已核 plan/固定位派生）。
 
@@ -338,6 +278,12 @@ def resource_plan(plan, results_root):
         roles.append(("FIX", fix))
         roles.append(("LEGACY_FIXTURE_ROOT", fix + ".legacy"))
     roles.append(("RUN_TEMPLATE", str(Path(results_root) / "template")))
+    # 默认 dev 发行建在本代结果目录里，只有本代有归属；显式 --no-build 消费共享发行，
+    # 共享根只释放消费租约（不由本 run 删除）。
+    if (plan or {}).get("fixture_deploy") == "dev" and not int((plan or {}).get("no_build") or 0):
+        private = (plan or {}).get("test_release_root")
+        if private:
+            roles.append(("PRIVATE_RELEASE", private))
     return [(role, path) for role, path in roles if os.path.lexists(path)]
 
 
@@ -352,6 +298,7 @@ def finalize(results_root, plan, assessment):
         report["not_attempted"] = [role for role, _ in resources]
         return report
     import fixture_scope
+    import wf_test_release
 
     if fault_active("delete-oserror") and resources:
         report["failed"] = [resources[0][0]]
@@ -369,8 +316,11 @@ def finalize(results_root, plan, assessment):
             report["not_attempted"] = [item[0] for item in resources[index + 1:]]
             return report
         try:
-            fixture_scope.remove(path)
-        except (fixture_scope.FixtureError, OSError) as exc:
+            if role == "PRIVATE_RELEASE":
+                wf_test_release.cleanup_private_release(path)
+            else:
+                fixture_scope.remove(path)
+        except (fixture_scope.FixtureError, wf_test_release.TestReleaseError, OSError) as exc:
             report["failed"] = [role]
             report["cleanup_state"] = "failed"
             report["reasons"].append(f"{role}: {exc}")

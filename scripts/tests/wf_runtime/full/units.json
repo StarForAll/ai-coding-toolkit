@@ -404,15 +404,15 @@
     {
       "name": "r67_tests",
       "kind": "suite",
-      "expect": 17,
+      "expect": 13,
       "tags": [
         "writer",
         "gate",
         "runner"
       ],
       "representative": false,
-      "candidate_clean": false,
-      "notes": "fake-tree runner contract audit：构造假 runner 树验证门禁/协议，不是安装项目行为用例；candidate 部署不是其目标"
+      "candidate_clean": true,
+      "notes": "产品侧写权/门禁/清单断言；运行器假树断言已迁到运行器契约入口（test_run_all_contract），候选实跑通过"
     },
     {
       "name": "r68_tests",
@@ -674,7 +674,7 @@
       ],
       "representative": false,
       "candidate_clean": false,
-      "notes": "full/representative 与显式 WF_SUITES=r72_tests 时执行（与套件同池，kind=extra）"
+      "notes": "full/representative 与显式 WF_SUITES=r72_tests 时执行（与套件同池，kind=extra）；使用源码安装器与固定旧 ref，候选模式按资格排除（dev 卸载路径保留）"
     },
     {
       "name": "d1_tests",
@@ -720,7 +720,8 @@
       "tags": [
         "flow"
       ],
-      "notes": "安装器闭环：从发行安装器装到空目录后跑自举（fixture=install）"
+      "notes": "安装器闭环：从发行安装器装到空目录后跑自举（fixture=install）；候选入口保留并由候选安装器部署",
+      "candidate_clean": true
     },
     {
       "name": "p5_spec",
@@ -729,7 +730,8 @@
       "tags": [
         "flow"
       ],
-      "notes": "V1–V5 规格流程"
+      "notes": "V1–V5 规格流程；代表集候选入口保留（夹具由候选安装部署）",
+      "candidate_clean": true
     },
     {
       "name": "p5_v2v3",
@@ -738,7 +740,8 @@
       "tags": [
         "flow"
       ],
-      "notes": "p5 流程：p5_v2v3"
+      "notes": "p5 流程：p5_v2v3；候选实跑通过（模板夹具由候选安装部署）",
+      "candidate_clean": true
     },
     {
       "name": "p5_v5",
@@ -747,7 +750,8 @@
       "tags": [
         "flow"
       ],
-      "notes": "p5 流程：p5_v5"
+      "notes": "p5 流程：p5_v5；候选实跑通过（模板夹具由候选安装部署）",
+      "candidate_clean": true
     }
   ],
   "representative_flow": "p5_spec",

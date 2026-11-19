@@ -111,7 +111,7 @@ class FinishFailureTest(unittest.TestCase):
 
 
 
-class ObserveTest(unittest.TestCase):
+class InventoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import fixture_scope
@@ -121,21 +121,18 @@ class ObserveTest(unittest.TestCase):
     def tearDownClass(cls):
         shutil.rmtree(cls.scope, ignore_errors=True)
 
-    def test_observe_is_shallow_and_never_digs_into_release_trees(self):
+    def test_inventory_is_read_only_and_lists_entries(self):
         root = Path(tempfile.mkdtemp(prefix="release-", dir=self.scope)) / "cache"
         root.mkdir()
         real = root / VERSION
         self.assertEqual(ensure(self.scope, real).returncode, 0)
-        import wf_release_common as common
-        with mock.patch.object(common, "tree_digest",
-                               side_effect=AssertionError("observe must not walk trees")):
-            report = release.observe(str(root))
+        before = sorted(os.listdir(root))
+        report = release.inventory(str(root))
         self.assertEqual(report["status"], "complete", report)
-        self.assertEqual(report["counts"].get("valid"), 1)
-        self.assertTrue(report["observed_at"])
-        self.assertEqual(report["capacity"], "not-measured")
+        self.assertTrue(report["entries"])
+        self.assertEqual(sorted(os.listdir(root)), before, "盘点必须零写")
 
-    def test_observe_reports_recovery_and_orphans_read_only(self):
+    def test_inventory_reports_pending_journal_and_orphans_read_only(self):
         root = Path(tempfile.mkdtemp(prefix="release-", dir=self.scope)) / "cache"
         root.mkdir()
         real = root / VERSION
@@ -144,10 +141,13 @@ class ObserveTest(unittest.TestCase):
         orphan = Path(str(real) + ".staging-deadbeef")
         orphan.mkdir()
         (orphan / "payload").write_text("x")
-        report = release.observe(str(root))
+        before = sorted(os.listdir(root))
+        report = release.inventory(str(root))
         self.assertEqual(report["status"], "partial")
-        self.assertGreaterEqual(report["counts"].get("recovery-required", 0), 1)
-        self.assertGreaterEqual(report["counts"].get("orphan-like", 0), 1)
+        kinds = [item["kind"] for item in report["entries"]]
+        self.assertIn("journal", kinds)
+        self.assertIn("release-staging", kinds)
+        self.assertEqual(sorted(os.listdir(root)), before, "盘点不得恢复/删除")
         self.assertTrue(journal.exists())
 
 
@@ -323,12 +323,11 @@ class CheckpointTest(unittest.TestCase):
         self.assertEqual(rc, 0, stdout + stderr)
         self.assertFalse(orphan.exists())
 
-    def test_observe_is_read_only_and_counts_materials(self):
+    def test_inventory_is_read_only_and_lists_materials(self):
         ensure(self.scope, self.real)
-        report = release.observe(str(self.cache))
+        report = release.inventory(str(self.cache))
         self.assertEqual(report["status"], "complete")
-        self.assertGreater(sum(report["counts"].values()), 0)
-        self.assertIn("inventory", report["inventory_hint"])
+        self.assertTrue(report["entries"])
         self.assertEqual(check(self.scope, self.real).returncode, 0)
 
 

@@ -85,6 +85,10 @@ install_cancel_traps() {
 
 # ---- 公开阶段：唯一一次解析，零写入 ------------------------------------------------
 if [ -z "$INNER_STAGE" ]; then
+  # 真实执行在冻结计划前只分配一次执行身份（隐式路径与 owner 共用；PID 重用不会同名）。
+  # public 每次调用都新建（不继承外层进程可能泄漏的旧身份）。
+  WF_RUN_IDENTITY=$("$PY" "$LIFECYCLE" new-id) || exit 2
+  export WF_RUN_IDENTITY
   if ! cli_out=$("$PY" "$CLI" "$@"); then
     exit 2
   fi
@@ -118,7 +122,8 @@ if [ "$INNER_STAGE" = "lease" ]; then
   export WF_RESULTS_DIR="$RESULTS"
   export WF_COMMAND_EVIDENCE_ROOT="$RESULTS/commands"
   export WF_REPRO_RESULTS="$RESULTS"
-  if ! layout_out=$("$PY" "$PATHS" layout --kind repro --pid "$$" --mode "$PLAN_REPRO_MODE" --format sh); then
+  if ! layout_out=$("$PY" "$PATHS" layout --kind repro --pid "$$" --mode "$PLAN_REPRO_MODE" \
+      --identity "$WF_RUN_IDENTITY" --format sh); then
     exit 2
   fi
   eval "$layout_out" || { echo "LAYOUT-EVAL-FAILED" >&2; exit 2; }
@@ -128,16 +133,13 @@ if [ "$INNER_STAGE" = "lease" ]; then
     "$PY" "$SCOPE" check-scope "$SCOPE_ROOT" "$RESULTS" \
       ${WF_TEST_RUN_CACHE:+"$WF_TEST_RUN_CACHE"} ${WF_TEST_RELEASE_CACHE:+"$WF_TEST_RELEASE_CACHE"} \
       ${WF_RESULTS_CACHE:+"$WF_RESULTS_CACHE"} || exit 2
-    RESULTS_CACHE="${WF_RESULTS_CACHE:-$SCOPE_ROOT/cache}"
   else
-    RESULTS_CACHE="${WF_RESULTS_CACHE:-$HOME/.cache/wf-test-run}"
+    :
   fi
-  # 结果缓存轮转：独立入口只回收本 scope（repro-*）的 finished+cleaned 条目。
-  WF_RESULTS_CACHE="$RESULTS_CACHE" "$PY" "$SCOPE" prune-results "$RESULTS_CACHE" \
-    --scope repro --exclude "$RESULTS" || true
-  # 唯一初始化：owner 意图 → active state → prepare（三个 checkpoint 只在 helper 内退出）。
+  # 默认执行不盘点/不轮转历史结果：维护只由显式入口发生。
+  # 唯一初始化：认领 → owner 意图 → active state（三个 checkpoint 只在 helper 内退出）。
   begin_out=$("$PY" "$LIFECYCLE" begin-run --results-root "$RESULTS" --role repro \
-      --intent execution --format sh)
+      --intent execution --run-id "$WF_RUN_IDENTITY" --format sh)
   begin_rc=$?
   if [ "$begin_rc" -ne 0 ]; then
     echo "RESULTS-INIT-FAILED: 初始化拒绝（rc=$begin_rc）；不启动 controller、不清理现场" >&2

@@ -648,7 +648,7 @@
       "script": "d1_wf_tests.py"
     },
     "f0": {
-      "candidate_clean": "<missing>",
+      "candidate_clean": true,
       "kind": "flow",
       "script": "p5_f0.py"
     },
@@ -663,7 +663,7 @@
       "script": "f1_ordinary.py"
     },
     "p5_spec": {
-      "candidate_clean": "<missing>",
+      "candidate_clean": true,
       "kind": "flow",
       "script": "p5_spec.py"
     },
@@ -673,12 +673,12 @@
       "script": "p5_v1.py"
     },
     "p5_v2v3": {
-      "candidate_clean": "<missing>",
+      "candidate_clean": true,
       "kind": "flow",
       "script": "p5_v2v3.py"
     },
     "p5_v5": {
-      "candidate_clean": "<missing>",
+      "candidate_clean": true,
       "kind": "flow",
       "script": "p5_v5.py"
     },
@@ -823,7 +823,7 @@
       "script": "r66_tests.py"
     },
     "r67_tests": {
-      "candidate_clean": false,
+      "candidate_clean": true,
       "kind": "suite",
       "script": "r67_tests.py"
     },

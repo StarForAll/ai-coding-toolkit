@@ -82,6 +82,25 @@ def entries(path):
         return []
 
 
+def tree_bytes(root):
+    """整树（含链接目标）字节与相对路径快照，用于证明历史材料零触碰。"""
+    root = Path(root)
+    snapshot = {}
+    if not root.exists():
+        return snapshot
+    for base, dirs, files in os.walk(root, followlinks=False):
+        for name in sorted(dirs + files):
+            path = Path(base) / name
+            relative = str(path.relative_to(root))
+            if path.is_symlink():
+                snapshot[relative] = "link:" + os.readlink(path)
+            elif path.is_dir():
+                snapshot[relative + "/"] = "dir"
+            else:
+                snapshot[relative] = path.read_bytes()
+    return snapshot
+
+
 class CaseBudget:
     """一个逻辑 case 的 900 秒单调 deadline：子调用递减，耗尽即失败（不重置、不加时）。"""
 
@@ -482,13 +501,13 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(summary["flow_ran"], 0)
         self.assertTrue(summary["template_reused"], "默认应共用同一夹具源")
         self.assertIn(summary["template_source"], ("run-build", "cache"))
-        self.assertEqual(summary["schema_version"], 3)
+        self.assertEqual(summary["schema_version"], 4)
+        self.assertEqual(summary["failure_kind"], None)
         control = json.loads((results / ".runner.json").read_text())
-        observe = control["control"]["observe"]
-        self.assertEqual(observe["status"], "enabled")
-        self.assertEqual(observe["calls"], 1, "真实 root 只调用一次 observe_roots")
-        self.assertTrue(observe["roots"], "实际配置根必须各出现一次")
-        self.assertEqual(len(observe["roots"]), len(set(observe["roots"])), "根必须去重")
+        self.assertEqual(control["control"]["schema_version"], 2)
+        self.assertNotIn("observe", control["control"],
+                         "默认执行不得观察历史材料")
+        self.assertNotIn("success", control, "控制记录不再复制整次结论")
         self.assertEqual(control["control"]["assessment"]["evidence_state"], "complete")
         self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
         state = json.loads((results / "run-state.json").read_text())
@@ -502,20 +521,21 @@ class RunAllContractTest(unittest.TestCase):
                          summary["suite_ran"] + summary["flow_ran"] + summary["repro_ran"])
         self.assertIn("budget", summary)
         self.assertGreaterEqual(summary["template_seconds"], 0)
-        # 首次 dev 调用：构建测试发行 + 模板缓存发布一次。
+        # 默认只建本代私有发行：不写、不恢复共享测试发行缓存。
         self.assertEqual(summary["release_build"], "built")
-        self.assertEqual(summary["template_build_sequences"], 1)
+        self.assertEqual(entries(release_cache), [],
+                         "默认执行不得写共享测试发行缓存（--no-build 才显式消费）")
+        self.assertEqual(entries(results_cache / "template"), [],
+                         "默认执行不得写跨 run 模板缓存（--template-cache 才显式申请）")
+        self.assertEqual(summary["template_build_sequences"], 0,
+                         "未申请跨 run 缓存时不发布模板条目")
 
         warm, _, warm_env = self.run_runner(case, [], cold)
         self.assertEqual(warm.returncode, 0, warm.stdout[-2000:])
         summary = json.loads((Path(warm_env["WF_RESULTS_DIR"]) / "summary.json").read_text(encoding="utf-8"))
-        self.assertEqual(summary["release_build"], "reused", "同输入第二次调用不重建发行")
-        self.assertEqual(summary["template_build_sequences"], 0, "模板缓存命中不重建")
-        self.assertTrue(summary["template_cache_hit"])
-        self.assertNotEqual(entries(release_cache), [],
-                            "测试发行必须建在 scope 内（不落用户 cache）")
-        self.assertNotEqual(entries(results_cache / "template"), [],
-                            "模板缓存条目必须建在 scope 内")
+        self.assertEqual(summary["release_build"], "built", "每次默认调用构建本代私有发行")
+        self.assertEqual(summary["template_source"], "run-build")
+        self.assertFalse(summary["template_cache_hit"])
         # 每调用独立 results/fixture/pycache：两次调用不得复用同一目录（AC3）。
         self.assertNotEqual(Path(env["WF_RESULTS_DIR"]), Path(warm_env["WF_RESULTS_DIR"]))
         self.assertNotEqual(Path(env["WF_FIX"]), Path(warm_env["WF_FIX"]))
@@ -527,13 +547,85 @@ class RunAllContractTest(unittest.TestCase):
         self.assertLess(entry["calls"][1]["deadline_remaining"],
                         entry["calls"][0]["deadline_remaining"],
                         "case 级 deadline 必须跨调用递减")
-        # 同一结果目录复用时要按本轮重新计数（机制缺口回归断言）。
-        reused, _, _ = self.run_runner(case, [], dict(cold, WF_RESULTS_DIR=env["WF_RESULTS_DIR"]))
-        self.assertEqual(reused.returncode, 0, reused.stdout[-2000:])
-        self.assertEqual(len(lines(Path(env["WF_RESULTS_DIR"]) / "stages")), 3,
-                         "复用结果目录后 stages 必须从本轮重新计数")
-        self.assertEqual(len(lines(Path(env["WF_RESULTS_DIR"]) / "plan-calls")), 2,
-                         "复用结果目录后 plan-calls 必须从本轮重新计数")
+        # 重复使用同一结果目录：执行不得接管已有产物；拒绝发生在写 owner/plan 之前。
+        before_files = sorted(os.listdir(results))
+        reused, _, _ = self.run_runner(case, [], dict(cold, WF_RESULTS_DIR=str(results)))
+        self.assertNotEqual(reused.returncode, 0, reused.stdout[-2000:])
+        self.assertIn("RESULTS-INIT-FAILED", reused.stdout + reused.stderr)
+        self.assertEqual(sorted(os.listdir(results)), before_files,
+                         "拒绝不得改写或清理已有结果")
+        # 显式申请跨 run 模板缓存：首次发布、同输入第二次命中，命中不重建条目。
+        cache_env_extra = dict(cold, WF_NO_TEMPLATE_CACHE="", WF_TEMPLATE_CACHE="1")
+        publish, _, publish_env = self.run_runner(case, ["--template-cache"],
+                                                  cache_env_extra)
+        self.assertEqual(publish.returncode, 0, publish.stdout[-2000:])
+        first = json.loads((Path(publish_env["WF_RESULTS_DIR"]) / "summary.json").read_text())
+        self.assertEqual(first["template_source"], "cache")
+        self.assertFalse(first["template_cache_hit"], "首次显式缓存申请发布条目")
+        warm_cache, _, cache_env = self.run_runner(case, ["--template-cache"],
+                                                  cache_env_extra)
+        self.assertEqual(warm_cache.returncode, 0, warm_cache.stdout[-2000:])
+        cached = json.loads((Path(cache_env["WF_RESULTS_DIR"]) / "summary.json").read_text())
+        self.assertEqual(cached["template_source"], "cache")
+        self.assertTrue(cached["template_cache_hit"])
+        self.assertEqual(cached["template_build_sequences"], 0)
+        self.assertNotEqual(entries(results_cache / "template"), [],
+                            "显式模板缓存条目必须建在 scope 内")
+
+    def test_default_run_leaves_history_and_shared_caches_untouched(self):
+        """R1/A1：默认执行只写本次材料；历史结果/共享发行/模板/证明缓存零触碰。"""
+        case = self.case("history-zero-touch")
+        env = case.env(WF_SUITES="r70_tests")
+        results_cache = Path(env["WF_RESULTS_CACHE"])
+        release_cache = Path(env["WF_TEST_RELEASE_CACHE"])
+        run_cache = Path(env["WF_TEST_RUN_CACHE"])
+        template_cache = results_cache / "template"
+        legacy = results_cache / "run-legacy"
+        (legacy / "logs").mkdir(parents=True)
+        (legacy / "hand-written.json").mkdir()
+        (legacy / "logs" / "manual.log").write_text("manual\n")
+        (legacy / "summary.json").write_text('{"status": "ok", "manual": true}\n')
+        (legacy / "run-state.json").write_text('{"hand": "written"}\n')
+        (template_cache / "old-slot").mkdir(parents=True)
+        (template_cache / "old-slot" / "payload.txt").write_text("template\n")
+        (release_cache / "0.0.0-old").mkdir(parents=True)
+        (release_cache / "0.0.0-old" / "install.py").write_text("raise SystemExit(0)\n")
+        (run_cache / "repro-state.json").write_text('{"schema_version": 5, "cases": {}}\n')
+        (run_cache / "proof.json").write_text('{"proven": true}\n')
+        template_before = tree_bytes(template_cache)
+        before = {path: tree_bytes(path) for path in
+                  (results_cache, release_cache, run_cache)}
+        result, _, env_used = self.run_runner(case, [], {"WF_SUITES": "r70_tests"})
+        self.assertEqual(result.returncode, 0, result.stdout[-2000:] + result.stderr[-2000:])
+        for path, snapshot in before.items():
+            self.assertEqual(tree_bytes(path), snapshot,
+                             f"默认执行触碰了历史/共享材料：{path}")
+        summary = json.loads((Path(env_used["WF_RESULTS_DIR"]) / "summary.json").read_text())
+        self.assertEqual(summary["release_build"], "built")
+        private_release = Path(env_used["WF_RESULTS_DIR"]) / "release"
+        self.assertFalse(private_release.exists(), "本代私有发行在收尾后回收")
+        # 正向对照：显式 --template-cache 才写跨 run 模板缓存。
+        cached_run, _, _ = self.run_runner(case, ["--template-cache"],
+                                           {"WF_SUITES": "r70_tests"})
+        self.assertEqual(cached_run.returncode, 0,
+                         cached_run.stdout[-2000:] + cached_run.stderr[-2000:])
+        self.assertNotEqual(tree_bytes(template_cache), template_before,
+                             "显式缓存入口必须真的写入模板条目")
+        # 正向对照：--no-build 显式消费预备好的共享发行（只读 check，不删除）。
+        shared_version = "0.1.0"
+        shared = release_cache / shared_version
+        prepared = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "tests" / "wf_test_release.py"),
+             "--ensure", "--version", shared_version, "--root", str(shared)],
+            capture_output=True, text=True, env={**os.environ, **env}, cwd=str(REPO))
+        self.assertEqual(prepared.returncode, 0, prepared.stdout[-1000:] + prepared.stderr[-1000:])
+        consumed, _, consumed_env = self.run_runner(
+            case, ["--no-build"], {"WF_SUITES": "r70_tests",
+                                   "WF_TEST_RELEASE_VERSION": shared_version})
+        self.assertEqual(consumed.returncode, 0, consumed.stdout[-2000:] + consumed.stderr[-2000:])
+        summary = json.loads((Path(consumed_env["WF_RESULTS_DIR"]) / "summary.json").read_text())
+        self.assertEqual(summary["release_build"], "checked")
+        self.assertTrue(shared.exists(), "共享发行只释放消费租约，不得删除")
 
     def test_template_can_be_disabled_for_determinism(self):
         case = self.case("no-template")
@@ -544,6 +636,14 @@ class RunAllContractTest(unittest.TestCase):
         self.assertFalse(summary["template_reused"], "WF_NO_TEMPLATE=1 时逐套件重建夹具")
         self.assertGreater(summary["init_seconds"], 0)
         self.assertEqual(summary["template_build_sequences"], 0)
+
+    def test_fake_runner_contract_propagates_failure_budget_and_serial_gaps(self):
+        """原 R67 假树断言：失败传播、零退出、期望用例数预算、串行段证据缺口。"""
+        from scripts.tests.wf_runtime import fake_runner_contract
+        records = fake_runner_contract.run(str(self.scope))
+        self.assertEqual(len(records), 4, records)
+        for name, record in records.items():
+            self.assertTrue(record["ok"], f"{name}: {record['actual']}")
 
     def test_failing_suite_makes_the_gate_fail(self):
         # f1_candidate_smoke 在 dev 部署下必须失败（安装记录是 0.0.0-dev）
@@ -587,6 +687,97 @@ class RunAllContractTest(unittest.TestCase):
         self.assertTrue(all("--check" in call for call in calls))
         self.assertEqual(lines(release_log), [],
                          "candidate 模式不得构建 dev 测试发行（AC5）")
+
+    def test_candidate_worker_cancel_cleans_fixtures_and_releases_leases(self):
+        """R3/A3：候选 worker 启动后取消——仍按本代事实清理夹具，候选根只释放租约。"""
+        case = self.case("candidate-cancel")
+        candidate, version = self.prepare_candidate(case)
+        env = case.env(WF_JOBS="1")
+        results = Path(env["WF_RESULTS_DIR"])
+        proc = subprocess.Popen(
+            ["bash", str(RUN_ALL), "--representative", "--fixture-deploy", "candidate",
+             "--release-root", str(candidate), "--release-version", version,
+             "--release-ref", f"refs/tags/wf-v{version}", "--repro", "none"],
+            cwd=str(REPO), env={**os.environ, **env},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + CANCEL_LOG_WAIT
+            while time.monotonic() < deadline:
+                if any(results.glob("*.test.log")):
+                    break
+                if proc.poll() is not None:
+                    break
+                time.sleep(0.05)
+            self.assertTrue(any(results.glob("*.test.log")), "候选 worker 未启动")
+            proc.terminate()
+            stdout, stderr = proc.communicate(timeout=CANCEL_CLEANUP_WAIT)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            proc.communicate(timeout=CANCEL_CLEANUP_WAIT)
+        output = (stdout or b"").decode(errors="replace") + (stderr or b"").decode(errors="replace")
+        self.assertNotEqual(proc.returncode, 0, output[-2000:])
+        control = json.loads((results / ".runner.json").read_text())
+        self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
+        target = control["control"]["target"]["status"]
+        self.assertIn(target, ("cancelled", "failed"), output[-2000:])
+        if (results / "summary.json").exists():
+            summary = json.loads((results / "summary.json").read_text())
+            self.assertEqual(summary["status"], "failed")
+            self.assertEqual(summary["failure_kind"], "cancelled")
+            self.assertNotIn("GATE-OK", output)
+        plan = json.loads((results / "plan.json").read_text())
+        self.assertFalse(Path(plan["fix"]).exists(), "已确认的本代夹具必须回收")
+        self.assertFalse(Path(plan["fix"] + ".legacy").exists())
+        self.assertTrue(candidate.exists(), "候选根只释放消费租约，不得删除")
+        self.assert_scope_locks_reacquirable()
+        # 新目录重跑：取消没有留下不可再取的租约/现场。
+        rerun, _, _ = self.run_runner(
+            case, ["--representative", "--fixture-deploy", "candidate",
+                   "--release-root", str(candidate), "--release-version", version,
+                   "--release-ref", f"refs/tags/wf-v{version}", "--repro", "none"],
+            {"WF_JOBS": "1"})
+        self.assertEqual(rerun.returncode, 0, rerun.stdout[-2000:] + rerun.stderr[-2000:])
+        self.assertIn("GATE-OK", rerun.stdout)
+
+    def test_candidate_final_check_cancel_is_attributed_without_success(self):
+        """R3/A3：终核阶段取消——归因为未完成/取消，仍清理且不产生候选通过。"""
+        case = self.case("candidate-final-cancel")
+        candidate, version = self.prepare_candidate(case)
+        log = case.private / "validator-calls"
+        shim = case.private / "validator-cancel.py"
+        shim.write_text(
+            "import os, sys\n"
+            f"log = {str(log)!r}\n"
+            "with open(log, 'a', encoding='utf-8') as handle:\n"
+            "    handle.write(' '.join(sys.argv[1:]) + '\\n')\n"
+            f"count = len(open(log, encoding='utf-8').read().splitlines())\n"
+            "if count >= 2:\n"
+            "    cancel = os.environ.get('WF_CANCEL_FILE')\n"
+            "    if cancel and not os.path.exists(cancel):\n"
+            "        open(cancel, 'x', encoding='utf-8').write('final-check cancel\\n')\n"
+            "    raise SystemExit(1)\n"
+            f"os.execv(sys.executable, [sys.executable, {str(FULL / 'prepare_candidate_repo.py')!r}] + sys.argv[1:])\n",
+            encoding="utf-8")
+        result, _, env = self.run_runner(
+            case, ["--representative", "--fixture-deploy", "candidate",
+                   "--release-root", str(candidate), "--release-version", version,
+                   "--release-ref", f"refs/tags/wf-v{version}", "--repro", "none"],
+            {"WF_CANDIDATE_VALIDATOR": str(shim), "WF_JOBS": "1"})
+        output = result.stdout + result.stderr
+        self.assertNotEqual(result.returncode, 0, output[-2000:])
+        self.assertIn("CANDIDATE-FINAL-INCOMPLETE", output)
+        self.assertNotIn("GATE-OK", output)
+        results = Path(env["WF_RESULTS_DIR"])
+        control = json.loads((results / ".runner.json").read_text())
+        self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
+        self.assertIn("failure", control["control"])
+        if (results / "summary.json").exists():
+            summary = json.loads((results / "summary.json").read_text())
+            self.assertEqual((summary["status"], summary["failure_kind"]),
+                             ("failed", "cancelled"))
+        plan = json.loads((results / "plan.json").read_text())
+        self.assertFalse(Path(plan["fix"]).exists())
 
     def test_candidate_dirty_worktree_fails_the_start_barrier_without_workers(self):
         case = self.case("candidate-dirty")
@@ -681,17 +872,29 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertEqual(len(lines(log)), 1,
                          "内嵌 repro 不得再 ensure/check（只剩 controller 准备的一次）")
+        self.assertFalse((Path(self.scope) / "cases" / "embedded-repro" / "state"
+                          / "repro-state.json").exists(), "green 运行不得读写共享 proof")
 
     def test_repro_concurrent_with_no_build_uses_the_inherited_frame(self):
         case = self.case("repro-concurrent")
         warm, _, _ = self.run_runner(case, [], {"WF_SUITES": "r70_tests"})
         self.assertEqual(warm.returncode, 0, warm.stdout[-2000:])
+        # --no-build 是显式消费预备好的共享发行：先由维护入口准备。
+        version = "0.1.0"
+        shared = Path(self.scope / "pool" / "test-release" / version)
+        prepared = subprocess.run(
+            [sys.executable, str(REPO / "scripts" / "tests" / "wf_test_release.py"),
+             "--ensure", "--version", version, "--root", str(shared)],
+            capture_output=True, text=True, env={**os.environ, **case.env()},
+            cwd=str(REPO))
+        self.assertEqual(prepared.returncode, 0, prepared.stdout[-1000:] + prepared.stderr[-1000:])
         shim, log = self.counting_shim(case, REPO / "scripts" / "tests" / "wf_test_release.py",
                                        "release-calls")
         result, _, _ = self.run_runner(
             case, ["--repro", "green", "--repro-group", "install", "--repro-concurrent",
                    "--no-build"],
-            {"WF_SUITES": "r70_tests", "WF_WITH_REPRO": "1", "WF_TEST_RELEASE_CLI": str(shim)})
+            {"WF_SUITES": "r70_tests", "WF_WITH_REPRO": "1",
+             "WF_TEST_RELEASE_CLI": str(shim), "WF_TEST_RELEASE_VERSION": version})
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("repro 与主池并发", result.stdout)
         self.assertEqual(len(lines(log)), 1, "--no-build 只在 controller 准备阶段 check 一次")
@@ -705,7 +908,7 @@ class RunAllContractTest(unittest.TestCase):
         shim = case.private / "git-broken.sh"
         shim.write_text("#!/bin/bash\nexit 1\n", encoding="utf-8")
         shim.chmod(0o755)
-        result, _, env = self.run_runner(case, ["--no-build"],
+        result, _, env = self.run_runner(case, ["--no-build", "--template-cache"],
                                          {"WF_SUITES": "r70_tests", "WF_GIT_BIN": str(shim)})
         self.assertEqual(result.returncode, 0, result.stdout[-3000:] + result.stderr[-2000:])
         self.assertIn("dev HEAD 不可读", result.stdout)
@@ -735,9 +938,14 @@ class RunAllContractTest(unittest.TestCase):
                 state_path = results / "run-state.json"
                 if state_path.exists():
                     state = json.loads(state_path.read_text())
-                    self.assertFalse(state.get("state") == "finished"
-                                     and state.get("cleanup_state") == "cleaned",
-                                     f"{fault}: 不得写 finished-cleaned")
+                    if fault == "summary-malformed":
+                        # 提交点之前的记录已写；落盘的摘要必须不是可读的通过对象。
+                        written = json.loads((results / "summary.json").read_text())
+                        self.assertNotEqual(written.get("status"), "ok")
+                    else:
+                        self.assertFalse(state.get("state") == "finished"
+                                         and state.get("cleanup_state") == "cleaned",
+                                         f"{fault}: 不得写 finished-cleaned")
                 plan = json.loads((results / "plan.json").read_text())
                 if fault in ("assess-exception", "assess-none", "assess-empty",
                              "assess-malformed", "assess-contradictory", "delete-oserror"):
@@ -808,8 +1016,9 @@ class RunAllContractTest(unittest.TestCase):
         state.mkdir()
         state.chmod(0o555)
         self.addCleanup(lambda: state.chmod(0o755))
+        # green 不写共享 proof；写失败只能用含 red 相位的合格证明来触发。
         result, _, env = self.run_runner(
-            case, ["--repro", "green", "--repro-group", "install"],
+            case, ["--repro", "both", "--repro-group", "install"],
             {"WF_SUITES": "r70_tests", "WF_WITH_REPRO": "1", "WF_REPRO_JOBS": "1",
              "WF_TEST_RUN_CACHE": str(state)})
         output = result.stdout + result.stderr
@@ -822,7 +1031,7 @@ class RunAllContractTest(unittest.TestCase):
         self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned",
                          "真实清理事实保留在控制记录里")
         run_state = json.loads((results / "run-state.json").read_text())
-        self.assertEqual(run_state["status"], "failed")
+        self.assertNotIn("status", run_state)
         self.assertEqual(run_state["cleanup_state"], "unknown",
                          "失败 run 不得留下 finished-cleaned 签名")
         self.assertEqual(run_state["evidence_state"], "incomplete")
@@ -833,31 +1042,31 @@ class RunAllContractTest(unittest.TestCase):
     def test_template_window_recovers_through_the_real_run_all_entry(self):
         case = self.case("template-window")
         env_extra = {"WF_SUITES": "r70_tests"}
-        first, _, env = self.run_runner(case, [], env_extra)
+        first, _, env = self.run_runner(case, ["--template-cache"], env_extra)
         self.assertEqual(first.returncode, 0, first.stdout[-2000:] + first.stderr[-2000:])
         results = Path(env["WF_RESULTS_DIR"])
         cache = Path(env["WF_RESULTS_CACHE"]) / "template"
-        self.assertTrue(entries(cache), "首次真实 run 必须发布模板缓存条目")
+        self.assertTrue(entries(cache), "显式模板缓存的首次真实 run 必须发布条目")
         fault = dict(env_extra, WF_TEST_FAULT_INJECTION="1",
                      WF_TEMPLATE_TXN_REBUILD="1",
                      WF_TEMPLATE_TXN_STOP_AFTER="after-journal")
-        failed, _, _ = self.run_runner(case, [], fault)
+        failed, _, _ = self.run_runner(case, ["--template-cache"], fault)
         self.assertNotEqual(failed.returncode, 0)
         self.assertIn("TEMPLATE-CACHE-FAILED", failed.stdout + failed.stderr)
-        recovered, _, env = self.run_runner(case, [], env_extra)
+        recovered, _, env = self.run_runner(case, ["--template-cache"], env_extra)
         self.assertEqual(recovered.returncode, 0,
                          recovered.stdout[-2000:] + recovered.stderr[-2000:])
         self.assertIn("TEMPLATE-CACHE-RECOVERED: rolled-back", recovered.stderr)
         self.assertIn("GATE-OK", recovered.stdout)
-        control = json.loads((Path(env["WF_RESULTS_DIR"]) / ".runner.json").read_text())
-        template_root = str(cache.resolve())
-        observe = control["control"]["observe"]
-        self.assertIn(template_root, observe["roots"])
-        report = observe["reports"][template_root]
-        self.assertIn(report["status"], ("partial", "complete"))
-        self.assertGreaterEqual(report["counts"].get("journal", 0)
-                                + report["counts"].get("recovery-required", 0), 1,
-                                "恢复前 observe 必须如实显示未完成事务/待恢复条目")
+        # 显式维护入口（inventory）证明恢复后无未完成 journal/待恢复条目。
+        inventory = subprocess.run(
+            [sys.executable, str(FULL / "template_cache.py"), "inventory",
+             "--cache-root", str(cache), "--format", "json"],
+            capture_output=True, text=True, cwd=str(REPO))
+        report = json.loads(inventory.stdout or "{}")
+        self.assertEqual([item for item in report.get("entries") or []
+                          if item["kind"] == "journal"], [],
+                         "恢复后不得残留未完成事务")
         self.assertFalse([name for name in entries(cache) if name.endswith(".journal.json")],
                          "真实入口恢复后不得残留 journal")
 
@@ -872,73 +1081,69 @@ class RunAllContractTest(unittest.TestCase):
         return json.loads((results / ".wf-results-owner.json").read_text())
 
     def test_init_checkpoint_death_leaves_identity_and_blocks_reuse(self):
-        """首次/计划转执行/cleaned 重用 × 三个点：helper os._exit(97)，shell 原样退出。"""
-        points = ("after-owner-intent", "after-run-state-before-prepare",
-                  "after-prepare-before-controller")
-        for scenario in ("first", "plan-only", "reuse"):
-            for index, point in enumerate(points):
-                with self.subTest(scenario=scenario, point=point):
-                    case = self.case(f"init-{scenario}-{index}")
-                    env_extra = {"WF_SUITES": "r70_tests"}
-                    if scenario == "reuse":
-                        env_extra, results = self._seed_cleaned_results(case)
-                        seed_plan = (results / "plan.json").exists()
-                        self.assertTrue(seed_plan)
-                    else:
-                        results = Path(case.env(**env_extra)["WF_RESULTS_DIR"])
-                    if scenario == "plan-only":
-                        mirror, _, _ = self.run_runner(
-                            case, ["--list"], dict(env_extra, WF_RESULTS_DIR=str(results)))
-                        self.assertEqual(mirror.returncode, 0, mirror.stderr)
-                        self.assertEqual(self._plane_owner(results)["intent"], "plan-only")
-                        self.assertTrue((results / "plan.json").is_file())
-                    fault = dict(env_extra, WF_RESULTS_DIR=str(results),
-                                 WF_TEST_FAULT_INJECTION="1",
-                                 WF_RESULTS_INIT_STOP_AFTER=point)
-                    proc, _, _ = self.run_runner(case, [], fault)
-                    self.assertEqual(proc.returncode, 97,
-                                     proc.stdout[-1000:] + proc.stderr[-1000:])
-                    self.assertIn("WF-RESULTS-INIT-STOP", proc.stderr)
-                    self.assertNotIn("RUN_ID=", proc.stdout, "死亡窗口不得给成功 run_id")
-                    control_path = results / ".runner.json"
-                    owner_after = self._plane_owner(results)
-                    if control_path.exists():
-                        # reuse 现场的旧 control 记录可以保留，但它必须还是上一代的 run_id。
-                        old_control = json.loads(control_path.read_text())
-                        self.assertNotEqual(old_control.get("run_id"), owner_after["run_id"],
-                                            "helper 死后不得启动本代 controller")
-                    else:
-                        self.assertFalse(control_path.exists())
-                    owner = self._plane_owner(results)
-                    self.assertEqual((owner["schema_version"], owner["intent"]),
-                                     (2, "execution"))
-                    state_path = results / "run-state.json"
-                    if point == "after-owner-intent":
-                        if state_path.exists():
-                            old_state = json.loads(state_path.read_text())
-                            self.assertNotEqual(old_state["run_id"], owner["run_id"],
-                                                "本代 state 尚未写；残留只能是上一代记录")
-                            self.assertEqual(scenario, "reuse",
-                                             "首次/计划场景不应有残留 state")
-                    else:
-                        self.assertTrue(state_path.exists())
-                    if scenario != "first":
-                        if point == "after-prepare-before-controller":
-                            self.assertFalse((results / "plan.json").exists(),
-                                             "prepare 后的旧产物已按许可清理")
-                        else:
-                            self.assertTrue((results / "plan.json").exists(),
-                                            "prepare 之前的旧证据必须保留")
-                    # 新入口不得把死亡现场降级成 legacy/plan-only；也不得自动删现场。
-                    retry, _, _ = self.run_runner(
-                        case, [], dict(env_extra, WF_RESULTS_DIR=str(results),
-                                       WF_TEST_FAULT_INJECTION="0",
-                                       WF_RESULTS_INIT_STOP_AFTER=""))
-                    self.assertNotEqual(retry.returncode, 0)
-                    self.assertIn("RESULTS-INIT-FAILED", (retry.stdout + retry.stderr))
-                    self.assertTrue((results / ".wf-results-owner.json").exists())
-                    # 锁必须真实释放：scope 结果锁与 fixture lease 均可再次获取。
-                    self.assert_scope_locks_reacquirable()
+        """空/不存在目的地 × 三个点：helper os._exit(97)，shell 原样退出，现场不被重做。"""
+        points = ("after-owner-intent", "after-run-state-before-dirs",
+                  "after-dirs-before-controller")
+        for index, point in enumerate(points):
+            with self.subTest(point=point):
+                case = self.case(f"init-first-{index}")
+                results = Path(case.env()["WF_RESULTS_DIR"])
+                fault = {"WF_SUITES": "r70_tests", "WF_RESULTS_DIR": str(results),
+                         "WF_TEST_FAULT_INJECTION": "1",
+                         "WF_RESULTS_INIT_STOP_AFTER": point}
+                proc, _, _ = self.run_runner(case, [], fault)
+                self.assertEqual(proc.returncode, 97,
+                                 proc.stdout[-1000:] + proc.stderr[-1000:])
+                self.assertIn("WF-RESULTS-INIT-STOP", proc.stderr)
+                self.assertNotIn("RUN_ID=", proc.stdout, "死亡窗口不得给成功 run_id")
+                self.assertFalse((results / ".runner.json").exists(),
+                                 "helper 死后不得启动本代 controller")
+                owner = self._plane_owner(results)
+                self.assertEqual((owner["schema_version"], owner["intent"]),
+                                 (2, "execution"))
+                state_path = results / "run-state.json"
+                if point == "after-owner-intent":
+                    self.assertFalse(state_path.exists(), "本代 state 尚未写")
+                else:
+                    self.assertTrue(state_path.exists())
+                # 新入口不得把死亡现场降级成 plan-only/legacy；也不得自动删现场。
+                retry, _, _ = self.run_runner(
+                    case, [], dict(fault, WF_TEST_FAULT_INJECTION="0",
+                                   WF_RESULTS_INIT_STOP_AFTER=""))
+                self.assertNotEqual(retry.returncode, 0)
+                self.assertIn("RESULTS-INIT-FAILED", (retry.stdout + retry.stderr))
+                self.assertTrue((results / ".wf-results-owner.json").exists())
+                # 锁必须真实释放：scope 结果锁与 fixture lease 均可再次获取。
+                self.assert_scope_locks_reacquirable()
+
+    def test_plan_only_and_finished_destinations_are_refused_before_checkpoint(self):
+        case = self.case("init-refuse")
+        env_extra = {"WF_SUITES": "r70_tests"}
+        mirror_dir = Path(case.env(**env_extra)["WF_RESULTS_DIR"])
+        mirror, _, _ = self.run_runner(case, ["--list"], dict(env_extra,
+                                                             WF_RESULTS_DIR=str(mirror_dir)))
+        self.assertEqual(mirror.returncode, 0, mirror.stderr)
+        owner_before = (mirror_dir / ".wf-results-owner.json").read_bytes()
+        plan_before = (mirror_dir / "plan.json").read_bytes()
+        proc, _, _ = self.run_runner(case, [], dict(env_extra, WF_RESULTS_DIR=str(mirror_dir)))
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("RESULTS-INIT-FAILED", proc.stdout + proc.stderr)
+        self.assertEqual((mirror_dir / ".wf-results-owner.json").read_bytes(), owner_before,
+                         "已有计划镜像不得被改写")
+        self.assertEqual((mirror_dir / "plan.json").read_bytes(), plan_before)
+        # 已完成的正式结果：执行/预览均不接管；字节与目录项保持不变。
+        seed_case = self.case("init-refuse-finished")
+        _, results = self._seed_cleaned_results(seed_case)
+        before = sorted(os.listdir(results))
+        before_bytes = {name: (results / name).read_bytes()
+                        for name in before if (results / name).is_file()}
+        second, _, _ = self.run_runner(seed_case, [],
+                                       dict(env_extra, WF_RESULTS_DIR=str(results)))
+        self.assertNotEqual(second.returncode, 0)
+        self.assertIn("RESULTS-INIT-FAILED", second.stdout + second.stderr)
+        self.assertEqual(sorted(os.listdir(results)), before)
+        for name, data in before_bytes.items():
+            self.assertEqual((results / name).read_bytes(), data, f"{name} 被改写")
 
     def test_controller_holds_the_release_lease_for_the_whole_run(self):
         """R1：发行消费锁由 root controller 从准备持有到收尾，正常结束后可重获。"""
@@ -1005,11 +1210,15 @@ class RunAllContractTest(unittest.TestCase):
             self.assertNotEqual(proc.returncode, 0, stdout.decode() + stderr.decode())
             control = json.loads((results / ".runner.json").read_text())
             self.assertEqual(control["control"]["target"]["status"], "cancelled")
-            self.assertFalse(control.get("success"))
+            self.assertNotIn("success", control, "取消结论由摘要/退出码表达，不复制到控制记录")
             self.assertEqual(control["state"], "finished")
             self.assertEqual(control["control"]["cleanup"]["cleanup_state"], "cleaned")
+            if (results / "summary.json").exists():
+                summary = json.loads((results / "summary.json").read_text())
+                self.assertEqual(summary["status"], "failed")
+                self.assertEqual(summary["failure_kind"], "cancelled")
             state = json.loads((results / "run-state.json").read_text())
-            self.assertEqual(state["status"], "cancelled")
+            self.assertNotIn("status", state, "run-state 只记录生命周期/清理/证据事实")
             self.assertEqual(state["cleanup_state"], "cleaned",
                              "取消完成清理后必须如实记录清理事实")
             self.assertEqual(state["evidence_state"], "incomplete",
@@ -1034,7 +1243,7 @@ class RunAllContractTest(unittest.TestCase):
         results = Path(env["WF_RESULTS_DIR"])
         proc = subprocess.Popen(
             [sys.executable, str(FULL / "fixture_scope.py"), "lease-results", "--",
-             "bash", str(REPRO_RUN), "--mode", "green", "--group", "install", "--no-build",
+             "bash", str(REPRO_RUN), "--mode", "green", "--group", "install",
              "--results-dir", str(results)],
             cwd=str(REPO), env={**os.environ, **env},
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1055,9 +1264,13 @@ class RunAllContractTest(unittest.TestCase):
             self.assertEqual(after, before, "已发布的取消请求不得被删除或改写")
             control = json.loads((results / ".runner.json").read_text())
             self.assertEqual(control["control"]["target"]["status"], "cancelled")
-            self.assertFalse(control.get("success"))
+            self.assertNotIn("success", control)
             state = json.loads((results / "run-state.json").read_text())
-            self.assertEqual(state["status"], "cancelled")
+            if (results / "summary.json").exists():
+                summary = json.loads((results / "summary.json").read_text())
+                self.assertEqual((summary["status"], summary["failure_kind"]),
+                                 ("failed", "cancelled"))
+            self.assertEqual(state["evidence_state"], "incomplete")
             self.assertFalse((Path(env["WF_TEST_RUN_CACHE"]) / "repro-state.json").exists(),
                              "取消到达成功边界前不得发布 proof")
         finally:

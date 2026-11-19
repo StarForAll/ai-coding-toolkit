@@ -203,8 +203,10 @@ def parse_args(argv):
     parser.add_argument("--no-build", action="store_true")
     parser.add_argument("--no-template", action="store_true",
                         help="关闭整套模板机制（含跨 run 缓存）：逐单元重建夹具")
+    parser.add_argument("--template-cache", action="store_true",
+                        help="显式申请跨 run 模板复用（默认只用本次模板）")
     parser.add_argument("--no-template-cache", action="store_true",
-                        help="只关跨 run 模板缓存（run 内模板照旧构建复用）")
+                        help="显式禁止跨 run 模板缓存（与 --template-cache 互斥）")
     parser.add_argument("--repro", dest="repro_mode", default=None)
     parser.add_argument("--repro-group", dest="repro_groups", action="append", default=[])
     parser.add_argument("--repro-concurrent", action="store_true",
@@ -348,6 +350,33 @@ def _repro_candidate_groups(groups_doc, names):
     return kept, dropped
 
 
+def candidate_reason(entry, fixture_deploy):
+    """候选资格的**唯一**判定（plan/audit/coverage 共用）。
+
+    候选模式只接受登记并有实际候选证据的执行单元；dev 模式不设该过滤。返回排除原因
+    或 None。这里不按 kind 例外：suite/candidate/flow/extra 用同一字段与同一措辞。
+    """
+    if fixture_deploy != "candidate":
+        return None
+    if entry.get("candidate_clean") is True:
+        return None
+    if entry.get("candidate_clean") is False:
+        return "candidate_clean=false（声明为 dev-only，不进入候选分母）"
+    return "未声明 candidate_clean（缺候选资格声明）"
+
+
+def _qualified(candidates, fixture_deploy, excluded):
+    """按候选资格过滤一组单元，并把被排除项（含原因）追加到披露清单。"""
+    kept = []
+    for entry in candidates:
+        reason = candidate_reason(entry, fixture_deploy)
+        if reason:
+            excluded.append({"name": entry["name"], "kind": entry["kind"], "reason": reason})
+            continue
+        kept.append(entry)
+    return kept
+
+
 def unit_record(entry):
     """执行记录编码：`name:kind:expect:fixture:script`（五段固定顺序，冒号分隔、无空格）。"""
     return ":".join((entry["name"], entry["kind"], str(entry["expect"]),
@@ -455,32 +484,50 @@ def plan(argv=None, env=None):
         if release_root or release_ref or release_version or release_meta:
             raise PlanError("dev 模式不接受 --release-root/--release-ref/--release-version/--release-meta")
 
-    # ---- candidate 的套件过滤 --------------------------------------------
+    # ---- 候选资格：所有可执行单元用同一来源过滤并披露排除项 --------------
+    # 不在 candidate 模式时为空；candidate 模式下 suite/candidate/flow/extra 一律按
+    # `candidate_reason()` 判定（唯一实现，audit/coverage 也消费它）。
     candidate_smoke = False
+    excluded_units = []
     if fixture_deploy == "candidate":
-        clean = [entry for entry in chosen if entry.get("candidate_clean")]
+        if mode == "subset":
+            rejected = [(entry, candidate_reason(entry, fixture_deploy)) for entry in chosen]
+            dev_only = [(entry, reason) for entry, reason in rejected if reason]
+            if dev_only:
+                raise PlanError(
+                    "candidate 模式拒绝显式请求的 dev-only 单元："
+                    + "；".join(f"{entry['name']}（{reason}）" for entry, reason in dev_only))
+        clean = [entry for entry in chosen if not candidate_reason(entry, fixture_deploy)]
+        excluded_units.extend({"name": entry["name"], "kind": entry["kind"],
+                               "reason": candidate_reason(entry, fixture_deploy)}
+                              for entry in chosen if candidate_reason(entry, fixture_deploy))
         if clean:
             chosen = clean
         elif mode == "representative":
-            fallback = [entry for entry in entries if entry["kind"] == "candidate"]
+            fallback = [entry for entry in entries if entry["kind"] == "candidate"
+                        and not candidate_reason(entry, fixture_deploy)]
             if not fallback:
-                raise PlanError("candidate 模式下没有 candidate_clean 套件，也没有 f1_candidate_smoke 兜底")
+                raise PlanError("candidate 模式下没有合格套件，也没有可用的 f1_candidate_smoke 兜底")
             chosen = fallback
             candidate_smoke = True
         else:
             raise PlanError(
-                "candidate 模式下没有 candidate_clean=true 的套件可跑（代表集请用 --representative 走兜底闭环）")
+                "candidate 模式下没有合格套件可跑（零匹配）："
+                + "；".join(f"{item['name']}（{item['reason']}）" for item in excluded_units))
 
     # ---- 流程 / extra（四类可计划单元同池）--------------------------------
     if mode == "subset":
         unit_entries = list(chosen)
     elif mode == "representative":
         flow_names = ["f0", units_doc.get("representative_flow") or "p5_spec"]
-        unit_entries = list(chosen) + [by_name[name] for name in flow_names if name in by_name]
+        candidates = [by_name[name] for name in flow_names if name in by_name]
+        unit_entries = list(chosen) + _qualified(candidates, fixture_deploy, excluded_units)
     else:
         flows = [entry for entry in entries if entry["kind"] == "flow"]
         extra = [entry for entry in entries if entry["kind"] == "extra"]
-        unit_entries = list(chosen) + flows + extra
+        unit_entries = list(chosen) + _qualified(flows + extra, fixture_deploy, excluded_units)
+    if not unit_entries:
+        raise PlanError("计划为零匹配：候选资格/选择器排除了全部可执行单元")
     # 去重（同名单元只执行一次）并保持顺序
     deduped, seen_names = [], set()
     for entry in unit_entries:
@@ -563,21 +610,37 @@ def plan(argv=None, env=None):
         repro_concurrent = False
 
     # ---- 开关（模板机制）--------------------------------------------------
+    # 默认只管理本次模板；跨 run 复用由使用者显式选择（--template-cache 或
+    # WF_TEMPLATE_CACHE=1）。负开关继续禁止跨次缓存，冲突在写前诊断。
     no_template = bool(args.no_template or env.get("WF_NO_TEMPLATE") == "1")
-    no_template_cache = bool(args.no_template_cache or env.get("WF_NO_TEMPLATE_CACHE") == "1")
-    if no_template:
-        no_template_cache = True   # WF_NO_TEMPLATE = 关闭整套模板机制（含缓存）
+    want_cache = bool(args.template_cache or env.get("WF_TEMPLATE_CACHE") == "1")
+    forbid_cache = bool(args.no_template_cache or env.get("WF_NO_TEMPLATE_CACHE") == "1")
+    if want_cache and forbid_cache:
+        raise PlanError("--template-cache 与 --no-template-cache/WF_NO_TEMPLATE_CACHE=1 互斥")
+    if want_cache and no_template:
+        raise PlanError("--no-template 关闭整套模板机制，与 --template-cache 冲突")
+    template_cache = want_cache and not no_template
+    no_template_cache = not template_cache
 
     # ---- 测试发行（仅 dev）-----------------------------------------------
     try:
         # 管理路径的唯一规则：scope 下的默认值从 scope 派生；显式域外路径在计划期拒绝。
-        layout = wf_test_paths.resolve_layout("run", os.getpid(), env=env)
+        layout = wf_test_paths.resolve_layout("run", os.getpid(), env=env,
+                                              identity=env.get("WF_RUN_IDENTITY"))
     except wf_test_paths.PathError as exc:
         raise PlanError(f"scope 路径校验失败（首次写前拒绝）：{exc}")
+    results_dir = env.get("WF_RESULTS_DIR") or str(layout["results_dir"])
+    results_dir = os.path.realpath(results_dir)
+    fix = env.get("WF_FIX") or str(layout["fixture"])
     if fixture_deploy == "dev":
         version = resolve_test_release_version(env=env)
-        cache = env.get("WF_TEST_RELEASE_CACHE") or str(layout["test_release"])
-        test_release_root = os.path.join(cache, version)
+        if args.no_build:
+            # 显式消费预备好的共享测试发行（--no-build）；入口自己核验输入与树摘要。
+            cache = env.get("WF_TEST_RELEASE_CACHE") or str(layout["test_release"])
+            test_release_root = os.path.join(cache, version)
+        else:
+            # 默认只在本代结果目录里构建/消费私有发行；共享缓存不写、不恢复。
+            test_release_root = os.path.join(results_dir, "release")
         test_release_ref = f"refs/tags/wf-v{version}"
     else:
         version, test_release_root, test_release_ref = None, None, None
@@ -591,9 +654,6 @@ def plan(argv=None, env=None):
     # PLAN_ISOLATED_UNITS 做成员判定——套件特判不进 bash 分支）。
     isolated_units = [entry["name"] for entry in unit_entries if entry.get("isolated_user")]
 
-    results_dir = env.get("WF_RESULTS_DIR") or str(layout["results_dir"])
-    results_dir = os.path.realpath(results_dir)
-    fix = env.get("WF_FIX") or str(layout["fixture"])
     scope_root = env.get("WF_TEST_SCOPE_ROOT") or None
     list_only = bool(args.list or args.dry_run)
     return {
@@ -618,6 +678,7 @@ def plan(argv=None, env=None):
         "isolated_units": isolated_units,
         "no_template": 1 if no_template else 0,
         "no_template_cache": 1 if no_template_cache else 0,
+        "template_cache": 1 if template_cache else 0,
         "repro_enabled": 1 if repro_enabled else 0,
         "repro_mode": repro_mode if repro_enabled else "none",
         "repro_groups": repro_groups if repro_enabled else [],
@@ -635,6 +696,7 @@ def plan(argv=None, env=None):
         "no_build": 1 if args.no_build else 0,
         "list_only": 1 if list_only else 0,
         "candidate_smoke": 1 if candidate_smoke else 0,
+        "excluded_units": excluded_units,
         "tags": wanted_tags,
         **suggestion,
     }
@@ -665,6 +727,9 @@ def describe(result):
     lines.append(f"jobs: {result['jobs']}  results_dir: {result['results_dir']}")
     if result["candidate_smoke"]:
         lines.append("candidate_smoke: f1_candidate_smoke 兜底")
+    if result.get("excluded_units"):
+        lines.append("候选资格排除: " + " ".join(
+            f"{item['name']}（{item['reason']}）" for item in result["excluded_units"]))
     if result.get("changed_files") or result.get("suggested_suites") or result.get("unmapped_changes"):
         lines.append(f"changed({len(result.get('changed_files') or [])}): "
                      f"{' '.join(result.get('changed_files') or []) or '-'}")
@@ -706,6 +771,10 @@ def emit(result, fmt):
         if key == "units":
             print(f"PLAN_UNITS={shlex.quote(' '.join(unit_record(entry) for entry in value))}")
             continue
+        if key == "excluded_units":
+            value = " ".join(f"{item['name']}({item['reason']})" for item in value)
+            print(f"PLAN_EXCLUDED_UNITS={shlex.quote(value)}")
+            continue
         name = "PLAN_" + key.upper()
         if isinstance(value, dict):
             value = " ".join(f"{key}:{'' if item is None else item}" for key, item in value.items())
@@ -729,7 +798,8 @@ USAGE = """run_all.sh 执行计划（plan.py）
   --list | --dry-run                     只输出计划，不执行
   --no-build                             不重建测试发行（必须已有新鲜 meta）
   --no-template                          关闭整套模板机制（含跨 run 缓存）
-  --no-template-cache                    只关跨 run 模板缓存
+  --template-cache                       显式申请跨 run 模板复用（默认只用本次模板）
+  --no-template-cache                    显式禁止跨 run 模板缓存（与 --template-cache 互斥）
   --parallel | --serial                  执行单元层并行 / 串行（确定性、排障）
                                          WF_TOTAL_JOBS 覆盖总并发；WF_REPRO_JOBS 覆盖 repro 并发数
   --format sh|json

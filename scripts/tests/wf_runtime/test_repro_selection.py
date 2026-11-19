@@ -357,6 +357,41 @@ class CommitTest(Base):
         self.assertNotIn("review-unavailable", select.read_state()["cases"])
         self.assertTrue(path.endswith("repro-state.json"))
 
+    def test_phase_answers_cover_every_frozen_phase(self):
+        first, path, sha, size = self.bundle("review-count-reject", "both")
+        second = select.select(["review"], only="review-unavailable", fixture_deploy="dev",
+                               mode="both")
+        document = select.bundle_document(first)
+        document["cases"].update(select.bundle_document(second)["cases"])
+        sha, size = select.write_bundle(str(path), document)
+        self.record("review-count-reject", "both", sha,
+                    first["cases"]["review-count-reject"]["execution_fingerprint"])
+        bundle = json.loads(path.read_text())
+        bundle["__sha256"] = sha
+        # 缺记录：只影响该 case 的相位，被记为 unverified。
+        report = select.validate_repro(
+            str(self.results), bundle, evidence_root=str(self.results / "commands"),
+            run_id=self.run_id)
+        self.assertEqual(report["missing"], ["review-unavailable"])
+        self.assertIn("review-unavailable", report["case_states"])
+        for phase in ("green", "red"):
+            counts = report["phases"][phase]
+            self.assertEqual(counts["planned"],
+                             counts["passed"] + counts["failed"] + counts["unverified"])
+        self.assertTrue(report["records"]["review-count-reject"]["verified"])
+        # 坏记录：同样只影响它自己的相位，报告不中断。
+        (self.results / "review-unavailable.json").write_text("{broken")
+        report = select.validate_repro(
+            str(self.results), bundle, evidence_root=str(self.results / "commands"),
+            run_id=self.run_id)
+        self.assertEqual(report["malformed"], ["review-unavailable.json"])
+        self.assertEqual(report["missing"], [])
+        for phase in ("green", "red"):
+            counts = report["phases"][phase]
+            self.assertEqual(counts["planned"],
+                             counts["passed"] + counts["failed"] + counts["unverified"])
+        self.assertTrue(report["records"]["review-count-reject"]["verified"])
+
     def test_writer_without_lease_is_refused(self):
         path, sha, size = self.verify("review-count-reject", "both")
         with mock.patch.object(fixture_scope, "verify_lease",
@@ -379,12 +414,19 @@ class CommitTest(Base):
         with self.assertRaises(select.SelectError):
             self.commit(path, sha, size)
 
-    def test_malformed_or_missing_results_block_the_writer(self):
+    def test_missing_or_malformed_results_only_affect_their_phases(self):
         path, sha, size = self.verify("review-count-reject", "both")
         (self.results / "review-count-reject.json").unlink()
-        with self.assertRaises(select.SelectError):
-            self.commit(path, sha, size)
+        # 缺失记录不再中断整份报告/写证明：该 case 的相位记为 unverified，其余证书照常。
+        self.commit(path, sha, size)
+        self.assertNotIn("review-count-reject", select.read_state()["cases"])
         self.record("review-count-reject", "both", sha, "wrong-fingerprint")
+        self.commit(path, sha, size)
+        self.assertNotIn("review-count-reject", select.read_state()["cases"],
+                         "错代/矛盾记录不得冒充可复用证明")
+        # 计划外记录仍是结构问题（不进入任何相位）。
+        (self.results / "unexpected-case.json").write_text(
+            json.dumps({"case": "unexpected-case", "mode": "both"}))
         with self.assertRaises(select.SelectError):
             self.commit(path, sha, size)
 
@@ -562,6 +604,17 @@ class ProofGateTest(Base):
         path, updated, _kept = self.commit(bundle_path, sha, size)
         self.assertEqual(updated, ["review-count-reject"])
         self.assertTrue(str(path).endswith("repro-state.json"))
+        entry = select.read_state()["cases"]["review-count-reject"]
+        self.assertEqual(set(entry), {"green", "red"},
+                         "both 模式记录两相位各自的清理确认")
+
+    def test_red_only_proof_does_not_claim_an_unrun_green_phase(self):
+        bundle, bundle_path, sha, size = self.bundle_for(mode="red")
+        _path, updated, _kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, ["review-count-reject"])
+        entry = select.read_state()["cases"]["review-count-reject"]
+        self.assertIn("red", entry)
+        self.assertNotIn("green", entry, "red-only 运行不得写未运行的 green 证明")
 
     def test_local_cleanup_failure_keeps_the_phase_unverified(self):
         bundle, bundle_path, sha, size = self.bundle_for()
@@ -652,7 +705,14 @@ class ProofGateTest(Base):
         self.assertEqual(select.auto_modes(
             {case: {"red_subject_digest": "x", "local_inputs": {"targets": "t"}}},
             select.load_groups())[case], "both", "v4 证明不能直接命中 auto")
+        # 升级写入必须由含 red 相位的合格证明触发；green-only 不读写共享 proof。
+        state_before = Path(select.state_path()).read_bytes()
         bundle, bundle_path, sha, size = self.bundle_for(mode="green")
+        path, updated, kept = self.commit(bundle_path, sha, size)
+        self.assertEqual(updated, [], "green-only 不得写 proof")
+        self.assertEqual(Path(select.state_path()).read_bytes(), state_before,
+                         "green-only 不得改写共享状态字节")
+        _, bundle_path, sha, size = self.bundle_for(mode="both")
         path, updated, kept = self.commit(bundle_path, sha, size)
         self.assertEqual(updated, [case])
         self.assertEqual(kept, [], "被重新验证的用例由本代证据替换，不再单列保留")
