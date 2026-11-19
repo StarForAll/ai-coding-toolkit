@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 414
-- **Last Active**: 2026-11-18
+- **Total Sessions**: 415
+- **Last Active**: 2026-11-19
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1308 | Active |
+| `journal-8.md` | ~1330 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 415 | 2026-11-19 | 收敛 wf 运行器职责、结论边界与历史材料授权 | `4ca1b0e2` | `main` |
 | 414 | 2026-11-18 | wf 运行器候选身份、相位证明与取消终态收口 | `03a9cf48` | `main` |
 | 413 | 2026-11-18 | 修正 wf 方案引用校验与文件句柄收口 | `3cc23a54` | `main` |
 | 412 | 2026-11-17 | wf 运行器生命周期、缓存恢复与 controller 收口 | `ea03b20d` | `main` |

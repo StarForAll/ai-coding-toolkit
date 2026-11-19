@@ -1306,3 +1306,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 415: 收敛 wf 运行器职责、结论边界与历史材料授权
+<!-- trellis-session: v=2 fp=8b00ba85032c82e2 -->
+
+**Date**: 2026-11-19
+**Task**: 收敛 wf 运行器职责、结论边界与历史材料授权
+**Branch**: `main`
+
+### Summary
+
+完成 11-18-wf-runner-responsibility-boundaries：默认执行只认领新目录并只写本次材料；轮转改报告、历史退役需整树内容授权；清理/终核/取消同一出口；repro 相位守恒并只写本次相位证明；候选资格统一、R67 假树断言迁入运行器契约并完成候选审计；summary schema4 唯一提交点，历史读取与字段迁移完成。T0 1284 OK、慢契约 38 OK、T2/T3、独立 repro、候选代表集/全量均 GATE-OK。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4ca1b0e2` | fix(test): 收敛 wf 运行器职责、结论边界与历史材料授权 |
+
+### Status
+
+[OK] **Completed**
