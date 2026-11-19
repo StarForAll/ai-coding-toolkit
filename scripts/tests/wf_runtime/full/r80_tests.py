@@ -211,5 +211,5 @@ log_text = open(os.path.join(F, record["evidence_ref"]), encoding="utf-8").read(
 rec("D07 facts 摘要不泄漏", "无哨兵", record.get("summary"), "SENTINEL9" not in json.dumps(record, ensure_ascii=False))
 rec("D07b 日志不泄漏", "无哨兵", bool(log_text), "SENTINEL9" not in log_text)
 
-json.dump(results, open("/tmp/r80_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r80_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

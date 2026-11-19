@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """CP4 / A8：卸载列出并保留本地偏离。"""
 import json, os, re, subprocess, sys
+import wfdrive
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-F = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "fu")
+F = os.path.join(wfdrive.legacy_root(), "fu")
 # 孤儿套件回接（2026-11-06 W1）：自带夹具，不依赖兄弟套件或 run_one 的 FIX
 subprocess.run(["bash", os.path.join(HERE, "wf_fixture.sh"), F], check=True, capture_output=True)
 SKILLS = os.path.join(F, ".agents/skills")
@@ -22,7 +23,9 @@ with open(skill, "a", encoding="utf-8") as handle:
 with open(workflow, "a", encoding="utf-8") as handle:
     handle.write("\n本地修改：仅用于 CP4 偏离用例。\n")
 
-import wfdrive
+_identity_problems = wfdrive.deployment_identity_problems(F)
+rec("A8 夹具部署来源可核验", "installation.json 与本次部署身份一致",
+    f"problems={_identity_problems or 'none'}", not _identity_problems)
 preview = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/uninstall.py"),
                           "--project", F], capture_output=True, text=True)
 rec("A8 预览列出本地偏离", "列 2 项偏离",
@@ -57,5 +60,5 @@ rec("A8 托管段移除且保留 /.wf-lock 裸行", ".gitignore 无标记串但�
     "# wf-managed-v1" not in open(os.path.join(F, ".gitignore"), encoding="utf-8").read()
     and "/.wf-lock" in open(os.path.join(F, ".gitignore"), encoding="utf-8").read().splitlines())
 
-json.dump(results, open("/tmp/cp4_a8_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp4_a8_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

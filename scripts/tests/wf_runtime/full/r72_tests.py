@@ -2,7 +2,7 @@
 """第三十六轮 R72：卸载入口的清单一致性与资产边界。"""
 import json, os, re, subprocess, sys
 import wfdrive
-F_BASE = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "r72")
+F_BASE = os.path.join(wfdrive.legacy_root(), "r72")
 results = []
 
 
@@ -16,10 +16,13 @@ def make_project(name):
     subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                     "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
+    install_ref = os.environ.get("WF_INSTALL_REF")
+    if not install_ref:
+        raise SystemExit("r72: 缺少 WF_INSTALL_REF（托管 runner 必须下发本次发行引用）")
     subprocess.run([wfdrive.TOOL_PYTHON,
                     wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
-                    "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
-                    "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
+                    "--target", target, "--release-ref", install_ref,
+                    "--source", wfdrive.release_root(),
                     "--platform", "dsh",
                     "--confirm", ],
                    capture_output=True, text=True)
@@ -105,6 +108,6 @@ for label, mutate in (("missing", "drop"), ("empty", "blank")):
     rec(f"5 安装记录摘要{label} → 拒绝且不删", "WF_ASSET_DECISION 且资产仍在",
         f"rc={rc} removed={removed}", "WF_ASSET_DECISION" in out and not removed)
 
-json.dump(results, open("/tmp/r72_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r72_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 

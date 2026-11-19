@@ -27,16 +27,38 @@ class FixtureError(wf_test_paths.PathError):
     """Refused a fixture operation before touching its contents."""
 
 
+def _temporary_roots():
+    """允许的临时根：当前进程 TMPDIR + execution.py 记录的宿主根（有界校验）。"""
+    current = Path(tempfile.gettempdir()).resolve()
+    roots = {current}
+    recorded = os.environ.get('WF_HOST_TMPDIR')
+    if recorded:
+        root = Path(recorded).resolve()
+        if root == current:
+            return roots
+        protected = (Path.home().resolve(), REPO.resolve())
+        # 记录的宿主根只能是可信临时目录：拒绝根、受保护路径及其祖先/内部目录。
+        if (not root.is_dir() or root == Path(root.anchor)
+                or any(root == item or root in item.parents or item in root.parents
+                       for item in protected)):
+            raise FixtureError(f'WF_HOST_TMPDIR 不是可用的临时根：{root}')
+        roots.add(root)
+    return roots
+
+
 def validate(root, forbidden=()):
     root = Path(root).absolute()
     if root != root.resolve():
         raise FixtureError(f'fixture path contains a symlink: {root}')
-    temp = Path(tempfile.gettempdir()).resolve()
-    if root == temp / 'wf-fixtures':
+    # 命令私有 TMPDIR（R3）会把 gettempdir() 指向本命令根；fixture 仍可位于宿主临时存储
+    # 或 runner 的测试缓存根，因此把 execution.py 记录的宿主根一并作为允许域。
+    temp_roots = _temporary_roots()
+    if any(root == temp / 'wf-fixtures' for temp in temp_roots):
         raise FixtureError(f'fixture root must not replace the shared fixture hub: {root}')
     caches = (Path.home() / '.cache' / 'wf-test-run',
               Path.home() / '.cache' / 'wf-fixtures')
-    if not (temp in root.parents or any(cache in root.parents for cache in caches)):
+    if not (any(temp in root.parents for temp in temp_roots)
+            or any(cache in root.parents for cache in caches)):
         raise FixtureError(f'fixture must be a child of temporary storage: {root}')
     for other in (REPO, Path.home(), *map(Path, forbidden)):
         other = other.resolve()
@@ -189,8 +211,9 @@ def _validate_cache_root(root):
     if root != root.resolve():
         raise FixtureError(f'prune root 包含符号链接：{root}')
     resolved = root.resolve()
-    temp = Path(tempfile.gettempdir()).resolve()
-    if resolved != DEFAULT_CACHE.resolve() and temp not in resolved.parents:
+    temp_roots = _temporary_roots()
+    if resolved != DEFAULT_CACHE.resolve() and not any(
+            temp in resolved.parents for temp in temp_roots):
         raise FixtureError(
             f'prune root 必须是标准缓存根（{DEFAULT_CACHE}）或临时目录之下：{root}')
     return root

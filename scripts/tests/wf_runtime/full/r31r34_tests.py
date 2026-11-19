@@ -52,12 +52,12 @@ def make_task(title, touch, sid="sess-X1"):
 
 def approve(task_id, digest, gen, sid="sess-X1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r31_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r31_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/r31_notes.json"
+NOTES = wfdrive.temp("r31_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -73,7 +73,7 @@ wf(["task-knowledge", "--task", task1, "--decision", "no-update", "--json"], {"g
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
                        {"generation": gen1}, "sess-X1")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task1, "--decision",
-                     dfile("/tmp/r31_arch.json", [dec(f"finish {task1}", "finish", d1),
+                     dfile(wfdrive.temp("r31_arch.json"), [dec(f"finish {task1}", "finish", d1),
                                                   dec("a31/**", "commit", d1)]), "--json"],
                     {"generation": gen1}, "sess-X1")
 rec("R31 准备：正常归档", "WF_OK", (payload or {}).get("code"), rc == 0)
@@ -92,7 +92,7 @@ gen1 = ((payload or {}).get("facts") or {}).get("generation") or gen1
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
                        {"generation": gen1}, "sess-X1")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task1, "--decision",
-                     dfile("/tmp/r31_arch2.json", [dec(f"finish {task1}", "finish", d1),
+                     dfile(wfdrive.temp("r31_arch2.json"), [dec(f"finish {task1}", "finish", d1),
                                                    dec("a31/**", "commit", d1)]), "--json"],
                     {"generation": gen1}, "sess-X1")
 facts = (payload or {}).get("facts", {})
@@ -113,11 +113,11 @@ approve(task2, d2, gen2, "sess-X2")
 open(os.path.join(F, "a31b/y.txt"), "w").write("y\n")
 wf(["task-start", "--task", task2, "--json"], {"generation": gen2}, "sess-X2")
 disp = {"changes": [{"object": "a31b/y.txt", "decision_ref": AT, "reason": "提交保留"}], "targets": [], "pending": []}
-json.dump(disp, open("/tmp/r31_disp.json", "w"), ensure_ascii=False)
+json.dump(disp, open(wfdrive.temp("r31_disp.json"), "w"), ensure_ascii=False)
 rc, payload, _ = wf(["task-abandon", "--task", task2, "--decision",
-                     dfile("/tmp/r31_stop.json", [dec(f"stop {task2}", "abandon", d2),
+                     dfile(wfdrive.temp("r31_stop.json"), [dec(f"stop {task2}", "abandon", d2),
                                                   dec("a31b/**", "commit", d2)]),
-                     "--disposition", "/tmp/r31_disp.json", "--json"], {"generation": gen2}, "sess-X2")
+                     "--disposition", wfdrive.temp("r31_disp.json"), "--json"], {"generation": gen2}, "sess-X2")
 rec("R31 准备：放弃结案", "WF_OK", (payload or {}).get("code"), rc == 0)
 subprocess.run(["git", "reset", "-q", "--mixed", "HEAD~1"], cwd=F, capture_output=True)
 closed_dir = wf_tasks.task_dir(F, task2)
@@ -127,9 +127,9 @@ rec("R31 准备：记录未提交", "任务仍归档、记录未入库",
     subprocess.run(["git", "ls-files", "--error-unmatch", f"{record_rel}/task.json"],
                    cwd=F, capture_output=True).returncode != 0)
 rc, payload, _ = wf(["task-abandon", "--task", task2, "--decision",
-                     dfile("/tmp/r31_stop2.json", [dec(f"stop {task2}", "abandon", d2),
+                     dfile(wfdrive.temp("r31_stop2.json"), [dec(f"stop {task2}", "abandon", d2),
                                                    dec("a31b/**", "commit", d2)]),
-                     "--disposition", "/tmp/r31_disp.json", "--json"], {"generation": gen2}, "sess-X2")
+                     "--disposition", wfdrive.temp("r31_disp.json"), "--json"], {"generation": gen2}, "sess-X2")
 tracked_now = subprocess.run(["git", "ls-files", "--error-unmatch", f"{record_rel}/task.json"],
                              cwd=F, capture_output=True).returncode == 0
 rec("R31 放弃重入续做记录提交", "WF_OK 且记录已入库",
@@ -260,5 +260,5 @@ satisfied, code, facts = wf_gates.verify_step(GateCtx(), task_like, "task.check-
 rec("R34 旧规则 Check 不满足门禁", "WF_CHECK_STALE",
     f"ok={satisfied} code={code}", satisfied is False and code == "WF_CHECK_STALE")
 
-json.dump(results, open("/tmp/r31r34_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r31r34_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

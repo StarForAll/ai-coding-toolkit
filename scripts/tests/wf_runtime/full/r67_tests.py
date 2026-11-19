@@ -56,8 +56,8 @@ def make_task(title, sid):
     prd = f"# {title}\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
     open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
     digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-    json.dump([dec("approve", "approve", digest)], open(f"/tmp/r67_{facts['task_id']}.json", "w"))
-    wf(["task-approve", "--task", facts["task_id"], "--decision", f"/tmp/r67_{facts['task_id']}.json", "--json"],
+    json.dump([dec("approve", "approve", digest)], open(wfdrive.temp(f"r67_{facts['task_id']}.json"), "w"))
+    wf(["task-approve", "--task", facts["task_id"], "--decision", wfdrive.temp(f"r67_{facts['task_id']}.json"), "--json"],
        {"generation": facts.get("generation"), "complexity": "light",
         "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
     return facts["task_id"], facts.get("generation"), directory
@@ -106,7 +106,7 @@ def proposal(name, extra=None):
                          "object_digest": _proposal_digest(files), "reason": "R67"}}
     if extra:
         body.update(extra)
-    path = f"/tmp/r67_{name}.json"
+    path = wfdrive.temp(f"r67_{name}.json")
     json.dump(body, open(path, "w"), ensure_ascii=False)
     return path
 
@@ -133,9 +133,9 @@ for state, key in (("paused", "paused"), ("suspended", "suspended")):
     json.dump(record, open(record_path, "w"), ensure_ascii=False)
 
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal",
-                     "/tmp/r67_noapproval.json" if os.path.exists("/tmp/r67_noapproval.json") else
+                     wfdrive.temp("r67_noapproval.json") if os.path.exists(wfdrive.temp("r67_noapproval.json")) else
                      json.dump({"files": [{"path": ".wf/spec/rules/r67c.md", "content": "# 三\n", "before": None}]},
-                               open("/tmp/r67_noapproval.json", "w")) or "/tmp/r67_noapproval.json", "--json"],
+                               open(wfdrive.temp("r67_noapproval.json"), "w")) or wfdrive.temp("r67_noapproval.json"), "--json"],
                     {"generation": gen()}, "sess-M1")
 rec("2b 无批准引用的提案被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
@@ -167,7 +167,7 @@ clean()
 # ---- 3. 清单声明：改 scope 不能把门禁移出义务集合 ----
 manifest_path = os.path.join(F, ".wf/install/release-manifest.json")
 manifest_backup = open(manifest_path, encoding="utf-8").read()
-env_path = "/tmp/r67_env.json"
+env_path = wfdrive.temp("r67_env.json")
 json.dump(wfdrive.envelope({"generation": gen()}, "sess-M1"), open(env_path, "w"), ensure_ascii=False)
 
 
@@ -211,5 +211,5 @@ rec("3d 恢复后可用", "含 task.plan-approved 且义务 id 唯一",
     f"count={len(restored_ids)} has={'task.plan-approved' in restored_ids}",
     "task.plan-approved" in restored_ids and len(restored_ids) == len(set(restored_ids)))
 
-json.dump(results, open("/tmp/r67_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r67_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

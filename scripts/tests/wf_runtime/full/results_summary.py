@@ -29,6 +29,9 @@ HERE = Path(__file__).resolve().parent
 METRICS_SCHEMA = 1
 SUMMARY_SCHEMA = 4
 LEGACY_SUMMARY_SCHEMAS = (3,)
+# 与 runner_cleanup.OUTCOMES 同一有限集：摘要只接受这些值，不从旧 bad 行反推类别。
+UNIT_OUTCOMES = ("passed", "assertion_failed", "preparation_failed", "execution_failed",
+                 "cancelled", "unverified")
 MAX_INPUT_BYTES = 1 << 20
 
 INT_MEASUREMENTS = ("full_mode", "jobs", "requested_jobs", "effective_jobs", "repro_jobs",
@@ -107,17 +110,19 @@ def canonical_root(root):
 
 
 def _unit_inputs(results_dir, names, run_id):
+    """逐单元输入快照：缺记录/结构缺失是**事实**（state=incomplete），不阻断摘要；
+    外来 run_id/单元名是矛盾输入，仍拒绝。"""
     evidence, problems = {}, []
     for name in names:
         path = Path(results_dir) / f"{name}.test.log.json"
         try:
             record = _json_object(_read_bytes(path, f"unit result {name}"), f"unit result {name}")
         except SummaryError as exc:
-            problems.append(str(exc))
+            evidence[name] = {"state": "incomplete", "reason": str(exc)}
             continue
         unit_execution = record.get("unit_execution")
         if not isinstance(unit_execution, dict):
-            problems.append(f"unit result {name} has no unit_execution")
+            evidence[name] = {"state": "incomplete", "reason": "no unit_execution"}
             continue
         if unit_execution.get("run_id") != run_id:
             problems.append(f"unit result {name} belongs to another run_id")
@@ -127,7 +132,7 @@ def _unit_inputs(results_dir, names, run_id):
             continue
         row = unit_execution.get("result_row")
         if not isinstance(row, list) or len(row) != 5 or row[0] != name:
-            problems.append(f"unit result {name} result_row is malformed")
+            evidence[name] = {"state": "incomplete", "reason": "result_row is malformed"}
             continue
         evidence[name] = file_evidence(path, f"unit result {name}")
     return evidence, problems
@@ -405,6 +410,52 @@ def _repro_phase_counts(plan, report):
     return clean
 
 
+def _validate_unit_outcomes(value):
+    """`unit_outcomes` 是 typed 分类（runner_cleanup 唯一产生）；结构非法即拒绝发布。"""
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        raise SummaryError("summary unit_outcomes is not a list")
+    clean, seen = [], set()
+    for item in value:
+        if not isinstance(item, dict):
+            raise SummaryError("summary unit_outcomes entry is not an object")
+        unit, outcome = item.get("unit"), item.get("outcome")
+        if not isinstance(unit, str) or not unit:
+            raise SummaryError("summary unit_outcomes entry has no unit")
+        if unit in seen:
+            raise SummaryError(f"summary unit_outcomes repeats unit {unit!r}")
+        if outcome not in UNIT_OUTCOMES:
+            raise SummaryError(f"summary unit outcome is invalid: {outcome!r}")
+        seen.add(unit)
+        clean.append({"unit": unit, "outcome": outcome})
+    return clean
+
+
+def _validate_outcome_counts(value, unit_outcomes):
+    """typed 计数必须与逐单元 outcome 一致；缺失时按零计（历史/独立 repro 摘要）。"""
+    if value is None:
+        value = {}
+    if not isinstance(value, dict):
+        raise SummaryError("summary outcome counts are not an object")
+    unknown = set(value) - set(UNIT_OUTCOMES)
+    if unknown:
+        raise SummaryError("summary outcome counts have unknown keys: " + " ".join(sorted(unknown)))
+    counts = {}
+    for name in UNIT_OUTCOMES:
+        number = value.get(name, 0)
+        if isinstance(number, bool) or not isinstance(number, int) or number < 0:
+            raise SummaryError(f"summary outcome count {name} is invalid")
+        counts[name] = number
+    if unit_outcomes is not None:
+        derived = {name: 0 for name in UNIT_OUTCOMES}
+        for item in unit_outcomes:
+            derived[item["outcome"]] += 1
+        if counts != derived:
+            raise SummaryError("summary outcome counts contradict unit_outcomes")
+    return counts
+
+
 def build(results_dir, report, metrics, input_evidence, plan, role, run_id, fault=None,
           context=None, commit=True):
     """一次构造最终 schema4；`commit=True` 立即原子发布，controller 用 `commit=False`
@@ -424,6 +475,18 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
     evidence_state = report.get("evidence_state")
     if evidence_state not in ("complete", "incomplete"):
         raise SummaryError("summary evidence_state is invalid")
+    unit_outcomes = _validate_unit_outcomes(report.get("unit_outcomes"))
+    outcome_counts = _validate_outcome_counts(report.get("outcome_counts"), unit_outcomes)
+    if unit_outcomes is not None:
+        planned = [item.get("name") for item in plan.get("units") or []
+                   if isinstance(item, dict)]
+        if planned and {item["unit"] for item in unit_outcomes} != set(planned):
+            raise SummaryError("summary unit_outcomes must cover every planned unit")
+    if (outcome_counts["unverified"] or (unit_outcomes is not None
+                                        and any(item["outcome"] == "unverified"
+                                                for item in unit_outcomes))) \
+            and evidence_state == "complete":
+        raise SummaryError("summary claims complete evidence while units are unverified")
     if not isinstance(input_evidence, dict):
         raise SummaryError("summary input_evidence is missing")
     candidate_commit = _candidate_commit(plan, context)
@@ -463,7 +526,12 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
         "failure_owner": {"unregistered": counts["unregistered_fail"],
                           "repro": counts["repro_fail"],
                           "rows": counts["bad"],
-                          "structural": counts["extra_failures"]},
+                          "structural": counts["extra_failures"],
+                          "assertion": outcome_counts["assertion_failed"],
+                          "preparation": outcome_counts["preparation_failed"],
+                          "execution": outcome_counts["execution_failed"],
+                          "cancelled": outcome_counts["cancelled"],
+                          "unverified": outcome_counts["unverified"]},
         "build_seconds": _number(metrics, "build_seconds") if metrics else 0,
         "template_seconds": _number(metrics, "template_seconds") if metrics else 0,
         "template_reused": bool(metrics.get("template_reused")) if metrics else False,
@@ -514,6 +582,9 @@ def build(results_dir, report, metrics, input_evidence, plan, role, run_id, faul
         "input_evidence": input_evidence,
         "summary_publish": "published",
     }
+    if unit_outcomes is not None:
+        # 可选字段：独立 repro 角色没有单元，保持旧读者看到的结构。
+        payload["unit_outcomes"] = unit_outcomes
     if fault == "summary-exception":
         raise SummaryError("injected summary build/publish exception")
     payload["summary_path"] = str(Path(results_dir) / "summary.json")

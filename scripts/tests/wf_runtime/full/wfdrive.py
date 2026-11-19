@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-import json, os, subprocess, sys
+import json, os, subprocess, sys, tempfile
 
-FIX = os.environ.get("WF_FIX", "/tmp/wf-fixtures/f1")
+FIX = os.environ.get("WF_FIX") or os.path.join(tempfile.gettempdir(),
+                                               "wf-fixtures", "f1")
 WF = os.path.join(FIX, ".wf/bin/wf.py")
 # SUT 驱动解释器（启动被测 wf.py）：默认保持异解释器是既定决策——wflib/session.py 的
 # l2_anchor 会跳过与自身同解释器的祖先，SUT 与驱动同解释器会把锚点推出 harness 之外
@@ -21,6 +22,125 @@ import library_source  # noqa: E402
 
 LIB, LIB_SOURCE = library_source.resolve(env=os.environ)
 TS = "2026-11-03T00:00:00.000000Z"
+
+# ---- 每次运行的材料根（R3） ----------------------------------------------
+# 托管套件由 execution.py 为每个命令下发私有 TMPDIR（结果 logs 下的唯一子根）；
+# 手工直跑没有 TMPDIR 时回落到宿主临时目录（tempfile 自身也遵循 TMPDIR）。
+def temp_root():
+    return os.path.abspath(os.environ.get("TMPDIR") or tempfile.gettempdir())
+
+
+def temp(*parts):
+    """本命令私有临时根下的绝对路径（跨命令不共享、不覆盖宿主旧文件）。"""
+    return os.path.join(temp_root(), *parts)
+
+
+def temp_dir(prefix="wf-"):
+    return tempfile.mkdtemp(prefix=prefix, dir=temp_root())
+
+
+def legacy_root():
+    """runner 提供的历史夹具根；单跑时退化到宿主临时目录（不读写固定旧发行）。"""
+    return os.path.abspath(os.environ.get("WF_LEGACY_FIXTURE_ROOT")
+                           or os.path.join(tempfile.gettempdir(), "wf-fixtures"))
+
+
+# ---- 发行来源（R1：候选断言必须消费本次已核发行） -------------------------
+# 托管 runner 只下发这两个变量；缺失时明确失败，绝不回退固定旧目录（如
+# 固定旧目录），否则候选审计可能实际测试作者库。
+
+
+def deploy_mode():
+    return os.environ.get("WF_FIXTURE_DEPLOY", "dev")
+
+
+def release_root(required=True):
+    root = os.environ.get("WF_RELEASE_REPO") or ""
+    if required and not root:
+        raise RuntimeError("WF_RELEASE_REPO 未提供：托管运行器必须下发本次发行根")
+    return root
+
+
+def install_source_path():
+    """测试断言的安装器来源：候选=已核发行；dev=作者 payload（作者侧行为）。"""
+    if deploy_mode() == "candidate":
+        root = release_root()
+        return os.path.join(root, "install.py")
+    return os.path.join(REPO, "docs/workflows/wf/payload", "install.py")
+
+
+def asset_source(*parts):
+    """产品资产来源：候选=发行树内副本；dev=作者源树（作者侧覆盖）。
+
+    发行映射（build-wf-release.release_source_path）：`payload/<x>` → `wf-release/<x>`，
+    `skills/<x>` → `wf-release/skills/<x>`。
+    """
+    if deploy_mode() == "candidate":
+        tail = list(parts[1:]) if parts[:1] == ("payload",) else list(parts)
+        return os.path.join(release_root(), "wf-release", *tail)
+    return os.path.join(REPO, "docs", "workflows", "wf", *parts)
+
+
+def release_version():
+    root = release_root(required=False)
+    if not root:
+        return os.environ.get("WF_RELEASE_VERSION") or None
+    try:
+        with open(os.path.join(root, "wf-release.json"), encoding="utf-8") as handle:
+            return (json.load(handle) or {}).get("version")
+    except (OSError, ValueError):
+        return os.environ.get("WF_RELEASE_VERSION") or None
+
+
+def release_commit(ref=None):
+    root = release_root()
+    ref = ref or os.environ.get("WF_INSTALL_REF") or ""
+    if not ref:
+        raise RuntimeError("WF_INSTALL_REF 未提供：无法核验实际安装身份")
+    proc = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse", f"{ref}^{{commit}}"],
+                          cwd=root, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"发行引用不可解析：{ref}（{proc.stderr.strip()[:200]}）")
+    return proc.stdout.strip()
+
+
+def installed_identity(project):
+    try:
+        with open(os.path.join(project, ".wf", "install", "installation.json"),
+                  encoding="utf-8") as handle:
+            return json.load(handle)
+    except (OSError, ValueError):
+        return None
+
+
+def install_identity_problems(project, version=None):
+    """实际安装记录与本次发行身份的差异列表（空 = 可核验）。"""
+    record = installed_identity(project) or {}
+    problems = []
+    expected_version = version if version is not None else release_version()
+    expected_ref = os.environ.get("WF_INSTALL_REF")
+    expected_commit = release_commit() if expected_ref else None
+    if not record:
+        return ["installation record is missing"]
+    if expected_version and record.get("version") != expected_version:
+        problems.append(f"version={record.get('version')!r} expected={expected_version!r}")
+    if expected_ref and record.get("release_ref") != expected_ref:
+        problems.append(f"release_ref={record.get('release_ref')!r} expected={expected_ref!r}")
+    if expected_commit and record.get("source_commit") != expected_commit:
+        problems.append(f"source_commit={record.get('source_commit')!r} expected={expected_commit!r}")
+    return problems
+
+
+def deployment_identity_problems(project):
+    """夹具实际部署身份：候选=本次发行安装；dev=作者开发态部署（0.0.0-dev）。"""
+    if deploy_mode() == "candidate":
+        return install_identity_problems(project)
+    record = installed_identity(project) or {}
+    if not record:
+        return ["installation record is missing"]
+    if record.get("version") != "0.0.0-dev":
+        return [f"version={record.get('version')!r} expected='0.0.0-dev'（dev 部署）"]
+    return []
 
 
 def deny_writes(path):

@@ -103,7 +103,7 @@ entry = items[0]
 rec("R61 探测异常→pending_check 且带路径", "pending_check 且 paths 非空",
     f"{entry['state']} paths={entry['facts'].get('paths')}",
     entry["state"] == "pending_check" and entry["facts"].get("paths"))
-env = "/tmp/r61_env.json"
+env = wfdrive.temp("r61_env.json")
 json.dump(wfdrive.envelope({}, "sess-F9"), open(env, "w"), ensure_ascii=False)
 ctx = wf_cli.Context(F, ["--envelope", env])
 wf_tasks.maintenance_persisted_probe = lambda root: (lambda entry: (_ for _ in ()).throw(AttributeError("boom")))
@@ -115,5 +115,5 @@ except Exception as exc:
 wf_tasks.maintenance_persisted_probe = original
 rec("R61 探测异常→门禁待核出口", "WF_HISTORY_UNRESOLVED", caught, caught == "WF_HISTORY_UNRESOLVED")
 
-json.dump(results, open("/tmp/r61_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r61_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

@@ -4,7 +4,11 @@ import contextlib, hashlib, io, json, os, shutil, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
-sys.path.insert(0, wfdrive.REPO + "/docs/workflows/wf/payload")
+# 候选模式断言已安装发行器的行为；dev 模式保留作者 payload（作者侧覆盖）。
+if wfdrive.deploy_mode() == "candidate":
+    sys.path.insert(0, wfdrive.release_root())
+else:
+    sys.path.insert(0, wfdrive.REPO + "/docs/workflows/wf/payload")
 from wflib import session as wf_session, spec as wf_spec, tasks as wf_tasks
 import install as wf_install
 
@@ -339,5 +343,5 @@ rec("A2 writer schema 非法即拒且零写入", "WF_RECORD_INVALID，记录与�
     and not os.path.exists(os.path.join(root, "wf-start/SKILL.md")))
 shutil.rmtree(base, ignore_errors=True)
 
-json.dump(results, open("/tmp/r83_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r83_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

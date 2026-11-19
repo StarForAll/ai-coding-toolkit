@@ -89,7 +89,7 @@ for text, label in (('{"a":1', "截断"), ("{oops}", "非法"), ("NaN", "常量"
 # ---- B4-1：d 桶的处置（登记为已知边界或实现） ----
 doc = open(wfdrive.REPO + "/docs/workflows/wf-framework-implementation.md",
            encoding="utf-8").read()
-rec("B4-1 d 档在实现稿登记为已交付（不是「已知边界」）", "含「d 档」且标 2026-11-12 交付",
+rec("B4-1（作者侧）d 档在实现稿登记为已交付（不是「已知边界」）", "含「d 档」且标 2026-11-12 交付",
     f"d档={'d 档' in doc} 交付={'d 档（归属语义存疑，2026-11-12 交付）' in doc}",
     "d 档" in doc and "d 档（归属语义存疑，2026-11-12 交付）" in doc)
 
@@ -157,5 +157,5 @@ rec("A4 bind 有恢复入口", "含 _resume_bind", "_resume_bind" in src, "_resu
 rec("A4b bind 意图先于绑定写入", "mutate 里写绑定",
     "_write_binding" in src, "_write_binding" in src)
 
-json.dump(results, open("/tmp/r84_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r84_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

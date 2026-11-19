@@ -29,12 +29,12 @@ def archive_task(tid, archived_at, terminal, curated, status="archived"):
 
 
 def governance():
-    ctx = wf_cli.Context(F, ["--envelope", "/tmp/r76_env.json"])
+    ctx = wf_cli.Context(F, ["--envelope", wfdrive.temp("r76_env.json")])
     tasks = list(wf_tasks.iter_tasks(F))
     return wf_tasks._governance_summary(F, tasks, wf_tasks._task_dirs(F)[1])
 
 
-json.dump(wfdrive.envelope({"generation": 1}, "sess-A1"), open("/tmp/r76_env.json", "w"), ensure_ascii=False)
+json.dump(wfdrive.envelope({"generation": 1}, "sess-A1"), open(wfdrive.temp("r76_env.json"), "w"), ensure_ascii=False)
 os.makedirs(os.path.join(F, ".wf/spec/rules"), exist_ok=True)
 open(os.path.join(F, ".wf/spec/rules/used.md"), "w").write("# used\n")
 open(os.path.join(F, ".wf/spec/rules/idle.md"), "w").write("# idle\n")
@@ -134,19 +134,19 @@ def hold_lock():
         f"sys.path.insert(0, {wfdrive.LIB!r});"
         "from wflib import lock;"
         "h = lock.acquire(%r);"
-        "open('/tmp/r76_holding', 'w').write('1');"
+        "import os; open(os.path.join(os.environ['TMPDIR'], 'r76_holding'), 'w').write('1');"
         "time.sleep(20)"
     ) % F
     return subprocess.Popen([wfdrive.PYTHON, "-c", code], stdout=subprocess.DEVNULL,
                             stderr=subprocess.DEVNULL)
 
 
-if os.path.exists("/tmp/r76_holding"):
-    os.remove("/tmp/r76_holding")
+if os.path.exists(wfdrive.temp("r76_holding")):
+    os.remove(wfdrive.temp("r76_holding"))
 holder = hold_lock()
 import time
 for _ in range(200):
-    if os.path.exists("/tmp/r76_holding"):
+    if os.path.exists(wfdrive.temp("r76_holding")):
         break
     time.sleep(0.05)
 
@@ -159,12 +159,12 @@ try:
 finally:
     holder.kill()
     holder.wait()
-    if os.path.exists("/tmp/r76_holding"):
-        os.remove("/tmp/r76_holding")
+    if os.path.exists(wfdrive.temp("r76_holding")):
+        os.remove(wfdrive.temp("r76_holding"))
 
 alive, facts = wf_lock.verify_holder(F)
 rec("3b 探测与运行时同一事实源", "返回 (bool, dict)", f"{alive} {sorted(facts)}",
     isinstance(alive, bool) and isinstance(facts, dict))
 
-json.dump(results, open("/tmp/r76_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r76_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

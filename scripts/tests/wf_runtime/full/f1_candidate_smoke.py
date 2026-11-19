@@ -65,6 +65,11 @@ def check_installation():
     if expected_digest:
         rec("安装规则摘要与候选一致", expected_digest, record.get("rules_digest"),
             record.get("rules_digest") == expected_digest)
+    if expected_ref:
+        expected_commit = wfdrive.release_commit()
+        rec("安装提交与候选一致", expected_commit[:12],
+            (record.get("source_commit") or "")[:12],
+            record.get("source_commit") == expected_commit)
 
 
 def check_initialized():

@@ -85,14 +85,14 @@ def approve(task_id, digest, gen, sid="sess-U1", extra=None):
     if extra:
         inputs.update(extra)
     rc, payload, out = wf(["task-approve", "--task", task_id, "--decision",
-                           dfile(f"/tmp/r17_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+                           dfile(wfdrive.temp(f"r17_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
                           inputs, sid)
     if rc != 0:
         print(f"approve 原文({task_id}):", (out or "")[:400])
     return rc, payload, out
 
 
-NOTES = "/tmp/r17_notes.json"
+NOTES = wfdrive.temp("r17_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -116,10 +116,10 @@ task19, gen19, dir19, d19 = make_task("R19 改名碰撞", [".wf/spec/**"], "sess
 approve(task19, d19, gen19, "sess-U19")
 wfok("task-start", ["task-start", "--task", task19, "--json"], {"generation": gen19}, "sess-U19")
 for name in ("a", "c"):
-    change = dfile(f"/tmp/r19_{name}.json",
+    change = dfile(wfdrive.temp(f"r19_{name}.json"),
                    [{"operation": "add", "new_paths": [f".wf/spec/{name}.md"], "content": RULE}])
     wf(["spec-update", "--task", task19, "--changes", change, "--json"], {"generation": gen19}, "sess-U19")
-batch = dfile("/tmp/r19_conflict.json",
+batch = dfile(wfdrive.temp("r19_conflict.json"),
               [{"operation": "rename", "old_paths": [".wf/spec/a.md"], "new_paths": [".wf/spec/b.md"]},
                {"operation": "rename", "old_paths": [".wf/spec/c.md"], "new_paths": [".wf/spec/b.md"]}])
 rc, payload, _ = wf(["spec-update", "--task", task19, "--changes", batch, "--json"], {"generation": gen19}, "sess-U19")
@@ -135,7 +135,7 @@ wf(["writer", "release", "--json"], {"generation": gen19}, "sess-U19")
 clean()
 task17, gen17, dir17, d17 = make_task("R17 spec 授权", ["src/**", ".wf/spec/**"], "sess-U17")
 approve(task17, d17, gen17, "sess-U17")
-early = dfile("/tmp/r17_early.json", [{"operation": "add", "new_paths": [".wf/spec/early.md"], "content": RULE}])
+early = dfile(wfdrive.temp("r17_early.json"), [{"operation": "add", "new_paths": [".wf/spec/early.md"], "content": RULE}])
 rc, payload, _ = wf(["spec-update", "--task", task17, "--changes", early, "--json"], {"generation": gen17}, "sess-U17")
 rec("R17 未开工不得写 spec", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
@@ -160,7 +160,7 @@ approve(task17b, d17b, gen17b, "sess-U17b")
 open(os.path.join(F, "src/r17b.txt"), "w").write("r17b\n")
 rc_s, start_b, _ = wfok("task-start", ["task-start", "--task", task17b, "--json"], {"generation": gen17b}, "sess-U17b")
 rec("R26 准备：开工", "WF_OK", (start_b or {}).get("code"), rc_s == 0)
-out_of_face = dfile("/tmp/r17_out.json", [{"operation": "add", "new_paths": [".wf/spec/outside-face.md"], "content": RULE}])
+out_of_face = dfile(wfdrive.temp("r17_out.json"), [{"operation": "add", "new_paths": [".wf/spec/outside-face.md"], "content": RULE}])
 rc, payload, _ = wf(["spec-update", "--task", task17b, "--changes", out_of_face, "--json"],
                     {"generation": gen17b}, "sess-U17b")
 rec("R26 spec 目标不在触碰面内", "WF_SCOPE_UNRESOLVED", (payload or {}).get("code"),
@@ -170,7 +170,7 @@ rec("R26 拒绝时零写入", "outside-face.md 不存在", os.path.exists(os.pat
 wf(["task-pause", "--task", task17b, "--reason", "R26 收尾", "--json"], {"generation": gen17b}, "sess-U17b")
 wf(["writer", "release", "--json"], {"generation": gen17b}, "sess-U17b")
 
-json.dump(results, open("/tmp/r17r24_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r17r24_results.json"), "w"), ensure_ascii=False, indent=2)
 print("part1", sum(1 for r in results if r["pass"]), "/", len(results))
 
 # ---------------- R20：改名不改归档引用 ----------------
@@ -179,7 +179,7 @@ task20a, gen20a, dir20a, d20a = make_task("R20 归档引用", [".wf/spec/**"], "
 approve(task20a, d20a, gen20a, "sess-U20a")
 wfok("task-start", ["task-start", "--task", task20a, "--json"], {"generation": gen20a}, "sess-U20a")
 old_rule = RULE.replace("paths: [\"src/**\"]", "paths: [\"src/old/**\"]")
-add20 = dfile("/tmp/r20_add.json", [{"operation": "add", "new_paths": [".wf/spec/old.md"], "content": old_rule}])
+add20 = dfile(wfdrive.temp("r20_add.json"), [{"operation": "add", "new_paths": [".wf/spec/old.md"], "content": old_rule}])
 wf(["spec-update", "--task", task20a, "--changes", add20, "--json"], {"generation": gen20a}, "sess-U20a")
 wf(["task-curate", "--task", task20a, "--spec", ".wf/spec/old.md", "--purpose", "旧规则", "--json"],
    {"generation": gen20a}, "sess-U20a")
@@ -188,13 +188,13 @@ wfok("spec", ["spec", "--file", ".wf/spec/old.md", "--json"],
 wfok("spec", ["spec", "--file", ".wf/spec/old.md", "--json"], {"generation": gen20a}, "sess-U20a")
 rc, payload, _ = wf(["task-check", "--task", task20a, "--review-notes", NOTES, "--json"],
                     {"generation": gen20a}, "sess-U20a")
-json.dump((payload or {}).get("facts"), open("/tmp/r20_facts.json", "w"), ensure_ascii=False)
+json.dump((payload or {}).get("facts"), open(wfdrive.temp("r20_facts.json"), "w"), ensure_ascii=False)
 rec("R20 准备：Check", "WF_OK", f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:400]}", rc == 0)
 wf(["task-knowledge", "--task", task20a, "--decision", "no-update", "--json"], {"generation": gen20a}, "sess-U20a")
 wfok("sampling", ["sampling", "pick", "--task", task20a, "--freeze", "--json"],
                        {"generation": gen20a}, "sess-U20a")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task20a, "--decision",
-                     dfile("/tmp/r20_arch.json", [dec(f"finish {task20a}", "finish", d20a),
+                     dfile(wfdrive.temp("r20_arch.json"), [dec(f"finish {task20a}", "finish", d20a),
                                                   dec(".wf/spec/**", "commit", d20a)]),
                      "--json"], {"generation": gen20a}, "sess-U20a")
 rec("R20 准备：归档任务", "WF_OK", f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:300]}", rc == 0)
@@ -206,7 +206,7 @@ clean()
 task20b, gen20b, dir20b, d20b = make_task("R20 改名", [".wf/spec/**"], "sess-U20b")
 approve(task20b, d20b, gen20b, "sess-U20b")
 wfok("task-start", ["task-start", "--task", task20b, "--json"], {"generation": gen20b}, "sess-U20b")
-rename20 = dfile("/tmp/r20_rename.json", [{"operation": "rename", "old_paths": [".wf/spec/old.md"],
+rename20 = dfile(wfdrive.temp("r20_rename.json"), [{"operation": "rename", "old_paths": [".wf/spec/old.md"],
                                            "new_paths": [".wf/spec/new.md"]}])
 rc, payload, _ = wf(["spec-update", "--task", task20b, "--changes", rename20, "--json"],
                     {"generation": gen20b}, "sess-U20b")
@@ -227,7 +227,7 @@ nomatch = rule18.replace('paths: ["lib/**"]', 'paths: ["nope/**"]').replace('ver
 task18, gen18, dir18, d18 = make_task("R18 核实", ["lib/**", ".wf/spec/**"], "sess-U18")
 approve(task18, d18, gen18, "sess-U18")
 wfok("task-start", ["task-start", "--task", task18, "--json"], {"generation": gen18}, "sess-U18")
-add18 = dfile("/tmp/r18_add.json",
+add18 = dfile(wfdrive.temp("r18_add.json"),
               [{"operation": "add", "new_paths": [".wf/spec/expired.md"], "content": expired},
                {"operation": "add", "new_paths": [".wf/spec/nomatch.md"], "content": nomatch}])
 wf(["spec-update", "--task", task18, "--changes", add18, "--json"], {"generation": gen18}, "sess-U18")
@@ -249,7 +249,7 @@ wfok("spec", ["spec", "--file", ".wf/spec/nomatch.md", "--json"],
      {"generation": gen18}, "sess-U18")   # 读取留痕（spec-loaded 前置）
 wfok("spec", ["spec", "--file", ".wf/spec/nomatch.md", "--json"], {"generation": gen18}, "sess-U18")
 rc, payload, _ = wf(["task-check", "--task", task18, "--decision",
-                     dfile("/tmp/r18_dec.json", [dec(".wf/spec/expired.md", "passed", d18)]),
+                     dfile(wfdrive.temp("r18_dec.json"), [dec(".wf/spec/expired.md", "passed", d18)]),
                      "--review-notes", NOTES, "--json"], {"generation": gen18}, "sess-U18")
 spec_facts = ((payload or {}).get("facts") or {}).get("spec") or {}
 rec("R18 策展未命中条目也参与判定", "curated 含 nomatch 且仍阻断",
@@ -257,13 +257,13 @@ rec("R18 策展未命中条目也参与判定", "curated 含 nomatch 且仍阻�
     ".wf/spec/nomatch.md" in (spec_facts.get("curated") or [])
     and (payload or {}).get("code") == "WF_SPEC_INCOMPLETE")
 rc, payload, _ = wf(["task-check", "--task", task18, "--decision",
-                     dfile("/tmp/r18_dec2.json", [dec(".wf/spec/expired.md .wf/spec/nomatch.md", "passed", d18)]),
+                     dfile(wfdrive.temp("r18_dec2.json"), [dec(".wf/spec/expired.md .wf/spec/nomatch.md", "passed", d18)]),
                      "--review-notes", NOTES, "--json"], {"generation": gen18}, "sess-U18")
 rec("R18 人判覆盖后通过", "WF_OK", f"{(payload or {}).get('code')} spec={json.dumps(((payload or {}).get('facts') or {}).get('spec'), ensure_ascii=False)[:160]}", rc == 0)
 wf(["task-pause", "--task", task18, "--reason", "R18 收尾", "--json"], {"generation": gen18}, "sess-U18")
 wf(["writer", "release", "--json"], {"generation": gen18}, "sess-U18")
 
-json.dump(results, open("/tmp/r17r24_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r17r24_results.json"), "w"), ensure_ascii=False, indent=2)
 print("part2", sum(1 for r in results if r["pass"]), "/", len(results))
 
 # ---------------- R21：验证期间新增范围外文件 ----------------
@@ -282,8 +282,8 @@ probe_block["verifications"] = ver21
 prd21 = f"# R21 结束前重算\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(probe_block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(dir21, "prd.md"), "w", encoding="utf-8").write(prd21)
 d21b = "sha256:" + hashlib.sha256(prd21.encode()).hexdigest()
-json.dump([dec(f"replan {task21}", "replan", d21b)], open("/tmp/r21_replan.json", "w"))
-wf(["task-replan", "--task", task21, "--decision", "/tmp/r21_replan.json", "--json"],
+json.dump([dec(f"replan {task21}", "replan", d21b)], open(wfdrive.temp("r21_replan.json"), "w"))
+wf(["task-replan", "--task", task21, "--decision", wfdrive.temp("r21_replan.json"), "--json"],
    {"generation": gen21}, "sess-U21")
 approve(task21, d21b, gen21, "sess-U21")
 rc, payload, _ = wf(["task-check", "--task", task21, "--review-notes", NOTES, "--json"],
@@ -305,7 +305,7 @@ approve(task22, d22, gen22, "sess-U22", extra={"tdd": True})
 open(os.path.join(F, "area22/r22.txt"), "w").write("r22\n")
 rc_s22, start22, _ = wfok("task-start", ["task-start", "--task", task22, "--json"], {"generation": gen22}, "sess-U22")
 rec("R22 准备：开工", "WF_OK", (start22 or {}).get("code"), rc_s22 == 0)
-bad_notes = "/tmp/r22_notes_bad.json"
+bad_notes = wfdrive.temp("r22_notes_bad.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"},
            "tdd_evidence": {"note": "no red/green references"}}, open(bad_notes, "w"))
 rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", bad_notes, "--json"],
@@ -315,7 +315,7 @@ rec("R22 非结构化证据不得通过", "WF_CHECK_FAILED", (payload or {}).get
 good = {"assertion": "add 支持变长加数", "red_reason": "旧实现不接受第三个加数",
         "red_command_ref": "v1", "green_command_ref": "v2",
         "properties": "可红、确定性、快速、可无人执行"}
-good_notes = "/tmp/r22_notes_good.json"
+good_notes = wfdrive.temp("r22_notes_good.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"},
            "tdd_evidence": good}, open(good_notes, "w"))
 block = json.loads(open(os.path.join(dir22, "prd.md"), encoding="utf-8").read().split("```json")[1].split("```")[0])
@@ -329,8 +329,8 @@ block["verifications"] = [
 prd22 = f"# R22 TDD 结构\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(dir22, "prd.md"), "w", encoding="utf-8").write(prd22)
 d22b = "sha256:" + hashlib.sha256(prd22.encode()).hexdigest()
-json.dump([dec(f"replan {task22}", "replan", d22b)], open("/tmp/r22_replan.json", "w"))
-wf(["task-replan", "--task", task22, "--decision", "/tmp/r22_replan.json", "--json"],
+json.dump([dec(f"replan {task22}", "replan", d22b)], open(wfdrive.temp("r22_replan.json"), "w"))
+wf(["task-replan", "--task", task22, "--decision", wfdrive.temp("r22_replan.json"), "--json"],
    {"generation": gen22}, "sess-U22")
 approve(task22, d22b, gen22, "sess-U22", extra={"tdd": True})
 # 制造历史红运行：文件内容不满足 v1 → Check fail
@@ -346,8 +346,8 @@ rec("R22 真实红→绿结构通过", "WF_OK", f"{(payload or {}).get('code')}"
 same = {"assertion": "a", "red_reason": "r", "red_command_ref": "v2", "green_command_ref": "v2",
         "properties": "可红"}
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"},
-           "tdd_evidence": same}, open("/tmp/r22_notes_same.json", "w"))
-rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", "/tmp/r22_notes_same.json", "--json"],
+           "tdd_evidence": same}, open(wfdrive.temp("r22_notes_same.json"), "w"))
+rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", wfdrive.temp("r22_notes_same.json"), "--json"],
                     {"generation": gen22}, "sess-U22")
 rec("R22 红绿同一条不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
@@ -373,7 +373,7 @@ wfok("sampling", ["sampling", "pick", "--task", task23, "--freeze", "--json"],
 lock_path = os.path.join(F, ".git", "index.lock")
 open(lock_path, "w").write("")
 rc_fail, fail_payload, _ = wf(["archive", "--task", task23, "--decision",
-                               dfile("/tmp/r23_arch.json", [dec(f"finish {task23}", "finish", d23),
+                               dfile(wfdrive.temp("r23_arch.json"), [dec(f"finish {task23}", "finish", d23),
                                                             dec("area23/**", "commit", d23)]), "--json"],
                               {"generation": cur_gen()}, "sess-U23")
 os.remove(lock_path)
@@ -389,7 +389,7 @@ wf(["task-pause", "--task", task23, "--reason", "R23 无写权前提", "--json"]
 rc_rel, rel_payload, _ = wf(["writer", "release", "--json"], {"generation": cur_gen()}, "sess-U23")
 print("R23 release:", rc_rel, (rel_payload or {}).get("code"), (rel_payload or {}).get("facts"))
 rc_busy, busy_payload, _ = wf(["archive", "--task", task23, "--decision",
-                               dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
+                               dfile(wfdrive.temp("r23_arch2.json"), [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],
                               {"generation": cur_gen()}, "sess-U23")
 # 期望码由 WF_WRITER_BUSY 改为 WF_SEMANTIC_DECISION：实现把"写权空闲且本会话未持有"
@@ -407,7 +407,7 @@ print("R23 续做前记录 check.id=", ((_rec23.get("check") or {}).get("id")),
       " 刚Check id=", ((chk23 or {}).get("facts") or {}).get("check"),
       " object_paths=", ((_rec23.get("check") or {}).get("object_paths")))
 rc, payload, _ = wf(["archive", "--task", task23, "--decision",
-                     dfile("/tmp/r23_arch2.json", [dec(f"finish {task23}", "finish", d23),
+                     dfile(wfdrive.temp("r23_arch2.json"), [dec(f"finish {task23}", "finish", d23),
                                                    dec("area23/**", "commit", d23)]), "--json"],
                     {"generation": cur_gen()}, "sess-U23")
 if (payload or {}).get("code") != "WF_OK":
@@ -432,25 +432,25 @@ approve(task24, d24, gen24, "sess-U24")
 open(os.path.join(F, "area24/r24.txt"), "w").write("r24\n")
 wfok("task-start", ["task-start", "--task", task24, "--json"], {"generation": gen24}, "sess-U24")
 disp = {"changes": [{"object": "area24/r24.txt", "decision_ref": AT, "reason": "保留现状"}], "targets": [], "pending": []}
-json.dump(disp, open("/tmp/r24_disp.json", "w"), ensure_ascii=False)
-stop_only = dfile("/tmp/r24_stop.json", [dec(f"stop {task24}", "abandon", d24)])
+json.dump(disp, open(wfdrive.temp("r24_disp.json"), "w"), ensure_ascii=False)
+stop_only = dfile(wfdrive.temp("r24_stop.json"), [dec(f"stop {task24}", "abandon", d24)])
 rc, payload, _ = wf(["task-abandon", "--task", task24, "--decision", stop_only,
-                     "--disposition", "/tmp/r24_disp.json", "--json"], {"generation": gen24}, "sess-U24")
+                     "--disposition", wfdrive.temp("r24_disp.json"), "--json"], {"generation": gen24}, "sess-U24")
 rec("R24 无授权且未处置不得结案", "WF_WORKSPACE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_WORKSPACE_UNRESOLVED")
 record = json.load(open(os.path.join(dir24, "task.json")))
 rec("R24 未结案时不写异常终态", "terminal 为空且仍未归档",
     f"terminal={record.get('terminal')} status={record.get('status')}",
     not record.get("terminal") and record.get("status") != "archived")
-with_grant = dfile("/tmp/r24_grant.json", [dec(f"stop {task24}", "abandon", d24),
+with_grant = dfile(wfdrive.temp("r24_grant.json"), [dec(f"stop {task24}", "abandon", d24),
                                            dec("area24/**", "commit", d24)])
 rc, payload, _ = wf(["task-abandon", "--task", task24, "--decision", with_grant,
-                     "--disposition", "/tmp/r24_disp.json", "--json"], {"generation": gen24}, "sess-U24")
+                     "--disposition", wfdrive.temp("r24_disp.json"), "--json"], {"generation": gen24}, "sess-U24")
 committed = subprocess.run(["git", "log", "-2", "--name-only", "--format="], cwd=F,
                            capture_output=True, text=True).stdout
 rec("R24 有授权时实际提交并结案", "WF_OK 且改动已提交",
     f"{(payload or {}).get('code')} committed={'area24/r24.txt' in committed}",
     rc == 0 and "area24/r24.txt" in committed)
 
-json.dump(results, open("/tmp/r17r24_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r17r24_results.json"), "w"), ensure_ascii=False, indent=2)
 print("total", sum(1 for r in results if r["pass"]), "/", len(results))

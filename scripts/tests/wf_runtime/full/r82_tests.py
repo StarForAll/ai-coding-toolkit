@@ -4,7 +4,9 @@ import hashlib, json, os, re, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
-sys.path.insert(0, wfdrive.REPO + "/docs/workflows/wf/payload")
+# 候选模式断言发行安装器；dev 模式保留作者 payload（作者侧覆盖）。
+sys.path.insert(0, wfdrive.release_root() if wfdrive.deploy_mode() == "candidate"
+                else wfdrive.REPO + "/docs/workflows/wf/payload")
 from wflib import check as wf_check, review as wf_review, session as wf_session, spec as wf_spec, tasks as wf_tasks
 import install as wf_install
 
@@ -165,5 +167,5 @@ repair_src = open(os.path.join(F, ".wf/bin/repair.py"), encoding="utf-8").read()
 rec("D-7 repair 拒绝多回执歧义", "含多重回执的拒绝",
     "同一 operation 存在多条维护回执" in repair_src, "同一 operation 存在多条维护回执" in repair_src)
 
-json.dump(results, open("/tmp/r82_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r82_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

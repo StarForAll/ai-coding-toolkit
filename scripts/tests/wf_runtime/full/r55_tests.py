@@ -58,7 +58,7 @@ def make_task(title, sid):
 
 def approve(task_id, digest, gen, choice="approve", sid="sess-Z1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r55_{task_id}_{choice}.json", [dec("approve", choice, digest)]), "--json"],
+               dfile(wfdrive.temp(f"r55_{task_id}_{choice}.json"), [dec("approve", choice, digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
@@ -120,5 +120,5 @@ rec("R55 对象摘要不符被拒", "WF_APPROVAL_MISSING", (payload or {}).get("
 wf(["task-pause", "--task", task4, "--reason", "R55", "--json"], {"generation": write_gen()}, "sess-Z4")
 wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-Z4")
 
-json.dump(results, open("/tmp/r55_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r55_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

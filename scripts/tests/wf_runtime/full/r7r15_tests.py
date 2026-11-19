@@ -70,12 +70,12 @@ def make_task(title, touch, sid="sess-T1", verifications=None, acceptance=None):
 
 def approve(task_id, digest, gen, sid="sess-T1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r7_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r7_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/r7_notes.json"
+NOTES = wfdrive.temp("r7_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -83,7 +83,7 @@ json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
 clean()
 task1, gen1, dir1, d1 = make_task("R7 基线边界", [".wf/spec/**"], "sess-T1")
 approve(task1, d1, gen1)
-proposal = dfile("/tmp/r7_prop_ok.json", _pdict([{"path": ".wf/spec/ok.md", "content": "# ok\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+proposal = dfile(wfdrive.temp("r7_prop_ok.json"), _pdict([{"path": ".wf/spec/ok.md", "content": "# ok\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                     "subject": "r7 proposal", "choice": "approve",
                     "object_digest": None, "reason": "R7"}))
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", proposal, "--json"], {"generation": gen1})
@@ -93,13 +93,13 @@ rec("R7 未开工零写入", "未写 ok.md", os.path.exists(os.path.join(F, ".wf
     not os.path.exists(os.path.join(F, ".wf/spec/ok.md")))
 rc_start, start_payload, _ = wf(["task-start", "--task", task1, "--json"], {"generation": gen1})
 rec("R7 准备：开工", "WF_OK", (start_payload or {}).get("code"), rc_start == 0)
-bad = dfile("/tmp/r7_prop_writer.json", _pdict([{"path": ".wf/writer.json", "content": "{}", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+bad = dfile(wfdrive.temp("r7_prop_writer.json"), _pdict([{"path": ".wf/writer.json", "content": "{}", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                     "subject": "r7 proposal", "choice": "approve",
                     "object_digest": None, "reason": "R7"}))
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", bad, "--json"], {"generation": gen1})
 rec("R7 控制记录不得作目标", "WF_SCOPE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SCOPE_UNRESOLVED")
-outside = dfile("/tmp/r7_prop_src.json", _pdict([{"path": "src/r7.txt", "content": "x\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+outside = dfile(wfdrive.temp("r7_prop_src.json"), _pdict([{"path": "src/r7.txt", "content": "x\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                     "subject": "r7 proposal", "choice": "approve",
                     "object_digest": None, "reason": "R7"}))
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", outside, "--json"], {"generation": gen1})
@@ -109,17 +109,17 @@ rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", proposal, 
 rec("R7 合法提案可应用", "WF_OK", (payload or {}).get("code"), rc == 0)
 
 # 符号链接逃逸
-os.makedirs("/tmp/outside-target", exist_ok=True)
+os.makedirs(wfdrive.temp("outside-target"), exist_ok=True)
 if not os.path.islink(os.path.join(F, ".wf/spec/link")):
-    os.symlink("/tmp/outside-target", os.path.join(F, ".wf/spec/link"))
-escape = dfile("/tmp/r7_prop_link.json", _pdict([{"path": ".wf/spec/link/x.md", "content": "# x\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+    os.symlink(wfdrive.temp("outside-target"), os.path.join(F, ".wf/spec/link"))
+escape = dfile(wfdrive.temp("r7_prop_link.json"), _pdict([{"path": ".wf/spec/link/x.md", "content": "# x\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                     "subject": "r7 proposal", "choice": "approve",
                     "object_digest": None, "reason": "R7"}))
 rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", escape, "--json"], {"generation": gen1})
 rec("R7 符号链接逃逸被拒", "WF_PATH_INVALID", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_PATH_INVALID")
-rec("R7 逃逸时未写项目外文件", "outside 未生成 x.md", os.path.exists("/tmp/outside-target/x.md"),
-    not os.path.exists("/tmp/outside-target/x.md"))
+rec("R7 逃逸时未写项目外文件", "outside 未生成 x.md", os.path.exists(wfdrive.temp("outside-target/x.md")),
+    not os.path.exists(wfdrive.temp("outside-target/x.md")))
 os.remove(os.path.join(F, ".wf/spec/link"))
 wf(["task-pause", "--task", task1, "--reason", "R7 收尾", "--json"], {"generation": gen1})
 wf(["writer", "release", "--json"], {"generation": gen1})
@@ -130,7 +130,7 @@ task1b, gen1b, dir1b, d1b = make_task("R7b 触碰面", [".wf/baseline.md"], "ses
 approve(task1b, d1b, gen1b, "sess-T1b")
 rc_s, start_payload, _ = wf(["task-start", "--task", task1b, "--json"], {"generation": gen1b}, "sess-T1b")
 rec("R7b 准备：开工", "WF_OK", (start_payload or {}).get("code"), rc_s == 0)
-offscope = dfile("/tmp/r7_prop_spec.json", _pdict([{"path": ".wf/spec/other.md", "content": "# o\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
+offscope = dfile(wfdrive.temp("r7_prop_spec.json"), _pdict([{"path": ".wf/spec/other.md", "content": "# o\n", "before": None}], {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                     "subject": "r7 proposal", "choice": "approve",
                     "object_digest": None, "reason": "R7"}))
 rc, payload, _ = wf(["baseline-apply", "--task", task1b, "--proposal", offscope, "--json"],
@@ -146,7 +146,7 @@ task8, gen8, dir8, d8 = make_task("R8 spec 目标类别", [".wf/spec/**"], "sess
 approve(task8, d8, gen8, "sess-T8")
 rc_s8, start8, _ = wf(["task-start", "--task", task8, "--json"], {"generation": gen8}, "sess-T8")
 rec("R8 准备：开工", "WF_OK", (start8 or {}).get("code"), rc_s8 == 0)
-wrong = dfile("/tmp/r7_spec_writer.json", [{"operation": "add", "new_paths": [".wf/writer.json"], "content": "{}"}])
+wrong = dfile(wfdrive.temp("r7_spec_writer.json"), [{"operation": "add", "new_paths": [".wf/writer.json"], "content": "{}"}])
 rc, payload, _ = wf(["spec-update", "--task", task8, "--changes", wrong, "--json"], {"generation": gen8}, "sess-T8")
 rec("R8 spec 不得写控制记录", "WF_SCOPE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SCOPE_UNRESOLVED")
@@ -160,7 +160,7 @@ approve(task10, d10, gen10, "sess-T2")
 open(os.path.join(F, "src/r10.txt"), "w").write("r10\n")
 rc_s10, start10, _ = wf(["task-start", "--task", task10, "--json"], {"generation": gen10}, "sess-T2")
 rec("R10 准备：开工", "WF_OK", (start10 or {}).get("code"), rc_s10 == 0)
-fail_notes = "/tmp/r7_notes_fail.json"
+fail_notes = wfdrive.temp("r7_notes_fail.json")
 json.dump({"standard": {"conclusion": "fail", "basis": "契约不一致"},
            "requirement": {"conclusion": "fail", "basis": "验收未覆盖"}}, open(fail_notes, "w"))
 rc, payload, _ = wf(["task-check", "--task", task10, "--review-notes", fail_notes, "--json"],
@@ -195,7 +195,7 @@ rec("R11 finish 项在 Check 被执行", "commands 含 v2 且 Check 未 pass",
 wf(["task-pause", "--task", task11, "--reason", "R11 收尾", "--json"], {"generation": gen11}, "sess-T3")
 wf(["writer", "release", "--json"], {"generation": gen11}, "sess-T3")
 
-json.dump(results, open("/tmp/r7r15_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r7r15_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")
 
 # ---------------- R9：改名/删除的续做 ----------------
@@ -217,14 +217,14 @@ counterexample: "r9 未校验"
 
 正文。
 '''
-add = dfile("/tmp/r9_add.json", [{"operation": "add", "new_paths": [".wf/spec/r9.md"], "content": rule}])
+add = dfile(wfdrive.temp("r9_add.json"), [{"operation": "add", "new_paths": [".wf/spec/r9.md"], "content": rule}])
 rc, payload, _ = wf(["spec-update", "--task", task9, "--changes", add, "--json"], {"generation": gen9}, "sess-T9")
 rec("R9 准备：建条目", "WF_OK", (payload or {}).get("code"), rc == 0)
 index_path = os.path.join(F, ".wf/spec/index.md")
 backup = open(index_path, encoding="utf-8").read()
 os.remove(index_path)
 os.makedirs(index_path)
-rename = dfile("/tmp/r9_rename.json", [{"operation": "rename", "old_paths": [".wf/spec/r9.md"],
+rename = dfile(wfdrive.temp("r9_rename.json"), [{"operation": "rename", "old_paths": [".wf/spec/r9.md"],
                                         "new_paths": [".wf/spec/r9b.md"]}])
 rc, payload, _ = wf(["spec-update", "--task", task9, "--changes", rename, "--json"], {"generation": gen9}, "sess-T9")
 rec("R9 改名后索引写失败", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
@@ -255,17 +255,17 @@ approve(task12, d12, gen12, "sess-T12")
 open(os.path.join(F, "src/r12.txt"), "w").write("r12\n")
 rc_s12, start12, _ = wf(["task-start", "--task", task12, "--json"], {"generation": gen12}, "sess-T12")
 rec("R12 准备：开工", "WF_OK", (start12 or {}).get("code"), rc_s12 == 0)
-old = dfile("/tmp/r12_old.json", [dec("v10 a1", "passed", d12)])
+old = dfile(wfdrive.temp("r12_old.json"), [dec("v10 a1", "passed", d12)])
 rc, payload, _ = wf(["task-check", "--task", task12, "--decision", old, "--review-notes", NOTES, "--json"],
                     {"generation": gen12}, "sess-T12")
 rec("R12 旧 id/旧对象不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-zeros = dfile("/tmp/r12_zeros.json", [dec("v1 a1", "passed", "sha256:" + "0" * 64)])
+zeros = dfile(wfdrive.temp("r12_zeros.json"), [dec("v1 a1", "passed", "sha256:" + "0" * 64)])
 rc, payload, _ = wf(["task-check", "--task", task12, "--decision", zeros, "--review-notes", NOTES, "--json"],
                     {"generation": gen12}, "sess-T12")
 rec("R12 未绑定批准对象的决定不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-right = dfile("/tmp/r12_right.json", [dec("v1 a1", "passed", d12)])
+right = dfile(wfdrive.temp("r12_right.json"), [dec("v1 a1", "passed", d12)])
 rc, payload, _ = wf(["task-check", "--task", task12, "--decision", right, "--review-notes", NOTES, "--json"],
                     {"generation": gen12}, "sess-T12")
 rec("R12 绑定对象与版本的决定通过", "WF_OK", (payload or {}).get("code"), rc == 0)
@@ -301,12 +301,12 @@ counterexample: "未核实"
 正文。
 '''
 json.dump([{"operation": "add", "new_paths": [".wf/spec/rules/src.md"], "content": pathed}],
-          open("/tmp/r13_seed.json", "w"), ensure_ascii=False)
+          open(wfdrive.temp("r13_seed.json"), "w"), ensure_ascii=False)
 task13, gen13, dir13, d13 = make_task("R13 spec 兜底", ["src/**", ".wf/spec/**"], "sess-T13")
 approve(task13, d13, gen13, "sess-T13")
 rc_s13, start13, _ = wf(["task-start", "--task", task13, "--json"], {"generation": gen13}, "sess-T13")
 rec("R13 准备：开工", "WF_OK", (start13 or {}).get("code"), rc_s13 == 0)
-rc, payload, _ = wf(["spec-update", "--task", task13, "--changes", "/tmp/r13_seed.json", "--json"],
+rc, payload, _ = wf(["spec-update", "--task", task13, "--changes", wfdrive.temp("r13_seed.json"), "--json"],
                     {"generation": gen13}, "sess-T13")
 open(os.path.join(F, "src/r13.txt"), "w").write("r13\n")
 rc, payload, _ = wf(["task-check", "--task", task13, "--review-notes", NOTES, "--json"],
@@ -317,8 +317,8 @@ wf(["task-curate", "--task", task13, "--spec", ".wf/spec/rules/src.md", "--purpo
    {"generation": gen13}, "sess-T13")
 wf(["spec", "--file", ".wf/spec/rules/src.md", "--json"], {"generation": gen13}, "sess-T13")
 json.dump([{"operation": "add", "new_paths": [".wf/spec/rules/src-extracted.md"], "content": extracted}],
-          open("/tmp/r13_extracted.json", "w"), ensure_ascii=False)
-wf(["spec-update", "--task", task13, "--changes", "/tmp/r13_extracted.json", "--json"],
+          open(wfdrive.temp("r13_extracted.json"), "w"), ensure_ascii=False)
+wf(["spec-update", "--task", task13, "--changes", wfdrive.temp("r13_extracted.json"), "--json"],
    {"generation": gen13}, "sess-T13")
 wf(["task-curate", "--task", task13, "--spec", ".wf/spec/rules/src-extracted.md",
     "--purpose", "提取条目", "--json"], {"generation": gen13}, "sess-T13")
@@ -327,7 +327,7 @@ rc, payload, _ = wf(["task-check", "--task", task13, "--review-notes", NOTES, "-
                     {"generation": gen13}, "sess-T13")
 rec("R13 未核实条目阻断", "WF_SPEC_INCOMPLETE", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SPEC_INCOMPLETE")
-decide = dfile("/tmp/r13_decision.json", [dec(".wf/spec/rules/src-extracted.md", "passed", d13)])
+decide = dfile(wfdrive.temp("r13_decision.json"), [dec(".wf/spec/rules/src-extracted.md", "passed", d13)])
 rc, payload, _ = wf(["task-check", "--task", task13, "--decision", decide, "--review-notes", NOTES, "--json"],
                     {"generation": gen13}, "sess-T13")
 rec("R13 人判覆盖后可继续", "WF_OK",
@@ -393,5 +393,5 @@ proc = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/wf.py"), "status
                       capture_output=True, text=True)
 rec("R15 合法标记恢复正常", "rc=0", proc.returncode, proc.returncode == 0)
 
-json.dump(results, open("/tmp/r7r15_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r7r15_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

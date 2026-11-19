@@ -146,12 +146,17 @@ class CandidateAuditTest(unittest.TestCase):
                          "审计必须覆盖全部可计划单元（含 dev-only 的实际来源证据）")
         eligible = {name for name, row in self.result["rows"]["units"].items()
                     if row["candidate_clean"] == "true"}
+        identity = self.audit["identity"]
         for name in sorted(eligible):
             record = self.audit["units"][name]
             self.assertEqual(record["script_sha256"],
                              self.result["rows"]["units"][name]["script_sha256"],
                              f"{name}: candidate audit 与当前脚本字节不一致")
             self.assertEqual(record["status"], "ok", f"{name}: 合格单元审计必须为 ok")
+            self.assertEqual(record["installation"]["source_commit"],
+                             identity["candidate_commit"],
+                             f"{name}: 合格单元必须由本候选实际安装")
+            self.assertEqual(record["installation"]["version"], identity["version"])
 
     def test_every_suite_is_verified_or_has_a_concrete_candidate_failure(self):
         for name, row in self.result["rows"]["units"].items():
@@ -177,8 +182,14 @@ class CandidateAuditTest(unittest.TestCase):
         import wf_release_common as common
         release_root = REPO / "docs" / "workflows" / "wf-release"
         release = json.loads((release_root / "wf-release.json").read_text())
-        self.assertEqual(self.audit["version"], release["version"])
-        self.assertEqual(self.audit["candidate_tree_digest"], common.tree_digest(str(release_root)))
+        identity = self.audit["identity"]
+        self.assertEqual(identity["version"], release["version"])
+        self.assertEqual(identity["candidate_tree_digest"], common.tree_digest(str(release_root)))
+        self.assertEqual(identity["source_tree_digest"], common.tree_digest(str(release_root)))
+        self.assertEqual(identity["candidate_commit"], self.audit["units"]["cp1_tests"]
+                         ["installation"]["source_commit"])
+        self.assertEqual(self.audit["units"]["cp1_tests"]["installation"]["version"],
+                         release["version"])
 
 
 class LibraryResolverTest(unittest.TestCase):

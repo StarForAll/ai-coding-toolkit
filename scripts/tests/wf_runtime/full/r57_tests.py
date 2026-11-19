@@ -75,5 +75,5 @@ rec("R57 预算 0 → spec 读取被拒（配置错误用记录类原因码）",
     (payload or {}).get("code") == "WF_RECORD_INVALID")
 open(config_path, "w", encoding="utf-8").write(backup)
 
-json.dump(results, open("/tmp/r57_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r57_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

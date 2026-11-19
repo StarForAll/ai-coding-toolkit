@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """第三十三轮 R69：前像结构与整批预检、审查导入冲突、卸载内容重核。"""
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -16,7 +16,7 @@ if not os.path.exists(EXTERNAL_ACK):
 AT = "2026-11-09T09:00:00.000000Z"
 REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
           "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
-NOTES = "/tmp/r69_notes.json"
+NOTES = wfdrive.temp("r69_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
@@ -67,8 +67,8 @@ open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 for name in ("design.md", "implement.md"):
     open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
 json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-          open("/tmp/r69_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r69_a.json", "--json"],
+          open(wfdrive.temp("r69_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r69_a.json"), "--json"],
    {"generation": genv, "complexity": "complex"}, "sess-V1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
 wf(["task-start", "--task", task_id, "--json"], {"generation": gen()}, "sess-V1")
@@ -80,7 +80,7 @@ def apply(name, files):
     body = {"files": files,
             "approval": {"source": "human", "at": AT, "subject": f"r69 {name}", "choice": "approve",
                          "object_digest": proposal_digest(files)}}
-    path = f"/tmp/r69_{name}.json"
+    path = wfdrive.temp(f"r69_{name}.json")
     json.dump(body, open(path, "w"), ensure_ascii=False)
     return wf(["baseline-apply", "--task", task_id, "--proposal", path, "--json"], {"generation": gen()}, "sess-V1")
 
@@ -119,15 +119,15 @@ def launch():
                          {"slot": "slot-b", "reviewer_cli": "pi"}],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
-    json.dump(request, open("/tmp/r69_launch.json", "w"), ensure_ascii=False)
+    json.dump(request, open(wfdrive.temp("r69_launch.json"), "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
     json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
-              open("/tmp/r69_export.json", "w"), ensure_ascii=False)
-    wf(["authorize", "record", "--task", task_id, "--file", "/tmp/r69_export.json", "--json"],
+              open(wfdrive.temp("r69_export.json"), "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", wfdrive.temp("r69_export.json"), "--json"],
        {"generation": gen()}, "sess-V1")
-    return wf(["review-launch", "--task", task_id, "--launch-request", "/tmp/r69_launch.json", "--json"],
+    return wf(["review-launch", "--task", task_id, "--launch-request", wfdrive.temp("r69_launch.json"), "--json"],
               {"generation": gen()}, "sess-V1")
 
 
@@ -145,9 +145,10 @@ def report_body(slot, **over):
 rc, payload, _ = launch()
 import glob
 
-found = re.search(r'"(/tmp/wf-review/[^"]*/' + re.escape(task_id) + r'/round-1)"', json.dumps(payload or {}))
+review_root = os.path.join(tempfile.gettempdir(), "wf-review")
+found = re.search(r'"(' + re.escape(review_root) + r'/[^"]*/' + re.escape(task_id) + r'/round-1)"', json.dumps(payload or {}))
 if not found:
-    _cand = glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
+    _cand = glob.glob(os.path.join(review_root, "*", task_id, "round-1"))
     if not _cand:
         print("r69 launch 原文:", json.dumps(payload or {}, ensure_ascii=False)[:400])
         raise SystemExit("r69: review-launch 未产出暂存目录（先看上一行原文）")
@@ -159,7 +160,7 @@ for slot in ("slot-a", "slot-b"):
     open(os.path.join(staging, slot, "report.md"), "w", encoding="utf-8").write(report_body(slot))
     wf(["review-import", "--task", task_id, "--round", "1", "--slot", slot,
         "--report", os.path.join(staging, slot, "report.md"), "--json"], {"generation": gen()}, "sess-V1")
-main_path = wfdrive.write_main_review("/tmp/r69_main.json", task_id, ["slot-a", "slot-b"])
+main_path = wfdrive.write_main_review(wfdrive.temp("r69_main.json"), task_id, ["slot-a", "slot-b"])
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
                      "--main-review", main_path, "--json"],
                     {"generation": gen()}, "sess-V1")
@@ -173,8 +174,8 @@ rc, payload, _ = wf(["review-import", "--task", task_id, "--round", "1", "--slot
 rec("3b 同槽位不同摘要 → 导入冲突", "WF_REVIEW_INVALID", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_REVIEW_INVALID")
 from wflib import gates as wf_gates, cli as wf_cli
-json.dump(wfdrive.envelope({"generation": gen()}, "sess-V1"), open("/tmp/r69_env.json", "w"), ensure_ascii=False)
-ctx = wf_cli.Context(F, ["--envelope", "/tmp/r69_env.json"])
+json.dump(wfdrive.envelope({"generation": gen()}, "sess-V1"), open(wfdrive.temp("r69_env.json"), "w"), ensure_ascii=False)
+ctx = wf_cli.Context(F, ["--envelope", wfdrive.temp("r69_env.json")])
 record_now = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 satisfied, code, facts = wf_gates.verify_step(ctx, record_now, "task.review-passed")
 rec("3c 旧 pass 引用的就是当前导入 → 门禁通过", "满足", f"{satisfied} {code}", satisfied is True)
@@ -189,21 +190,29 @@ satisfied, code, facts = wf_gates.verify_step(ctx, record_now, "task.review-pass
 rec("3d 结论引用的报告已变 → 门禁不通过", "WF_REVIEW_INVALID",
     f"{satisfied} {code}", satisfied is False and code == "WF_REVIEW_INVALID")
 
-json.dump(results, open("/tmp/r69_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r69_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 
 # ---- 4. 卸载：确认期间内容变化必须使预览失效 ----
-UN = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "r69-uninstall")
+UN = os.path.join(wfdrive.legacy_root(), "r69-uninstall")
 subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                 "reset", UN], check=True)
 subprocess.run(["git", "init", "-q"], cwd=UN, capture_output=True)
-subprocess.run([wfdrive.TOOL_PYTHON,
-                wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
-                "--target", UN, "--release-ref", "refs/tags/wf-v0.1.0",
-                "--source", os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo",
-                "--platform", "dsh",
-                "--confirm", ],
-               capture_output=True, text=True)
+_release = wfdrive.release_root()
+_install_ref = os.environ.get("WF_INSTALL_REF")
+if not _install_ref:
+    raise SystemExit("r69: 缺少 WF_INSTALL_REF（托管 runner 必须下发本次发行引用）")
+_install = subprocess.run([wfdrive.TOOL_PYTHON,
+                           os.path.join(_release, "install.py"),
+                           "--target", UN, "--release-ref", _install_ref,
+                           "--source", _release,
+                           "--platform", "dsh",
+                           "--confirm", ],
+                          capture_output=True, text=True)
+_identity_problems = wfdrive.install_identity_problems(UN)
+rec("4 安装来源为本次发行", "installation.json 的 version/ref/commit 与本发行一致",
+    f"rc={_install.returncode} problems={_identity_problems or 'none'}",
+    _install.returncode == 0 and not _identity_problems)
 
 
 def run_uninstall(mutator=None):
@@ -249,5 +258,5 @@ rec("4 确认期间资产被改 → 预览失效且不删除", "WF_PREVIEW_STALE
     f"rc={rc_u} survived={survived}",
     "WF_PREVIEW_STALE" in out_u and survived)
 
-json.dump(results, open("/tmp/r69_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r69_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

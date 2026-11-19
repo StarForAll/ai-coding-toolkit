@@ -401,6 +401,48 @@ SIGKILL、卡住）都判为设施失败而不是成功。控制面是两条匿�
   保留并在 receipt `retained_paths` 报告；harness 的 `_STAGED` 在托管 worker 下 defer 给相位目录统一回收。
 - candidate `check` 的 git 调用带 `GIT_OPTIONAL_LOCKS=0`，不刷新 `.git/index`；测试直接断言 index 不变。
 
+## 候选发行证据、临时材料与结果归因（2026-11-19）
+
+- **发行来源**：R69/R70/R89 与 `f0` 安装、`cp5_b12` 的 F2、`cp4_a8`/`r35_tests` 的次级夹具、CP3/R83 的
+  安装器导入、R85/R86 的安装器静态读取，在候选模式一律消费 `WF_RELEASE_REPO`/`WF_INSTALL_REF`
+  指向的本次已核发行；缺失即失败，不再回退 `/tmp/wf-fixtures/release-repo`。
+  `verify_install_identity.py` 是安装身份的单一核验点（version/release_ref/source_commit/
+  rules_digest + `.wf/lib` 字节），`wf_fixture.sh`、`f2_setup.sh`、`run_one.sh` 的 install 分支与
+  候选审计共用它。R72 仍用作者 payload 安装器（dev-only），但 `--source` 与 ref 来自本次发行。
+  R86 中仅存在于作者仓库的开发部署器/构建器断言标注为“作者侧”。
+- **临时材料**：`execution.py --local-tmp-root <results>/logs` 为每个受监督命令先写 pending
+  receipt，再以 command_id 建唯一私有根并导出 `TMPDIR/TMP/TEMP`；创建失败时 receipt 记
+  `local_tmp_created=false`、`local_cleanup=failed`，不伪报 retained path。fixture/init/suite
+  四个命令各自持有根，嵌套步骤继承同一 TMPDIR；回收仍只在 supervision=cleaned 后进行。
+  套件材料改用 `wfdrive.temp()`/`wfdrive.temp_dir()`，历史夹具根用 `wfdrive.legacy_root()`；
+  `test_unit_temp_paths.py` 静态扫描全部可计划脚本与 fixture/init helper 的绝对 `/tmp` 字面量
+  （登记项必须带原因与测试），并用真实执行证明私有根、创建失败与回收三种事实。
+  `fixture_scope` 同时接受宿主临时根（`WF_HOST_TMPDIR`）与命令私有 TMPDIR 下的夹具；
+  记录的宿主根必须有界（拒绝 `/`、HOME/仓库及其祖先或内部路径），不因环境变量放宽删除域。
+- **结果归因**：`execution.verdict` 的 `assertion_result` 增加 `failures/expected/declared_total/
+  counts_complete/kind`；`runner_cleanup.classify_unit` 交叉核 row、unit_execution、test result 与
+  同代 receipts，产生有限集
+  `passed|assertion_failed|preparation_failed|execution_failed|cancelled|unverified`。
+  只有 target_rc=0、显式 FAIL 且 PASS+FAIL（或正式汇总）完整等于 expect 才归
+  `assertion_failed`；target 非零归 `execution_failed`；准备失败必须带记录原因，且已启动
+  阶段的 receipt 终态/run/命令身份一致，否则 `unverified`；test receipt 的 rc/status 必须
+  与单元结果一致；缺/错代/矛盾一律 `unverified`。`evidence_state=complete` 仅当每个计划
+  单元都有可分类结果（结构完整的准备/执行/取消失败仍可为 complete），行级 `bad` 不再单独
+  证明断言失败。`summary.json` 增加可选 `unit_outcomes=[{unit,outcome}]` 与 `failure_owner` 的
+  `assertion/preparation/execution/cancelled/unverified` 计数；既有 `gate.bad`、`rows`、
+  `status/failure_kind` 语义不变，旧 schema4 摘要没有新字段时仍按原规则读取。
+  缺 `unit_execution`/结果行的单元在 schema1 metrics 的 `inputs.units` 里记为
+  `state=incomplete`（不再是 metrics 采集失败）；外来 run_id/单元名仍拒绝。这样失败运行
+  仍能留下 `summary.json` 的 `cleanup_state/evidence_state` 结论。
+- **候选审计**：`candidate_audit.py` 报告为 schema 3，`identity` 冻结候选/来源树、tag commit、
+  release subject、unit 注册表、helper 字节、tool/SUT 运行时与解释器身份；逐行记录脚本字节、
+  kind/expect/fixture/隔离、模板来源（run-build/external）与实际安装身份，并给出
+  `input_identity/input_digest`。`--only` 只接受可核验的同身份旧报告（schema/全 ID/待保留行
+  输入一致），空值、未知或混合 ID、旧格式、身份漂移、待保留行过期都在启动套件前拒绝并保全
+  原字节；不传 `--only` 是完整审计。审计在候选发行锁内运行，开始冻结、结束重算公共输入与
+  脚本字节，任一漂移或证据异常（安装/收据不成立、缺行）都不发布。`AUDIT-STATUS=complete|failed`
+  区分“全部 ok”与“含预期 dev-only 失败断言”，不把“报告写成”当成审计通过。
+
 ## 解释器契约
 
 - SUT 驱动解释器（启动被测 `wf.py`）：`wfdrive.PYTHON` / `_harness.WF_PYTHON` 两处单点默认
@@ -431,3 +473,6 @@ SIGKILL、卡住）都判为设施失败而不是成功。控制面是两条匿�
   reused 的 268.2s 直接比较。新增命令监督（C→G→S→W）、公共 helper 身份、cleanup 聚合与审计测试
   是主要成本。无硬失败门槛，按审查口径接受偏差。
   热路径守护：`test_runner_budgets.py` 断言 `wf.py status` 5 次中位数 < 500ms（`WF_PERF_GUARD=0` 可关）。
+- 2026-11-19（本任务）：每命令私有 TMPDIR + 候选审计身份/证据校准后，full green 并行 **68s**、
+  串行 **359s**（ext4 冷 scope；149 单元含 85 repro），与上一任务 72.74s 同量级；新增的
+  per-command receipt/TMPDIR 与 outcome 归因未改变预算口径（60s target 仍只报告）。

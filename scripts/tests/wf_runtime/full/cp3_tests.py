@@ -55,12 +55,12 @@ def make_task(title, touch, sid, acceptance=None, verifications=None):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/cp3_{task_id}_a.json", [dec("approve plan", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"cp3_{task_id}_a.json"), [dec("approve plan", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/cp3_notes.json"
+NOTES = wfdrive.temp("cp3_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -81,7 +81,7 @@ subprocess.run(["git", "add", "notes.txt"], cwd=F, capture_output=True)
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
                        {"generation": gen1}, "sess-Q1")   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task1, "--decision",
-                       dfile("/tmp/cp3_a6.json", [dec(f"finish {task1}", "finish", d1),
+                       dfile(wfdrive.temp("cp3_a6.json"), [dec(f"finish {task1}", "finish", d1),
                                                   dec(["src/c6.txt"], "commit", d1)]),
                        "--json"], {"generation": gen1}, "sess-Q1")
 rec("A6 归档成功（subject 为数组）", "pass", (payload or {}).get("code"), rc == 0)
@@ -114,7 +114,7 @@ wf(["task-knowledge", "--task", task2, "--decision", "no-update", "--json"], {"g
 wf(["sampling", "pick", "--task", task2, "--freeze", "--json"],
                        {"generation": gen2}, "sess-Q2")   # 归档前置：先冻结并落盘选样（本任务会话）
 rc, payload, out = wf(["archive", "--task", task2, "--decision",
-                       dfile("/tmp/cp3_a6b.json", [dec(f"finish {task2}", "finish", d2),
+                       dfile(wfdrive.temp("cp3_a6b.json"), [dec(f"finish {task2}", "finish", d2),
                                                   dec("src/*.py", "commit", d2)]), "--json"],
                       {"generation": gen2}, "sess-Q2")
 rec("A6 未覆盖交付的授权被门禁挡住", "WF_WIP_UNRESOLVED 或 WF_COMMIT_NOT_AUTHORIZED",
@@ -135,25 +135,25 @@ launch = {"implementation_clis": ["dsh"],
           "submitted_scope": {"diff": "git diff", "requirements": ["prd"], "test_results": ["v1"]},
           "readable_scope": {"code": ["src/**"], "spec": [".wf/spec/**"], "prd": [".wf/tasks/**/prd.md"]},
           "exclusions": [".env"], "export_decision": "human (test)"}
-json.dump(launch, open("/tmp/cp3_launch.json", "w"), ensure_ascii=False)
+json.dump(launch, open(wfdrive.temp("cp3_launch.json"), "w"), ensure_ascii=False)
 # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
 json.dump([{"choice": "export", "task": task3, "materials": ["diff", "requirement", "test_results"], "paths": ["src/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
-          open("/tmp/cp3_export.json", "w"), ensure_ascii=False)
-wf(["authorize", "record", "--task", task3, "--file", "/tmp/cp3_export.json", "--json"],
+          open(wfdrive.temp("cp3_export.json"), "w"), ensure_ascii=False)
+wf(["authorize", "record", "--task", task3, "--file", wfdrive.temp("cp3_export.json"), "--json"],
    {"generation": gen3}, "sess-Q3")
-rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", "/tmp/cp3_launch.json", "--json"],
+rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", wfdrive.temp("cp3_launch.json"), "--json"],
                     {"generation": gen3}, "sess-Q3")
 rec("A7 round 1 发起", "pass", (payload or {}).get("code"), rc == 0)
-rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", "/tmp/cp3_launch.json", "--json"],
+rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", wfdrive.temp("cp3_launch.json"), "--json"],
                     {"generation": gen3}, "sess-Q3")
 rec("A7 round 2 发起", "pass", (payload or {}).get("code"), rc == 0)
 record = json.load(open(os.path.join(dir3, "task.json")))
 attempts = record["reviews"]["attempts"]
 rec("A7 两轮落在同一 attempt", "attempts=[{number:1,round_ids:[1,2]}]",
     json.dumps(attempts, ensure_ascii=False), len(attempts) == 1 and attempts[0]["round_ids"] == [1, 2])
-rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", "/tmp/cp3_launch.json", "--json"],
+rc, payload, _ = wf(["review-launch", "--task", task3, "--launch-request", wfdrive.temp("cp3_launch.json"), "--json"],
                     {"generation": gen3}, "sess-Q3")
 # round_ids 现在只作观察与历史重建，不再作为拒绝依据（见 review.py 对应注释）：
 # 轮次上限不是机械门禁，是否再开一轮由人/判定决定。故第三轮应放行并继续记在同一 attempt。
@@ -257,13 +257,12 @@ sample = {"schema_version": 1,
           "gitignore_managed": {"begin_marker": "# wf-managed-v1", "end_marker": "# wf-managed-end",
                                 "lines": ["/.wf-lock"]}}
 import importlib.util
-spec = importlib.util.spec_from_file_location(
-    "wf_install", wfdrive.REPO + "/docs/workflows/wf/payload/install.py")
+spec = importlib.util.spec_from_file_location("wf_install", wfdrive.install_source_path())
 install_mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(install_mod)
 rec("A17 两处 rules_digest 一致（含非 ASCII 路径）", "相同摘要",
     f"same={install_mod.compute_rules_digest(sample) == wf_assets.compute_rules_digest(sample)}",
     install_mod.compute_rules_digest(sample) == wf_assets.compute_rules_digest(sample))
 
-json.dump(results, open("/tmp/cp3_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp3_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

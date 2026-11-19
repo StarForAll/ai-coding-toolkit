@@ -8,7 +8,7 @@ from wflib import tasks as wf_tasks
 
 F = wfdrive.FIX
 results = []
-NOTES = "/tmp/r87_notes.json"
+NOTES = wfdrive.temp("r87_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
@@ -97,16 +97,16 @@ import hashlib
 digest = "sha256:" + hashlib.sha256(open(prd, "rb").read()).hexdigest()
 json.dump([{"source": "human", "at": "2026-11-04T00:00:00.000000Z", "subject": "approve",
             "object_digest": digest, "choice": "approve", "reason": "r89"}],
-          open("/tmp/r89_approve.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r89_approve.json", "--json"],
+          open(wfdrive.temp("r89_approve.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r89_approve.json"), "--json"],
    {"generation": gen(), "complexity": "light", "downgrade": {"reason": "x", "evidence": "y"}})
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 open(os.path.join(F, "pkg/r89.py"), "w").write("x=1\n")
 wf(["task-start", "--task", task_id, "--json"], {"generation": gen()})
 json.dump([{"source": "human", "at": "2026-11-04T00:00:00.000000Z", "subject": "external-changes",
             "object_digest": "sha256:" + "0" * 64, "choice": "已核对无影响", "reason": "夹具"}],
-          open("/tmp/r89_ext.json", "w"))
-wf(["task-check", "--task", task_id, "--review-notes", NOTES, "--decision", "/tmp/r89_ext.json", "--json"],
+          open(wfdrive.temp("r89_ext.json"), "w"))
+wf(["task-check", "--task", task_id, "--review-notes", NOTES, "--decision", wfdrive.temp("r89_ext.json"), "--json"],
    {"generation": gen()})
 wf(["task-knowledge", "--task", task_id, "--decision", "no-update", "--json"], {"generation": gen()})
 # 推进到 finish：需要 finish 决定（用 archive 的 finish 分支之前先看 phase）
@@ -124,7 +124,7 @@ json.dump(record, open(os.path.join(F, facts["directory"], "task.json"), "w", en
           ensure_ascii=False)
 os.makedirs(os.path.join(F, ".wf/spec/rules"), exist_ok=True)
 open(os.path.join(F, ".wf/spec/rules/r89.md"), "w").write('# r89\n')
-changes = "/tmp/r89_changes.json"
+changes = wfdrive.temp("r89_changes.json")
 json.dump([{"operation": "add", "new_paths": [".wf/spec/rules/r89b.md"], "content": "# r89b\n"}],
           open(changes, "w"), ensure_ascii=False)
 rc_b, payload_b, _ = wf(["spec-update", "--task", task_id, "--changes", changes, "--json"],
@@ -141,6 +141,6 @@ valid, code, _f = __import__("wflib.gates", fromlist=["x"]).verify_step(
     type("C", (), {"root": F, "rule_version": lambda self: "sha256:" + "0" * 64})(), record, "task.check-passed")
 rec("B3 失效的旧检查不再通过门禁", "WF_CHECK_STALE", code, code == "WF_CHECK_STALE")
 
-json.dump(results, open("/tmp/r87_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r87_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 

@@ -6,7 +6,6 @@ sys.path.insert(0, wfdrive.LIB)
 from wflib import gates as wf_gates
 
 F = wfdrive.FIX
-ROOT = wfdrive.REPO
 results = []
 AT = "2026-11-05T11:00:00.000000Z"
 
@@ -77,7 +76,7 @@ def fake_compute(ctx_, task_, step_id, **kwargs):
         raise KeyError(step_id)
     return original_compute(ctx_, task_, step_id, **kwargs)
 wf_gates.compute_P = fake_compute
-env = "/tmp/r64_env.json"
+env = wfdrive.temp("r64_env.json")
 json.dump(wfdrive.envelope({"generation": write_gen()}, "sess-J1"), open(env, "w"), ensure_ascii=False)
 from wflib import cli as wf_cli
 ctx = wf_cli.Context(F, ["--envelope", env])
@@ -90,10 +89,11 @@ rec("P3-8 未知 step 留痕", "有 __unknown_steps__ 条目", bool(unknown), bo
 # （run_all.sh 的 source_hygiene.py snapshot/check）。旧用例先 rmtree 再断言“没有”，
 # 恒真且会改写作者源树，因此删除而不是保留。
 
-# P3-3：改名同步 bump 包络
-rec("P3-3 同步与释放 bump 包络", "源码含 revision bump",
-    "revision" in open(os.path.join(ROOT, "docs/workflows/wf/payload/lib/wflib/spec.py"), encoding="utf-8").read(),
-    True)
+# P3-3：改名同步 bump 包络（断言对象 = 当前部署实际使用的 wflib，不是作者 payload）
+_lib_source = open(os.path.join(wfdrive.LIB, "wflib", "spec.py"), encoding="utf-8").read()
+_scope_label = "安装库" if wfdrive.deploy_mode() == "candidate" else "作者库"
+rec(f"P3-3（{_scope_label}）同步与释放 bump 包络", "库源码含 revision bump",
+    f"lib={wfdrive.LIB}", "revision" in _lib_source)
 
-json.dump(results, open("/tmp/r64_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r64_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

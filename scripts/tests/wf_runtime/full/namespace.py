@@ -89,7 +89,6 @@ def main():
         Path(os.environ['FIX']).parent.mkdir(parents=True, exist_ok=True)
         bind(shared / 'results', results)
         bind(shared / 'release', release, readonly=True)
-        bind(shared / 'release', Path('/tmp/wf-fixtures/release-repo'), readonly=True)
         if template is not None:
             if template_relative is not None:
                 # Restore the nested read-only mount after its writable parent mount.

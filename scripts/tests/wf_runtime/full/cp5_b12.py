@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """CP5 / B1+B2：F2 上的 Trellis 两分支与「共存 + 外部提交处置」。"""
 import hashlib, json, os, subprocess, sys
+import wfdrive
 HERE = os.path.dirname(os.path.abspath(__file__))
-F = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f2")
+F = os.path.join(wfdrive.legacy_root(), "f2")
 # 孤儿套件回接（2026-11-06 W1）：自带 F2 夹具（含 .trellis 残留言据与无交集外部提交）
 subprocess.run(["bash", os.path.join(HERE, "f2_setup.sh")], check=True, capture_output=True)
 # F2 初始态还包含一个已归档的初始化任务（与历史 V2/V3 用例同构），否则 F 无基线/无确认
@@ -10,7 +11,6 @@ _environ = {**os.environ, "WF_FIX": F, "PYTHONPATH": HERE}
 subprocess.run([sys.executable, os.path.join(HERE, "f1_init.py")], check=True, capture_output=True, env=_environ)
 os.environ["WF_FIX"] = F
 sys.path.insert(0, HERE)
-import wfdrive
 wfdrive.FIX = F
 wfdrive.WF = os.path.join(F, ".wf/bin/wf.py")
 results = []
@@ -37,6 +37,17 @@ def git(*args):
 
 
 # ---------------- B1：Trellis 两分支（F2 自带 .trellis/ 残留言据） ----------------
+_identity_problems = wfdrive.deployment_identity_problems(F)
+rec("B1 F2 部署来源可核验", "installation.json 与本次部署身份一致",
+    f"problems={_identity_problems or 'none'}", not _identity_problems)
+_legacy = open(os.path.join(F, ".trellis", "README.md"), encoding="utf-8").read()
+_notes = open(os.path.join(F, "NOTES.md"), encoding="utf-8").read()
+_history = git("log", "--format=%s")
+rec("B1 部署保留原始项目数据与历史", ".trellis/README.md、NOTES.md 与两次提交原样保留",
+    f"readme={_legacy.strip()[:12]!r} notes={_notes.strip()!r}",
+    _legacy == "# Trellis 残留言据（非激活指令）\n" and _notes == "external note\n"
+    and "legacy import" in _history.splitlines()
+    and "other process: add notes" in _history.splitlines())
 rc, payload, _ = wf(["enable", "--json"], None, "sess-F1")
 rec("B1 纯残留数据可启用", "pass + 警告", f"{(payload or {}).get('code')} warnings={len((payload or {}).get('warnings') or [])}",
     rc == 0 and (payload or {}).get("warnings"))
@@ -77,7 +88,7 @@ digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 inputs = {"generation": gen, "complexity": "light",
           "downgrade": {"reason": "单函数扩展", "evidence": "不碰治理面"}}
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision",
-                     json.dump([dec("approve", "approve", digest)], open("/tmp/cp5_a.json", "w")) or "/tmp/cp5_a.json",
+                     json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("cp5_a.json"), "w")) or wfdrive.temp("cp5_a.json"),
                      "--json"], inputs, "sess-F2")
 rec("B2 批准", "pass", (payload or {}).get("code"), rc == 0)
 open(os.path.join(F, "src/other.py"), "w").write("# other\n")
@@ -98,12 +109,12 @@ git("commit", "-qm", "外部提交：触碰面内、无任务标记")
 external = git("rev-parse", "HEAD")
 json.dump({"standard": {"conclusion": "pass", "basis": "单函数"},
            "requirement": {"conclusion": "pass", "basis": "a1 覆盖"}},
-          open("/tmp/cp5_notes.json", "w"))
+          open(wfdrive.temp("cp5_notes.json"), "w"))
 json.dump([{"source": "human (test)", "at": AT, "subject": f"已核对无影响 {external}",
             "object_digest": "sha256:" + "0" * 64, "choice": "checked", "reason": "CP5 外部提交处置"}],
-          open("/tmp/cp5_ext.json", "w"))
-rc, payload, out = wf(["task-check", "--task", task_id, "--review-notes", "/tmp/cp5_notes.json",
-                       "--decision", "/tmp/cp5_ext.json", "--json"], inputs, "sess-F2")
+          open(wfdrive.temp("cp5_ext.json"), "w"))
+rc, payload, out = wf(["task-check", "--task", task_id, "--review-notes", wfdrive.temp("cp5_notes.json"),
+                       "--decision", wfdrive.temp("cp5_ext.json"), "--json"], inputs, "sess-F2")
 rec("B2 外部提交（触碰面内）不阻断 Check", "pass", (payload or {}).get("code"), rc == 0)
 record = json.load(open(os.path.join(directory, "task.json")))
 external_list = (record.get("check") or {}).get("scope_check", {}).get("external_changes") or []
@@ -113,5 +124,5 @@ rec("B2 外部提交被列入检查事实", "列出该提交",
 rec("B2 无交集的外部提交不入列", "只列与触碰面相交的提交", f"count={len(external_list)}", len(external_list) == 1)
 wf(["writer", "release", "--json"], inputs, "sess-F2")
 
-json.dump(results, open("/tmp/cp5_b12_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp5_b12_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

@@ -57,7 +57,7 @@ def make_task(title, touch, sid):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r38_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r38_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
@@ -71,7 +71,7 @@ open(os.path.join(F, "a38/k.txt"), "w").write("k\n")
 rc_s1, start1, _ = wf(["task-start", "--task", task1, "--json"], {"generation": writer_generation()}, "sess-Z1")
 rec("R38 准备：开工", "WF_OK",
     f"{(start1 or {}).get('code')} facts={json.dumps((start1 or {}).get('facts'), ensure_ascii=False)[:160]}", rc_s1 == 0)
-keep = dfile("/tmp/r38_keep.json", [dec("a38/k.txt", "keep", d1)])
+keep = dfile(wfdrive.temp("r38_keep.json"), [dec("a38/k.txt", "keep", d1)])
 rc, payload, _ = wf(["stop", "--decision", keep, "--json"], {"generation": writer_generation()}, "sess-Z1")
 rec("R38 准备：保留 WIP", "WF_OK",
     f"{(payload or {}).get('code')} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:160]}", rc == 0)
@@ -106,7 +106,7 @@ record = json.load(open(record_path))
 rec("R39 路径仍脏时 resume 不写解除", "resolved 仍为 None",
     (record.get("handoff") or {}).get("wip", {}).get("resolved"),
     (record.get("handoff") or {}).get("wip", {}).get("resolved") is None)
-commit_stop = dfile("/tmp/r39_commit.json", [dec("a38/k.txt", "commit", d1),
+commit_stop = dfile(wfdrive.temp("r39_commit.json"), [dec("a38/k.txt", "commit", d1),
                                              dec("a38/k.txt", "commit", d1)])
 rc, payload, _ = wf(["stop", "--decision", commit_stop, "--json"], {"generation": writer_generation()}, "sess-Z1")
 rec("R39 收工提交成功", "WF_OK", (payload or {}).get("code"), rc == 0)
@@ -118,5 +118,5 @@ rec("R39 提交后写解除结论", "resolved.choice=commit",
 rec("R39 已提交不再阻断他对象", "空列表", wf_cli.wip_blockers(F), not wf_cli.wip_blockers(F))
 
 
-json.dump(results, open("/tmp/r38r39_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r38r39_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

@@ -71,12 +71,12 @@ def make_task(title, touch, sid):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r43_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r43_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/r43_notes.json"
+NOTES = wfdrive.temp("r43_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -125,7 +125,7 @@ open(os.path.join(F, "src/a.py"), "w").write("a\n")
 rc_sa, start_a, _ = wf(["task-start", "--task", task_a, "--json"], {"generation": write_gen()}, "sess-RA")
 rec("R44 准备：A 开工", "WF_OK",
     f"{(start_a or {}).get('code')} facts={json.dumps((start_a or {}).get('facts'), ensure_ascii=False)[:220]}", rc_sa == 0)
-keep_a = dfile("/tmp/r44_keep.json", [dec("src/a.py", "keep", d_a)])
+keep_a = dfile(wfdrive.temp("r44_keep.json"), [dec("src/a.py", "keep", d_a)])
 rc, payload, _ = wf(["stop", "--decision", keep_a, "--json"], {"generation": write_gen()}, "sess-RA")
 rec("R44 准备：A 保存 WIP 归属", "WF_OK", (payload or {}).get("code"), rc == 0)
 blockers = wf_cli.wip_blockers(F, exclude_id=task_a)
@@ -149,7 +149,7 @@ clean()
 rc_sd, start_d, _ = wf(["task-start", "--task", task_d, "--json"], {"generation": write_gen()}, "sess-RD")
 rec("R45 准备：开工", "WF_OK", (start_d or {}).get("code"), rc_sd == 0)
 os.remove(os.path.join(F, "del/gone.txt"))
-keep_d = dfile("/tmp/r45_keep.json", [dec("del/gone.txt", "keep", d_d)])
+keep_d = dfile(wfdrive.temp("r45_keep.json"), [dec("del/gone.txt", "keep", d_d)])
 rc, payload, _ = wf(["stop", "--decision", keep_d, "--json"], {"generation": write_gen()}, "sess-RD")
 rec("R45 准备：删除态保留 WIP", "WF_OK", (payload or {}).get("code"), rc == 0)
 rc, payload, _ = wf(["bind", "--task", task_d, "--json"], {"generation": write_gen()}, "sess-RD2")
@@ -168,5 +168,5 @@ rec("R45 写回解除结论", "resolved.choice=resume-after-disposal",
     json.dumps(resolved, ensure_ascii=False)[:100] if resolved else None,
     bool(resolved) and resolved.get("choice") == "resume-after-disposal")
 
-json.dump(results, open("/tmp/r43r45_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r43r45_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

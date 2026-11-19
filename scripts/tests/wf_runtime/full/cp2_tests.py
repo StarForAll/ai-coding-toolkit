@@ -55,13 +55,13 @@ def make_task(title, touch, verifications, acceptance, sid, body_note=""):
 
 def approve(task_id, digest, gen, sid, extra=None):
     items = [dec("approve plan", "approve", digest)] + (extra or [])
-    path = decision_file(f"/tmp/cp2_{task_id}_approve.json", items)
+    path = decision_file(wfdrive.temp(f"cp2_{task_id}_approve.json"), items)
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件纯函数", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/cp2_notes.json"
+NOTES = wfdrive.temp("cp2_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 V1 = {"id": "v1", "invocation": {"kind": "argv", "argv": ["/usr/bin/python3", "-c", "print(1)"]},
@@ -94,7 +94,7 @@ rc, payload, out = approve(task1, d1, gen1, "sess-P1")
 rec("A2 改错字后未接链即重批", "WF_APPROVAL_MISSING 或语义变化提示", (payload or {}).get("code"),
     (payload or {}).get("code") in ("WF_APPROVAL_MISSING", "WF_SEMANTIC_DECISION"))
 # 用机械修订衔接
-mech = decision_file("/tmp/cp2_mech.json", [dec(f"{old_version} -> 新版本（仅修错字）", "机械修订",
+mech = decision_file(wfdrive.temp("cp2_mech.json"), [dec(f"{old_version} -> 新版本（仅修错字）", "机械修订",
                                                 d1, "只改正文错字，机读块未变")])
 rc, payload, out = wf(["task-approve", "--task", task1, "--decision", mech, "--json"],
                       {"generation": gen1}, "sess-P1")
@@ -119,7 +119,7 @@ approve(task2, d2, gen2, "sess-P2")
 text2 = open(os.path.join(dir2, "prd.md"), encoding="utf-8").read()
 open(os.path.join(dir2, "prd.md"), "w", encoding="utf-8").write(
     text2.replace('"statement": "文件存在"', '"statement": "文件存在且可读"'))
-mech2 = decision_file("/tmp/cp2_mech2.json", [dec("旧 -> 新", "机械修订", d2, "改验收措辞")])
+mech2 = decision_file(wfdrive.temp("cp2_mech2.json"), [dec("旧 -> 新", "机械修订", d2, "改验收措辞")])
 rc, payload, out = wf(["task-approve", "--task", task2, "--decision", mech2, "--json"],
                       {"generation": gen2}, "sess-P2")
 rec("A2 语义变化拒绝机械修订", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
@@ -146,14 +146,14 @@ open(os.path.join(F, "src/p13.txt"), "w").write("ok\n")
 rc, payload, out = wf(["task-check", "--task", task3, "--review-notes", NOTES, "--json"],
                       {"generation": gen3}, "sess-P3")
 rec("A13 首次重检通过（历史 1 次失败）", "pass", (payload or {}).get("code"), rc == 0)
-declare = decision_file("/tmp/cp2_declare.json", [dec("debug-declaration:v1:count=1:evidence=handoff", "declare", d3)])
+declare = decision_file(wfdrive.temp("cp2_declare.json"), [dec("debug-declaration:v1:count=1:evidence=handoff", "declare", d3)])
 wf(["task-check", "--task", task3, "--decision", declare, "--review-notes", NOTES, "--json"],
    {"generation": gen3}, "sess-P3")
 wf(["task-knowledge", "--task", task3, "--decision", "no-update", "--json"], {"generation": gen3}, "sess-P3")
 wf(["sampling", "pick", "--task", task3, "--freeze", "--json"],
                        {"generation": gen3}, "sess-P3")   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task3, "--decision",
-                       decision_file("/tmp/cp2_archive.json", [dec(f"finish {task3}", "finish", d3),
+                       decision_file(wfdrive.temp("cp2_archive.json"), [dec(f"finish {task3}", "finish", d3),
                                                                dec("src/p13.txt", "commit", d3)]),
                        "--json"], {"generation": gen3}, "sess-P3")
 facts = (payload or {}).get("facts", {})
@@ -204,5 +204,5 @@ rec("A14 他宿主配置的适用性未知", "needs_decision WF_SEMANTIC_DECISIO
 os.remove(os.path.join(F, ".claude", "settings.json"))
 os.remove(os.path.join(F, ".claude-settings"))
 
-json.dump(results, open("/tmp/cp2_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp2_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

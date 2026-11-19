@@ -52,12 +52,12 @@ def make_task(title, touch, sid="sess-Y1"):
 
 def approve(task_id, digest, gen, sid="sess-Y1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r35_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r35_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/r35_notes.json"
+NOTES = wfdrive.temp("r35_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -69,11 +69,11 @@ approve(task1, d1, gen1, "sess-Y1")
 open(os.path.join(F, "a35/w.txt"), "w").write("w\n")
 wf(["task-start", "--task", task1, "--json"], {"generation": gen1}, "sess-Y1")
 disp = {"changes": [{"object": "a35/w.txt", "decision_ref": AT, "reason": "提交保留"}], "targets": [], "pending": []}
-json.dump(disp, open("/tmp/r35_disp.json", "w"), ensure_ascii=False)
+json.dump(disp, open(wfdrive.temp("r35_disp.json"), "w"), ensure_ascii=False)
 rc, payload, _ = wf(["task-abandon", "--task", task1, "--decision",
-                     dfile("/tmp/r35_stop.json", [dec(f"stop {task1}", "abandon", d1),
+                     dfile(wfdrive.temp("r35_stop.json"), [dec(f"stop {task1}", "abandon", d1),
                                                   dec("a35/**", "commit", d1)]),
-                     "--disposition", "/tmp/r35_disp.json", "--json"], {"generation": gen1}, "sess-Y1")
+                     "--disposition", wfdrive.temp("r35_disp.json"), "--json"], {"generation": gen1}, "sess-Y1")
 rec("R35 准备：放弃结案", "WF_OK", (payload or {}).get("code"), rc == 0)
 archived_dir = wf_tasks.task_dir(F, task1)
 active_dir = os.path.join(F, ".wf/tasks", os.path.basename(archived_dir))
@@ -83,9 +83,9 @@ rec("R35 准备：目录回到活动位置", "活动在、归档不在",
     f"active={os.path.exists(active_dir)} archived={os.path.exists(archived_dir)}",
     os.path.exists(active_dir) and not os.path.exists(archived_dir))
 rc, payload, _ = wf(["task-abandon", "--task", task1, "--decision",
-                     dfile("/tmp/r35_stop2.json", [dec(f"stop {task1}", "abandon", d1),
+                     dfile(wfdrive.temp("r35_stop2.json"), [dec(f"stop {task1}", "abandon", d1),
                                                    dec("a35/**", "commit", d1)]),
-                     "--disposition", "/tmp/r35_disp.json", "--json"], {"generation": gen1}, "sess-Y1")
+                     "--disposition", wfdrive.temp("r35_disp.json"), "--json"], {"generation": gen1}, "sess-Y1")
 moved = wf_tasks.task_dir(F, task1)
 facts = (payload or {}).get("facts", {})
 rec("R35 重入先完成移动", "记录回到归档根",
@@ -123,7 +123,7 @@ approve(task3, d3, gen3b, "sess-Y3")
 open(os.path.join(F, "a37/k.txt"), "w").write("k\n")
 rc_s, start3, _ = wf(["task-start", "--task", task3, "--json"], {"generation": gen3b}, "sess-Y3")
 rec("R37 准备：开工", "WF_OK", (start3 or {}).get("code"), rc_s == 0)
-keep = dfile("/tmp/r37_keep.json", [dec("a37/k.txt", "keep", d3)])
+keep = dfile(wfdrive.temp("r37_keep.json"), [dec("a37/k.txt", "keep", d3)])
 rc, payload, _ = wf(["stop", "--decision", keep, "--json"], {"generation": gen3b}, "sess-Y3")
 rec("R37 准备：收工保留 WIP", "WF_OK 且记录 handoff.wip",
     f"{(payload or {}).get('code')} paths={((payload or {}).get('facts') or {}).get('wip', {}).get('paths')}",
@@ -149,5 +149,5 @@ rc, payload, _ = wf(["task-resume", "--task", task3, "--json"], {"generation": g
 rec("R37 保留路径变化时恢复被拒", "WF_WORKSPACE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_WORKSPACE_UNRESOLVED")
 
-json.dump(results, open("/tmp/r35r37_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r35r37_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

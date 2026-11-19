@@ -58,12 +58,12 @@ def make_task(title, touch, sid):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/cp4_{task_id}_a.json", [dec("approve plan", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"cp4_{task_id}_a.json"), [dec("approve plan", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/cp4_notes.json"
+NOTES = wfdrive.temp("cp4_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -73,12 +73,12 @@ task_a, gen_a, dir_a, d_a = make_task("CP4 前置-被放弃", ["src/pa.txt"], "s
 approve(task_a, d_a, gen_a, "sess-R1")
 open(os.path.join(F, "src/pa.txt"), "w").write("pa\n")
 wf(["task-start", "--task", task_a, "--json"], {"generation": gen_a}, "sess-R1")
-stop = dfile("/tmp/cp4_abandon.json", [dec(f"stop {task_a}", "abandon", d_a),
+stop = dfile(wfdrive.temp("cp4_abandon.json"), [dec(f"stop {task_a}", "abandon", d_a),
                                        dec("src/pa.txt", "commit", d_a)])
 disp = {"changes": [{"object": "src/pa.txt", "decision_ref": AT, "reason": "保留现状"}], "targets": [], "pending": []}
-json.dump(disp, open("/tmp/cp4_disp.json", "w"), ensure_ascii=False)
+json.dump(disp, open(wfdrive.temp("cp4_disp.json"), "w"), ensure_ascii=False)
 rc, payload, _ = wf(["task-abandon", "--task", task_a, "--decision", stop,
-                     "--disposition", "/tmp/cp4_disp.json", "--json"], {"generation": gen_a}, "sess-R1")
+                     "--disposition", wfdrive.temp("cp4_disp.json"), "--json"], {"generation": gen_a}, "sess-R1")
 rec("A1 准备：被放弃的前置任务", "pass", (payload or {}).get("code"), rc == 0)
 wf(["writer", "release", "--json"], {"generation": gen_a}, "sess-R1")
 clean()
@@ -106,7 +106,7 @@ json.dump(record, open(os.path.join(dir_b, "task.json"), "w"), ensure_ascii=Fals
 wf(["sampling", "pick", "--task", task_b, "--freeze", "--json"],
                        {"generation": gen_b}, "sess-R2")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b, "--decision",
-                     dfile("/tmp/cp4_b.json", [dec(f"finish {task_b}", "finish", d_b),
+                     dfile(wfdrive.temp("cp4_b.json"), [dec(f"finish {task_b}", "finish", d_b),
                                                dec("src/pb.txt", "commit", d_b)]), "--json"],
                     {"generation": gen_b}, "sess-R2")
 rec("A1 归档门禁核前置", "WF_DEPENDENCY_UNMET", (payload or {}).get("code"),
@@ -116,7 +116,7 @@ wf(["writer", "release", "--json"], {"generation": gen_b}, "sess-R2")
 
 # ---------------- T2 / A4：spec 模板可被解析 ----------------
 meta, problems = wf_spec.parse_frontmatter(os.path.join(
-    wfdrive.REPO + "/docs/workflows/wf/payload/templates/spec/rule.md"))
+    F, ".wf", "templates", "spec", "rule.md"))
 errors, paths, path_problems = wf_spec.validate_metadata(meta)
 rec("A4 模板 frontmatter 可解析", "problems 为空且 metadata 含 status/author",
     f"problems={problems} errors={errors} path_problems={path_problems}",
@@ -152,5 +152,5 @@ rec("A19 --json 输出结构", "tier=pass 且 facts.content 存在",
 wf(["task-pause", "--task", task_c, "--reason", "CP4 收尾", "--json"], {"generation": gen_c}, "sess-R3")
 wf(["writer", "release", "--json"], {"generation": gen_c}, "sess-R3")
 
-json.dump(results, open("/tmp/cp4_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp4_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

@@ -56,7 +56,7 @@ def make_task(title, touch, sid="sess-X1"):
 
 def approve(task_id, digest, gen, sid="sess-X1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r53_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r53_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "complex"}, sid)
 
 
@@ -111,5 +111,5 @@ rec("R53 补齐后开工通过", "WF_OK", (payload or {}).get("code"), rc == 0)
 wf(["task-pause", "--task", task1, "--reason", "R53 收尾", "--json"], {"generation": write_gen()}, "sess-X1")
 wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-X1")
 
-json.dump(results, open("/tmp/r53_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r53_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

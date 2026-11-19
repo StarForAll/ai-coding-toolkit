@@ -59,7 +59,7 @@ def hashlib_sha(text):
 
 
 def approve(task_id, digest, gen, sid="sess-R12"):
-    path = f"/tmp/r12_{task_id}_a.json"
+    path = wfdrive.temp(f"r12_{task_id}_a.json")
     json.dump([dec("approve", "approve", digest)], open(path, "w"))
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"],
               {"generation": gen, "complexity": "light",
@@ -78,8 +78,8 @@ proposal = {"files": files,
             "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                          "subject": "baseline proposal r1", "choice": "approve",
                          "object_digest": _pd(files), "reason": "R1 用例"}}
-json.dump(proposal, open("/tmp/r12_proposal_bad.json", "w"), ensure_ascii=False)
-rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_bad.json", "--json"],
+json.dump(proposal, open(wfdrive.temp("r12_proposal_bad.json"), "w"), ensure_ascii=False)
+rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", wfdrive.temp("r12_proposal_bad.json"), "--json"],
                     {"generation": gen1})
 rec("R1 非法条目整批拒绝", "WF_PATH_INVALID", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_PATH_INVALID")
@@ -97,8 +97,8 @@ try:
                  "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                               "subject": "baseline proposal r1", "choice": "approve",
                               "object_digest": _pd(files2), "reason": "R1 用例"}}
-    json.dump(proposal2, open("/tmp/r12_proposal_mid.json", "w"), ensure_ascii=False)
-    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_mid.json", "--json"],
+    json.dump(proposal2, open(wfdrive.temp("r12_proposal_mid.json"), "w"), ensure_ascii=False)
+    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", wfdrive.temp("r12_proposal_mid.json"), "--json"],
                         {"generation": gen1})
     rec("R1 中途写入失败映射为结构化退出码", "WF_PERSISTENCE_FAILED", (payload or {}).get("code"),
         (payload or {}).get("code") == "WF_PERSISTENCE_FAILED")
@@ -114,14 +114,14 @@ try:
                "approval": {"source": "human", "at": "2026-11-06T00:00:00.000000Z",
                             "subject": "baseline proposal r1", "choice": "approve",
                             "object_digest": _pd(files3), "reason": "R1 用例"}},
-              open("/tmp/r12_proposal_other.json", "w"), ensure_ascii=False)
-    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_other.json", "--json"],
+              open(wfdrive.temp("r12_proposal_other.json"), "w"), ensure_ascii=False)
+    rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", wfdrive.temp("r12_proposal_other.json"), "--json"],
                         {"generation": gen1})
     rec("R1 不同提案不得覆盖未完成动作", "WF_ACTION_INCOMPLETE", (payload or {}).get("code"),
         (payload or {}).get("code") == "WF_ACTION_INCOMPLETE")
 finally:
     wfdrive.allow_writes(deny)
-rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", "/tmp/r12_proposal_mid.json", "--json"],
+rc, payload, _ = wf(["baseline-apply", "--task", task1, "--proposal", wfdrive.temp("r12_proposal_mid.json"), "--json"],
                     {"generation": gen1})
 rec("R1 同提案重入续做成功", "WF_OK 且两份文件都在",
     f"{(payload or {}).get('code')} first={os.path.exists(os.path.join(F, '.wf/spec/first.md'))} second={os.path.exists(os.path.join(F, '.wf/spec/blocked-dir/x.md'))}",
@@ -155,8 +155,8 @@ counterexample: "x 未校验入参"
 changes = [{"operation": "add", "new_paths": [".wf/spec/rules/new-one.md"], "content": rule},
            {"operation": "delete", "old_paths": [".wf/spec/rules/does-not-exist.md"],
             "reference_dispositions": []}]
-json.dump(changes, open("/tmp/r12_spec_bad.json", "w"), ensure_ascii=False)
-rc, payload, _ = wf(["spec-update", "--task", task2, "--changes", "/tmp/r12_spec_bad.json", "--json"],
+json.dump(changes, open(wfdrive.temp("r12_spec_bad.json"), "w"), ensure_ascii=False)
+rc, payload, _ = wf(["spec-update", "--task", task2, "--changes", wfdrive.temp("r12_spec_bad.json"), "--json"],
                     {"generation": gen2}, "sess-R13")
 rec("R1 spec 整批校验拦截", "WF_PATH_INVALID", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_PATH_INVALID")
@@ -224,5 +224,5 @@ if backup is not None:
 else:
     os.remove(home)
 
-json.dump(results, open("/tmp/r1r2_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r1r2_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

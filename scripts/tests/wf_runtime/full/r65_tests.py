@@ -52,8 +52,8 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R65\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r65_a.json", "w"))
-wfdrive.run(["task-approve", "--task", task_id, "--decision", "/tmp/r65_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r65_a.json"), "w"))
+wfdrive.run(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r65_a.json"), "--json"],
             inputs={"generation": gen, "complexity": "light",
                     "complexity_conditions": {"scope": {"value": "unknown"}},
                     "downgrade": {"reason": "只改内部", "evidence": "无对外签名"}}, sid="sess-K2", show=False)
@@ -64,7 +64,7 @@ def wfk(args, inputs=None, sid="sess-K2"):
 
 open(os.path.join(F, "pkg/a.py"), "w").write("x\n")
 wfk(["task-start", "--task", task_id, "--json"], {"generation": write_gen()})
-notes = "/tmp/r65_notes.json"
+notes = wfdrive.temp("r65_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(notes, "w"))
 wfk(["task-check", "--task", task_id, "--review-notes", notes, "--json"], {"generation": write_gen()})
@@ -76,10 +76,10 @@ record["plan"]["complexity_reasons"] = [item for item in reasons_now if not item
     [{"downgrade": True, "reason": "缩范围"}]
 json.dump(record, open(record_path, "w", encoding="utf-8"), ensure_ascii=False)
 json.dump([dec(f"finish {task_id}", "finish", digest), dec("pkg/a.py", "commit", digest)],
-          open("/tmp/r65_arch.json", "w"))
+          open(wfdrive.temp("r65_arch.json"), "w"))
 wfk(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
                        {"generation": gen})   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wfk(["archive", "--task", task_id, "--decision", "/tmp/r65_arch.json", "--json"],
+rc, payload, _ = wfk(["archive", "--task", task_id, "--decision", wfdrive.temp("r65_arch.json"), "--json"],
                      {"generation": write_gen()})
 rec("R3 轻量任务缺证据的降级仍被归档门禁挡住", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
@@ -110,5 +110,5 @@ investigation["retrospective"] = {"at": AT, "triggers": []}
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
 rec("R6 有复盘即满足", "满足", satisfied, satisfied is True)
 
-json.dump(results, open("/tmp/r65_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r65_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

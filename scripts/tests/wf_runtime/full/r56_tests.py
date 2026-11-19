@@ -7,7 +7,7 @@ sys.path.insert(0, wfdrive.LIB)
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -55,7 +55,7 @@ def write_gen():
     return json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")
 
 
-NOTES = "/tmp/r56_notes.json"
+NOTES = wfdrive.temp("r56_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -98,8 +98,8 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/spec/**"],
 prd = f"# R56 周期\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r56_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r56_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r56_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r56_a.json"), "--json"],
    {"generation": gen, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-A1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a = 1\n")
 rc_s, start1, _ = wf(["task-start", "--task", task_id, "--json"], {"generation": write_gen()}, "sess-A1")
@@ -153,5 +153,5 @@ rec("R56 键缺失按缺省且不阻断周期", "WF_OK 且记录 period_days=90�
     saved_spec.get("period_days") == 90 and not saved_spec.get("period_problems"))
 
 open(config_path, "w", encoding="utf-8").write(backup)
-json.dump(results, open("/tmp/r56_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r56_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

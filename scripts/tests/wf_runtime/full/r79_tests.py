@@ -108,5 +108,5 @@ rec("D07 标准 Bearer 被遮罩", "不含明文", masked, secret not in masked)
 argv = wf_check.redact_argv(["/usr/bin/python3", "tool", "--token", secret, "plain"])
 rec("D07b 分离参数被遮罩", "不含明文", argv, secret not in json.dumps(argv))
 
-json.dump(results, open("/tmp/r79_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r79_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

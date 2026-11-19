@@ -420,14 +420,14 @@ class RunAllContractTest(unittest.TestCase):
             encoding="utf-8")
         return shim, log
 
-    def prepare_candidate(self, case, name="candidate", tamper=False):
+    def prepare_candidate(self, case, name="candidate", tamper=False, tree=None, version=None):
         started = time.monotonic()
-        manifest = json.loads((REPO / "docs/workflows/wf-release/wf-release.json").read_text())
-        version = manifest["version"]
+        tree = Path(tree) if tree else REPO / "docs/workflows/wf-release"
+        version = version or json.loads((tree / "wf-release.json").read_text())["version"]
         candidate = case.private / name
         prepare = subprocess.run([
             sys.executable, str(FULL / "prepare_candidate_repo.py"),
-            "--tree", str(REPO / "docs/workflows/wf-release"), "--version", version,
+            "--tree", str(tree), "--version", version,
             "--out", str(candidate)], capture_output=True, text=True)
         self.assertEqual(prepare.returncode, 0, prepare.stdout + prepare.stderr)
         if tamper:
@@ -436,6 +436,77 @@ class RunAllContractTest(unittest.TestCase):
         self.cost["cases"].setdefault(case.name, {"calls": []})["candidate_prepare_seconds"] = \
             round(time.monotonic() - started, 2)
         return candidate, version
+
+    def validator_with_tree(self, case, tree, name="validator-tree"):
+        """候选校验包装器：把临时发行树作为 --tree 追加给真实 validator。"""
+        script = case.private / (name + ".py")
+        script.write_text(
+            "import os, sys\n"
+            f"tree = {str(tree)!r}\n"
+            f"validator = {str(FULL / 'prepare_candidate_repo.py')!r}\n"
+            "os.execv(sys.executable, [sys.executable, validator, '--tree', tree]\n"
+            "         + sys.argv[1:])\n", encoding="utf-8")
+        return script
+
+    def candidate_commit(self, candidate):
+        return json.loads(Path(str(candidate) + ".meta.json").read_text())["commit"]
+
+    def f2_setup(self, case, root, deploy, candidate=None, version=None, ref=None):
+        """同一 legacy scaffold 的 dev 部署或候选安装（R1/A1 对拍面）。"""
+        root.mkdir(parents=True, exist_ok=True)
+        env = {**os.environ, "WF_LEGACY_FIXTURE_ROOT": str(root),
+               "WF_FIXTURE_DEPLOY": deploy, "WF_TEST_SCOPE_ROOT": str(self.scope),
+               "PYTHONPYCACHEPREFIX": str(case.private / "pycache")}
+        if deploy == "candidate":
+            candidate = Path(candidate)
+            env.update({
+                "WF_RELEASE_ROOT": str(candidate), "WF_RELEASE_REF": ref,
+                "WF_RELEASE_VERSION": version,
+                "WF_RELEASE_COMMIT": self.candidate_commit(candidate),
+                "WF_RELEASE_REPO": str(candidate), "WF_RELEASE_TREE": str(candidate),
+                "SHARED_RELEASE": str(candidate), "WF_INSTALL_REF": ref,
+                "WF_TEST_LIB": str(candidate / "wf-release" / "lib")})
+        proc = subprocess.run(["bash", str(FULL / "f2_setup.sh")], env=env,
+                              capture_output=True, text=True,
+                              timeout=case.budget.timeout(CALL_TIMEOUT))
+        self.assertEqual(proc.returncode, 0,
+                         proc.stdout[-2000:] + proc.stderr[-2000:])
+        return root / "f2"
+
+    def git_subject_commit(self, project, subject):
+        proc = subprocess.run(["git", "log", "--all", "--format=%H\t%s"], cwd=str(project),
+                              capture_output=True, text=True)
+        for line in proc.stdout.splitlines():
+            commit, _, message = line.partition("\t")
+            if message == subject:
+                return commit
+        return None
+
+    def git_subject_tree(self, project, subject):
+        """提交树摘要（内容寻址）：跨两个独立 scaffold 比较，不用含时间戳的 commit id。"""
+        commit = self.git_subject_commit(project, subject)
+        if not commit:
+            return None
+        proc = subprocess.run(["git", "rev-parse", f"{commit}^{{tree}}"], cwd=str(project),
+                              capture_output=True, text=True)
+        return proc.stdout.strip() or None
+
+    def build_temp_release(self, case, version="0.1.1"):
+        """在 owned scope 里用 build(version, destination_root) 造一棵临时发行树。"""
+        import importlib.util
+        module_path = REPO / "scripts" / "build-wf-release.py"
+        spec = importlib.util.spec_from_file_location("wf_build_release_contract",
+                                                      module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        dev_manifest = json.loads(
+            (REPO / "docs" / "workflows" / "wf" / "dev-manifest.json").read_text())
+        dev_manifest["version"] = version
+        destination = case.private / f"release-{version}"
+        manifest, manifest_path = module.build(version, str(destination), dev_manifest)
+        self.assertEqual(manifest["version"], version)
+        self.assertTrue(Path(manifest_path).is_file())
+        return destination
 
     # ---- 计划面：零 warmup --------------------------------------------------
     def test_plan_only_runs_no_warmup_inside_the_scope(self):
@@ -665,6 +736,111 @@ class RunAllContractTest(unittest.TestCase):
         self.assertIn("TEST-RELEASE-STALE", result.stdout + result.stderr)
         self.assertEqual(entries(shared), before, "private 池的失败不得污染共享池")
 
+    def test_repository_under_tmp_falls_back_to_serial_without_mocking(self):
+        """A3：真实 `/tmp` 下的仓库路径触发既有串行回退；与显式 --serial 对拍。"""
+        case = self.case("repo-under-tmp")
+        alias = case.private / "repo"
+        if alias.exists() or alias.is_symlink():
+            alias.unlink()
+        os.symlink(REPO, alias)
+        env = case.env(WF_TOTAL_JOBS="2", WF_SUITES="r70_tests")
+        proc = subprocess.run(
+            ["bash", str(alias / "scripts/tests/wf_runtime/full/run_all.sh"),
+             "--subset", "--repro", "none"],
+            cwd=str(REPO), env={**os.environ, **env},
+            capture_output=True, text=True, timeout=case.budget.timeout(CALL_TIMEOUT))
+        self.assertEqual(proc.returncode, 0, proc.stdout[-3000:] + proc.stderr[-2000:])
+        results = Path(env["WF_RESULTS_DIR"])
+        summary = json.loads((results / "summary.json").read_text())
+        self.assertEqual(summary["fallback_reason"], "repository-under-tmp")
+        self.assertEqual(summary["execution_mode"], "serial")
+        self.assertEqual(summary["status"], "ok")
+        receipts = [json.loads(path.read_text()) for path in
+                    sorted((results / "commands").glob("*.json"))]
+        unit_receipts = [item for item in receipts
+                         if item.get("evidence_scope") == "managed-child"
+                         and Path(item.get("log_path") or "").name != "release-prepare.log"]
+        self.assertTrue(unit_receipts, "本代必须留下单元命令的 receipt")
+        self.assertTrue(all(item.get("local_tmp_created") is True for item in unit_receipts),
+                        "每个受监督单元命令都必须有本代私有 TMPDIR")
+        self.assertTrue(all(item.get("local_cleanup") == "removed" for item in unit_receipts))
+        self.assertTrue(all(not item.get("retained_paths") for item in unit_receipts))
+        serial, _, serial_env = self.run_runner(
+            case, ["--subset", "--repro", "none", "--serial"], {"WF_SUITES": "r70_tests"})
+        self.assertEqual(serial.returncode, 0, serial.stdout[-2000:])
+        serial_summary = json.loads((Path(serial_env["WF_RESULTS_DIR"]) / "summary.json")
+                                    .read_text())
+        for key in ("suite_ran", "flow_ran", "fail", "status"):
+            self.assertEqual(serial_summary[key], summary[key], key)
+        self.assertEqual(serial_summary["execution_mode"], "serial")
+
+    def test_serial_reruns_ignore_legacy_fixed_inputs(self):
+        """A3：旧 `/tmp` 伪确认/审批/notes/release-repo 存在时，两次串行运行都不消费它们。"""
+        case = self.case("legacy-decoys")
+        decoys = {
+            Path("/tmp/wf_external_ack.json"):
+                json.dumps([{"source": "human (decoy)", "choice": "reject",
+                             "subject": "external-changes",
+                             "object_digest": "sha256:" + "0" * 64}], ensure_ascii=False),
+            Path("/tmp/cp5_a.json"): "{broken-decoy",
+            Path("/tmp/cp5_notes.json"): "{}",
+            Path("/tmp/cp5_ext.json"): "[]",
+            Path("/tmp/r70_notes.json"): "{}",
+            Path("/tmp/r70_a.json"): "{}",
+            Path("/tmp/f0_approve.json"): "[]",
+        }
+        legacy_release = Path("/tmp/wf-fixtures/release-repo")
+        backup = Path(str(legacy_release) + f".contract-save-{os.getpid()}")
+        saved = {}
+        try:
+            for path, content in decoys.items():
+                saved[path] = path.read_bytes() if path.exists() else None
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding="utf-8")
+            if legacy_release.exists() or legacy_release.is_symlink():
+                os.replace(legacy_release, backup)
+            legacy_release.mkdir(parents=True, exist_ok=True)
+            (legacy_release / "wf-release.json").write_text("{\"version\": \"decoy\"}\n")
+            for attempt in (1, 2):
+                result, _, env = self.run_runner(
+                    case, ["--subset", "--repro", "none", "--serial"],
+                    {"WF_SUITES": "r70_tests cp5_b12"})
+                self.assertEqual(result.returncode, 0,
+                                 f"第 {attempt} 次串行：{result.stdout[-3000:]}")
+                summary = json.loads((Path(env["WF_RESULTS_DIR"]) / "summary.json").read_text())
+                self.assertEqual((summary["status"], summary["fail"]), ("ok", 0),
+                                 f"第 {attempt} 次串行不得消费旧固定输入")
+                self.assertEqual(summary["execution_mode"], "serial")
+                self.assertIn("[PASS] 1 安装来源为本次发行",
+                              (Path(env["WF_RESULTS_DIR"]) / "r70_tests.out").read_text(
+                                  encoding="utf-8", errors="replace"))
+                self.assertIn("[PASS] B1 F2 部署来源可核验",
+                              (Path(env["WF_RESULTS_DIR"]) / "cp5_b12.out").read_text(
+                                  encoding="utf-8", errors="replace"))
+                for path in decoys:
+                    self.assertTrue(path.exists(), f"套件不得删除/改写旧固定路径：{path}")
+        finally:
+            try:
+                if legacy_release.is_dir() and not legacy_release.is_symlink():
+                    shutil.rmtree(legacy_release)
+                elif legacy_release.exists() or legacy_release.is_symlink():
+                    legacy_release.unlink()
+            except OSError:
+                pass
+            if backup.exists() or backup.is_symlink():
+                os.replace(backup, legacy_release)
+            for path, content in saved.items():
+                try:
+                    if content is None:
+                        if path.is_dir():
+                            shutil.rmtree(path)
+                        elif path.exists() or path.is_symlink():
+                            path.unlink()
+                    else:
+                        path.write_bytes(content)
+                except OSError:
+                    pass
+
     # ---- candidate 面 -------------------------------------------------------
     def test_candidate_representative_from_empty_state_has_owned_flow_fixtures(self):
         case = self.case("candidate-representative")
@@ -687,6 +863,76 @@ class RunAllContractTest(unittest.TestCase):
         self.assertTrue(all("--check" in call for call in calls))
         self.assertEqual(lines(release_log), [],
                          "candidate 模式不得构建 dev 测试发行（AC5）")
+
+    def test_candidate_release_identity_is_exercised_end_to_end(self):
+        """A1：非 0.1.0 候选经真实代表入口、CP5 F2 与 install repro 都核回本候选。"""
+        case = self.case("candidate-release-identity")
+        version = "0.1.1"
+        ref = f"refs/tags/wf-v{version}"
+        tree = self.build_temp_release(case, version)
+        candidate = case.private / "candidate-011"
+        prepare = subprocess.run([
+            sys.executable, str(FULL / "prepare_candidate_repo.py"),
+            "--tree", str(tree), "--version", version, "--out", str(candidate)],
+            capture_output=True, text=True, timeout=case.budget.timeout(CALL_TIMEOUT))
+        self.assertEqual(prepare.returncode, 0, prepare.stdout + prepare.stderr)
+        commit = self.candidate_commit(candidate)
+        validator = self.validator_with_tree(case, tree)
+        result, _, env = self.run_runner(
+            case, ["--representative", "--fixture-deploy", "candidate",
+                   "--release-root", str(candidate), "--release-version", version,
+                   "--release-ref", ref, "--repro", "green", "--repro-group", "install"],
+            {"WF_CANDIDATE_VALIDATOR": str(validator)})
+        self.assertEqual(result.returncode, 0,
+                         result.stdout[-3000:] + result.stderr[-2000:])
+        results = Path(env["WF_RESULTS_DIR"])
+        summary = json.loads((results / "summary.json").read_text())
+        self.assertEqual(summary["status"], "ok", json.dumps(summary, ensure_ascii=False)[:2000])
+        self.assertEqual(summary["fail"], 0)
+        self.assertEqual(summary["candidate_commit"], commit)
+        self.assertEqual(summary["repro_phase_counts"]["green"]["unverified"], 0)
+        self.assertGreater(summary["repro_phase_counts"]["green"]["passed"], 0)
+        f0_out = (results / "f0.out").read_text(encoding="utf-8", errors="replace")
+        self.assertIn("install identity ok: version=0.1.1", f0_out,
+                      "f0 的实际安装身份必须来自本候选发行")
+        r70_out = (results / "r70_tests.out").read_text(encoding="utf-8", errors="replace")
+        self.assertIn("[PASS] 1 安装来源为本次发行", r70_out,
+                      "R70 次级项目必须由本候选安装器安装")
+        # 同一 legacy scaffold：dev 部署与候选安装都必须保留原始项目数据与历史。
+        dev = self.f2_setup(case, case.private / "f2-compare" / "dev", "dev")
+        installed = self.f2_setup(case, case.private / "f2-compare" / "candidate",
+                                  "candidate", candidate, version, ref)
+        for relative in (".trellis/README.md", "NOTES.md"):
+            self.assertEqual((dev / relative).read_bytes(), (installed / relative).read_bytes(),
+                             f"{relative} 在候选安装后被改写")
+        for subject in ("legacy import", "other process: add notes"):
+            dev_tree = self.git_subject_tree(dev, subject)
+            self.assertIsNotNone(dev_tree, f"dev 部署缺少提交：{subject}")
+            self.assertEqual(dev_tree, self.git_subject_tree(installed, subject),
+                             f"候选安装改写了原始提交树：{subject}")
+        verify = subprocess.run([
+            sys.executable, str(FULL / "verify_install_identity.py"),
+            "--target", str(installed), "--release-root", str(candidate),
+            "--ref", ref, "--version", version], capture_output=True, text=True)
+        self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+        # CP5 B1/B2 在候选 F2 上继续通过（候选不降级资格）。
+        cp5_env = {**os.environ, "WF_LEGACY_FIXTURE_ROOT": str(case.private / "f2-cp5"),
+                   "WF_FIXTURE_DEPLOY": "candidate",
+                   "WF_TEST_SCOPE_ROOT": str(self.scope),
+                   "WF_RELEASE_ROOT": str(candidate), "WF_RELEASE_REF": ref,
+                   "WF_RELEASE_VERSION": version, "WF_RELEASE_COMMIT": commit,
+                   "WF_RELEASE_REPO": str(candidate), "WF_RELEASE_TREE": str(candidate),
+                   "SHARED_RELEASE": str(candidate), "WF_INSTALL_REF": ref,
+                   "WF_TEST_LIB": str(candidate / "wf-release" / "lib"),
+                   "PYTHONPYCACHEPREFIX": str(case.private / "pycache")}
+        cp5 = subprocess.run([sys.executable, str(FULL / "cp5_b12.py")], env=cp5_env,
+                             capture_output=True, text=True,
+                             timeout=case.budget.timeout(CALL_TIMEOUT))
+        self.assertEqual(cp5.returncode, 0, cp5.stdout[-3000:] + cp5.stderr[-2000:])
+        self.assertNotIn(": FAIL", cp5.stdout)
+        self.assertIn("saved 11 cases; 11 passed", cp5.stdout)
+        self.assertIn("[PASS] B1 F2 部署来源可核验", cp5.stdout)
+        self.assertIn("[PASS] B1 部署保留原始项目数据与历史", cp5.stdout)
 
     def test_candidate_worker_cancel_cleans_fixtures_and_releases_leases(self):
         """R3/A3：候选 worker 启动后取消——仍按本代事实清理夹具，候选根只释放租约。"""

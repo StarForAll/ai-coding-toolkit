@@ -71,12 +71,12 @@ def make_task(title, touch, sid="sess-U1"):
 # 夹具：项目内的嵌套仓库 vendor/subrepo（用 gitfile 形式，便于提交）
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 os.makedirs(os.path.join(F, "vendor/subrepo/data"), exist_ok=True)
-open(os.path.join(F, "vendor/subrepo/.git"), "w").write("gitdir: /tmp/nowhere\n")
+open(os.path.join(F, "vendor/subrepo/.git"), "w").write("gitdir: " + wfdrive.temp("nowhere") + "\n")
 open(os.path.join(F, "vendor/subrepo/data/rule.md"), "w").write(RULE)
 clean()
 task1, gen1, dir1, d1 = make_task("R49 链接进嵌套仓库", ["pkg/**", ".wf/spec/**"], "sess-U1")
-json.dump([dec("approve", "approve", d1)], open("/tmp/r49_a.json", "w"))
-wf(["task-approve", "--task", task1, "--decision", "/tmp/r49_a.json", "--json"],
+json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r49_a.json"), "w"))
+wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r49_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-U1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a = 1\n")
 rc_s, start1, _ = wf(["task-start", "--task", task1, "--json"], {"generation": write_gen()}, "sess-U1")
@@ -109,7 +109,7 @@ link_dir = os.path.join(F, ".wf/spec/nested-dir")
 if os.path.lexists(link_dir):
     os.remove(link_dir)
 os.symlink(os.path.join(F, "vendor/subrepo/data"), link_dir)
-change = dfile("/tmp/r49_change.json",
+change = dfile(wfdrive.temp("r49_change.json"),
                [{"operation": "add", "new_paths": [".wf/spec/nested-dir/new.md"], "content": RULE}])
 rc, payload, _ = wf(["spec-update", "--task", task1, "--changes", change, "--json"],
                     {"generation": write_gen()}, "sess-U1")
@@ -120,7 +120,7 @@ rec("R49 拒绝时零写入", "嵌套仓库内 new.md 未生成",
     not os.path.exists(os.path.join(F, "vendor/subrepo/data/new.md")))
 
 # 正例：普通 spec 仍可写
-ok_change = dfile("/tmp/r49_ok.json",
+ok_change = dfile(wfdrive.temp("r49_ok.json"),
                   [{"operation": "add", "new_paths": [".wf/spec/normal.md"], "content": RULE}])
 rc, payload, _ = wf(["spec-update", "--task", task1, "--changes", ok_change, "--json"],
                     {"generation": write_gen()}, "sess-U1")
@@ -129,5 +129,5 @@ os.remove(link_file)
 os.remove(link_dir)
 shutil.rmtree(os.path.join(F, "vendor"))
 
-json.dump(results, open("/tmp/r49_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r49_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

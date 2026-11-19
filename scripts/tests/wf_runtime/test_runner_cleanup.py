@@ -118,11 +118,18 @@ class AssessRunTest(unittest.TestCase):
         report = cleanup.assess_run(self.root, "run-1", {"units": []}, result(), gate_ok)
         self.assertEqual((report["cleanup_state"], report["evidence_state"]),
                          ("cleaned", "complete"))
-        gate_bad = {"ok": False, "gate": {}, "counts": {}, "repro": {}}
+        # 行级失败不是证据缺口：聚合 bad 只表示“未通过”，归因来自单元 typed outcome。
+        gate_bad = {"ok": False, "gate": {"malformed": 0, "bad": ["x"]}, "counts": {},
+                    "repro": {}}
         report = cleanup.assess_run(self.root, "run-1", {"units": []}, result(), gate_bad)
         self.assertEqual((report["cleanup_state"], report["evidence_state"]),
-                         ("cleaned", "incomplete"),
-                         "没有跑完不等于没有清理，两个事实必须分开")
+                         ("cleaned", "complete"),
+                         "没有跑完不等于没有清理；行级失败也不等于证据缺失")
+        # 结果行结构坏损才是证据缺口。
+        gate_broken = {"ok": False, "gate": {"malformed": 1, "bad": []}, "counts": {},
+                       "repro": {}}
+        report = cleanup.assess_run(self.root, "run-1", {"units": []}, result(), gate_broken)
+        self.assertEqual(report["evidence_state"], "incomplete")
         broken = {"status": "passed", "rc": 0, "supervision": {"cleanup_state": "unknown"}}
         report = cleanup.assess_run(self.root, "run-1", {"units": []}, broken, gate_ok)
         self.assertEqual(report["cleanup_state"], "unknown")
@@ -134,6 +141,212 @@ class AssessRunTest(unittest.TestCase):
             cleanup.validate_assessment(assessment)
         with self.assertRaises(cleanup.CleanupError):
             cleanup.validate_assessment(None)
+
+    def test_missing_unit_still_gets_an_unverified_outcome(self):
+        """结果结构缺失：每个计划单元都有 outcome 占位，evidence 不完整。"""
+        (self.root / "lines").write_text("u\t1\t1\tbad\tmissing\n")
+        gate = {"ok": False, "gate": {"malformed": 0, "missing": ["u"], "duplicate": [],
+                                      "unexpected": [], "bad": ["u"]}, "counts": {}, "repro": {}}
+        report = cleanup.assess_run(self.root, "run-1", {"units": [{"name": "u"}]},
+                                    result(state="cleaned"), gate)
+        self.assertEqual(report["unit_outcomes"], [{"unit": "u", "outcome": "unverified"}])
+        self.assertEqual(report["outcome_counts"]["unverified"], 1)
+        self.assertEqual(report["evidence_state"], "incomplete")
+
+    def test_typed_outcomes_come_from_same_generation_unit_evidence(self):
+        """真实文件接线：receipt 终态 + row/result 一致才给出 assertion_failed。"""
+        results = self.root
+        commands = results / "commands"
+        commands.mkdir()
+        (results / "lines").write_text("u\t1\t1\tbad\tsaved 0 / 1\n")
+        receipt_path = commands / "c1.json"
+        lifecycle.write_receipt(receipt_path, {
+            "schema_version": 1, "command_id": "c1", "run_id": "run-1",
+            "evidence_scope": "managed-child", "state": "finished",
+            "local_cleanup": "none", "log_path": str(results / "u.log"),
+            "argv": ["bash", "suite.sh"],
+            "result": {"status": "failed", "rc": 1},
+            "supervision": {"cleanup_state": "cleaned", "infrastructure_error": False,
+                            "target_rc": 0}})
+        unit_path = results / "u.test.log.json"
+        unit_path.write_text(json.dumps({
+            "schema_version": 2, "name": "u", "status": "failed", "rc": 1,
+            "assertion_result": {"ok": False, "failures": 1, "counts_complete": True,
+                                 "expected": 1, "observed": 0},
+            "supervision": {"cleanup_state": "cleaned", "infrastructure_error": False,
+                            "target_rc": 0},
+            "unit_execution": {"schema_version": 1, "unit": "u", "run_id": "run-1",
+                               "invocation_id": "inv", "state": "passed",
+                               "result_row": ["u", "1", "1", "bad", "saved 0 / 1"],
+                               "command_evidence": [{"phase": "test", "command_id": "c1",
+                                                     "evidence_path": str(receipt_path),
+                                                     "result_path": str(unit_path)}]}}))
+        gate = {"ok": False, "gate": {"malformed": 0, "missing": [], "duplicate": [],
+                                      "unexpected": [], "bad": ["u"]},
+                "counts": {}, "repro": {}}
+        report = cleanup.assess_run(results, "run-1", {"units": [{"name": "u"}]},
+                                    result(), gate)
+        self.assertEqual(report["evidence_state"], "complete")
+        self.assertEqual(report["unit_outcomes"], [{"unit": "u", "outcome": "assertion_failed"}])
+        self.assertEqual(report["outcome_counts"]["assertion_failed"], 1)
+        # 错代 receipt → unverified，证据不完整。
+        record = json.loads(unit_path.read_text())
+        record["unit_execution"]["command_evidence"][0]["evidence_path"] = str(
+            commands / "missing.json")
+        unit_path.write_text(json.dumps(record))
+        report = cleanup.assess_run(results, "run-1", {"units": [{"name": "u"}]},
+                                    result(), gate)
+        self.assertEqual(report["evidence_state"], "incomplete")
+        self.assertEqual(report["outcome_counts"]["unverified"], 1)
+
+
+class ClassifyUnitTest(unittest.TestCase):
+    """单元分类器的唯一判据：row × unit_execution × test result × receipts。"""
+
+    RESULT_PATH = "/results/unit.test.log.json"
+
+    def unit_execution(self, state="passed", **overrides):
+        record = {"schema_version": 1, "unit": "unit", "run_id": "run-1",
+                  "invocation_id": "inv", "state": state,
+                  "result_row": ["unit", "1", "2", "bad", "saved 0 / 1"],
+                  "command_evidence": [{"phase": "test"}]}
+        record.update(overrides)
+        return record
+
+    def result(self, *, rc=1, status="failed", target_rc=0, failures=1,
+               counts_complete=True, assertion_ok=False):
+        return {"rc": rc, "status": status,
+                "assertion_result": {"ok": assertion_ok, "failures": failures,
+                                     "counts_complete": counts_complete,
+                                     "expected": 1, "observed": 0},
+                "supervision": {"cleanup_state": "cleaned", "target_rc": target_rc}}
+
+    def test_receipt(self, phase="test", status="failed", path=None, rc=None):
+        codes = {"passed": 0, "failed": 1, "cancelled": 143, "timeout": 124}
+        return {"phase": phase, "command_id": "c1",
+                "result": {"status": status, "rc": codes[status] if rc is None else rc},
+                "result_path": path or self.RESULT_PATH}
+
+    def classify(self, result, receipts=None, problems=None, unit_execution=None, row=None):
+        if row is None:
+            rc = result.get("rc") if isinstance(result, dict) else 1
+            row = ["unit", str(rc), "2", "ok" if rc == 0 else "bad", "x"]
+        return cleanup.classify_unit(unit_execution or self.unit_execution(), result, row,
+                                     receipts if receipts is not None
+                                     else [self.test_receipt()],
+                                     problems or [], self.RESULT_PATH)
+
+    def test_assertion_failure_requires_zero_target_rc_and_complete_counts(self):
+        outcome, _ = self.classify(self.result())
+        self.assertEqual(outcome, "assertion_failed")
+        for result in (self.result(target_rc=0, counts_complete=False),
+                       self.result(target_rc=0, failures=0, assertion_ok=False),
+                       self.result(target_rc=0, failures=0, assertion_ok=True,
+                                   counts_complete=False)):
+            with self.subTest(result=result):
+                self.assertEqual(self.classify(result)[0], "unverified",
+                                 "计数不完整或没有显式 FAIL 时不得归为断言失败")
+
+    def test_nonzero_target_is_execution_failure_not_assertion(self):
+        outcome, reason = self.classify(
+            self.result(rc=2, target_rc=2, failures=0, counts_complete=False),
+            receipts=[self.test_receipt(status="failed", rc=2)])
+        self.assertEqual(outcome, "execution_failed")
+        self.assertIn("target rc=2", reason)
+        # 目标失败但断言自称通过：矛盾。
+        contradiction = self.result(rc=2, target_rc=2, assertion_ok=True)
+        self.assertEqual(self.classify(contradiction, receipts=[
+            self.test_receipt(status="failed", rc=2)])[0], "unverified")
+
+    def test_receipt_result_must_match_the_unit_result(self):
+        outcome, reason = self.classify(
+            self.result(rc=2, target_rc=2, failures=0, counts_complete=False),
+            receipts=[self.test_receipt(status="failed", rc=1)])
+        self.assertEqual(outcome, "unverified")
+        self.assertIn("receipt result differs", reason)
+
+    def test_passed_requires_complete_and_consistent_facts(self):
+        passed = self.result(rc=0, status="passed", target_rc=0, failures=0,
+                             assertion_ok=True)
+        self.assertEqual(self.classify(passed, receipts=[
+            self.test_receipt(status="passed")])[0], "passed")
+        row_mismatch = passed
+        outcome, _ = cleanup.classify_unit(
+            self.unit_execution(), row_mismatch, ["unit", "2", "2", "bad", "x"],
+            [self.test_receipt()], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "unverified")
+
+    def test_missing_or_mismatched_receipt_is_unverified(self):
+        self.assertEqual(self.classify(self.result(), receipts=[], )[0], "unverified")
+        wrong_path = self.test_receipt(path="/results/other.json")
+        self.assertEqual(self.classify(self.result(), receipts=[wrong_path])[0],
+                         "unverified")
+        self.assertEqual(self.classify(self.result(), problems=["receipt unreadable"])[0],
+                         "unverified")
+        execution_without_test = self.unit_execution(
+            command_evidence=[{"phase": "fixture"}])
+        self.assertEqual(self.classify(self.result(), receipts=[],
+                                       unit_execution=execution_without_test)[0],
+                         "unverified")
+
+    def test_cancelled_requires_agreeing_receipt(self):
+        cancelled = self.result(rc=143, status="cancelled", target_rc=0, failures=0,
+                                counts_complete=False)
+        receipt = self.test_receipt(status="cancelled")
+        self.assertEqual(self.classify(cancelled, receipts=[receipt])[0], "cancelled")
+        disagreeing = self.test_receipt(status="failed")
+        self.assertEqual(self.classify(cancelled, receipts=[disagreeing])[0], "unverified")
+
+    def test_cleanup_facts_do_not_change_the_typed_outcome(self):
+        """清理成功/未知/失败只影响 cleanup_state，不改变单元分类。"""
+        for state in ("cleaned", "unknown", "failed"):
+            result = self.result(target_rc=0)
+            result["supervision"]["cleanup_state"] = state
+            self.assertEqual(self.classify(result)[0], "assertion_failed", state)
+            execfail = self.result(rc=2, target_rc=2, failures=0, counts_complete=False)
+            execfail["supervision"]["cleanup_state"] = state
+            self.assertEqual(self.classify(execfail, receipts=[
+                self.test_receipt(status="failed", rc=2)])[0],
+                "execution_failed", state)
+            cancelled = self.result(rc=143, status="cancelled", target_rc=0, failures=0,
+                                    counts_complete=False)
+            cancelled["supervision"]["cleanup_state"] = state
+            self.assertEqual(self.classify(cancelled, receipts=[
+                self.test_receipt(status="cancelled")])[0], "cancelled", state)
+            prepared = self.unit_execution(state="prep-failed", failure_reason="INSTALL-FAILED")
+            self.assertEqual(cleanup.classify_unit(
+                prepared, {"status": "failed", "rc": 1},
+                ["unit", "1", "0", "bad", "INSTALL-FAILED"],
+                [self.test_receipt(phase="install")], [], self.RESULT_PATH)[0],
+                "preparation_failed", state)
+
+    def test_preparation_failure_is_never_an_assertion_failure(self):
+        execution = self.unit_execution(state="prep-failed", failure_reason="INSTALL-FAILED",
+                                        command_evidence=[])
+        result = {"status": "failed", "rc": 1, "reason": "INSTALL-FAILED"}
+        outcome, _ = cleanup.classify_unit(execution, result, ["unit", "1", "0", "bad", "x"],
+                                           [], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "unverified",
+                         "已启动准备阶段但缺 receipt：证据不足，不是可下结论的准备失败")
+        receipt = self.test_receipt(phase="install", status="failed")
+        outcome, _ = cleanup.classify_unit(execution, result, ["unit", "1", "0", "bad", "x"],
+                                           [receipt], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "preparation_failed")
+        preflight = self.unit_execution(state="prep-failed", failure_reason="FIXTURE-FAILED",
+                                        command_evidence=[], preflight_failed=True)
+        outcome, _ = cleanup.classify_unit(preflight, result, ["unit", "1", "0", "bad", "x"],
+                                           [], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "preparation_failed")
+        unlabeled = self.unit_execution(state="prep-failed", failure_reason="",
+                                        command_evidence=[], preflight_failed=True)
+        outcome, _ = cleanup.classify_unit(unlabeled, result, ["unit", "1", "0", "bad", "x"],
+                                           [], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "unverified",
+                         "preflight failure without a recorded reason is not classifiable")
+        contradictory = self.test_receipt(phase="install", status="passed")
+        outcome, _ = cleanup.classify_unit(execution, result, ["unit", "1", "0", "bad", "x"],
+                                           [contradictory], [], self.RESULT_PATH)
+        self.assertEqual(outcome, "unverified")
 
 
 class FinalizeTest(unittest.TestCase):

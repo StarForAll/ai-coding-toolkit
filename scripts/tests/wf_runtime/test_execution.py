@@ -125,6 +125,26 @@ class ExecutionTest(unittest.TestCase):
         self.log.write_text('[start] exit=1 code=WF_CHECK_FAILED\nTASK_ID task-1\n')
         self.assertFalse(self.execution().verdict(self.log, 0, 'steps')['ok'])
 
+    def test_assertion_counts_expose_their_completeness(self):
+        self.log.write_text('[V] first: PASS — ok\n[V] second: FAIL — rejected\nsaved 1 / 2\n')
+        check = self.execution().verdict(self.log, 1, 'suite', expected=2)
+        self.assertEqual((check['failures'], check['declared_total'],
+                          check['counts_complete']), (1, 2, True))
+        # 只有 PASS、没有 FAIL，且 PASS+FAIL 数不足 expect：计数不完整。
+        self.log.write_text('[V] first: PASS — ok\nsaved 1 / 2\n')
+        check = self.execution().verdict(self.log, 1, 'suite', expected=2)
+        self.assertEqual((check['failures'], check['counts_complete']), (0, False))
+        # 正式汇总与 PASS 行一致时计数完整。
+        self.log.write_text('[V] first: PASS — ok\nsaved 1 cases; 1 passed\n')
+        check = self.execution().verdict(self.log, 0, 'suite', expected=1)
+        self.assertTrue(check['counts_complete'])
+        # flow 没有汇总行：PASS+FAIL 之和必须等于 expect。
+        self.log.write_text('[F] first: PASS — ok\n[F] second: FAIL — no\n')
+        check = self.execution().verdict(self.log, 1, 'flow', expected=2)
+        self.assertEqual((check['failures'], check['counts_complete']), (1, True))
+        check = self.execution().verdict(self.log, 1, 'flow', expected=3)
+        self.assertFalse(check['counts_complete'])
+
     def test_unshare_mounts_return_results_and_protect_template_and_release(self):
         probe = subprocess.run(
             ["unshare", "-Urm", "bash", "-c",

@@ -56,7 +56,7 @@ def make_task(title, touch, sid="sess-W1"):
 
 def approve(task_id, digest, gen, complexity="complex", sid="sess-W1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r51_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r51_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": complexity}, sid)
 
 
@@ -108,8 +108,8 @@ open(os.path.join(dir1, "implement.md"), "w", encoding="utf-8").write("# 执行\
 clean()
 wf(["task-pause", "--task", task1, "--reason", "R51", "--json"], {"generation": write_gen()}, "sess-W1")
 wf(["task-resume", "--task", task1, "--json"], {"generation": write_gen()}, "sess-W1")
-json.dump([dec("approve", "approve", d1)], open("/tmp/r51_re.json", "w"))
-rc, payload, _ = wf(["task-approve", "--task", task1, "--decision", "/tmp/r51_re.json", "--json"],
+json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r51_re.json"), "w"))
+rc, payload, _ = wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r51_re.json"), "--json"],
                     {"generation": write_gen(), "complexity": "complex"}, "sess-W1")
 wf(["task-pause", "--task", task1, "--reason", "R51 收尾", "--json"], {"generation": write_gen()}, "sess-W1")
 wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-W1")
@@ -117,8 +117,8 @@ wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-W1")
 # ---------------- R52：disable 保留分隔符且可复验 ----------------
 clean()
 task2, gen2, dir2, d2 = make_task("R52 disable", ["pkg/**", ".wf/spec/**"], "sess-W2")
-json.dump([dec("approve", "approve", d2)], open("/tmp/r52_a.json", "w"))
-wf(["task-approve", "--task", task2, "--decision", "/tmp/r52_a.json", "--json"],
+json.dump([dec("approve", "approve", d2)], open(wfdrive.temp("r52_a.json"), "w"))
+wf(["task-approve", "--task", task2, "--decision", wfdrive.temp("r52_a.json"), "--json"],
    {"generation": gen2, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-W2")
 open(os.path.join(F, "pkg/b.py"), "w").write("b = 1\n")
 wf(["task-start", "--task", task2, "--json"], {"generation": write_gen()}, "sess-W2")
@@ -135,9 +135,9 @@ counterexample: "未覆盖"
 
 正文。
 '''
-add = dfile("/tmp/r52_add.json", [{"operation": "add", "new_paths": [".wf/spec/rules/r52.md"], "content": rule}])
+add = dfile(wfdrive.temp("r52_add.json"), [{"operation": "add", "new_paths": [".wf/spec/rules/r52.md"], "content": rule}])
 wf(["spec-update", "--task", task2, "--changes", add, "--json"], {"generation": write_gen()}, "sess-W2")
-disable = dfile("/tmp/r52_dis.json", [{"operation": "disable", "old_paths": [".wf/spec/rules/r52.md"],
+disable = dfile(wfdrive.temp("r52_dis.json"), [{"operation": "disable", "old_paths": [".wf/spec/rules/r52.md"],
                                        "reference_dispositions": []}])
 rc, payload, _ = wf(["spec-update", "--task", task2, "--changes", disable, "--json"],
                     {"generation": write_gen()}, "sess-W2")
@@ -151,5 +151,5 @@ rec("R52 结束分隔符保留", "第二个 --- 存在", text.count("---") >= 2,
 wf(["task-pause", "--task", task2, "--reason", "R52 收尾", "--json"], {"generation": write_gen()}, "sess-W2")
 wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-W2")
 
-json.dump(results, open("/tmp/r51r52_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r51r52_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """第三十一轮 R68：审查判定输入、repair 预览漂移与锁、基线批准与前像、续做分类。"""
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -16,7 +16,7 @@ if not os.path.exists(EXTERNAL_ACK):
 AT = "2026-11-08T09:00:00.000000Z"
 REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
           "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
-NOTES = "/tmp/r68_notes.json"
+NOTES = wfdrive.temp("r68_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
@@ -107,8 +107,8 @@ def build_task(title, sid):
     for name in ("design.md", "implement.md"):
         open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
     json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-              open("/tmp/r68_a.json", "w"))
-    wf(["task-approve", "--task", task_id, "--decision", "/tmp/r68_a.json", "--json"],
+              open(wfdrive.temp("r68_a.json"), "w"))
+    wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r68_a.json"), "--json"],
        {"generation": genv, "complexity": "complex"}, sid)
     open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
     wf(["task-start", "--task", task_id, "--json"], {"generation": gen()}, sid)
@@ -145,27 +145,29 @@ def scenario(title, sid, mutate=None):
                          {"slot": "slot-b", "reviewer_cli": "pi"}],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
-    json.dump(request, open("/tmp/r68_launch.json", "w"), ensure_ascii=False)
+    json.dump(request, open(wfdrive.temp("r68_launch.json"), "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
     json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
-              open("/tmp/r68_export.json", "w"), ensure_ascii=False)
-    wf(["authorize", "record", "--task", task_id, "--file", "/tmp/r68_export.json", "--json"],
+              open(wfdrive.temp("r68_export.json"), "w"), ensure_ascii=False)
+    wf(["authorize", "record", "--task", task_id, "--file", wfdrive.temp("r68_export.json"), "--json"],
        {"generation": gen()}, sid)
-    rc, payload, _ = wf(["review-launch", "--task", task_id, "--launch-request", "/tmp/r68_launch.json",
+    rc, payload, _ = wf(["review-launch", "--task", task_id, "--launch-request", wfdrive.temp("r68_launch.json"),
                          "--json"], {"generation": gen()}, sid)
     if rc != 0:
         return f"launch failed {(payload or {}).get('code')}"
     import glob as _glob
 
     text = json.dumps(payload or {})
-    found = re.search(r'"(/tmp/wf-review/[^"]*/' + re.escape(task_id) + r'/round-1)"', text)
+    review_root = os.path.join(tempfile.gettempdir(), "wf-review")
+    found = re.search(r'"(' + re.escape(review_root) + r'/[^"]*/' + re.escape(task_id) + r'/round-1)"', text)
     if found:
         staging = found.group(1)
     else:
-        candidates = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
-        staging = candidates[0] if candidates else f"/tmp/wf-review/unknown/{task_id}/round-1"
+        candidates = _glob.glob(os.path.join(review_root, "*", task_id, "round-1"))
+        staging = candidates[0] if candidates else os.path.join(review_root, "unknown",
+                                                                task_id, "round-1")
     check = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8")).get("check") or {}
     anchor = (check.get("anchor") or {}).get("check_anchor")
     for slot in ("slot-a", "slot-b"):
@@ -181,7 +183,7 @@ def scenario(title, sid, mutate=None):
     for slot in ("slot-a", "slot-b"):
         for item in (mutate or {}).get(slot, {}).get("findings") or []:
             findings.append(dict(item, slot=slot))
-    main_path = wfdrive.write_main_review("/tmp/r68_main.json", task_id,
+    main_path = wfdrive.write_main_review(wfdrive.temp("r68_main.json"), task_id,
                                           ["slot-a", "slot-b"], findings=findings)
     rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
                          "--main-review", main_path, "--json"],
@@ -254,7 +256,7 @@ def baseline(name, choice="approve", bind=True, before="__omit__", content=None)
     body = {"files": files,
             "approval": {"source": "human", "at": AT, "subject": f"r68 {name}", "choice": choice,
                          "object_digest": proposal_digest(files) if bind else "sha256:" + "0" * 64}}
-    path = f"/tmp/r68_{name}.json"
+    path = wfdrive.temp(f"r68_{name}.json")
     json.dump(body, open(path, "w"), ensure_ascii=False)
     return path
 
@@ -290,7 +292,7 @@ try:
     body = {"files": files,
             "approval": {"source": "human", "at": AT, "subject": "r68 resume", "choice": "approve",
                          "object_digest": proposal_digest(files)}}
-    path = "/tmp/r68_resume.json"
+    path = wfdrive.temp("r68_resume.json")
     json.dump(body, open(path, "w"), ensure_ascii=False)
     rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", path, "--json"],
                         {"generation": gen()}, sid)
@@ -306,5 +308,5 @@ rec("11b 同提案重入续做（已写文件不挡）", "WF_OK 且 skipped 含�
     rc == 0 and facts.get("skipped") == [".wf/spec/rules/r68c.md"])
 finish(task_id, sid)
 
-json.dump(results, open("/tmp/r68_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r68_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

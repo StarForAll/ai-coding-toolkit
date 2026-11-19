@@ -77,7 +77,7 @@ INSTALLED_RUNTIME_PATTERNS = (
 )
 
 
-def _script_evidence(path):
+def script_evidence(path):
     try:
         data = Path(path).read_bytes()
         text = data.decode("utf-8", "replace")
@@ -97,6 +97,24 @@ def _script_evidence(path):
     return {"script_sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
             "source_layer": layer, "author_source_refs": author,
             "installed_refs": installed}
+
+
+def _audit_identity(audit):
+    """审计身份只在 identity 里（schema 3+）；旧 schema 无身份，一律视为无证据。"""
+    return audit.get("identity") or {}
+
+
+def audit_version(audit):
+    return _audit_identity(audit).get("version")
+
+
+def _record_matches_candidate(record, audit):
+    """候选合格证据必须连到本候选 commit/version 的实际安装身份。"""
+    identity = _audit_identity(audit)
+    installation = record.get("installation") or {}
+    return (bool(identity.get("candidate_commit"))
+            and installation.get("source_commit") == identity.get("candidate_commit")
+            and installation.get("version") == identity.get("version"))
 
 
 def _load_audit():
@@ -127,8 +145,9 @@ def _unit_disposition(entry, meta_state, evidence, audit):
                 "not_migratable_reason": reason + evidence,
                 "installed_assertion": "none in candidate mode（dev 入口保留）"}
     record = (audit.get("units") or {}).get(entry["name"]) or {}
-    # audit 必须对应当前脚本字节；脚本改动后旧 audit 自动失效。
-    if record and record.get("script_sha256") != evidence.get("script_sha256"):
+    # audit 必须对应当前脚本字节与实际安装身份；任一不符旧 audit 自动失效。
+    if record and (record.get("script_sha256") != evidence.get("script_sha256")
+                   or not _record_matches_candidate(record, audit)):
         record = {}
     audited = record.get("status") in ("ok", "bad")
     if entry["name"] == "f1_candidate_smoke":
@@ -140,7 +159,7 @@ def _unit_disposition(entry, meta_state, evidence, audit):
             return {"migration_status": "candidate-verified",
                     "can_run_installed": "verified",
                     "not_migratable_reason": None,
-                    "installed_assertion": f"candidate run {audit.get('version')}: "
+                    "installed_assertion": f"candidate run {audit_version(audit)}: "
                                            + (record.get("tail") or "ok")}
         return {"migration_status": "declared-candidate-unverified",
                 "can_run_installed": "not-tested" if not audited else "failed",
@@ -151,7 +170,7 @@ def _unit_disposition(entry, meta_state, evidence, audit):
         return {"migration_status": "migratable-verified-pending-promotion",
                 "can_run_installed": "verified",
                 "not_migratable_reason": None,
-                "installed_assertion": f"candidate run {audit.get('version')}: "
+                "installed_assertion": f"candidate run {audit_version(audit)}: "
                                        + (record.get("tail") or "ok")}
     note = (entry.get("notes") or "").strip()
     if audited:
@@ -252,7 +271,7 @@ def coverage():
         state = entry.get("candidate_clean", "<missing>")
         meta_state = "true" if state is True else ("false" if state is False else "missing")
         script = entry.get("script", entry["name"] + ".py")
-        evidence = _script_evidence(HERE / script)
+        evidence = script_evidence(HERE / script)
         disposition = _unit_disposition(entry, meta_state, evidence, audit)
         rows["units"][entry["name"]] = {
             "kind": entry.get("kind"),
@@ -268,7 +287,7 @@ def coverage():
         entry = meta.get(name) or {}
         state = entry.get("candidate_clean", "<missing>")
         meta_state = "true" if state is True else ("false" if state is False else "missing")
-        evidence = _script_evidence(REPRO / (name + ".py"))
+        evidence = script_evidence(REPRO / (name + ".py"))
         disposition = _repro_disposition(bool(grouped.get(name)), meta_state, evidence)
         rows["repro"][name] = {
             "groups": sorted(grouped.get(name, [])),

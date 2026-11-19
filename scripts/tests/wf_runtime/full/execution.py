@@ -1075,14 +1075,16 @@ def _record_local(evidence_path, command_id, home, state, reason=None, origin='l
 
 def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pass_fds=(),
         scope=None, isolated_user=False, runner_control=False, receipt_path=None,
-        local_dirs=(), fault_identity=None, retain_local=False):
+        local_dirs=(), local_tmp_root=None, fault_identity=None, retain_local=False):
     """Run one command under the C→G→S→W supervision described in the module docstring.
 
     `scope` 由 controller 传入时复用同一取消作用域；`isolated_user` 在本 command 的
     command_id 下建立唯一 HOME，并在 supervision 结论之后决定删除/保留；`runner_control`
-    只由 root controller 使用（证据写 `.runner.json`）。`retain_local=True` 表示调用方显式
-    请求保留本 command 的局部路径（repro 的 `WF_REPRO_KEEP=1`）：supervision 清理已确认后
-    仍按 `retained-keep` 登记，且该相位不进入 proof。
+    只由 root controller 使用（证据写 `.runner.json`）。`local_tmp_root` 是本命令私有
+    TMPDIR 的父目录（结果 logs 内）：先写 pending receipt，再以 command_id 建唯一子根并把
+    目标进程的 TMPDIR/TMP/TEMP 指向它；创建失败时收据明确记“未创建”，不伪报保留路径。
+    `retain_local=True` 表示调用方显式请求保留本 command 的局部路径（repro 的
+    `WF_REPRO_KEEP=1`）：supervision 清理已确认后仍按 `retained-keep` 登记，且该相位不进入 proof。
     """
     if not math.isfinite(timeout) or timeout <= 0:
         raise ValueError('command timeout must be positive and finite')
@@ -1101,7 +1103,11 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                                       receipt_path=receipt_path)
     evidence_path = _receipt_path_for(descriptor, command_id, log_path)
     home = Path(str(log_path) + '.home-' + command_id) if isolated_user else None
-    local_paths = ([str(home)] if home else []) + [os.path.abspath(item) for item in local_dirs]
+    local_tmp = (Path(os.path.abspath(local_tmp_root)) / command_id
+                 if local_tmp_root else None)
+    local_paths = (([str(home)] if home else [])
+                   + ([str(local_tmp)] if local_tmp else [])
+                   + [os.path.abspath(item) for item in local_dirs])
     receipt = _receipt_record(descriptor, command_id, log_path, argv, target_cwd,
                               'pending' if local_paths else 'none', local_paths)
     fault_spec = resolve_command_fault(fault_identity)
@@ -1111,6 +1117,8 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
     result['command_id'] = command_id
     result['evidence_path'] = evidence_path
     result['local_dirs'] = [os.path.abspath(item) for item in local_dirs]
+    if local_tmp is not None:
+        result['local_tmp_root'] = str(local_tmp)
     result['local_keep'] = bool(retain_local)
     cancel_file = os.environ.get('WF_CANCEL_FILE')
     log_fd = -1
@@ -1126,7 +1134,25 @@ def run(argv, log_path, *, timeout, cwd=None, env=None, inherit_output=False, pa
                               reason=f'isolated home preparation failed: {exc}',
                               local_prepare_failed=True)
                 return result
-            env = {**(os.environ if env is None else env), 'HOME': str(home)}
+        if local_tmp is not None:
+            try:
+                local_tmp.mkdir(mode=0o700)
+            except OSError as exc:
+                result.update(status='failed', rc=1,
+                              reason=f'local tmp root preparation failed: {exc}',
+                              local_prepare_failed=True, local_tmp_created=False)
+                return result
+            result['local_tmp_created'] = True
+        command_env = dict(os.environ if env is None else env)
+        if home is not None:
+            command_env['HOME'] = str(home)
+        if 'WF_HOST_TMPDIR' not in command_env:
+            # 私有 TMPDIR 之外，fixture 归属校验仍需知道宿主/运行器的临时存储根。
+            command_env['WF_HOST_TMPDIR'] = tempfile.gettempdir()
+        if local_tmp is not None:
+            for key in ('TMPDIR', 'TMP', 'TEMP'):
+                command_env[key] = str(local_tmp)
+        env = command_env
         log_fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
         # inherit_output：目标直接继承调用方控制台；日志只保留失败原因（与旧行为一致）。
         guardian_log_fd = log_fd if not inherit_output else -1
@@ -1367,14 +1393,19 @@ def _remove_local_dir(path, anchor):
 def _finalize_evidence(result, evidence_path, command_id, home, log_path):
     """写 finished receipt 并按 supervision 结论收口本 command 的 local 资源。"""
     lifecycle, cleanup = _local_modules()
-    local_paths = ([str(home)] if home is not None else []) + list(result.get('local_dirs') or [])
+    local_tmp = result.get('local_tmp_root')
+    local_paths = (([str(home)] if home is not None else [])
+                   + ([local_tmp] if local_tmp else [])
+                   + list(result.get('local_dirs') or []))
     local_state = 'none' if not local_paths else 'retained-unknown'
     retained = list(local_paths)
     try:
         supervision = result.get('supervision') or {}
         if local_paths:
             if result.get('local_prepare_failed'):
-                local_state, retained = 'failed', list(local_paths)
+                # 准备失败（HOME/TMPDIR 根未建成）时只登记真实存在的路径，不能伪报保留。
+                local_state = 'failed'
+                retained = [item for item in local_paths if os.path.lexists(item)]
             elif result.get('local_keep'):
                 # 显式 KEEP：保留真实路径，并让相位证据明确“未确认回收”。
                 local_state, retained = 'retained-keep', list(local_paths)
@@ -1401,6 +1432,8 @@ def _finalize_evidence(result, evidence_path, command_id, home, log_path):
                    'supervision': result.get('supervision'),
                    'local_cleanup': local_state,
                    'retained_paths': retained}
+        if local_tmp:
+            updates['local_tmp_created'] = bool(result.get('local_tmp_created'))
         lifecycle.update_receipt(evidence_path, command_id, updates)
     except (lifecycle.LifecycleError, OSError) as exc:
         # 写 finished 失败：保留 started，原非零 rc 保持；原 0 转非零并归因。
@@ -1456,19 +1489,22 @@ def verdict(log_path, rc, kind, expected=None, phase=None):
     # 「用例数」的唯一观测点：PASS 行形态数（raw/suite/flow/repro），步骤型输出则是
     # 通过的 step 行数——它与 `expect` 预算比较；`passed` 仍保持 PASS 行计数以兼容既有消费者。
     observed = passed
+    declared_total = None
     if kind == 'suite':
         summary = re.fullmatch(r'(?:saved|total)\s+(\d+)\s*/\s*(\d+)', tail)
         alternative = re.fullmatch(r'saved\s+(\d+)\s+(?:cases|checks);\s*(\d+)\s+passed', tail)
         count = re.fullmatch(r'saved\s+(\d+)\s+cases', tail)
         if summary:
             good, total = map(int, summary.groups())
+            declared_total = total
             evidence = total if total > 0 and good == total else 0
         elif alternative:
             total, good = map(int, alternative.groups())
+            declared_total = total
             evidence = total if total > 0 and good == total else 0
         elif count:
-            total = int(count.group(1))
-            evidence = total if passed == total and total > 0 else 0
+            declared_total = int(count.group(1))
+            evidence = declared_total if passed == declared_total and declared_total > 0 else 0
         else:
             evidence = 0
     elif kind == 'steps':
@@ -1491,10 +1527,27 @@ def verdict(log_path, rc, kind, expected=None, phase=None):
     ok = rc == 0 and failures == 0 and evidence > 0
     if expected is not None:
         ok = ok and observed == expected
+    # 断言计数是否完整：分类 assertion_failed 的必需事实（不能只看 rc 或 bad 行）。
+    # suite：正式汇总总数与 PASS+FAIL 之和都必须等于 expect（三者互相印证）；
+    # flow/extra：没有汇总行的脚本以 PASS+FAIL 之和对照 expect；
+    # steps：每个步骤都有终态行且条数等于 expect；raw：只要求无 expect 预算。
+    if kind == 'suite':
+        counts_complete = (expected is not None and declared_total is not None
+                           and declared_total == expected == passed + failures)
+    elif kind == 'flow':
+        counts_complete = expected is not None and passed + failures == expected
+    elif kind == 'steps':
+        counts_complete = expected is not None and len(steps) == expected
+    elif kind == 'raw':
+        counts_complete = expected is None
+    else:
+        counts_complete = evidence == 1
     reason = '' if ok else f'rc={rc} observed={observed} failures={failures} expected={expected}'
     if kind == 'repro' and phase and not evidence:
         reason += f' phase={phase}'
     return {'ok': ok, 'assertions': evidence, 'passed': passed, 'observed': observed,
+            'failures': failures, 'expected': expected, 'declared_total': declared_total,
+            'counts_complete': counts_complete, 'kind': kind,
             'tail': tail, 'phase': phase, 'reason': reason}
 
 
@@ -1686,6 +1739,8 @@ def _summary_report(gate_report, assessment, cleanup_report, control):
         "cleanup_state": cleanup_report['cleanup_state'],
         "cleanup_report": cleanup_report,
         "evidence_state": assessment['evidence_state'],
+        "unit_outcomes": assessment.get('unit_outcomes') or None,
+        "outcome_counts": assessment.get('outcome_counts') or {},
         "reasons": reasons[:50],
     }
 
@@ -2184,6 +2239,8 @@ def main(argv=None):
                         help='repro 判定所需相位（kind=repro 时必填）')
     parser.add_argument('--isolated-user', action='store_true',
                         help='use a unique disposable test HOME per command')
+    parser.add_argument('--local-tmp-root', default=None,
+                        help='本命令私有 TMPDIR 的父目录（每命令以 command_id 建唯一子根）')
     parser.add_argument('--runner-control', action='store_true',
                         help='run as the root controller (single finalize + summary publisher)')
     parser.add_argument('--runner-role', choices=('full', 'repro'), default=None)
@@ -2214,7 +2271,9 @@ def main(argv=None):
         result = run(command, args.log, timeout=args.timeout,
                      inherit_output=False, pass_fds=[item for item in
                                                      (args.pass_fds or '').split(',') if item],
-                     isolated_user=args.isolated_user, fault_identity=args.fault_identity)
+                     isolated_user=args.isolated_user,
+                     local_tmp_root=args.local_tmp_root,
+                     fault_identity=args.fault_identity)
     except (OSError, EvidenceError, lifecycle.LifecycleError,
             _path_error_class()) as exc:
         print(f'EXECUTION-FAILED: {args.name} 启动前拒绝（证据域/路径）：{exc}', file=sys.stderr)

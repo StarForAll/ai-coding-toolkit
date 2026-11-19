@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """第三十五轮 R71：交接实例核验、dispose 锁内重核、审查五轴齐全。"""
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -16,7 +16,7 @@ if not os.path.exists(EXTERNAL_ACK):
 AT = "2026-11-11T09:00:00.000000Z"
 REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
           "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
-NOTES = "/tmp/r71_notes.json"
+NOTES = wfdrive.temp("r71_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 AXES = ("range", "acceptance", "contract", "regression", "testability")
@@ -64,11 +64,11 @@ def build_task(title, sid, complexity="complex"):
     for name in ("design.md", "implement.md"):
         open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
     json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-              open("/tmp/r71_a.json", "w"))
+              open(wfdrive.temp("r71_a.json"), "w"))
     inputs = {"generation": genv, "complexity": complexity}
     if complexity == "light":
         inputs["downgrade"] = {"reason": "单文件", "evidence": "不碰治理面"}
-    wf(["task-approve", "--task", task_id, "--decision", "/tmp/r71_a.json", "--json"], inputs, sid)
+    wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r71_a.json"), "--json"], inputs, sid)
     open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
     rc_s, payload_s, _ = wf(["task-start", "--task", task_id, "--json"], {"generation": gen()}, sid)
     if rc_s != 0:
@@ -82,15 +82,15 @@ os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 # ---------- 1. 交接两端都核实例标识 ----------
 task_id, directory, sid = build_task("R71 交接", "sess-X1")
 wf(["task-pause", "--task", task_id, "--reason", "交接准备", "--json"], {"generation": gen()}, sid)
-json.dump([dec(f"handover {task_id}", "handover")], open("/tmp/r71_ho.json", "w"))
-rc, payload, _ = wfdrive.run(["writer-handover", "begin", "--to", "sess-X2", "--decision", "/tmp/r71_ho.json",
+json.dump([dec(f"handover {task_id}", "handover")], open(wfdrive.temp("r71_ho.json"), "w"))
+rc, payload, _ = wfdrive.run(["writer-handover", "begin", "--to", "sess-X2", "--decision", wfdrive.temp("r71_ho.json"),
                               "--json"], {"generation": gen()}, sid,
                              instance_id="ffffffffffffffffffffffffffffffff", show=False)
 rec("1 交接发起拒绝错误实例标识", "WF_BINDING_MISMATCH", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_BINDING_MISMATCH")
 writer_state = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("state")
 rec("1b 交接未进入 recovering", "held", writer_state, writer_state == "held")
-rc, payload, _ = wf(["writer-handover", "begin", "--to", "sess-X2", "--decision", "/tmp/r71_ho.json",
+rc, payload, _ = wf(["writer-handover", "begin", "--to", "sess-X2", "--decision", wfdrive.temp("r71_ho.json"),
                      "--json"], {"generation": gen()}, sid)
 rec("1c 正常交接发起", "WF_OK", (payload or {}).get("code"), rc == 0)
 
@@ -134,7 +134,7 @@ def plan_for(reason):
                             "evidence": {"commit": "0" * 40, "verified_by": "human", "paths": "r71"}}}
 
 
-base_plan = "/tmp/r71_dispose.json"
+base_plan = wfdrive.temp("r71_dispose.json")
 json.dump(plan_for("A"), open(base_plan, "w"), ensure_ascii=False)
 
 
@@ -149,7 +149,7 @@ writer_now = json.load(open(writer_path, encoding="utf-8"))
 disposed = (writer_now.get("maintenance_results") or [{}])[0].get("disposition")
 rec("2b 未按被替换的计划写回", "disposition 仍为空", disposed, disposed is None)
 
-json.dump(results, open("/tmp/r71_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r71_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 
 # 清理第 2 段的维护回执，避免挡住后续任务的开工程序
@@ -202,10 +202,10 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
                "slots": [{"slot": slot, "reviewer_cli": cli} for slot, cli in slot_specs],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
-    launch_path = f"/tmp/r71_launch_{name}.json"
+    launch_path = wfdrive.temp(f"r71_launch_{name}.json")
     json.dump(request, open(launch_path, "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准，请求里的 export_decision 只是声明
-    export_path = f"/tmp/r71_export_{name}.json"
+    export_path = wfdrive.temp(f"r71_export_{name}.json")
     json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
@@ -219,8 +219,10 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
               json.dumps((payload or {}).get("facts"), ensure_ascii=False)[:200])
     import glob as _glob
 
-    found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
-    staging = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-1"
+    review_root = os.path.join(tempfile.gettempdir(), "wf-review")
+    found = _glob.glob(os.path.join(review_root, "*", task_id, "round-1"))
+    staging = found[0] if found else os.path.join(review_root, "unknown", task_id,
+                                                   "round-1")
     # v42 B1：`fail` 轴必须配 blocking finding，申报 verdict 也要与推导一致——
     # 否则报告本身不成立（WF_REVIEW_INVALID），测的就不是判定链路了。
     _failing = [axis for axis, value in (axes or {}).items()
@@ -244,7 +246,7 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
         if rc_i != 0:
             print("   import failed:", slot, (payload_i or {}).get("code"),
                   json.dumps((payload_i or {}).get("facts"), ensure_ascii=False)[:200])
-    main_path = wfdrive.write_main_review("/tmp/r71_main.json", task_id,
+    main_path = wfdrive.write_main_review(wfdrive.temp("r71_main.json"), task_id,
                                          [slot for slot, _cli in slot_specs],
                                          findings=_findings)
     rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
@@ -302,7 +304,7 @@ rec("3g 同 CLI 双槽位不产生判定结论", "WF_REVIEW_INVALID + result 为
 # ---------- 4. 两段显式交接 E2E（旧代次失效 → 接收者 accept → 新代次生效） ----------
 ho_id, ho_dir, ho_sid = build_task("R71 交接 E2E", "sess-H1")
 wf(["task-pause", "--task", ho_id, "--reason", "交接 E2E", "--json"], {"generation": gen()}, ho_sid)
-json.dump([dec(f"handover {ho_id}", "handover")], open("/tmp/r71_ho2.json", "w"))
+json.dump([dec(f"handover {ho_id}", "handover")], open(wfdrive.temp("r71_ho2.json"), "w"))
 _old_gen = gen()
 # receiver 按 session-key 核（不是裸会话名）：先按同一身份派生 H2 的 key
 sys.path.insert(0, os.path.join(F, ".wf/lib"))
@@ -312,7 +314,7 @@ try:
                                        "identity": {"host_id": "dsh", "session_id": "sess-H2"}})
 finally:
     sys.path.pop(0)
-rc, payload, _ = wf(["writer-handover", "begin", "--to", _h2_key, "--decision", "/tmp/r71_ho2.json",
+rc, payload, _ = wf(["writer-handover", "begin", "--to", _h2_key, "--decision", wfdrive.temp("r71_ho2.json"),
                      "--json"], {"generation": _old_gen}, ho_sid)
 rec("4 交接 begin 成功", "WF_OK", (payload or {}).get("code"), rc == 0)
 _ho_state = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
@@ -354,5 +356,5 @@ rec("4f accept 后旧会话/旧代次失效", "非 WF_OK",
     ("WF_WRITER_BUSY", "WF_GENERATION_STALE", "WF_BINDING_MISMATCH", "WF_IDENTITY_UNRESOLVED"))
 wf(["writer", "release", "--json"], {"generation": _accept_gen}, "sess-H2")
 
-json.dump(results, open("/tmp/r71_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r71_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

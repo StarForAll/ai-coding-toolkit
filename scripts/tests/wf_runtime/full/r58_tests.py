@@ -8,7 +8,7 @@ from wflib import config as wf_config
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -80,14 +80,14 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R58 阈值\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r58_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r58_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r58_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r58_a.json"), "--json"],
    {"generation": gen, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-C1")
 open(os.path.join(F, "pkg/a.py"), "w").write("bad\n")
 rc_s, start1, _ = wf(["task-start", "--task", task_id, "--json"], {"generation": write_gen()}, "sess-C1")
 rec("R58 准备：开工", "WF_OK", (start1 or {}).get("code"), rc_s == 0)
 
-NOTES = "/tmp/r58_notes.json"
+NOTES = wfdrive.temp("r58_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
 
@@ -97,7 +97,7 @@ def run_final_gate():
     sys.path.insert(0, wfdrive.LIB)
     from wflib import gates as gates_mod
     from wflib import cli as wf_cli
-    env_path = "/tmp/r58_env.json"
+    env_path = wfdrive.temp("r58_env.json")
     json.dump(wfdrive.envelope({"generation": write_gen()}, "sess-C1"), open(env_path, "w"), ensure_ascii=False)
     ctx = wf_cli.Context(F, ["--envelope", env_path])
     import glob
@@ -152,5 +152,5 @@ rec("R58 阈值非法时同样阻断（不再按 3 放行）", "WF_CAPABILITY_UN
     and "debug_repeat_threshold" in json.dumps(caught_facts, ensure_ascii=False))
 
 open(config_path, "w", encoding="utf-8").write(backup)
-json.dump(results, open("/tmp/r58_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r58_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

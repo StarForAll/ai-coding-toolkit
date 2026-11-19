@@ -6,10 +6,13 @@ sys.path.insert(0, wfdrive.LIB)
 from wflib import check as wf_check
 
 F = wfdrive.FIX
-SRC = wfdrive.REPO + "/docs/workflows/wf/skills"
+# 候选模式读发行内技能副本；dev 模式保留作者技能源（作者侧覆盖）。
+SRC = (os.path.join(wfdrive.release_root(), "wf-release", "skills")
+       if wfdrive.deploy_mode() == "candidate"
+       else os.path.join(wfdrive.REPO, "docs", "workflows", "wf", "skills"))
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -65,12 +68,12 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R63\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r63_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r63_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r63_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r63_a.json"), "--json"],
    {"generation": gen, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-H1")
 open(os.path.join(F, "pkg/a.py"), "w").write("x\n")
 wf(["task-start", "--task", task_id, "--json"], {"generation": write_gen()}, "sess-H1")
-NOTES = "/tmp/r63_notes.json"
+NOTES = wfdrive.temp("r63_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 wf(["task-check", "--task", task_id, "--review-notes", NOTES,
                     "--decision", EXTERNAL_ACK, "--json"], {"generation": write_gen()}, "sess-H1")
@@ -89,5 +92,5 @@ for name in ("wf-grilling", "wf-tdd", "wf-diagnosing-bugs", "wf-code-review", "w
     missing = [item for item in required if f"| {item} |" not in text]
     rec(f"P2-7 {name} 来源登记齐全", "六项齐全", missing or "ok", not missing)
 
-json.dump(results, open("/tmp/r63_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r63_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

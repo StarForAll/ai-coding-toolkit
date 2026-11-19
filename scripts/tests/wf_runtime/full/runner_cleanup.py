@@ -38,6 +38,12 @@ FAULT_VALUES = (
     "metrics-truncated", "metrics-old-run", "metrics-input-mismatch",
 )
 STATUSES = ("passed", "failed", "cancelled", "timeout")
+# 每个计划单元的 typed outcome：唯一由本模块产生，summary 只搬运不改判。
+OUTCOMES = ("passed", "assertion_failed", "preparation_failed", "execution_failed",
+            "cancelled", "unverified")
+# 准备失败标签 → 必须存在的受监督阶段 receipt（run_one.sh 的 fail_prep 标签是唯一来源）。
+PREP_PHASE_BY_LABEL = (("INSTALL-FAILED", "install"), ("FIXTURE-FAILED", "fixture"),
+                       ("INIT-FAILED", "init"))
 
 
 class CleanupError(Exception):
@@ -146,46 +152,210 @@ def read_children(results_root, run_id):
     return {"commands": commands, "problems": problems}
 
 
+def _read_rows(results_root):
+    """五列结果行的只读投影：同名重复行保留（归因阶段按矛盾处理）。"""
+    rows = {}
+    try:
+        with open(Path(results_root) / "lines", encoding="utf-8", errors="replace") as handle:
+            for line in handle.read().splitlines():
+                parts = line.split("\t")
+                if len(parts) == 5:
+                    rows.setdefault(parts[0], []).append(parts)
+    except OSError:
+        pass
+    return rows
+
+
+def _unit_receipts(unit_execution, run_id):
+    """逐阶段核 receipt：终态、命令身份、同一代 run；返回 (receipts, problems)。"""
+    receipts, problems = [], []
+    for item in unit_execution.get("command_evidence") or []:
+        if not isinstance(item, dict):
+            problems.append("command evidence is not an object")
+            continue
+        phase = item.get("phase")
+        command_id = item.get("command_id")
+        evidence_path = item.get("evidence_path")
+        if not isinstance(phase, str) or not phase:
+            problems.append("command evidence has no phase")
+            continue
+        if not isinstance(command_id, str) or not command_id:
+            problems.append(f"{phase} evidence has no command id")
+            continue
+        if not isinstance(evidence_path, str) or not evidence_path:
+            problems.append(f"{phase} evidence has no receipt path")
+            continue
+        try:
+            receipt = lifecycle.read_receipt(evidence_path)
+        except lifecycle.LifecycleError as exc:
+            problems.append(f"{phase} receipt is unreadable: {exc}")
+            continue
+        if receipt.get("state") != "finished":
+            problems.append(f"{phase} receipt is not finished")
+            continue
+        if receipt.get("command_id") != command_id:
+            problems.append(f"{phase} receipt command id mismatch")
+            continue
+        if receipt.get("run_id") != run_id:
+            problems.append(f"{phase} receipt belongs to another run")
+            continue
+        recorded = receipt.get("result")
+        if not isinstance(recorded, dict) or recorded.get("status") not in STATUSES:
+            problems.append(f"{phase} receipt result is unusable")
+            continue
+        receipts.append({"phase": phase, "command_id": command_id, "receipt": receipt,
+                         "result": recorded, "result_path": item.get("result_path")})
+    return receipts, problems
+
+
+def _classify_preparation(unit_execution, receipts):
+    """prep-failed → preparation_failed 或 unverified（不把准备失败记成断言失败）。"""
+    label = unit_execution.get("failure_reason")
+    if not isinstance(label, str) or not label:
+        return "unverified", "preparation failure has no recorded reason"
+    if not receipts and unit_execution.get("preflight_failed") is True:
+        # 启动登记前就失败：没有（也不该有）受监督流程的 receipt。
+        return "preparation_failed", "preflight failed before any supervised step"
+    required = next((phase for prefix, phase in PREP_PHASE_BY_LABEL
+                     if label.startswith(prefix)), None)
+    by_phase = {item["phase"]: item for item in receipts}
+    if required and required not in by_phase:
+        return "unverified", f"preparation failed ({label}) without a {required} receipt"
+    for item in receipts:
+        if item["phase"] == required and item["result"].get("status") == "passed":
+            return "unverified", f"{required} receipt claims success for a failed preparation"
+    return "preparation_failed", label
+
+
+def classify_unit(unit_execution, result, row, receipts, receipt_problems, result_path):
+    """单单元唯一分类器：`row`×`unit_execution`×test result×receipts 交叉核对。
+
+    `bad`（聚合行）只说明“该单元未通过”，不能单独证明断言失败；只有目标进程正常退出、
+    显式 FAIL 与完整计数同时成立才归 assertion_failed。
+    """
+    if receipt_problems:
+        return "unverified", "; ".join(receipt_problems)
+    if not isinstance(result, dict):
+        return "unverified", "unit result is not an object"
+    try:
+        row_rc = int(row[1])
+    except (TypeError, ValueError):
+        return "unverified", "unit row rc is not an integer"
+    rc = result.get("rc")
+    if isinstance(rc, bool) or not isinstance(rc, int) or rc != row_rc:
+        return "unverified", "unit row contradicts the test result rc"
+    if (row[3] == "ok") != (rc == 0):
+        return "unverified", "unit row status contradicts the test result rc"
+    state = unit_execution.get("state")
+    if state == "prep-failed":
+        # 准备失败没有 test 断言事实；分类只依赖准备阶段标签与同代 receipt。
+        return _classify_preparation(unit_execution, receipts)
+    assertion = result.get("assertion_result")
+    supervision = result.get("supervision")
+    if not isinstance(assertion, dict):
+        return "unverified", "unit result has no assertion facts"
+    if not isinstance(supervision, dict):
+        return "unverified", "unit result has no supervision facts"
+    phases = {item["phase"]: item for item in receipts}
+    test = phases.get("test")
+    if test is None:
+        return "unverified", "unit evidence has no supervised test phase"
+    recorded_path = test.get("result_path")
+    if not isinstance(recorded_path, str) or \
+            os.path.abspath(recorded_path) != os.path.abspath(result_path):
+        return "unverified", "test receipt does not name this unit result"
+    if (test["result"].get("rc") != result.get("rc")
+            or test["result"].get("status") != result.get("status")):
+        return "unverified", "test receipt result differs from the unit result"
+    status = result.get("status")
+    if status in ("cancelled", "timeout"):
+        if test["result"].get("status") != status:
+            return "unverified", "cancelled result contradicts its receipt"
+        return "cancelled", status
+    target_rc = supervision.get("target_rc")
+    if isinstance(target_rc, bool) or not isinstance(target_rc, int):
+        return "unverified", "test target exit status is missing"
+    if target_rc != 0:
+        if assertion.get("ok") is True:
+            return "unverified", "target failed but assertion facts claim success"
+        return "execution_failed", f"target rc={target_rc}"
+    failures = assertion.get("failures")
+    complete = assertion.get("counts_complete")
+    if assertion.get("ok") is True and failures == 0 and complete is True:
+        return "passed", "all expected assertions passed"
+    if isinstance(failures, int) and not isinstance(failures, bool) and failures > 0:
+        if complete is not True:
+            return "unverified", "explicit failures without complete assertion counts"
+        if row[3] != "bad":
+            return "unverified", "assertion failure without a failing result row"
+        return "assertion_failed", f"{failures} explicit failed assertion(s)"
+    if failures == 0:
+        return "unverified", "insufficient assertions without an explicit failure"
+    return "unverified", "unit assertion facts are not classifiable"
+
+
 def _unit_evidence(results_root, run_id, plan):
-    """逐计划单元核 unit_execution（缺失/错 ID/旧 JSON/伪 prep 都报问题）。"""
+    """每个计划单元恰好一个 typed outcome；缺失/错代/矛盾也占位为 unverified。"""
     root = Path(results_root)
+    rows = _read_rows(results_root)
     units, problems = [], []
+
+    def record_outcome(name, outcome, reason, unit_execution=None):
+        if outcome == "unverified":
+            problems.append({"kind": "unit-unverified", "detail": f"{name}: {reason}"})
+        units.append({"unit": name,
+                      "state": (unit_execution or {}).get("state"),
+                      "invocation_id": (unit_execution or {}).get("invocation_id"),
+                      "command_count": len((unit_execution or {}).get("command_evidence") or []),
+                      "outcome": outcome, "outcome_reason": reason})
+
     for entry in (plan or {}).get("units") or []:
         name = entry["name"]
         path = root / f"{name}.test.log.json"
         if not path.exists():
-            problems.append({"kind": "missing-unit", "detail": name})
+            record_outcome(name, "unverified", "unit result is missing")
             continue
         try:
             record = lifecycle.read_json_object(path, f"unit result {name}")
         except lifecycle.LifecycleError as exc:
-            problems.append({"kind": "unreadable-unit", "detail": str(exc)})
+            record_outcome(name, "unverified", f"unit result is unreadable: {exc}")
             continue
         unit_execution = record.get("unit_execution")
         if not isinstance(unit_execution, dict):
-            problems.append({"kind": "no-unit-execution", "detail": name})
+            record_outcome(name, "unverified", "unit result has no unit_execution")
             continue
         if unit_execution.get("schema_version") != lifecycle.UNIT_EXECUTION_SCHEMA or \
                 isinstance(unit_execution.get("schema_version"), bool):
-            problems.append({"kind": "unit-schema", "detail": name})
+            record_outcome(name, "unverified", "unit_execution schema is invalid",
+                           unit_execution)
             continue
         if unit_execution.get("unit") != name:
-            problems.append({"kind": "unit-name", "detail": name})
+            record_outcome(name, "unverified", "unit_execution names another unit",
+                           unit_execution)
             continue
         if unit_execution.get("run_id") != run_id:
-            problems.append({"kind": "unit-wrong-run",
-                             "detail": f"{name}: run_id={unit_execution.get('run_id')!r}"})
+            record_outcome(name, "unverified",
+                           f"unit_execution belongs to another run_id"
+                           f" ({unit_execution.get('run_id')!r})", unit_execution)
             continue
         if unit_execution.get("state") not in ("passed", "prep-failed"):
-            problems.append({"kind": "unit-state", "detail": name})
+            record_outcome(name, "unverified", "unit_execution state is invalid",
+                           unit_execution)
             continue
         row = unit_execution.get("result_row")
         if not isinstance(row, list) or len(row) != 5 or row[0] != name:
-            problems.append({"kind": "unit-row", "detail": name})
+            record_outcome(name, "unverified", "unit_execution result_row is malformed",
+                           unit_execution)
             continue
-        units.append({"unit": name, "state": unit_execution["state"],
-                      "invocation_id": unit_execution.get("invocation_id"),
-                      "command_count": len(unit_execution.get("command_evidence") or [])})
+        observed_rows = rows.get(name) or []
+        if len(observed_rows) != 1 or observed_rows[0] != row:
+            record_outcome(name, "unverified",
+                           "unit row is missing, duplicated or differs", unit_execution)
+            continue
+        receipts, receipt_problems = _unit_receipts(unit_execution, run_id)
+        outcome, reason = classify_unit(unit_execution, record, row, receipts,
+                                        receipt_problems, str(path))
+        record_outcome(name, outcome, reason, unit_execution)
     return {"units": units, "problems": problems}
 
 
@@ -216,8 +386,10 @@ def validate_assessment(assessment):
 def assess_run(results_root, run_id, plan, control, gate_report):
     """聚合 root 控制结果、child receipts、unit 证据与 gate 报告。
 
-    `cleanup_state` 只回答“进程与本地资源是否确认释放”；unit/gate 证据缺失进入
-    `evidence_state`，不会把“没跑完”误记成“没清理”，也不会反过来放宽清理许可。
+    `cleanup_state` 只回答“进程与本地资源是否确认释放”；`evidence_state` 只回答“每个
+    计划单元是否都有合法、同代、可分类的结果与必要 receipts”。行级失败不是证据缺口：
+    结构完整的准备/执行/取消失败仍是 `evidence_state=complete`，但类别明确且绝不
+    计为断言失败。gate 的聚合 bad 值只作兼容门禁，不参与单元分类。
     """
     reasons, cleanup_problems, evidence_problems, retained = [], [], [], []
     control_assessment = assess_execution(control)
@@ -231,12 +403,30 @@ def assess_run(results_root, run_id, plan, control, gate_report):
             retained.append(item["retained"])
     units = _unit_evidence(results_root, run_id, plan)
     evidence_problems.extend(units["problems"])
-    gate_state = "unknown" if not isinstance(gate_report, dict) else (
-        "complete" if gate_report.get("ok") else "incomplete")
-    if gate_state == "unknown":
+    if not isinstance(gate_report, dict):
         evidence_problems.append({"kind": "gate-report", "detail": "gate report is missing"})
-    elif gate_state == "incomplete":
-        evidence_problems.append({"kind": "gate-rows", "detail": "result rows do not match the frozen plan"})
+    else:
+        gate_facts = gate_report.get("gate")
+        if isinstance(gate_facts, dict):
+            broken = (int(gate_facts.get("malformed") or 0) > 0
+                      or bool(gate_facts.get("duplicate")) or bool(gate_facts.get("unexpected")))
+            if broken:
+                evidence_problems.append({
+                    "kind": "gate-rows",
+                    "detail": "result rows are malformed, duplicated or unexpected"})
+        repro = gate_report.get("repro")
+        if isinstance(repro, dict):
+            unverified = 0
+            for counts in (repro.get("phase_counts") or {}).values():
+                if isinstance(counts, dict):
+                    unverified += int(counts.get("unverified") or 0)
+            if unverified:
+                evidence_problems.append({
+                    "kind": "repro-unverified",
+                    "detail": f"{unverified} repro phase(s) lack this-generation evidence"})
+    outcome_counts = {name: 0 for name in OUTCOMES}
+    for item in units["units"]:
+        outcome_counts[item["outcome"]] += 1
     for item in cleanup_problems:
         reasons.append(f"cleanup: {item['kind']}: {item['detail']}")
     for item in evidence_problems:
@@ -261,6 +451,9 @@ def assess_run(results_root, run_id, plan, control, gate_report):
                    "status": control.get("status"), "rc": control.get("rc")},
         "commands": children["commands"],
         "units": units["units"],
+        "unit_outcomes": [{"unit": item["unit"], "outcome": item["outcome"]}
+                          for item in units["units"]],
+        "outcome_counts": outcome_counts,
         "gate": gate_report,
         "repro": (gate_report or {}).get("repro") if isinstance(gate_report, dict) else None,
     }

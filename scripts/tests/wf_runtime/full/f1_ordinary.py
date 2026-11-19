@@ -104,11 +104,11 @@ json.dump([
      "object_digest": prd_digest, "choice": "approve", "reason": "范围两个文件，验收机械可核"},
     {"source": "human terminal (session B)", "at": at, "subject": "plan-q-1：是否按轻量处理",
      "object_digest": prd_digest, "choice": "是", "reason": "接受推荐项"},
-], open("/tmp/decision_approve_multiply.json", "w"), ensure_ascii=False, indent=2)
+], open(wfdrive.temp("decision_approve_multiply.json"), "w"), ensure_ascii=False, indent=2)
 
 inputs = {"generation": generation}
 rc, payload, _ = wf(["task-approve", "--task", task_id,
-                     "--decision", "/tmp/decision_approve_multiply.json", "--json"], inputs)
+                     "--decision", wfdrive.temp("decision_approve_multiply.json"), "--json"], inputs)
 step("task-approve", rc, payload)
 rc, payload, _ = wf(["task-start", "--task", task_id, "--json"], inputs)
 step("task-start", rc, payload)
@@ -125,10 +125,10 @@ open(os.path.join(F, "tests/test_calc.py"), "w", encoding="utf-8").write(tests)
 
 notes = {"standard": {"conclusion": "pass", "basis": "新增纯函数，未改既有 add；命名与风格一致"},
          "requirement": {"conclusion": "pass", "basis": "验收 a1 由 v1 覆盖正负用例"}}
-json.dump(notes, open("/tmp/review_notes_multiply.json", "w"), ensure_ascii=False, indent=2)
+json.dump(notes, open(wfdrive.temp("review_notes_multiply.json"), "w"), ensure_ascii=False, indent=2)
 
 rc, payload, _ = wf(["task-check", "--task", task_id,
-                     "--review-notes", "/tmp/review_notes_multiply.json", "--json"], inputs)
+                     "--review-notes", wfdrive.temp("review_notes_multiply.json"), "--json"], inputs)
 payload = step("task-check", rc, payload)
 print("   anchor:", payload["facts"]["anchor"]["check_anchor"])
 
@@ -147,9 +147,9 @@ json.dump([
     {"source": "human terminal (session B)", "at": "2026-11-03T02:10:00.000000Z",
      "subject": "src/calc.py,tests/test_calc.py", "object_digest": prd_digest,
      "choice": "commit", "reason": "授权提交本任务两个交付路径"},
-], open("/tmp/decision_archive_multiply.json", "w"), ensure_ascii=False, indent=2)
+], open(wfdrive.temp("decision_archive_multiply.json"), "w"), ensure_ascii=False, indent=2)
 rc, payload, _ = wf(["archive", "--task", task_id,
-                     "--decision", "/tmp/decision_archive_multiply.json", "--json"], inputs)
+                     "--decision", wfdrive.temp("decision_archive_multiply.json"), "--json"], inputs)
 payload = step("archive", rc, payload)
 print("   archived:", payload["facts"]["terminal"], payload["facts"]["moved_to"])
 rc, payload, _ = wf(["writer", "release", "--json"], inputs)

@@ -96,8 +96,8 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/baseline.md"],
 prd = f"# R62\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r62_a.json", "w"))
-rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", "/tmp/r62_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r62_a.json"), "w"))
+rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r62_a.json"), "--json"],
                     {"generation": gen, "complexity": "light",
                      "downgrade": {"reason": "只改索引一条", "evidence": "无验收口径变化"}}, "sess-G2")
 rec("P2-4 降级批准通过", "WF_OK", (payload or {}).get("code"), rc == 0)
@@ -123,5 +123,5 @@ for cmd, extra in (("task-knowledge", ["--decision", "no-update"]),):
     rec(f"P2-5 {cmd} 对归档任务拒绝", "WF_BINDING_MISMATCH", (payload or {}).get("code"),
         (payload or {}).get("code") == "WF_BINDING_MISMATCH")
 
-json.dump(results, open("/tmp/r62_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r62_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

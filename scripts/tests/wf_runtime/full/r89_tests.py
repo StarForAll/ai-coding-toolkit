@@ -4,7 +4,11 @@ import json, os, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-RELEASE = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
+RELEASE = os.environ.get("WF_RELEASE_REPO") or ""
+INSTALL_REF = os.environ.get("WF_INSTALL_REF") or ""
+if not RELEASE or not INSTALL_REF:
+    raise SystemExit("r89: 托管 runner 必须提供 WF_RELEASE_REPO 与 WF_INSTALL_REF"
+                     "（候选/发行安装不能回退固定旧目录）")
 results = []
 
 
@@ -15,7 +19,7 @@ def rec(name, expected, actual, ok):
 
 def install(target, *platforms, extra=()):
     args = [wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
-            "--target", target, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE]
+            "--target", target, "--release-ref", INSTALL_REF, "--source", RELEASE]
     for name in platforms:
         args += ["--platform", name]
     args += list(extra)
@@ -41,6 +45,9 @@ rec("R92 dsh 装在项目内 .agents/skills", "WF_OK 且目录存在",
     f"{'WF_OK' if r1.returncode == 0 else r1.stdout[-80:]}",
     r1.returncode == 0 and os.path.isdir(os.path.join(t1, ".agents/skills/wf-start")))
 record = json.load(open(os.path.join(t1, ".wf/install/installation.json"), encoding="utf-8"))
+_identity_problems = wfdrive.install_identity_problems(t1)
+rec("R92c 安装来源为本次发行", "installation.json 的 version/ref/commit 与本发行一致",
+    f"problems={_identity_problems or 'none'}", not _identity_problems)
 rec("R92b 记录里 roots 为相对路径、platforms 已写入", ".agents/skills + dsh",
     f"{record.get('roots')} / {record.get('platforms')}",
     record.get("roots") == [".agents/skills"] and record.get("platforms") == ["dsh"])
@@ -79,8 +86,8 @@ rec("R92 省略平台被拒", "WF_PATH_INVALID",
 # 6) --skill-root 不再被接受
 t6 = fresh("legacy")
 r6 = subprocess.run([wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
-                     "--target", t6, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE,
-                     "--skill-root", "/tmp/whatever"], capture_output=True, text=True)
+                     "--target", t6, "--release-ref", INSTALL_REF, "--source", RELEASE,
+                     "--skill-root", wfdrive.temp("whatever")], capture_output=True, text=True)
 rec("R92 --skill-root 已移除", "argparse 拒绝",
     "unrecognized" in (r6.stderr + r6.stdout),
     "unrecognized" in (r6.stderr + r6.stdout))
@@ -106,11 +113,11 @@ for label, extra in (("重复 flag", ["--platform", "codex", "--platform", "clau
                      ("逗号分隔", ["--platform", "codex,claudecode"])):
     t = fresh("form")
     args = [wfdrive.TOOL_PYTHON, os.path.join(RELEASE, "install.py"),
-            "--target", t, "--release-ref", "refs/tags/wf-v0.1.0", "--source", RELEASE] + extra + list(CONFIRM)
+            "--target", t, "--release-ref", INSTALL_REF, "--source", RELEASE] + extra + list(CONFIRM)
     r = subprocess.run(args, capture_output=True, text=True)
     ok = (r.returncode == 0 and os.path.isdir(os.path.join(t, ".agents/skills/wf-start"))
           and os.path.isdir(os.path.join(t, ".claude/skills/wf-start")))
     rec(f"R92 platform {label}", "两个目录都在", f"{r.returncode}/{'OK' if ok else r.stdout[-60:]}", ok)
 
-json.dump(results, open("/tmp/r89_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r89_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

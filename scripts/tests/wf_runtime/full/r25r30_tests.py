@@ -61,12 +61,12 @@ def make_task(title, touch, sid="sess-W1"):
 
 def approve(task_id, digest, gen, sid="sess-W1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r25_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r25_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/r25_notes.json"
+NOTES = wfdrive.temp("r25_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -98,7 +98,7 @@ task28, gen28, dir28, d28 = make_task("R28 核实周期", ["pkg/**", ".wf/spec/*
 approve(task28, d28, gen28, "sess-W28")
 rc_s, start28, _ = wf(["task-start", "--task", task28, "--json"], {"generation": gen28}, "sess-W28")
 rec("R28 准备：开工", "WF_OK", (start28 or {}).get("code"), rc_s == 0)
-changes = dfile("/tmp/r28_add.json",
+changes = dfile(wfdrive.temp("r28_add.json"),
                 [{"operation": "add", "new_paths": [".wf/spec/old.md"], "content": RULE.replace("{date}", old_date)},
                  {"operation": "add", "new_paths": [".wf/spec/future.md"], "content": RULE.replace("{date}", future_date)}])
 wf(["spec-update", "--task", task28, "--changes", changes, "--json"], {"generation": gen28}, "sess-W28")
@@ -115,7 +115,7 @@ rec("R28 配置周期生效（1 天）", "needs 含 expired 且 period_days=1",
     f"needs={needs} period={spec_facts.get('period_days')}",
     "expired" in needs and spec_facts.get("period_days") == 1)
 rec("R28 未来日期进入待核对", "needs 含 future-date", needs, "future-date" in needs)
-covered = dfile("/tmp/r28_decision.json", [dec(".wf/spec/old.md .wf/spec/future.md", "passed", d28)])
+covered = dfile(wfdrive.temp("r28_decision.json"), [dec(".wf/spec/old.md .wf/spec/future.md", "passed", d28)])
 rc, payload, _ = wf(["task-check", "--task", task28, "--decision", covered, "--review-notes", NOTES, "--json"],
                     {"generation": gen28}, "sess-W28")
 record = json.load(open(os.path.join(dir28, "task.json")))
@@ -135,7 +135,7 @@ task30, gen30, dir30, d30 = make_task("R30 引用冲突", [".wf/spec/**"], "sess
 approve(task30, d30, gen30, "sess-W30")
 rc_s30, start30, _ = wf(["task-start", "--task", task30, "--json"], {"generation": gen30}, "sess-W30")
 rec("R30 准备：开工", "WF_OK", f"{(start30 or {}).get('code')}", rc_s30 == 0)
-add30 = dfile("/tmp/r30_add.json", [{"operation": "add", "new_paths": [".wf/spec/ref.md"],
+add30 = dfile(wfdrive.temp("r30_add.json"), [{"operation": "add", "new_paths": [".wf/spec/ref.md"],
                                      "content": RULE.replace("{date}", today.isoformat())}])
 wf(["spec-update", "--task", task30, "--changes", add30, "--json"], {"generation": gen30}, "sess-W30")
 wf(["task-curate", "--task", task30, "--spec", ".wf/spec/ref.md", "--purpose", "引用", "--json"],
@@ -144,7 +144,7 @@ index_path = os.path.join(F, ".wf/spec/index.md")
 backup = open(index_path, encoding="utf-8").read()
 os.remove(index_path)
 os.makedirs(index_path)
-noise = dfile("/tmp/r30_noise.json", [{"operation": "add", "new_paths": [".wf/spec/noise.md"],
+noise = dfile(wfdrive.temp("r30_noise.json"), [{"operation": "add", "new_paths": [".wf/spec/noise.md"],
                                        "content": RULE.replace("{date}", today.isoformat())}])
 rc, payload, _ = wf(["spec-update", "--task", task30, "--changes", noise, "--json"],
                     {"generation": gen30}, "sess-W30")
@@ -169,5 +169,5 @@ rec("R30 判定只读不写文件", "ref.md 仍在",
     os.path.exists(os.path.join(F, ".wf/spec/ref.md")))
 wf(["writer", "release", "--json"], {"generation": gen30}, "sess-W30")
 
-json.dump(results, open("/tmp/r25r30_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r25r30_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

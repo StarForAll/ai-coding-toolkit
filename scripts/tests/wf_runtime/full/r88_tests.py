@@ -113,5 +113,5 @@ code6 = (payload6 or {}).get("code")
 rec("D4 旧 task.create 动作给出明确出口", "WF_RECORD_INVALID（不是无可执行出口）",
     code6, code6 == "WF_RECORD_INVALID")
 
-json.dump(results, open("/tmp/r88_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r88_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

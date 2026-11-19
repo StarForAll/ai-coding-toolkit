@@ -72,13 +72,13 @@ def make_task(title, touch, sid="sess-T1"):
 clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 task1, gen1, dir1, d1 = make_task("R47 读取边界", ["pkg/**", ".wf/spec/**"], "sess-T1")
-json.dump([dec("approve", "approve", d1)], open("/tmp/r47_a.json", "w"))
-wf(["task-approve", "--task", task1, "--decision", "/tmp/r47_a.json", "--json"],
+json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r47_a.json"), "w"))
+wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r47_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-T1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a = 1\n")
 rc_s, start1, _ = wf(["task-start", "--task", task1, "--json"], {"generation": write_gen()}, "sess-T1")
 rec("R47 准备：开工", "WF_OK", (start1 or {}).get("code"), rc_s == 0)
-outside = "/tmp/wf-outside-spec.md"
+outside = wfdrive.temp("wf-outside-spec.md")
 open(outside, "w").write("# 项目外内容\n")
 os.makedirs(os.path.join(F, ".wf/spec"), exist_ok=True)
 link = os.path.join(F, ".wf/spec/link.md")
@@ -109,15 +109,15 @@ wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-T1")
 clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 task2, gen2, dir2, d2 = make_task("R48 嵌套仓库", ["pkg/**", ".wf/spec/**"], "sess-T2")
-json.dump([dec("approve", "approve", d2)], open("/tmp/r48_a.json", "w"))
-wf(["task-approve", "--task", task2, "--decision", "/tmp/r48_a.json", "--json"],
+json.dump([dec("approve", "approve", d2)], open(wfdrive.temp("r48_a.json"), "w"))
+wf(["task-approve", "--task", task2, "--decision", wfdrive.temp("r48_a.json"), "--json"],
    {"generation": gen2, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-T2")
 open(os.path.join(F, "pkg/b.py"), "w").write("b = 1\n")
 rc_s2, start2, _ = wf(["task-start", "--task", task2, "--json"], {"generation": write_gen()}, "sess-T2")
 rec("R48 准备：开工", "WF_OK", (start2 or {}).get("code"), rc_s2 == 0)
 nested = os.path.join(F, ".wf/spec/child")
 os.makedirs(os.path.join(nested, ".git"), exist_ok=True)
-change = dfile("/tmp/r48_change.json",
+change = dfile(wfdrive.temp("r48_change.json"),
                [{"operation": "add", "new_paths": [".wf/spec/child/new.md"], "content": RULE}])
 rc, payload, _ = wf(["spec-update", "--task", task2, "--changes", change, "--json"],
                     {"generation": write_gen()}, "sess-T2")
@@ -131,5 +131,5 @@ rec("R48 报告嵌套根位置", "facts 含 nested repository root",
     "nested repository root" in json.dumps((payload or {}).get("facts"), ensure_ascii=False))
 shutil.rmtree(nested)
 
-json.dump(results, open("/tmp/r47r48_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r47r48_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

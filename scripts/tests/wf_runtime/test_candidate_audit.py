@@ -71,15 +71,127 @@ class CandidateAuditTest(unittest.TestCase):
 
     def test_committed_audit_has_a_durable_generator_and_no_environment_paths(self):
         data = json.loads((FULL / "candidate-audit.json").read_text())
-        self.assertEqual(data["schema_version"], 2)
+        self.assertEqual(data["schema_version"], 3)
         self.assertEqual(data["generated_by"],
                          "scripts/tests/wf_runtime/full/candidate_audit.py")
         self.assertEqual(data["invocation"][0], "python3")
+        self.assertIn(data["audit"]["kind"], ("full", "incremental"))
+        self.assertIn(data["audit"]["status"], ("complete", "failed"))
+        identity = data["identity"]
+        for key in ("version", "release_ref", "candidate_commit", "candidate_tree_digest",
+                    "source_tree_digest", "release_subject", "manifest_digest",
+                    "rules_digest", "units_registry_digest", "helpers", "runtime",
+                    "interpreter"):
+            self.assertIn(key, identity, key)
+        self.assertTrue(identity["helpers"])
         self.assertNotIn("/tmp/", json.dumps(data), "审计证据不得固化临时 workdir")
         for name in ("r90_tests", "p5_v1"):
-            self.assertTrue(data["units"][name]["failures"], name)
+            record = data["units"][name]
+            self.assertTrue(record["failures"], name)
+            self.assertEqual(record["status"], "bad")
+            self.assertEqual(record["installation"]["source_commit"],
+                             identity["candidate_commit"],
+                             f"{name}: 实际安装身份必须是本候选")
         self.assertEqual(data["units"]["p5_v1"]["rc"], 1)
         self.assertEqual(data["units"]["p5_v1"]["suite_rc"], 0)
+        for name, record in data["units"].items():
+            for key in ("script_sha256", "kind", "expect", "fixture", "isolated_user",
+                        "template", "installation", "input_identity", "input_digest"):
+                self.assertIn(key, record, name)
+
+    def test_malformed_previous_report_is_refused_cleanly(self):
+        audit = _load()
+        entries = {"a": {"name": "a", "kind": "suite", "expect": 1, "fixture": "template"}}
+        identity = {"candidate_commit": "c"}
+        for document in ({"schema_version": 3, "identity": identity, "units": []},
+                         {"schema_version": 3, "identity": identity,
+                          "units": {"a": "not-a-record"}}):
+            with self.subTest(document=document):
+                with self.assertRaises(audit.AuditError):
+                    audit._validate_incremental(document, identity, entries,
+                                                {"a": "sha256:" + "1" * 64},
+                                                set(), {"source": "run-build",
+                                                        "install": {}})
+
+    def test_failed_atomic_publish_leaves_no_temp_and_old_bytes(self):
+        audit = _load()
+        out = self.root / "report.json"
+        out.write_text('{"old": true}\n')
+        with self.assertRaises(TypeError):
+            audit._atomic_write_json(out, {"bad": object()})
+        self.assertEqual(out.read_text(), '{"old": true}\n')
+        self.assertEqual(sorted(self.root.glob(".report.json.tmp-*")), [])
+
+    def test_only_selection_is_normalized_and_rejected_before_any_run(self):
+        audit = _load()
+        entries = audit._registry()
+        self.assertIsNone(audit.normalize_only(None, entries), "未传 --only 表示完整审计")
+        self.assertEqual(audit.normalize_only(["cp1_tests", "cp1_tests"], entries),
+                         ["cp1_tests"])
+        for values in ([""], ["   "], ["no-such-unit"], ["cp1_tests", "no-such-unit"],
+                       ["d1_tests"]):
+            with self.subTest(values=values):
+                with self.assertRaises(audit.AuditError):
+                    audit.normalize_only(values, entries)
+        # 空/未知/混合选择都在建 workdir 或启动套件前被拒（rc=1，输出 unchanged）。
+        import contextlib
+        import io
+        for values in (["--only", ""], ["--only", "no-such-unit"],
+                       ["--only", "cp1_tests", "--only", "no-such-unit"]):
+            stderr = io.StringIO()
+            with contextlib.redirect_stderr(stderr):
+                rc = audit.main(["--version", "0.1.0"] + values)
+            self.assertEqual(rc, 1, values)
+            self.assertIn("AUDIT-REFUSED", stderr.getvalue())
+
+    def test_incremental_validation_requires_full_matching_identity(self):
+        audit = _load()
+        entries = {"a": {"name": "a", "kind": "suite", "expect": 1, "fixture": "template"}}
+        scripts = {"a": "sha256:" + "1" * 64}
+        template = {"source": "run-build", "install": {"version": "0.1.0", "release_ref": "r",
+                                                       "source_commit": "c",
+                                                       "rules_digest": "sha256:r"}}
+        identity = {"candidate_commit": "c"}
+
+        def previous(**overrides):
+            row = {"status": "ok", "isolated_user": False, "template": template}
+            row["input_identity"] = audit._row_identity(entries["a"], scripts["a"],
+                                                        template, False)
+            row["input_digest"] = audit._canonical_digest(row["input_identity"])
+            row.update(overrides)
+            return {"schema_version": 3, "identity": identity, "units": {"a": row}}
+
+        audit._validate_incremental(previous(), identity, entries, scripts, set(), template)
+        with self.assertRaises(audit.AuditError):
+            audit._validate_incremental(previous(status="missing"), identity, entries,
+                                        scripts, set(), template)
+        cases = [
+            # 旧 schema：不可验证。
+            ({"schema_version": 2, "identity": identity, "units": previous()["units"]},
+             identity, scripts),
+            # 身份/候选变化。
+            (previous(), {"candidate_commit": "other"}, scripts),
+            # 旧报告缺 ID。
+            ({"schema_version": 3, "identity": identity, "units": {}}, identity, scripts),
+            # 待保留行脚本字节变化。
+            (previous(), identity, {"a": "sha256:" + "2" * 64}),
+        ]
+        for document, current, current_scripts in cases:
+            with self.subTest(document=document):
+                with self.assertRaises(audit.AuditError):
+                    audit._validate_incremental(document, current, entries,
+                                                current_scripts, set(), template)
+        # 外部模板树漂移也必须拒绝增量。
+        external = dict(template, source="external", tree_digest="sha256:old")
+        external_row_identity = audit._row_identity(entries["a"], scripts["a"], external, False)
+        document = {"schema_version": 3, "identity": identity,
+                    "units": {"a": dict(previous()["units"]["a"], template=external,
+                                        input_identity=external_row_identity,
+                                        input_digest=audit._canonical_digest(
+                                            external_row_identity))}}
+        with self.assertRaises(audit.AuditError):
+            audit._validate_incremental(document, identity, entries, scripts, set(),
+                                        dict(external, tree_digest="sha256:new"))
 
     def test_stale_invocation_or_managed_run_id_is_not_accepted(self):
         entry = {"name": "p5_v1", "expect": 12, "script": "p5_v1.py"}

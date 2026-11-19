@@ -59,8 +59,8 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/spec/**"],
 prd = f"# R74\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-          open("/tmp/r74_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r74_a.json", "--json"],
+          open(wfdrive.temp("r74_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r74_a.json"), "--json"],
    {"generation": genv, "complexity": "light",
     "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-Z1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
@@ -68,7 +68,7 @@ rc_s, payload_s, _ = wf(["task-start", "--task", task_id, "--json"], {"generatio
 if rc_s != 0:
     print("   start failed:", (payload_s or {}).get("code"),
           json.dumps((payload_s or {}).get("facts"), ensure_ascii=False)[:200])
-changes = "/tmp/r74_changes.json"
+changes = wfdrive.temp("r74_changes.json")
 json.dump([{"operation": "add", "new_paths": [".wf/writer.json"], "content": "{}"}],
           open(changes, "w"), ensure_ascii=False)
 rc, payload, _ = wf(["spec-update", "--task", task_id, "--changes", changes, "--json"],
@@ -100,5 +100,5 @@ rec("3 枚举包含全部 Git 跟踪文件", "无遗漏", sorted(tracked_missing
 rec("3b 枚举不含控制目录", "无 .wf/ 前缀", [p for p in walked if p.startswith(".wf/")][:2],
     not [p for p in walked if p.startswith(".wf/")])
 
-json.dump(results, open("/tmp/r74_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r74_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

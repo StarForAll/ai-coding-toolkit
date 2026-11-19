@@ -10,7 +10,8 @@ usage() { cat <<'EOF'
 部署来源：
   dev       源码树 → `scripts/wf-dev-deploy.py`（安装记录 0.0.0-dev），T1/T2 用；
   candidate 候选仓库根的 `install.py --source <候选根>`，安装后核对 installation.json
-            的 version / release_ref / rules_digest，不符即失败（不回退 dev）。
+            的 version / release_ref / source_commit / rules_digest 与 `.wf/lib` 内容，
+            不符即失败（不回退 dev）。
 EOF
 }
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -43,7 +44,7 @@ while [ $# -gt 0 ]; do
     *) if [ -z "$F" ]; then F="$1"; else MODE="$1"; fi; shift ;;
   esac
 done
-F=${F:-/tmp/wf-fixtures/f1}
+F=${F:-${WF_LEGACY_FIXTURE_ROOT:-${TMPDIR:-/tmp}/wf-fixtures}/f1}
 DEPLOY=${DEPLOY:-${WF_FIXTURE_DEPLOY:-dev}}
 RELEASE_ROOT=${RELEASE_ROOT:-${WF_RELEASE_ROOT:-}}
 RELEASE_REF=${RELEASE_REF:-${WF_RELEASE_REF:-}}
@@ -89,32 +90,9 @@ case "$DEPLOY" in
     "$PY" "$RELEASE_ROOT/install.py" --target "$F" --release-ref "$RELEASE_REF" \
       --source "$RELEASE_ROOT" --platform dsh --confirm >"$DEPLOY_LOG" 2>&1 || {
       echo "wf_fixture: 候选安装失败（见 $DEPLOY_LOG）" >&2; tail -5 "$DEPLOY_LOG" >&2; exit 1; }
-    "$PY" - "$F" "$RELEASE_ROOT" "$RELEASE_REF" "$RELEASE_VERSION" <<'PY'
-import json, os, sys
-
-target, release_root, expected_ref, expected_version = sys.argv[1:5]
-install = os.path.join(target, ".wf", "install", "installation.json")
-try:
-    with open(install, encoding="utf-8") as handle:
-        record = json.load(handle)
-except (OSError, ValueError) as exc:
-    raise SystemExit(f"wf_fixture: 读取安装记录失败：{exc}")
-with open(os.path.join(release_root, "wf-release.json"), encoding="utf-8") as handle:
-    manifest = json.load(handle)
-problems = []
-if record.get("version") != expected_version:
-    problems.append(f"version={record.get('version')!r} expected={expected_version!r}")
-if record.get("release_ref") != expected_ref:
-    problems.append(f"release_ref={record.get('release_ref')!r} expected={expected_ref!r}")
-expected_digest = (manifest.get("compatibility") or {}).get("rules_digest")
-if record.get("rules_digest") != expected_digest:
-    problems.append(f"rules_digest={record.get('rules_digest')!r} expected={expected_digest!r}")
-if record.get("version") == "0.0.0-dev":
-    problems.append("安装记录仍是 dev 占位版本 0.0.0-dev")
-if problems:
-    raise SystemExit("wf_fixture: 候选安装记录与候选身份不一致：" + "; ".join(problems))
-print(f"candidate install ok: version={expected_version} ref={expected_ref}")
-PY
+    "$PY" "$HERE/verify_install_identity.py" --target "$F" --release-root "$RELEASE_ROOT" \
+      --ref "$RELEASE_REF" --version "$RELEASE_VERSION" || {
+      echo "wf_fixture: 候选安装记录与候选身份不一致（不回退 dev）" >&2; exit 1; }
     ;;
   *)
     echo "wf_fixture: --deploy 只接受 dev|candidate（收到 '$DEPLOY'）" >&2; exit 2 ;;

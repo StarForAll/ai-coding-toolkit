@@ -51,7 +51,7 @@ def new_task(title, touch_paths, sid="sess-C", argv=("print(1)",)):
 
 def approve(task_id, digest, gen, sid="sess-C"):
     at = "2026-11-03T04:00:00.000000Z"
-    path = f"/tmp/decision_{task_id}.json"
+    path = wfdrive.temp(f"decision_{task_id}.json")
     json.dump([{"source": f"human ({sid})", "at": at, "subject": "approve", "object_digest": digest,
                 "choice": "approve", "reason": "用例"}], open(path, "w"), ensure_ascii=False)
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"], {"generation": gen}, sid)
@@ -67,8 +67,8 @@ rec("V3", "不重叠任务开工（不带入维护组）", "pass", (payload or {
 os.makedirs(os.path.join(F, "docs"), exist_ok=True)
 open(os.path.join(F, "docs/v2.txt"), "w").write("v2\n")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"}, "requirement": {"conclusion": "pass", "basis": "a1"}},
-          open("/tmp/notes_v2.json", "w"))
-rc, payload, _ = wf(["task-check", "--task", task_v2, "--review-notes", "/tmp/notes_v2.json", "--json"],
+          open(wfdrive.temp("notes_v2.json"), "w"))
+rc, payload, _ = wf(["task-check", "--task", task_v2, "--review-notes", wfdrive.temp("notes_v2.json"), "--json"],
                     {"generation": gen_v2})
 rec("V2", "Check pass（V2 准备）", "pass", (payload or {}).get("code"), rc == 0)
 wf(["task-knowledge", "--task", task_v2, "--decision", "no-update", "--json"], {"generation": gen_v2})
@@ -77,10 +77,10 @@ json.dump([{"source": "human (sess-C)", "at": at, "subject": f"finish {task_v2}"
             "choice": "finish", "reason": "V2 用例"},
            {"source": "human (sess-C)", "at": at, "subject": "docs/v2.txt", "object_digest": digest_v2,
             "choice": "commit", "reason": "授权提交 docs/v2.txt"}],
-          open("/tmp/decision_v2_archive.json", "w"), ensure_ascii=False)
+          open(wfdrive.temp("decision_v2_archive.json"), "w"), ensure_ascii=False)
 wf(["sampling", "pick", "--task", task_v2, "--freeze", "--json"],
                        {"generation": gen_v2})   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", "/tmp/decision_v2_archive.json", "--json"],
+rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", wfdrive.temp("decision_v2_archive.json"), "--json"],
                     {"generation": gen_v2})
 commit_ok = (payload or {}).get("facts", {}).get("commit", {}).get("committed") is True
 rec("V3", "不重叠任务归档（维护组仍待提交）", "pass 且提交成功（reject: 捎带维护组）",
@@ -91,7 +91,7 @@ rc, payload, _ = wf(["writer", "release", "--json"], {"generation": gen_v2})
 rec("V2", "归档后释放写权（另一合法动作改写公共字段）", "pass", (payload or {}).get("code"), rc == 0)
 wf(["sampling", "pick", "--task", task_v2, "--freeze", "--json"],
                        {"generation": gen_v2})   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", "/tmp/decision_v2_archive.json", "--json"],
+rc, payload, _ = wf(["archive", "--task", task_v2, "--decision", wfdrive.temp("decision_v2_archive.json"), "--json"],
                     {"generation": gen_v2})
 facts = (payload or {}).get("facts", {})
 rec("V2", "独立进程重入 archive", "报告「归档已持久化」，不重复归档/提交",
@@ -126,15 +126,15 @@ decision = {"source": "human (terminal)", "at": "2026-11-03T04:20:00.000000Z",
 plan = {"operation": operation,
         "disposition": {"kind": "commit", "decision": decision,
                         "evidence": {"commit": sha, "verified_by": "human", "paths": "install group"}}}
-json.dump(plan, open("/tmp/dispose_plan.json", "w"), ensure_ascii=False, indent=2)
+json.dump(plan, open(wfdrive.temp("dispose_plan.json"), "w"), ensure_ascii=False, indent=2)
 import re as _re
 
 preview = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"),
-                          "--project", F, "--dispose", "/tmp/dispose_plan.json"],
+                          "--project", F, "--dispose", wfdrive.temp("dispose_plan.json")],
                          capture_output=True, text=True)
 token = _re.search(r"预览指纹：([0-9a-f]{8})", preview.stdout)
 apply_run = subprocess.run([wfdrive.PYTHON, os.path.join(F, ".wf/bin/repair.py"),
-                            "--project", F, "--dispose", "/tmp/dispose_plan.json",
+                            "--project", F, "--dispose", wfdrive.temp("dispose_plan.json"),
                             "--apply", "--nonce", token.group(1) if token else "0" * 8],
                            capture_output=True, text=True,
                            input=(token.group(1) + "\n") if token else "")
@@ -158,5 +158,5 @@ for line in git("log", "--format=%H").splitlines():
 rec("V3", "writer 整文件未被任务提交捎带", "任务提交中不出现 .wf/writer.json（维护组提交另计）",
     f"task_commits_with_writer={len(in_task_commits)}", len(in_task_commits) == 0)
 
-json.dump(results, open("/tmp/p5_v2v3_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("p5_v2v3_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results))

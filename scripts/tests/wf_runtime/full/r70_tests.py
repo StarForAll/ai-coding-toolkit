@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """第三十四轮 R70：卸载既有偏离与确认期变化之分、真实审查失败必须落盘。"""
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tempfile
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
 
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -16,7 +16,7 @@ if not os.path.exists(EXTERNAL_ACK):
 AT = "2026-11-10T09:00:00.000000Z"
 REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
           "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
-NOTES = "/tmp/r70_notes.json"
+NOTES = wfdrive.temp("r70_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
@@ -41,30 +41,31 @@ def gen():
 
 # ---------- 1. 卸载：既有偏离不被误判，确认期变化才失效 ----------
 def _release_source():
-    """发行目录：优先 WF_RELEASE_REPO（harness 提供），否则用仓库内已构建的发行树。
+    """本次已核发行根：托管 runner 必须提供 WF_RELEASE_REPO（缺失即失败，无固定旧目录回退）。"""
+    path = wfdrive.release_root()
+    if not (os.path.exists(os.path.join(path, "wf-release.json"))
+            and os.path.isdir(os.path.join(path, "wf-release"))):
+        raise SystemExit(f"r70: WF_RELEASE_REPO 不是有效的发行目录：{path}")
+    return path
 
-    两处都可能不存在（未构建/未挂载）——那就明确报出来，而不是让卸载步骤连锁失败。
-    """
-    candidates = [os.environ.get("WF_RELEASE_REPO"), "/tmp/wf-fixtures/release-repo",
-                  wfdrive.REPO + "/docs/workflows/wf-release"]
-    for path in candidates:
-        # install.py 要求"已检出的发行目录"：既要有清单，也要有 wf-release/ 实体assets
-        if (path and os.path.exists(os.path.join(path, "wf-release.json"))
-                and os.path.isdir(os.path.join(path, "wf-release"))):
-            return path
-    raise SystemExit("r70: 需要有效的发行目录（WF_RELEASE_REPO，含 wf-release.json 与 wf-release/ 实体）；"
-                     "单独运行请先 bash scripts/build-wf-release.py 并用 run_all.sh 提供该路径")
+
+def _install_ref():
+    ref = os.environ.get("WF_INSTALL_REF")
+    if not ref:
+        raise SystemExit("r70: 缺少 WF_INSTALL_REF（托管 runner 必须下发本次发行引用）")
+    return ref
 
 
 def make_project(name):
-    target = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), f"r70-{name}")
+    target = os.path.join(wfdrive.legacy_root(), f"r70-{name}")
     subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "fixture_scope.py"),
                     "reset", target], check=True)
     subprocess.run(["git", "init", "-q"], cwd=target, capture_output=True)
+    release = _release_source()
     proc = subprocess.run([wfdrive.TOOL_PYTHON,
-                           wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
-                           "--target", target, "--release-ref", "refs/tags/wf-v0.1.0",
-                           "--source", _release_source(),
+                           os.path.join(release, "install.py"),
+                           "--target", target, "--release-ref", _install_ref(),
+                           "--source", release,
                            "--platform", "dsh",
                            "--confirm", ],
                           capture_output=True, text=True)
@@ -113,6 +114,10 @@ def first_asset(target):
 
 # ① 干净资产：卸载成功
 clean_target = make_project("clean")
+_identity_problems = wfdrive.install_identity_problems(clean_target)
+rec("1 安装来源为本次发行", "installation.json 的 version/ref/commit 与本发行一致",
+    f"problems={_identity_problems or 'none'}",
+    not _identity_problems)
 rc, out = run_uninstall(clean_target)
 if rc != 0:
     print("① 卸载输出:", out[-400:].replace("\n", " | "))
@@ -160,8 +165,8 @@ open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 for name in ("design.md", "implement.md"):
     open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
 json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-          open("/tmp/r70_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r70_a.json", "--json"],
+          open(wfdrive.temp("r70_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r70_a.json"), "--json"],
    {"generation": genv, "complexity": "complex"}, "sess-W1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
 wf(["task-start", "--task", task_id, "--json"], {"generation": gen()}, "sess-W1")
@@ -173,10 +178,10 @@ def launch(round_no):
                          {"slot": "slot-b", "reviewer_cli": "pi"}],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
-    path = f"/tmp/r70_launch_{round_no}.json"
+    path = wfdrive.temp(f"r70_launch_{round_no}.json")
     json.dump(request, open(path, "w"), ensure_ascii=False)
     # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）
-    export_path = f"/tmp/r70_export_{round_no}.json"
+    export_path = wfdrive.temp(f"r70_export_{round_no}.json")
     json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
@@ -218,15 +223,16 @@ check, anchor = current_anchor()
 rc, payload, _ = launch(1)
 import glob as _glob
 
-found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")
-staging1 = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-1"
+review_root = os.path.join(tempfile.gettempdir(), "wf-review")
+found = _glob.glob(os.path.join(review_root, "*", task_id, "round-1"))
+staging1 = found[0] if found else os.path.join(review_root, "unknown", task_id, "round-1")
 for slot in ("slot-a", "slot-b"):
     import_report(staging1, slot, 1, check, anchor,
                   # v42 B1：blocking finding 必须落在具体轴上，否则"输入不成立"而非"判定 fail"
                   **({"findings": [{"id": "F1", "severity": "blocker", "axis": "acceptance",
                                     "assertion_ref": "a1", "summary": "真失败"}], "verdict": "fail"}
                      if slot == "slot-a" else {}))
-main1 = wfdrive.write_main_review("/tmp/r70_main_1.json", task_id, ["slot-a", "slot-b"],
+main1 = wfdrive.write_main_review(wfdrive.temp("r70_main_1.json"), task_id, ["slot-a", "slot-b"],
                                   findings=[{"id": "F1", "slot": "slot-a"}])
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
                      "--main-review", main1, "--json"],
@@ -246,11 +252,11 @@ wf(["task-check", "--task", task_id, "--review-notes", NOTES,
                     "--decision", EXTERNAL_ACK, "--json"], {"generation": gen()}, "sess-W1")
 check, anchor = current_anchor()
 rc, payload, _ = launch(2)
-found = _glob.glob(f"/tmp/wf-review/*/{task_id}/round-2")
-staging2 = found[0] if found else f"/tmp/wf-review/unknown/{task_id}/round-2"
+found = _glob.glob(os.path.join(review_root, "*", task_id, "round-2"))
+staging2 = found[0] if found else os.path.join(review_root, "unknown", task_id, "round-2")
 for slot in ("slot-a", "slot-b"):
     import_report(staging2, slot, 2, check, anchor)
-main2 = wfdrive.write_main_review("/tmp/r70_main_2.json", task_id, ["slot-a", "slot-b"],
+main2 = wfdrive.write_main_review(wfdrive.temp("r70_main_2.json"), task_id, ["slot-a", "slot-b"],
                                   round_no=2)
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "2",
                      "--main-review", main2, "--json"],
@@ -265,5 +271,5 @@ rec("2b 次轮通过仍保留历史失败", "outcome=fail 且触发含 review_fa
     f"verdict={(reviews.get('result') or {}).get('verdict')} outcome={outcome} triggers={triggers}",
     (reviews.get("result") or {}).get("verdict") == "pass" and outcome == "fail" and "review_fail" in triggers)
 
-json.dump(results, open("/tmp/r70_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r70_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

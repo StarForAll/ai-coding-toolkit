@@ -58,7 +58,7 @@ def new_task(title, touch, verifications, acceptance, sid, prd_extra=""):
 
 
 def approve(task_id, digest, gen, sid, complexity="light", downgrade=True):
-    path = decision_file(f"/tmp/cp1_{task_id}_approve.json", [dec("approve plan", "approve", digest)])
+    path = decision_file(wfdrive.temp(f"cp1_{task_id}_approve.json"), [dec("approve plan", "approve", digest)])
     inputs = {"generation": gen, "complexity": complexity}
     if downgrade and complexity == "light":
         inputs["downgrade"] = {"reason": "仅新增一个纯函数", "evidence": "触碰面单文件、不碰治理面"}
@@ -83,7 +83,7 @@ def release(task_id, gen, sid):
     wf(["writer", "release", "--json"], {"generation": gen}, sid)
 
 
-PASS_NOTES = "/tmp/cp1_notes_pass.json"
+PASS_NOTES = wfdrive.temp("cp1_notes_pass.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(PASS_NOTES, "w"))
 
@@ -116,7 +116,7 @@ task2, gen2, dir2, d2 = new_task("CP1 A15 plan-q", ["src/a15.txt"],
                                  prd_extra="\n## 待决问题\n\nplan-q-1：是否按轻量处理？推荐答案：是。\n")
 # 批准时需先有答复
 rc, payload, out = wf(["task-approve", "--task", task2, "--decision",
-                       decision_file("/tmp/cp1_a15_q.json", [dec("approve plan", "approve", d2),
+                       decision_file(wfdrive.temp("cp1_a15_q.json"), [dec("approve plan", "approve", d2),
                                                              dec("plan-q-1：是否按轻量处理", "是", d2)]),
                        "--json"], {"generation": gen2, "complexity": "light",
                                    "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
@@ -145,11 +145,11 @@ start(task3, gen3, sid)
 rc, payload, out = check(task3, gen3, sid, PASS_NOTES)
 rec("A10 无 Decision 的 manual", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-wrong = decision_file("/tmp/cp1_a10_wrong.json", [dec("m1", "approve", d3), dec("a1", "passed", d3)])
+wrong = decision_file(wfdrive.temp("cp1_a10_wrong.json"), [dec("m1", "approve", d3), dec("a1", "passed", d3)])
 rc, payload, out = check(task3, gen3, sid, PASS_NOTES, wrong)
 rec("A10 choice 非枚举不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-right = decision_file("/tmp/cp1_a10_right.json", [dec("m1", "passed", d3), dec("a1", "passed", d3)])
+right = decision_file(wfdrive.temp("cp1_a10_right.json"), [dec("m1", "passed", d3), dec("a1", "passed", d3)])
 rc, payload, out = check(task3, gen3, sid, PASS_NOTES, right)
 ok = rc == 0
 record = json.load(open(os.path.join(dir3, "task.json")))
@@ -215,7 +215,7 @@ wf(["task-knowledge", "--task", task6, "--decision", "no-update", "--json"], {"g
 wf(["sampling", "pick", "--task", task6, "--freeze", "--json"],
                        {"generation": gen6})   # 归档前置：先冻结并落盘选样
 rc, payload, out = wf(["archive", "--task", task6, "--decision",
-                       decision_file("/tmp/cp1_a18_archive.json", [dec(f"finish {task6}", "finish", d6),
+                       decision_file(wfdrive.temp("cp1_a18_archive.json"), [dec(f"finish {task6}", "finish", d6),
                                                                    dec("src/a18.txt", "commit", d6)]),
                        "--json"], {"generation": gen6}, sid)
 rec("A18 降级缺证据阻断", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
@@ -233,14 +233,14 @@ approve(task7, d7, gen7, sid)
 open(os.path.join(F, "src/a21.txt"), "w").write("a21\n")
 start(task7, gen7, sid)
 rc, payload, out = wf(["writer-handover", "begin", "--to", "deadbeef", "--decision",
-                       decision_file("/tmp/cp1_a21_dec.json", [dec("handover", "accept", d7)]),
+                       decision_file(wfdrive.temp("cp1_a21_dec.json"), [dec("handover", "accept", d7)]),
                        "--json"], {"generation": gen7}, sid)
 rec("A21 未保存进度即交接", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 
 # ---------------- T8 / A22：收工判定 ----------------
 rc, payload, out = wf(["stop", "--decision",
-                       decision_file("/tmp/cp1_a22_keep.json", [dec("src/a21.txt,docs/other.txt", "keep", d7)]),
+                       decision_file(wfdrive.temp("cp1_a22_keep.json"), [dec("src/a21.txt,docs/other.txt", "keep", d7)]),
                        "--json"], {"generation": gen7}, sid)
 rec("A22 keep 含范围外路径", "WF_WORKSPACE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_WORKSPACE_UNRESOLVED")
@@ -255,7 +255,7 @@ approve(task7b, d7b, gen7b, "sess-M7b")
 open(os.path.join(F, "src/a22.txt"), "w").write("a22\n")
 start(task7b, gen7b, "sess-M7b")
 rc, payload, out = wf(["stop", "--decision",
-                       decision_file("/tmp/cp1_a22_commit.json", [dec("src/a22.txt,src/a22-extra.txt", "commit", d7b),
+                       decision_file(wfdrive.temp("cp1_a22_commit.json"), [dec("src/a22.txt,src/a22-extra.txt", "commit", d7b),
                                                                   dec("src/a22.txt", "commit", d7b)]),
                        "--json"], {"generation": gen7b}, "sess-M7b")
 rec("A22 commit 授权未覆盖", "WF_COMMIT_NOT_AUTHORIZED", (payload or {}).get("code"),
@@ -271,7 +271,7 @@ approve(task7c, d7c, gen7c, "sess-M7c")
 open(os.path.join(F, "src/a22b.txt"), "w").write("a22b\n")
 start(task7c, gen7c, "sess-M7c")
 rc, payload, out = wf(["stop", "--decision",
-                       decision_file("/tmp/cp1_a22_transfer.json", [dec("src/a22b.txt", "transfer", d7c)]),
+                       decision_file(wfdrive.temp("cp1_a22_transfer.json"), [dec("src/a22b.txt", "transfer", d7c)]),
                        "--json"], {"generation": gen7c}, "sess-M7c")
 rec("A22 transfer 承接对象不存在", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
@@ -288,7 +288,7 @@ approve(task9, d9, gen9, sid)
 open(os.path.join(F, "src/a23.txt"), "w").write("a23\n")
 open(os.path.join(F, "tests/a23.txt"), "w").write("a23\n")
 start(task9, gen9, sid)
-stop_dec = decision_file("/tmp/cp1_a23_stop.json", [dec(f"stop {task9}", "abandon", d9)])
+stop_dec = decision_file(wfdrive.temp("cp1_a23_stop.json"), [dec(f"stop {task9}", "abandon", d9)])
 rc, payload, out = wf(["task-abandon", "--task", task9, "--decision", stop_dec, "--json"],
                       {"generation": gen9}, sid)
 facts = (payload or {}).get("facts", {})
@@ -296,22 +296,22 @@ rec("A23 无 disposition 出预览", "WF_SEMANTIC_DECISION 且含 preview.uncomm
     f"{(payload or {}).get('code')} uncommitted={len((facts.get('preview') or {}).get('uncommitted', []))}",
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION" and (facts.get("preview") or {}).get("uncommitted"))
 partial = {"changes": [{"object": "src/a23.txt", "decision_ref": AT, "reason": "保留现状"}], "targets": [], "pending": []}
-json.dump(partial, open("/tmp/cp1_a23_partial.json", "w"), ensure_ascii=False)
+json.dump(partial, open(wfdrive.temp("cp1_a23_partial.json"), "w"), ensure_ascii=False)
 rc, payload, out = wf(["task-abandon", "--task", task9, "--decision", stop_dec,
-                       "--disposition", "/tmp/cp1_a23_partial.json", "--json"], {"generation": gen9}, sid)
+                       "--disposition", wfdrive.temp("cp1_a23_partial.json"), "--json"], {"generation": gen9}, sid)
 rec("A23 去向未覆盖全部未提交路径", "WF_WORKSPACE_UNRESOLVED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_WORKSPACE_UNRESOLVED")
 full = {"changes": [{"object": "src/a23.txt", "decision_ref": AT, "reason": "保留现状"},
                     {"object": "tests/a23.txt", "decision_ref": AT, "reason": "保留现状"}],
         "targets": [], "pending": []}
-json.dump(full, open("/tmp/cp1_a23_full.json", "w"), ensure_ascii=False)
-with_grant = decision_file("/tmp/cp1_a23_grant.json",
+json.dump(full, open(wfdrive.temp("cp1_a23_full.json"), "w"), ensure_ascii=False)
+with_grant = decision_file(wfdrive.temp("cp1_a23_grant.json"),
                            [dec(f"stop {task9}", "abandon", d9),
                             dec(["src/a23.txt", "tests/a23.txt"], "commit", d9)])
 rc, payload, out = wf(["task-abandon", "--task", task9, "--decision", with_grant,
-                       "--disposition", "/tmp/cp1_a23_full.json", "--json"], {"generation": gen9}, sid)
+                       "--disposition", wfdrive.temp("cp1_a23_full.json"), "--json"], {"generation": gen9}, sid)
 rec("A23 覆盖全部后异常归档", "pass", (payload or {}).get("code"), rc == 0)
 wf(["writer", "release", "--json"], {"generation": gen9}, sid)
 
-json.dump(results, open("/tmp/cp1_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp1_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

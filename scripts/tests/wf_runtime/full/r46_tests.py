@@ -53,7 +53,7 @@ counterexample: "未核实用例"
 正文。
 '''
 
-NOTES = "/tmp/r46_notes.json"
+NOTES = wfdrive.temp("r46_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -78,8 +78,8 @@ clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 os.makedirs(os.path.join(F, ".wf/spec/rules"), exist_ok=True)
 task1, gen1, dir1, d1 = make_task("R46 对照", ["pkg/**", ".wf/spec/**"], "sess-S1")
-json.dump([dec("approve", "approve", d1)], open("/tmp/r46_a.json", "w"))
-wf(["task-approve", "--task", task1, "--decision", "/tmp/r46_a.json", "--json"],
+json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r46_a.json"), "w"))
+wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r46_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}},
    "sess-S1")
 rc_s, start1, _ = wf(["task-start", "--task", task1, "--json"], {"generation": write_gen()}, "sess-S1")
@@ -126,5 +126,5 @@ rec("R46 元数据不可靠时整文件不可路由", "不进入 matched、列�
     ".wf/spec/rules/with-bad-entry.md" not in [item["path"] for item in matched]
     and ".wf/spec/rules/with-bad-entry.md" in [item["path"] for item in unparsed])
 
-json.dump(results, open("/tmp/r46_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r46_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

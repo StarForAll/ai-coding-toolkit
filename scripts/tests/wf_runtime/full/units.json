@@ -52,7 +52,7 @@
     {
       "name": "cp4_a8",
       "kind": "suite",
-      "expect": 9,
+      "expect": 10,
       "tags": [
         "uninstall"
       ],
@@ -73,7 +73,7 @@
     {
       "name": "cp5_b12",
       "kind": "suite",
-      "expect": 9,
+      "expect": 11,
       "tags": [
         "capability",
         "identity"
@@ -142,7 +142,7 @@
     {
       "name": "r35_tests",
       "kind": "suite",
-      "expect": 10,
+      "expect": 11,
       "tags": [
         "uninstall",
         "install"
@@ -430,7 +430,7 @@
     {
       "name": "r69_tests",
       "kind": "suite",
-      "expect": 9,
+      "expect": 10,
       "tags": [
         "review",
         "uninstall",
@@ -442,7 +442,7 @@
     {
       "name": "r70_tests",
       "kind": "suite",
-      "expect": 5,
+      "expect": 6,
       "tags": [
         "review",
         "uninstall",
@@ -623,7 +623,7 @@
     {
       "name": "r89_tests",
       "kind": "suite",
-      "expect": 12,
+      "expect": 13,
       "tags": [
         "install",
         "identity"
@@ -701,7 +701,7 @@
     {
       "name": "f1_candidate_smoke",
       "kind": "candidate",
-      "expect": 17,
+      "expect": 18,
       "tags": [
         "candidate",
         "smoke",

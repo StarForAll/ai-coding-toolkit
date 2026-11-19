@@ -90,23 +90,22 @@ rec("D-14 引用检查带 unknown 分类", "含 unknown/status",
     sorted(refs_summary), {"dangling", "unknown", "status"} <= set(refs_summary))
 
 # ---- D-15/D-16：预览与落盘证据同源 ----
-install_src = open(wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
-                   encoding="utf-8").read()
+install_src = open(wfdrive.install_source_path(), encoding="utf-8").read()
 rec("D-15 安装器预览与落盘共用平台解析", "含 resolve_skill_roots",
     "resolve_skill_roots(args.target" in install_src,
     "resolve_skill_roots(args.target" in install_src)
 dev_src = open(wfdrive.REPO + "/scripts/wf-dev-deploy.py",
                encoding="utf-8").read()
-rec("D-16 开发态预览含平台与技能目录", "含 平台：",
+rec("D-16（作者侧）开发态预览含平台与技能目录", "含 平台：",
     "平台：" in dev_src and "技能目录（目标项目内）" in dev_src,
     "平台：" in dev_src and "技能目录（目标项目内）" in dev_src)
 
 # ---- D-17/D-18：字节复现按 sha256；版本单源 ----
 build_src = open(wfdrive.REPO + "/scripts/build-wf-release.py",
                  encoding="utf-8").read()
-rec("D-17 复现比对用 sha256", "含 file_digest", "file_digest(path) == file_digest" in build_src,
+rec("D-17（作者侧）复现比对用 sha256", "含 file_digest", "file_digest(path) == file_digest" in build_src,
     "file_digest(path) == file_digest" in build_src)
-rec("D-18 版本一致性有断言", "含 _assert_version_consistency",
+rec("D-18（作者侧）版本一致性有断言", "含 _assert_version_consistency",
     "_assert_version_consistency" in build_src, "_assert_version_consistency" in build_src)
 
 # ---- 收尾：stdin 不静默挂起 ----
@@ -129,6 +128,6 @@ rec("N52-01b 不再用历史归属路径求交", "不含 attributed_paths 直接
     "for path in attributed_paths(root, other_id, other.get(\"baseline_head\")):" not in src_scope,
     'for path in attributed_paths(root, other_id, other.get("baseline_head")):' not in src_scope)
 
-json.dump(results, open("/tmp/r86_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r86_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 

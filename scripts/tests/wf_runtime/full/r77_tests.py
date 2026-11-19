@@ -266,7 +266,7 @@ rec("8 terminal 非法 → unknown", "候选 0 且给 terminal 未知",
 clear_samples_titles()
 open(CONFIG, "w", encoding="utf-8").write(backup)
 
-json.dump(results, open("/tmp/r77_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r77_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
 
 

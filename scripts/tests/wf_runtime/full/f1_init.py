@@ -18,7 +18,9 @@ def test_lib():
     candidates = [os.path.join(F, ".wf", "lib")]
     if os.environ.get("WF_TEST_LIB"):
         candidates.append(os.environ["WF_TEST_LIB"])
-    candidates.append(os.path.join(REPO, "docs", "workflows", "wf", "payload", "lib"))
+    if wfdrive.deploy_mode() != "candidate":
+        # 作者源码回退只在 dev 成立；候选 fixture 缺安装库必须失败（不得静默用作者库）。
+        candidates.append(os.path.join(REPO, "docs", "workflows", "wf", "payload", "lib"))
     for candidate in candidates:
         if candidate and os.path.isdir(os.path.join(candidate, "wflib")):
             return candidate
@@ -109,12 +111,12 @@ approve = [
     {"source": "human terminal (session A)", "at": at, "subject": "plan-q-1：初始化任务是否按轻量处理",
      "object_digest": prd_digest, "choice": "是", "reason": "接受推荐项"},
 ]
-json.dump(approve, open("/tmp/decision_approve_init.json", "w"), ensure_ascii=False, indent=2)
+json.dump(approve, open(wfdrive.temp("decision_approve_init.json"), "w"), ensure_ascii=False, indent=2)
 
 inputs = {"generation": generation, "complexity": "light",
           "downgrade": {"reason": "初始化任务只生成骨架文件，不触碰既有治理面与外部契约",
                         "evidence": "治理面块随本任务首次生成且 paths 为空；不修改业务代码与依赖"}}
-rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", "/tmp/decision_approve_init.json", "--json"],
+rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("decision_approve_init.json"), "--json"],
                     inputs)
 payload = step("task-approve", rc, payload)
 print("   plan_version:", payload["facts"]["plan_version"])
@@ -153,16 +155,16 @@ proposal = {"files": files,
                          "object_digest": None, "choice": "approve",
                          "reason": "初始化任务按已批准 PRD 生成骨架"}}
 proposal["decision"]["object_digest"] = _records.plain_digest({"files": files})
-json.dump(proposal, open("/tmp/proposal_init.json", "w"), ensure_ascii=False, indent=2)
-rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", "/tmp/proposal_init.json", "--json"], inputs)
+json.dump(proposal, open(wfdrive.temp("proposal_init.json"), "w"), ensure_ascii=False, indent=2)
+rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", wfdrive.temp("proposal_init.json"), "--json"], inputs)
 payload = step("baseline-apply", rc, payload)
 print("   written:", payload["facts"]["written"])
 
 notes = {"standard": {"conclusion": "pass", "basis": "生成文件与模板一致，逐项人工核对"},
          "requirement": {"conclusion": "pass", "basis": "验收项 a1 由 v1 机械核验"}}
-json.dump(notes, open("/tmp/review_notes_init.json", "w"), ensure_ascii=False, indent=2)
+json.dump(notes, open(wfdrive.temp("review_notes_init.json"), "w"), ensure_ascii=False, indent=2)
 
-rc, payload, _ = wf(["task-check", "--task", task_id, "--review-notes", "/tmp/review_notes_init.json", "--json"], inputs)
+rc, payload, _ = wf(["task-check", "--task", task_id, "--review-notes", wfdrive.temp("review_notes_init.json"), "--json"], inputs)
 payload = step("task-check", rc, payload)
 print("   check:", payload["facts"]["check"])
 
@@ -183,8 +185,8 @@ archive_decisions = [
      "subject": ",".join(grant_paths), "object_digest": prd_digest,
      "choice": "commit", "reason": "授权提交本次初始化产物及其任务记录"},
 ]
-json.dump(archive_decisions, open("/tmp/decision_archive_init.json", "w"), ensure_ascii=False, indent=2)
-rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/decision_archive_init.json", "--json"], inputs)
+json.dump(archive_decisions, open(wfdrive.temp("decision_archive_init.json"), "w"), ensure_ascii=False, indent=2)
+rc, payload, _ = wf(["archive", "--task", task_id, "--decision", wfdrive.temp("decision_archive_init.json"), "--json"], inputs)
 payload = step("archive", rc, payload)
 print("   archive:", json.dumps(payload["facts"], ensure_ascii=False)[:600])
 write_release = (payload.get("facts") or {}).get("write_release") or {}

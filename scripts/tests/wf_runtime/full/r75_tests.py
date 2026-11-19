@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """第三十九轮 R75：bind 实例一致性、报告重哈希、槽位完整性、巡检治理面、锁存活探测。"""
-import hashlib, json, os, subprocess, sys
+import hashlib, json, os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import wfdrive
 sys.path.insert(0, wfdrive.LIB)
@@ -9,7 +9,7 @@ from wflib import gates as wf_gates, tasks as wf_tasks, lock as wf_lock, cli as 
 F = wfdrive.FIX
 results = []
 
-EXTERNAL_ACK = "/tmp/wf_external_ack.json"
+EXTERNAL_ACK = wfdrive.temp("wf_external_ack.json")
 if not os.path.exists(EXTERNAL_ACK):
     json.dump([{"source": "human (test)", "at": "2026-11-04T00:00:00.000000Z",
                 "subject": "external-changes", "object_digest": "sha256:" + "0" * 64,
@@ -19,7 +19,7 @@ AT = "2026-11-04T09:00:00.000000Z"
 REPORT = ("<!-- wf-review-agent:v1 status=done -->\n"
           "<!-- wf-review-report:v1 -->\n```json\n{body}\n```\n")
 AXES = ("range", "acceptance", "contract", "regression", "testability")
-NOTES = "/tmp/r75_notes.json"
+NOTES = wfdrive.temp("r75_notes.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"},
            "requirement": {"conclusion": "pass", "basis": "b"}}, open(NOTES, "w"))
 
@@ -64,8 +64,8 @@ open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 for name in ("design.md", "implement.md"):
     open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
 json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-          open("/tmp/r75_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r75_a.json", "--json"],
+          open(wfdrive.temp("r75_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r75_a.json"), "--json"],
    {"generation": genv, "complexity": "complex"}, "sess-A1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a\n")
 wf(["task-start", "--task", task_id, "--json"], {"generation": gen()}, "sess-A1")
@@ -91,7 +91,7 @@ anchor = (check.get("anchor") or {}).get("check_anchor")
 
 def launch(slots):
     # K6 第 3 类：材料外发要有对应的确认入库（只在请求里写 export_decision 不够）
-    _auth = "/tmp/r75_export.json"
+    _auth = wfdrive.temp("r75_export.json")
     json.dump([{"choice": "export", "task": task_id, "materials": ["diff", "requirement", "test_results"], "paths": ["pkg/**"], "quote": "人同意把材料外发给审查 CLI",
                 "by": "human:test", "at": "2026-11-10T00:00:00.000000Z",
                 "source": "user-declared"}],
@@ -102,7 +102,7 @@ def launch(slots):
                "slots": [{"slot": s, "reviewer_cli": c} for s, c in slots],
                "export_decision": dec("export", "approve"), "submitted_scope": {"diff": "git diff", "requirement": ["prd"], "test_results": ["v1"]},
                "readable_scope": {"paths": ["pkg/**"]}, "exclusions": []}
-    path = "/tmp/r75_launch.json"
+    path = wfdrive.temp("r75_launch.json")
     json.dump(request, open(path, "w"), ensure_ascii=False)
     return wf(["review-launch", "--task", task_id, "--launch-request", path, "--json"],
               {"generation": gen()}, "sess-A1")
@@ -125,7 +125,8 @@ def report(staging, slot, cli_name, **over):
 
 rc, payload, _ = launch([("slot-a", "codex"), ("slot-b", "pi"), ("slot-c", "claude")])
 import glob
-staging = glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")[0]
+review_root = os.path.join(tempfile.gettempdir(), "wf-review")
+staging = glob.glob(os.path.join(review_root, "*", task_id, "round-1"))[0]
 for slot, cli_name in (("slot-a", "codex"), ("slot-b", "pi")):
     p = report(staging, slot, cli_name)
     wf(["review-import", "--task", task_id, "--round", "1", "--slot", slot, "--report", p, "--json"],
@@ -136,11 +137,11 @@ rec("2 声明三槽位只导入两份 → 拒绝", "WF_REVIEW_INVALID", (payload
     (payload or {}).get("code") == "WF_REVIEW_INVALID")
 
 # 补齐第三份后通过
-staging2 = glob.glob(f"/tmp/wf-review/*/{task_id}/round-1")[0]
+staging2 = glob.glob(os.path.join(review_root, "*", task_id, "round-1"))[0]
 p3 = report(staging2, "slot-c", "claude")
 wf(["review-import", "--task", task_id, "--round", "1", "--slot", "slot-c", "--report", p3, "--json"],
    {"generation": gen()}, "sess-A1")
-main_path = wfdrive.write_main_review("/tmp/r75_main.json", task_id,
+main_path = wfdrive.write_main_review(wfdrive.temp("r75_main.json"), task_id,
                                       ["slot-a", "slot-b", "slot-c"])
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
                      "--main-review", main_path, "--json"],
@@ -155,8 +156,8 @@ report_path = [item for item in record["reviews"]["imported"]
                if item.get("slot") == target.get("slot")][0]["report_path"]
 with open(os.path.join(F, report_path), "a", encoding="utf-8") as handle:
     handle.write("\n被改写\n")
-json.dump(wfdrive.envelope({"generation": gen()}, "sess-A1"), open("/tmp/r75_env.json", "w"), ensure_ascii=False)
-ctx = wf_cli.Context(F, ["--envelope", "/tmp/r75_env.json"])
+json.dump(wfdrive.envelope({"generation": gen()}, "sess-A1"), open(wfdrive.temp("r75_env.json"), "w"), ensure_ascii=False)
+ctx = wf_cli.Context(F, ["--envelope", wfdrive.temp("r75_env.json")])
 ok_flag, code, facts = wf_gates.verify_step(ctx, record, "task.review-passed")
 rec("2c 报告文件被改写 → 门禁不通过", "WF_REVIEW_INVALID", f"{ok_flag} {code}",
     ok_flag is False and code == "WF_REVIEW_INVALID")
@@ -188,5 +189,5 @@ rec("4b 持锁期间探测到存活进程", "alive=True 且 pid 匹配",
 rec("4c 探测不改动锁文件", "标记仍在", bool(wf_lock.holder_mark(F)) or not os.path.exists(os.path.join(F, ".wf-lock")),
     True)
 
-json.dump(results, open("/tmp/r75_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r75_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

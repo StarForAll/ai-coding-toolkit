@@ -92,8 +92,7 @@ rec("R50-10b 符号引用不误判", "[]", wf_tasks.retrospective_evidence_probl
     wf_tasks.retrospective_evidence_problems(Ctx(), symbolic) == [])
 
 # ---- R50-11：安装预览展示 session_profile ----
-install_src = open(wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
-                   encoding="utf-8").read()
+install_src = open(wfdrive.install_source_path(), encoding="utf-8").read()
 rec("R50-11 预览含平台与技能目录", "含 平台： 与 技能目录（目标项目内）",
     ("平台：" in install_src) and ("技能目录（目标项目内）" in install_src),
     ("平台：" in install_src) and ("技能目录（目标项目内）" in install_src))
@@ -136,5 +135,5 @@ rec("P2-4 门禁区分 REVIEW_UNAVAILABLE", "含 WF_REVIEW_UNAVAILABLE",
 rec("P2-5 复杂度提示键带出", "含 complexity_hints", "complexity_hints" in src,
     "complexity_hints" in src)
 
-json.dump(results, open("/tmp/r85_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r85_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

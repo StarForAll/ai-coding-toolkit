@@ -54,12 +54,12 @@ def make_task(title, touch, sid, verifications=None, acceptance=None):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/cp5_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"cp5_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
 
-NOTES = "/tmp/cp5_notes2.json"
+NOTES = wfdrive.temp("cp5_notes2.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "单文件"},
            "requirement": {"conclusion": "pass", "basis": "验收覆盖"}}, open(NOTES, "w"))
 
@@ -88,11 +88,11 @@ rc, payload, _ = wf(["task-check", "--task", task_b4, "--review-notes", NOTES, "
 rec("B4 重检通过（历史 1 次失败）", "pass", (payload or {}).get("code"), rc == 0)
 record = json.load(open(os.path.join(dir_b4, "task.json")))
 failed_check = [c["id"] for c in record["check_history"] if c["result"] == "fail"][0]
-declare1 = dfile("/tmp/cp5_b4_decl1.json", [dec(
+declare1 = dfile(wfdrive.temp("cp5_b4_decl1.json"), [dec(
     f"debug-declaration:v1:count=2:dedupe={failed_check}/v1:evidence=handoff", "declare", d_b4)])
 wf(["task-check", "--task", task_b4, "--decision", declare1, "--review-notes", NOTES, "--json"],
    {"generation": gen_b4}, "sess-G1")
-declare2 = dfile("/tmp/cp5_b4_decl2.json", [dec(
+declare2 = dfile(wfdrive.temp("cp5_b4_decl2.json"), [dec(
     f"debug-declaration:v1:count=1:dedupe={failed_check}/v1", "declare", d_b4)])
 rc, payload, _ = wf(["task-check", "--task", task_b4, "--decision", declare2, "--review-notes", NOTES, "--json"],
                     {"generation": gen_b4}, "sess-G1")
@@ -102,7 +102,7 @@ wf(["task-knowledge", "--task", task_b4, "--decision", "no-update", "--json"], {
 wf(["sampling", "pick", "--task", task_b4, "--freeze", "--json"],
                        {"generation": gen_b4}, "sess-G1")   # 归档前置：先冻结并落盘选样
 rc, payload, _ = wf(["archive", "--task", task_b4, "--decision",
-                     dfile("/tmp/cp5_b4_arch.json", [dec(f"finish {task_b4}", "finish", d_b4),
+                     dfile(wfdrive.temp("cp5_b4_arch.json"), [dec(f"finish {task_b4}", "finish", d_b4),
                                                      dec("src/b4.txt", "commit", d_b4)]), "--json"],
                     {"generation": gen_b4}, "sess-G1")
 facts = (payload or {}).get("facts", {})
@@ -136,8 +136,8 @@ counterexample: "未区分纯函数与有副作用的辅助函数"
 add 必须保持纯函数。
 '''
 change1 = [{"operation": "add", "new_paths": [".wf/spec/rules/combined.md"], "content": rule}]
-json.dump(change1, open("/tmp/cp5_b5_add.json", "w"), ensure_ascii=False, indent=2)
-rc, payload, _ = wf(["spec-update", "--task", task_b5, "--changes", "/tmp/cp5_b5_add.json", "--json"],
+json.dump(change1, open(wfdrive.temp("cp5_b5_add.json"), "w"), ensure_ascii=False, indent=2)
+rc, payload, _ = wf(["spec-update", "--task", task_b5, "--changes", wfdrive.temp("cp5_b5_add.json"), "--json"],
                     {"generation": gen_b5}, "sess-G2")
 rec("B5 建被拆分条目", "pass", (payload or {}).get("code"), rc == 0)
 wf(["task-curate", "--task", task_b5, "--spec", ".wf/spec/rules/combined.md",
@@ -151,8 +151,8 @@ split = [{"operation": "add", "new_paths": [".wf/spec/rules/pure.md"], "content"
                                                                 "choice": "解除依赖",
                                                                 "reason": "拆分为 pure/effects 两条"}},
                                       "replacement": ".wf/spec/rules/pure.md"}]}]
-json.dump(split, open("/tmp/cp5_b5_split.json", "w"), ensure_ascii=False, indent=2)
-rc, payload, _ = wf(["spec-update", "--task", task_b5, "--changes", "/tmp/cp5_b5_split.json", "--json"],
+json.dump(split, open(wfdrive.temp("cp5_b5_split.json"), "w"), ensure_ascii=False, indent=2)
+rc, payload, _ = wf(["spec-update", "--task", task_b5, "--changes", wfdrive.temp("cp5_b5_split.json"), "--json"],
                     {"generation": gen_b5}, "sess-G2")
 applied = (payload or {}).get("facts", {}).get("applied") or []
 index_text = open(os.path.join(F, ".wf/spec/index.md"), encoding="utf-8").read()
@@ -179,7 +179,7 @@ rc_s, s_payload, s_out = wf(["sampling", "pick", "--task", task_b3, "--freeze", 
                         "sess-G3")   # 归档前置：用**实时代次**冻结并落盘选样
 if rc_s != 0:
     print("B3 sampling 原文:", (s_out or "")[:300])
-archive_decision = dfile("/tmp/cp5_b3_arch.json", [dec(f"finish {task_b3}", "finish", d_b3),
+archive_decision = dfile(wfdrive.temp("cp5_b3_arch.json"), [dec(f"finish {task_b3}", "finish", d_b3),
                                                    dec("src/b3.txt", "commit", d_b3)])
 envelope = json.dumps({"session": {"provider": "host",
                                    "identity": {"host_id": "dsh", "session_id": "sess-G3"},
@@ -223,5 +223,5 @@ rec("B3 独立进程重入报告已持久化", "WF_OK 且 persisted=true、不�
     rc == 0 and persisted is True and commits == 1)
 wf(["writer", "release", "--json"], {"generation": gen_b3}, "sess-G3")
 
-json.dump(results, open("/tmp/cp5_b345_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("cp5_b345_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

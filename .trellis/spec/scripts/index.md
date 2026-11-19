@@ -23,6 +23,7 @@ This project uses three script surfaces:
 |----------|-------------|
 | [python-conventions.md](./python-conventions.md) | Writing or modifying Python scripts |
 | [shell-conventions.md](./shell-conventions.md) | Writing or modifying Shell scripts |
+| [wf-runtime-runner-contracts.md](./wf-runtime-runner-contracts.md) | Modifying `scripts/tests/wf_runtime/full/` runner, candidate audit, unit outcomes, or per-command temp ownership |
 
 ---
 

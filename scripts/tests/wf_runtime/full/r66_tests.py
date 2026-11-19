@@ -45,8 +45,8 @@ def make_task(title, sid):
     prd = f"# {title}\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
     open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
     digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-    json.dump([dec("approve", "approve", digest)], open(f"/tmp/r66_{facts['task_id']}.json", "w"))
-    wf(["task-approve", "--task", facts["task_id"], "--decision", f"/tmp/r66_{facts['task_id']}.json", "--json"],
+    json.dump([dec("approve", "approve", digest)], open(wfdrive.temp(f"r66_{facts['task_id']}.json"), "w"))
+    wf(["task-approve", "--task", facts["task_id"], "--decision", wfdrive.temp(f"r66_{facts['task_id']}.json"), "--json"],
        {"generation": facts.get("generation"), "complexity": "light",
         "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
     return facts["task_id"], facts.get("generation")
@@ -116,7 +116,7 @@ manifest_backup = open(manifest_path, encoding="utf-8").read()
 manifest = json.loads(manifest_backup)
 manifest["required_steps"] = [s for s in manifest.get("required_steps") or [] if s.get("id") != "task.spec-loaded"]
 json.dump(manifest, open(manifest_path, "w", encoding="utf-8"), ensure_ascii=False)
-env_path = "/tmp/r66_env.json"
+env_path = wfdrive.temp("r66_env.json")
 json.dump(wfdrive.envelope({"generation": gen()}, "sess-L1"), open(env_path, "w"), ensure_ascii=False)
 ctx = wf_cli.Context(F, ["--envelope", env_path])
 blocked = None
@@ -145,5 +145,5 @@ rec("5 重复记录被拒并给诊断", "RecordInvalid", caught, caught == "Reco
 shutil.rmtree(dup_dir, ignore_errors=True)
 rec("5b 去重后可正常定位", "返回路径", bool(wf_tasks.task_dir(F, task1)), bool(wf_tasks.task_dir(F, task1)))
 
-json.dump(results, open("/tmp/r66_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r66_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

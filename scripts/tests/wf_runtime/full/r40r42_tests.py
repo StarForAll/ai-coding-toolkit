@@ -56,7 +56,7 @@ def make_task(title, touch, sid):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r40_{task_id}_a.json", [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r40_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 
@@ -114,5 +114,5 @@ open(os.path.join(F, "a40/x.txt"), "w").write("x\n")
 rc, payload, _ = wf(["task-resume", "--task", task1, "--json"], {"generation": write_gen()}, "sess-Q3")
 rec("R42 指纹一致时恢复通过", "WF_OK", (payload or {}).get("code"), rc == 0)
 
-json.dump(results, open("/tmp/r40r42_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r40r42_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

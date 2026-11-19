@@ -157,6 +157,16 @@ class MetricsTest(unittest.TestCase):
                 with self.assertRaises(module.SummaryError):
                     module.validate_measurements(measurements(**overrides))
 
+    def test_incomplete_unit_inputs_are_recorded_not_refused(self):
+        """缺 unit_execution 是输入事实（incomplete），摘要仍须记录清理/证据结论。"""
+        (self.ws.results / "b.test.log.json").write_text(json.dumps(
+            {"schema_version": 2, "name": "b", "status": "failed", "rc": 1}))
+        path = self.ws.write_metrics()
+        record = json.loads(path.read_text())
+        self.assertEqual(record["inputs"]["units"]["b"]["state"], "incomplete")
+        metrics, evidence = self.ws.read_metrics()
+        self.assertEqual(evidence["units"]["b"]["state"], "incomplete")
+
     def test_units_must_belong_to_this_run(self):
         self.ws.write_units("other-run")
         with self.assertRaises(module.SummaryError):
@@ -240,6 +250,70 @@ class BuildTest(unittest.TestCase):
         with self.assertRaises(module.SummaryError):
             module.build(self.ws.results, report(), measurements(), None,
                          {"mode": "full"}, "full", "run-1")
+
+    def test_unit_outcomes_are_additive_and_typed_counts_stay_separate_from_rows(self):
+        value = report(ok=False, fail=1)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "assertion_failed"},
+                                  {"unit": "b", "outcome": "passed"}]
+        value["outcome_counts"] = {"passed": 1, "assertion_failed": 1,
+                                   "preparation_failed": 0, "execution_failed": 0,
+                                   "cancelled": 0, "unverified": 0}
+        payload = self.ws.build(value)
+        self.assertEqual(payload["unit_outcomes"], value["unit_outcomes"])
+        self.assertEqual(payload["failure_owner"]["assertion"], 1)
+        self.assertEqual(payload["failure_owner"]["preparation"], 0)
+        self.assertEqual(payload["failure_owner"]["rows"], 0,
+                         "rows 仍是原聚合值，不由 typed 分类改写")
+        self.assertEqual(payload["status"], "failed")
+
+    def test_unverified_unit_forces_incomplete_evidence(self):
+        value = report(ok=False, fail=1)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "unverified"},
+                                  {"unit": "b", "outcome": "passed"}]
+        value["outcome_counts"] = {"passed": 1, "assertion_failed": 0,
+                                   "preparation_failed": 0, "execution_failed": 0,
+                                   "cancelled": 0, "unverified": 1}
+        with self.assertRaises(module.SummaryError):
+            self.ws.build(value)
+        value["evidence_state"] = "incomplete"
+        payload = self.ws.build(value)
+        self.assertEqual(payload["failure_owner"]["unverified"], 1)
+
+    def test_malformed_or_contradictory_outcomes_are_refused(self):
+        cases = []
+        value = report(ok=False)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "bogus"}]
+        cases.append(value)
+        value = report(ok=False)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "passed"},
+                                  {"unit": "a", "outcome": "passed"}]
+        cases.append(value)
+        value = report(ok=False)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "passed"}]
+        value["outcome_counts"] = {"passed": 2}
+        cases.append(value)
+        value = report(ok=False)
+        value["unit_outcomes"] = "not-a-list"
+        cases.append(value)
+        value = report(ok=False)
+        value["outcome_counts"] = {"assertion_failed": -1}
+        cases.append(value)
+        for value in cases:
+            with self.subTest(value=value):
+                with self.assertRaises(module.SummaryError):
+                    self.ws.build(value)
+
+    def test_unit_outcomes_must_cover_every_planned_unit(self):
+        value = report(ok=True)
+        value["unit_outcomes"] = [{"unit": "a", "outcome": "passed"}]
+        value["outcome_counts"] = {"passed": 1}
+        with self.assertRaises(module.SummaryError):
+            self.ws.build(value)
+
+    def test_repro_role_summary_has_no_unit_outcomes_key(self):
+        payload = self.ws.build(report())
+        self.assertNotIn("unit_outcomes", payload)
+        self.assertEqual(payload["failure_owner"]["assertion"], 0)
 
 
 class HistoricalConclusionTest(unittest.TestCase):

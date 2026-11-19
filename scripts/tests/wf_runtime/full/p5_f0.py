@@ -55,11 +55,11 @@ digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T07:00:00.000000Z"
 json.dump([{"source": "human (sess-F)", "at": at, "subject": "approve init plan",
             "object_digest": digest, "choice": "approve", "reason": "F0 自举"}],
-          open("/tmp/f0_approve.json", "w"), ensure_ascii=False)
+          open(wfdrive.temp("f0_approve.json"), "w"), ensure_ascii=False)
 inputs = {"generation": gen, "complexity": "light",
           "downgrade": {"reason": "初始化任务只生成骨架，项目无既有治理面与外部契约",
                         "evidence": "全新项目；治理面块随本任务首次生成且 paths 为空"}}
-rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", "/tmp/f0_approve.json", "--json"], inputs)
+rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("f0_approve.json"), "--json"], inputs)
 rec("批准初始化规划", "pass", (payload or {}).get("code"), rc == 0)
 
 rc, payload, _ = wf(["task-start", "--task", task_id, "--json"], inputs)
@@ -114,24 +114,24 @@ proposal["approval"] = {"source": "human terminal", "at": "2026-11-07T00:00:00.0
                         "subject": "F0 baseline proposal", "choice": "approve",
                         "object_digest": _wf_records.plain_digest({"files": proposal["files"]}),
                         "reason": "F0 初始化基线"}
-json.dump(proposal, open("/tmp/f0_proposal.json", "w"), ensure_ascii=False, indent=2)
-rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", "/tmp/f0_proposal.json", "--json"], inputs)
+json.dump(proposal, open(wfdrive.temp("f0_proposal.json"), "w"), ensure_ascii=False, indent=2)
+rc, payload, _ = wf(["baseline-apply", "--task", task_id, "--proposal", wfdrive.temp("f0_proposal.json"), "--json"], inputs)
 rec("初始化落盘骨架", "pass", (payload or {}).get("code"), rc == 0)
 
 json.dump({"standard": {"conclusion": "pass", "basis": "骨架文件核对"},
            "requirement": {"conclusion": "pass", "basis": "a1 由 v1 覆盖"}},
-          open("/tmp/f0_notes.json", "w"))
-rc, payload, _ = wf(["task-check", "--task", task_id, "--review-notes", "/tmp/f0_notes.json", "--json"], inputs)
+          open(wfdrive.temp("f0_notes.json"), "w"))
+rc, payload, _ = wf(["task-check", "--task", task_id, "--review-notes", wfdrive.temp("f0_notes.json"), "--json"], inputs)
 rec("Check pass", "pass", (payload or {}).get("code"), rc == 0)
 wf(["task-knowledge", "--task", task_id, "--decision", "no-update", "--json"], inputs)
 json.dump([{"source": "human (sess-F)", "at": at, "subject": f"finish {task_id}", "object_digest": digest,
             "choice": "finish", "reason": "F0 初始化"},
            {"source": "human (sess-F)", "at": at, "subject": ".wf/project-config.json,.wf/baseline.md,.wf/spec/index.md",
             "object_digest": digest, "choice": "commit", "reason": "授权提交初始化产物"}],
-          open("/tmp/f0_archive.json", "w"), ensure_ascii=False)
+          open(wfdrive.temp("f0_archive.json"), "w"), ensure_ascii=False)
 wf(["sampling", "pick", "--task", task_id, "--freeze", "--json"],
                        {"generation": gen})   # 归档前置：先冻结并落盘选样
-rc, payload, _ = wf(["archive", "--task", task_id, "--decision", "/tmp/f0_archive.json", "--json"], inputs)
+rc, payload, _ = wf(["archive", "--task", task_id, "--decision", wfdrive.temp("f0_archive.json"), "--json"], inputs)
 rec("归档", "pass", (payload or {}).get("code"), rc == 0)
-json.dump(results, open("/tmp/p5_f0_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("p5_f0_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results))

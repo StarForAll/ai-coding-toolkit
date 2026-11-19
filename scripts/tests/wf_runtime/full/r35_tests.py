@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """R5（install.py 记录形态下的卸载）与 R3（锁部分标记的人工出口）。"""
 import json, os, re, subprocess, sys
+import wfdrive
 HERE = os.path.dirname(os.path.abspath(__file__))
-F5 = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f5")
-F3 = os.path.join(os.environ.get("WF_LEGACY_FIXTURE_ROOT", "/tmp/wf-fixtures"), "f3")
-REPO = os.environ.get("WF_RELEASE_REPO") or "/tmp/wf-fixtures/release-repo"
+F5 = os.path.join(wfdrive.legacy_root(), "f5")
+F3 = os.path.join(wfdrive.legacy_root(), "f3")
 # 孤儿套件回接（2026-11-06 W1）：两个夹具都自带，不依赖兄弟套件或固定 /tmp 路径
 for _target in (F5, F3):
     subprocess.run(["bash", os.path.join(HERE, "wf_fixture.sh"), _target], check=True, capture_output=True)
@@ -25,7 +25,9 @@ with open(skill, "a", encoding="utf-8") as handle:
 with open(workflow, "a", encoding="utf-8") as handle:
     handle.write("\n本地修改：R5 偏离用例。\n")
 
-import wfdrive
+_identity_problems = wfdrive.deployment_identity_problems(F5)
+rec("R5 夹具部署来源可核验", "installation.json 与本次部署身份一致",
+    f"problems={_identity_problems or 'none'}", not _identity_problems)
 preview = subprocess.run([wfdrive.PYTHON, os.path.join(F5, ".wf/bin/uninstall.py"), "--project", F5],
                          capture_output=True, text=True)
 rec("R5 正式记录下预览可运行", "输出预览且列出 2 项偏离",
@@ -91,5 +93,5 @@ proc = subprocess.run([wfdrive.PYTHON, os.path.join(F3, ".wf/bin/wf.py"), "statu
 rec("R3 人工清理后恢复正常", "status 正常输出",
     f"rc={proc.returncode}", proc.returncode == 0)
 
-json.dump(results, open("/tmp/r35_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r35_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases;", sum(1 for r in results if r["pass"]), "passed")

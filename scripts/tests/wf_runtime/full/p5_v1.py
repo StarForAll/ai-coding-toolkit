@@ -84,5 +84,5 @@ rec("已绑定会话不能再建对象", "绑定冲突、原对象不变、未�
     and bound == {"kind": "task", "id": task_id}
     and sorted(os.listdir(os.path.join(F, ".wf/tasks"))) == before_tasks)
 
-json.dump(results, open("/tmp/p5_v1_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("p5_v1_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", len(results), "cases")

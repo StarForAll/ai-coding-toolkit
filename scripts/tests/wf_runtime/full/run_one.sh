@@ -40,6 +40,9 @@ add_phase() {  # add_phase <name> <result-path>
 
 out="$RESULTS_DIR/$unit.out"
 : > "$out"
+# 本单元每个受监督命令的私有 TMPDIR 父目录（结果 logs 内，namespace 重挂后仍可见）。
+TMP_PARENT="$RESULTS_DIR/logs"
+mkdir -p "$TMP_PARENT"
 init_started=$(now_ms)
 prep_rc=0
 
@@ -83,11 +86,21 @@ case "$fixture" in
     "$PY" "$HERE/fixture_scope.py" reset "$target" --forbid "$RESULTS_DIR" \
       --forbid "$SHARED_RELEASE" >>"$out" 2>&1 || fail_prep INSTALL-FAILED
     if ! "$PY" "$HERE/execution.py" --name "$unit-install" --result "$result" \
+        --local-tmp-root "$TMP_PARENT" \
         --log "$RESULTS_DIR/$unit-install.log" -- \
         "$PY" "$SHARED_RELEASE/install.py" --target "$target" --release-ref "$WF_INSTALL_REF" \
         --source "$SHARED_RELEASE" --platform dsh --confirm >>"$out" 2>&1; then
       add_phase install "$result"
       fail_prep INSTALL-FAILED
+    fi
+    if [ "$WF_FIXTURE_DEPLOY" = "candidate" ]; then
+      # 候选模式：被安装项目必须能核回本次候选（version/ref/commit + .wf/lib 字节）。
+      if ! "$PY" "$HERE/verify_install_identity.py" --target "$target" \
+          --release-root "$SHARED_RELEASE" --ref "$WF_RELEASE_REF" \
+          --version "$WF_RELEASE_VERSION" >>"$out" 2>&1; then
+        add_phase install "$result"
+        fail_prep INSTALL-IDENTITY-MISMATCH
+      fi
     fi
     add_phase install "$result"
     FIX="$target"
@@ -115,13 +128,14 @@ case "$fixture" in
       fi
     else
       result=$(phase_result fixture)
-      "$PY" "$HERE/execution.py" --name fixture --result "$result" --log "$out.fixture.log" -- \
+      "$PY" "$HERE/execution.py" --name fixture --result "$result" \
+        --local-tmp-root "$TMP_PARENT" --log "$out.fixture.log" -- \
         bash "$HERE/wf_fixture.sh" "$FIX" >>"$out" 2>&1 || prep_rc=1
       add_phase fixture "$result"
       if [ "$prep_rc" -eq 0 ]; then
         result=$(phase_result init)
         WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name init --result "$result" \
-          --log "$out.init.log" -- \
+          --local-tmp-root "$TMP_PARENT" --log "$out.init.log" -- \
           "$PY" "$HERE/f1_init.py" >>"$out" 2>&1 || prep_rc=2
         add_phase init "$result"
       fi
@@ -165,7 +179,8 @@ if [ -n "${WF_UNIT_FAULT:-}" ] && [ "${WF_TEST_FAULT_INJECTION:-0}" = "1" ]; the
 fi
 test_result="$RESULTS_DIR/$unit.test.log.json"
 WF_FIX="$FIX" "$PY" "$HERE/execution.py" --name "$unit" --kind "$executor_kind" \
-  --expected "$expect" --fault-identity "unit:$unit" --log "$RESULTS_DIR/$unit.test.log" \
+  --expected "$expect" --fault-identity "unit:$unit" --local-tmp-root "$TMP_PARENT" \
+  --log "$RESULTS_DIR/$unit.test.log" \
   --result "$test_result" ${user_args[@]+"${user_args[@]}"} \
   -- "$PY" "$HERE/$script" >>"$out" 2>&1
 rc=$?

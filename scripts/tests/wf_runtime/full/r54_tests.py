@@ -53,7 +53,7 @@ def approve(task_id, digest, gen, inputs_extra, sid="sess-Y1"):
     inputs = {"generation": gen}
     inputs.update(inputs_extra)
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(f"/tmp/r54_{task_id}.json", [dec("approve", "approve", digest)]), "--json"], inputs, sid)
+               dfile(wfdrive.temp(f"r54_{task_id}.json"), [dec("approve", "approve", digest)]), "--json"], inputs, sid)
 
 
 def plan_of(task_id):
@@ -139,5 +139,5 @@ rc, payload, _ = approve(task4, d4, gen4, {}, "sess-Y4")
 rec("R54 无条件为 light 且通过", "WF_OK 且 complex=light",
     f"{(payload or {}).get('code')} {plan_of(task4).get('plan', {}).get('complexity')}", rc == 0)
 
-json.dump(results, open("/tmp/r54_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r54_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

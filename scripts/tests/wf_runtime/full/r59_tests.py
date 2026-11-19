@@ -105,12 +105,12 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R59 重叠任务\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open("/tmp/r59_a.json", "w"))
-wf(["task-approve", "--task", task_id, "--decision", "/tmp/r59_a.json", "--json"],
+json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r59_a.json"), "w"))
+wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r59_a.json"), "--json"],
    {"generation": gen, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-D2")
 open(os.path.join(F, "pkg/n.txt"), "w").write("n\n")
 rc, payload, _ = wf(["task-start", "--task", task_id, "--json"], {"generation": gen}, "sess-D2")
 rec("R59 重叠任务可开工（不再 WF_WIP_UNRESOLVED）", "WF_OK", (payload or {}).get("code"), rc == 0)
 
-json.dump(results, open("/tmp/r59_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r59_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

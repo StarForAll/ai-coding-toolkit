@@ -162,5 +162,5 @@ for label, value in (("broken", "broken"), ("true", True), ("false", False)):
         and _dir_after == _dir_before)
 open(_writer_path, "w", encoding="utf-8").write(_writer_snap)
 
-json.dump(results, open("/tmp/r90_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r90_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

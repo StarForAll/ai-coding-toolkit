@@ -96,7 +96,7 @@ rec("R60 不可核回执为 pending_check", "pending_check", states().get("op-60
     states().get("op-60") == "pending_check")
 sys.path.insert(0, wfdrive.LIB)
 from wflib import cli as wf_cli
-env = "/tmp/r60_env.json"
+env = wfdrive.temp("r60_env.json")
 json.dump(wfdrive.envelope({}, "sess-E9"), open(env, "w"), ensure_ascii=False)
 ctx = wf_cli.Context(F, ["--envelope", env])
 task = {"id": "2026-" + "e" * 32, "plan": {"touch_paths": ["pkg/**"]}}
@@ -107,5 +107,5 @@ except Exception as exc:
     caught = getattr(exc, "code", None)
 rec("R60 待核回执进入门禁（不再被忽略）", "WF_HISTORY_UNRESOLVED", caught, caught == "WF_HISTORY_UNRESOLVED")
 
-json.dump(results, open("/tmp/r60_results.json", "w"), ensure_ascii=False, indent=2)
+json.dump(results, open(wfdrive.temp("r60_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))
