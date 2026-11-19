@@ -1328,3 +1328,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 416: wf 候选发行证据与运行结果归因校准
+<!-- trellis-session: v=2 fp=4582b133a7480833 -->
+
+**Date**: 2026-11-19
+**Task**: wf 候选发行证据与运行结果归因校准
+**Branch**: `main`
+
+### Summary
+
+完成 11-19 任务 A1–A4：候选发行来源统一消费 WF_RELEASE_REPO/ref 并核安装记录与 .wf/lib；候选审计 schema3 完整身份、增量拒绝与锁内发布；每命令私有 TMPDIR 与套件材料按次生成（含静态守卫与 /tmp 回退/旧输入反例）；单元 typed outcome 与 summary unit_outcomes/failure_owner，证据完整性独立于清理与 bad 聚合。验证：1323 单测、41 慢契约、dev full green 并行 68s/串行 359s、全量候选审计 65/65（仅预期 dev-only 失败）、发行字节复现 OK。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `830bd9fb` | fix(test): 校准 wf 候选发行证据、临时材料归属与结果归因 |
+
+### Status
+
+[OK] **Completed**
