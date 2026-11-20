@@ -1350,3 +1350,38 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 417: wf 审查链路证据与主会话复核语义修正（0.1.3）
+<!-- trellis-session: v=2 fp=4d832a1f9a182e62 -->
+
+**Date**: 2026-11-20
+**Task**: wf 审查链路证据与主会话复核语义修正（0.1.3）
+**Branch**: `main`
+
+### Summary
+
+按 20+ 轮外部审查复核修正回顾链路：交付集合区分框架资产与项目数据、关闭证据绑定 Check、unable 同轮阻断、blocking 才必填核实、复核状态继承、报告输入形状校验；0.1.3 发行树重建一致
+
+### Main Changes
+
+- review/scope/tasks/cli/paths + skills + 设计稿/机制稿/实现稿 + 交付纪律 + 测试 48 路径
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `95bc4e80` | fix(wf): 修正审查链路证据与主会话复核语义 |
+| `7b53772e` | chore(task): archive 11-20-wf-review-chain-fixes |
+
+### Testing
+
+- [OK] T0 1431 通过（43 跳过）；review 套件 6/6；representative 62 单元；validate-wf-design / check-doc-refs / validate-skills 全绿；release 0.1.3 字节复现
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 由人创建 wf-v0.1.3 tag 并推送；随后用新版跑一次真实 dogfood（含发现问题→修复→重查→收敛）
