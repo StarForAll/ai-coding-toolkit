@@ -103,6 +103,18 @@ class DeliverySetTest(unittest.TestCase):
         pending = tasks.pending_delivery_paths(SimpleNamespace(root=root), task)
         self.assertIn("other/extra.py", pending)
 
+    def test_project_spec_paths_stay_in_the_delivery_set(self):
+        """项目自己的 spec 是项目数据，不是框架自有资产：归了本任务就必须进交付集合。"""
+        root = _repo()
+        _write(os.path.join(root, ".wf", "spec", "rule.md"), "---\nschema_version: 1\n---\n# r\n")
+        task = _task(plan={"touch_paths": ["src/**", ".wf/spec/rule.md"]},
+                     entry_snapshot={"touch_paths": ["src/**", ".wf/spec/rule.md"]})
+        delivery = scope.delivery_set(root, task)
+        self.assertIn(".wf/spec/rule.md", delivery["paths"])
+        self.assertIn(".wf/spec/rule.md", check.object_paths(SimpleNamespace(root=root), task))
+        self.assertIn(".wf/spec/rule.md", tasks.pending_delivery_paths(
+            SimpleNamespace(root=root), task))
+
     def test_new_file_can_be_covered_by_expansion(self):
         """新增文件不在 `git ls-files` 里：扩面确认必须把未跟踪文件算作真实区域。"""
         root = _repo()

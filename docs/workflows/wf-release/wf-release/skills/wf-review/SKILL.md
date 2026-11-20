@@ -26,14 +26,14 @@ user-invoked: true
   --envelope <本会话信封> --json
 ```
 
-返回的 `facts` 里给全了你需要的：`report_path`（报告要写到哪）、`materials`（`diff.patch` / `prd.md` / `check.json` / `tests.json`）、`submitted_scope` / `readable_scope` / `exclusions`（本次授权边界）、`anchor`（`check_anchor`）、以及 `agent`（你的署名，取自本会话宿主身份）。
+返回的 `facts` 里给全了你需要的：`report_path`（报告要写到哪）、`materials`（`diff.patch` / `prd.md` / `check.json` / `tests.json`）、`submitted_scope` / `readable_scope` / `exclusions`（本次授权边界）、`anchor`（`check_anchor`）、以及 `agent`（你的署名，取自本会话宿主身份）。若 `narrowed` 为真，材料只是交付集合的子集（`submitted_paths` / `delivery_path_count`）：按声明范围审，不把未选路径当作已覆盖；需要更多材料时停止回报，不自行扩大。
 
-**同一 agent 在同一轮只能审查一次**：`review-context` 会先占位；若本轮已有你的记录，它会直接拒绝并给出口——不要绕过去重跑。
+**同一 agent 在同一轮只能审查一次**：`review-context` 会先占位；`status=in-progress` 是你自己的草稿，重入会返回同一 `materials`/`report_path` 让你续写；只有 `status=done` 才拒绝并指向 `review-import`。不要绕过去重跑。
 
 ## 步骤
 
 1. 运行上面的 `review-context`，拿到 `report_path` 与 `materials`。
-2. 只读 `materials` 里的材料（`diff.patch` 是相对**任务基线**的差异；`prd.md` 是本次批准的需求；`check.json` 是 Check 锚点；`tests.json` 是已执行的验证命令）。材料包不足时，可只在 `readable_scope` 内只读仓库补充（业务代码、spec、PRD），把实际读取面写进 `read-scope`；不得越过 `exclusions`。**`read-scope` 不得与 `excluded-scope` 交叠**：如果某路径已声明排除，就不要把它写进读取面；确实读过就如实写，导入/判定会按越界处理。
+2. 只读 `materials` 里的材料（`diff.patch` 是相对**任务基线**的差异；`prd.md` 是本次批准的需求；`check.json` 是 Check 锚点；`tests.json` 是已执行的验证命令）。材料包不足时，可只在 `readable_scope` 内只读仓库补充（业务代码、spec、PRD），把实际读取面写进 `read-scope`；不得越过 `exclusions`。只读材料包、未做仓库补读时 `read-scope` 写 `materials`；本轮 `readable_scope` 显式为空时，空数组表示未补读，不要写仓库路径。**`read-scope` 不得与 `excluded-scope` 或本次 `exclusions` 交叠**：如果某路径已声明排除，就不要把它写进读取面；确实读过就如实写，导入/判定会按越界处理。`.wf/` 运行态与 `.git/` 私有配置不是业务代码，未在 spec/PRD 显式放行时不要申报。
 3. 报告写到 `report_path`（文件名 `review-<agent>.md` **就是身份**，正文不必再写 `reviewer-id`/`source-cli`）。写完后把文件头部的 `status=in-progress` 改成 `status=done`——`review-import` 只认 `done`。
    **报告已存在时先看状态行**：`status=in-progress` 是你自己这次的占位（`review-context` 写的骨架），正常续写；**已是 `status=done`** 说明该槽位本轮已完成一份报告、只是还没导入——**停止并回报给人，不要覆盖**。
 4. 按固定检查轴逐项检查：范围、验收、契约/spec、跨层回归、可测性。
@@ -56,12 +56,14 @@ user-invoked: true
               "severity":"blocking|suggestion","assertion_ref":"验收项/验证 id 或 spec 位置"}],
  "verdict":"pass|fail|unavailable"}
 ```
-```
+
+同一份报告内 `findings[].id` 必须唯一；不同报告之间可以复用同名 id（身份由 round+slot+id 组成）。
 
 7. `verdict` 只写本报告的事实结论；不得声称“已通过项目门禁”。
-8. **保存前先把首行改成 `status=done`，再跑一次
+8. **先在 `status=in-progress` 下跑一遍
    `<python> <项目根>/.wf/bin/wf.py lint report --file <report_path> --task <任务 id> --json`**，
-   按 `problems` 一次改全（lint 不是门禁，但能省掉导入/判定才暴露的格式返工）。
+   按 `problems` 一次改全。草稿阶段的 `in-progress` 不是格式错误（lint 只在 `notes` 里提示
+   “导入前须改 done”，`ok` 仍为 true）；`import`/`decide` 才要求 `status=done`。
 9. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
 
 ## 不做

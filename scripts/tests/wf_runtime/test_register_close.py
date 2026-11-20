@@ -87,6 +87,10 @@ class RegisterCloseTest(unittest.TestCase):
             return task, task["action"]
 
         with mock.patch.object(review, "standard_drift_gate", return_value=None), \
+                mock.patch("wflib.tasks._is_approved_plan", return_value=True), \
+                mock.patch("wflib.gates.check_validity",
+                           return_value={"valid": True, "code": None, "facts": {},
+                                         "blockers": []}), \
                 mock.patch.object(tasks_mod, "_start_task_action", _start), \
                 mock.patch.object(tasks_mod, "_finish_task_action",
                                   lambda _ctx, _path, task, *_a, **_k: (task, {"ok": True})):

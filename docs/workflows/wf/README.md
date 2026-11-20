@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.2`（审查判定主会话复核、报告边界与旧口径清理；`0.1.0`/`0.1.1` 已由 tag 固定，本轮按 §7.2 递增）；正式发布前保持 `0.x.y` |
+| 目标版本 | `0.1.3`（审查链路、覆盖采信与版本身份修正；`0.1.0` 曾对应不同内容，`0.1.1`/`0.1.2` 未打 tag；本轮重建后由人创建 `wf-v0.1.3`）；正式发布前保持 `0.x.y` |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -47,6 +47,10 @@
 （`DEV_VERSION_PLACEHOLDER`）时，打包脚本不要求它与 `--version` 相同——版本源唯一在
 `--version` 参数，占位符只表示"这是开发态源树、尚未声明发行号"。占位符以外的任何值都必须
 与 `--version` 一致，否则 `scripts/build-wf-release.py` 直接 `SystemExit`（`_assert_version_consistency`）。
+
+打包入口另有两项机械守卫：`--version` 必须与本文「目标版本」一致（README 漂移即拒绝）；
+`refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
+tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 
 ## 4. 产物校验
 

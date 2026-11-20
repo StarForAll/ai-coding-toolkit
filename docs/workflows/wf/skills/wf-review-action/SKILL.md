@@ -25,12 +25,17 @@ disable-model-invocation: false
   --main-review .wf/.runtime/main-review.json --plan <处置.json> --json
 ```
 
-1. 导入后读 `facts.imported_agents`（本轮报告来自哪些 agent）；报告正文在任务目录 `review/` 下。
-2. **主会话复核（不是可选步骤）**：逐份报告质疑其覆盖、证据与矛盾（`report_review.reliance` 取 `primary|partial|none`，写清为什么）；逐条 finding 本地核实（`finding_review.check` 取 `verified|disputed|unable`）；对五个轴给出**你自己的** `pass|fail|uncovered` 与依据（`basis`），来源写 `main` 或具体报告槽位。判 `fail` 必须指回本轮未关闭的 blocking finding；判 `pass` 不能覆盖未关闭 blocking。
+1. 导入后读 `facts.imported_agents`（本轮报告来自哪些 agent）；报告正文在任务目录 `review/` 下。若本轮 launch 的 `scope.narrowed` 为真，报告只覆盖交付集合的声明子集；这是实施侧对审查输入面的判断：在受影响轴的 `basis` 写清未选路径是否相关、能否补证、还剩什么风险，`review-decide` 的 `scope.unselected` 会随判定记录；只有确实留下需要人接受的残余风险时才登记 judgment，不要为每次收窄机械补一条规模判断。不要把它当作全交付面审查。
+2. **主会话复核（不是可选步骤）**：逐份报告质疑其覆盖、证据与矛盾（`report_review.reliance` 取 `primary|partial|none`，写清为什么）；逐条 finding 本地核实（`finding_review.check` 取 `verified|disputed|unable`）；对五个轴给出**你自己的** `pass|fail|uncovered` 与依据（`basis`），来源写 `main` 或具体报告槽位。判 `fail` 必须指回本轮未关闭的 blocking finding；判 `pass` 不能覆盖未关闭 blocking。**覆盖按你的采信计算**：`reliance=none` 的报告不贡献覆盖，`partial` 只贡献你在该轴 `sources` 列出的槽位，`primary` 贡献它全部 `pass/fail` 轴；不要把不采信的报告当覆盖来源。材料收窄时若你把某轴留 `uncovered`，就不要把覆盖该轴的报告标 `primary`；入口会把这对矛盾拒掉，改成 `partial/none` 或把轴改判 `pass/fail`。
 3. 先汇总：按轴列出共识、分歧与互相矛盾的事实，标明来源 agent 与 finding id。**reviewer 报告是辅助证据**：报告未覆盖的轴，你能核实就自己补（写 `pass/fail` + 依据），补不了才留 `uncovered` 交人；不要为补一个 reviewer 的未覆盖轴自动再发一轮。
+   - **只有 blocking finding 必须逐条核实**（`finding_review`）；非阻塞建议填不填由你判断，未填会记进 `deferred_suggestions`，不影响本轮成立；草稿骨架只给 blocking 留占位，建议的空占位直接删掉即可视为延后。修正复核只需提交新增/改动的 `main_findings`，入口按 id 并集保留旧的，并沿用它们上次的核实状态（重交草稿也一样；要改状态就显式写 `finding_review`）。
    - 主会话复核 `fail` 轴必须指回一条**未关闭**的 blocking finding；修好后重跑 Check、发**新一轮**，不要改已判轮次的复核。
-   - 你认为某条 finding 是误报/重分类时，主会话复核对应轴写 `pass`、`finding_review.check=disputed`，按处置规则写 `accepted`；同一轮重判可在 finding 关闭后通过。判定后再改复核内容会被拒（要改结论请开新一轮）。
-4. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。
+   - 主会话自己核实、reviewer 未提出的 blocking：写进 `main_findings[]`（id/severity/statement/assertion_ref/basis），`fail` 轴的 `finding_refs` 用 `{finding_id, slot:"main"}` 引用，关闭时 dispositions 写 `slot:"main"`；这不是伪造 reviewer finding。`finding_review` 可省（默认 verified），要写 `disputed/unable` 时才补；`finding_id` 唯一时 `slot` 可省，入口会写回。
+   - `finding_review.check=unable` 的 finding 不能靠 accepted 关闭；先补核实，或保持 open 让判定 fail。blocking main finding 的 severity 降级/关闭必须先走 dispositions；`broken-reference` 只有所引规则确实被本任务改过才要求人复核。
+   - 缺陷落在已批准验收项/验证/spec 条款之外时，先判断是否仍在原触碰面内、能否直接修：能修就继续修，并在收尾说明“缺正式判据”，不要为凑 `assertion_ref` 降成 suggestion 或先停下请批。只有要改验收/承诺/授权，或需要人确认残余风险时，才登记 `judgment`（kind=缺口/未核实, outcome=escalated）请人扩判据。
+   - 报告未到齐时，可先用 `review-decide --register-only --main-review <file>` 登记已核实 main_findings（不产生 verdict）；最小文件只需 `task`/`round`/`main_findings`，入口补 discovery 并标未就绪。正式判否仍要完整审查。已判 `pass/unavailable` 后不能用登记入口改写复核；先关闭、后核实为 verified 的 finding，核实那次必须补可解析的 evidence_refs。
+   - 你认为某条 finding 是误报/重分类时，主会话复核对应轴写 `pass`、`finding_review.check=disputed`，按处置规则写 `accepted`；同一轮重判可在 finding 关闭后通过。判定为 `pass`/`unavailable` 后不可替换复核；判定为 `fail` 或尚未判定时，可提交修正复核（旧复核保留并标 `supersedes`）。若复核仍有 `fail` 轴，不能据此产 `pass`。
+4. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。`finding_id` 命中多轮/多槽位时，在自己的 `--plan` 元素里补 `round`+`slot` 重交即可，不需要请人裁。
 5. 把处置写成 `--plan` 文件的元素数组，再交 `review-decide`。
 6. 驳回必须本地核实；「作者不认可」不是证据。
 
@@ -84,7 +89,7 @@ disable-model-invocation: false
 
 - 轮次不设上限；"这轮算过"的唯一依据是 `review-decide` 的 pass 加上既有 disposition 关闭事实，
   不是"报告读完了"或"建议都登记了"。
-- 本轮有**主会话复核与报告都未覆盖的轴**时 `review-decide` 输出需人裁决（`WF_SEMANTIC_DECISION`）：主会话能补就补，补不了才由人写接受文件（`by/at/quote/source` + `round` + `axes`）后用 `--gap-acceptance` 重判；缺口既不判 fail，也不等于审查通过。
+- 本轮有**主会话复核与主会话采信的报告都未覆盖的轴**时 `review-decide` 输出需人裁决（`WF_SEMANTIC_DECISION`）：主会话能补就补，补不了才由人写接受文件（`by/at/quote/source` + `task` + `round` + `axes`）后用 `--gap-acceptance` 重判；缺口既不判 fail，也不等于审查通过。
 - 关闭证据与处置类型见 `wf-repair-loop`「这条 blocking 真的修了吗」；定位与写权事实见 `wf-continue`。
 
 ## pass 之后：建议取舍与主动收敛
@@ -95,7 +100,7 @@ disable-model-invocation: false
 
 ## 判定边界
 
-`review-decide` 的 pass/fail 由入口按事实推导（人数、CLI 差异、锚点、主会话复核与报告的覆盖、阻塞项）；本 skill 不给 verdict。
+`review-decide` 的 pass/fail 由入口按事实推导（人数、CLI 差异、锚点、主会话复核与采信报告的覆盖、未关闭 blocking）；本 skill 不给 verdict。
 单 reviewer 只是 degraded 参考，不满足复杂任务完成条件。
 
 ## 纪律

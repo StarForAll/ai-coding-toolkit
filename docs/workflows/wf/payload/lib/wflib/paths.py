@@ -89,8 +89,8 @@ def seg_match(pattern: str, name: str) -> bool:
     return fnmatch.fnmatchcase(name, pattern)
 
 
-def match_path(pattern: str, path: str):
-    """pattern 是否匹配仓库相对 path；返回 (bool, 说明)。"""
+def match_path(pattern: str, path: str) -> bool:
+    """pattern 是否匹配仓库相对 path；返回 bool。"""
     psegs = pattern.split("/")
     nsegs = path.split("/")
     return _match(psegs, nsegs)

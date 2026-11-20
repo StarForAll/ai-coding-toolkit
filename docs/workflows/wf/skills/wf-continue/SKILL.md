@@ -21,7 +21,7 @@ disable-model-invocation: false
 | 已批准，未开工 | `task-start --task <id>` |
 | in_progress/execute | 在批准触碰面内实施；读规则用 `spec --file <path>`；需要时 `task-curate` |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
-| 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：属本任务用 `task-attribute` 裁决归属；人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。排除按记录时的内容摘要绑定，内容一变就失效，且不构成提交授权 |
+| 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute --task <id> --commit <sha>` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止 |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
@@ -55,6 +55,11 @@ disable-model-invocation: false
 - **扩面**：要碰批准面之外的文件时，先判每条新路径对应哪个问题、为什么非改不可、总量是否该回 Plan 重批；
   **判断 → 提出 → 人确认 → 才修改**（先改后补授权属越界修改，机制按 K6 第 4 类拦）。
   人的挑战：「这些新文件是哪条问题逼出来的？总量是不是该回计划？」
+- **补测试 vs 改验证定义**：为已批准的验证项补测试文件是你的事，不需要回 Plan；若要在 PRD 里
+  **新增/改一条验证项**（新的必需证据），那是改验收证据、不是等价实现，属规划变化，走回 Plan 重批。
+- **vendor_dirty / 框架自有改动**：`status`/`repair_scope` 给出 `.wf/lib/**` 的 vendor 改动且本任务声称修框架时，
+  不要把它当业务交付或审查材料：现场改 vendor 升级会丢、也不进提交。向人说明后按源仓库维护任务处理
+  （回源仓库立项/另开任务），当前任务只记录“发现框架缺陷”的归属与边界。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；
   不自行取舍、不隐瞒、不改限制本身。冲突无法调和时停下报告是合法终态。
 

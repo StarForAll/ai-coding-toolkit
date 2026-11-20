@@ -837,6 +837,10 @@ def _short_repair(scope, precheck, acceptances=()):
             "rounds": [{"round": item.get("round"), "verdict": item.get("verdict"),
                         "inferred": bool(item.get("inferred"))}
                        for item in scope.get("rounds") or []],
+            # 收窄审查材料是判断，必须在人看的一屏里可见；不是新的门禁
+            "launch_scope": [{"round": item.get("round"), "scope": item.get("scope")}
+                             for item in scope.get("launches") or []
+                             if isinstance(item, dict) and item.get("scope")],
             # 放行清单是"强制回显"（§6 cli ④/#46），--short 也列（by/at/quote 都很短）
             "unknown_acceptances": list(acceptances)}
 
@@ -2195,7 +2199,7 @@ COMMAND_HELP = {
                                "--launch-request": "可选：覆盖/补充入口自动生成的请求"},
                       "inputs": {"--launch-request": {
                           "export_decision": "可选：留痕标签；权威是已入库的外发确认（task + materials）",
-                          "submitted_scope": "可选：入口默认生成 {diff,requirement,test_results}",
+                          "submitted_scope": "可选：入口默认生成 {diff:{paths}, requirement, test_results:{check}}；旧请求可省略本参数让入口重建",
                           "reviewers": "可选：要几份审查（默认 2）"}},
                       "example": "wf.py review-launch --task <id> --implementation-cli codex --json"},
     "review-context": {"purpose": "reviewer 侧唯一入口：占位 + 物化材料 + 给出报告路径",
@@ -2252,11 +2256,11 @@ COMMAND_HELP = {
                       "example": "wf.py review-status --task 2026-xxxx --json"},
     "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名，实施 CLI 取本会话）",
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
-                               "--main-review": "主会话五轴复核文件（产生 verdict 时必填）",
+                               "--main-review": "主会话五轴复核文件（产生 verdict 时必填；也可与 --register-only 登记 main findings）",
                                "--main-review-draft": "按本轮已导入报告生成主会话复核待填骨架后退出",
                                "--plan": "逐条 finding 处置", "--unavailable": "不可用声明（与 --plan 互斥）",
-                               "--register-only": "只登记复核关闭：不产生结论、不校验人数/异种"
-                                                  "（仍需 --plan；关闭的硬条件照旧）",
+                               "--register-only": "只登记复核关闭或主会话 finding：不产生结论、不校验人数/异种"
+                                                  "（需 --plan 或 --main-review；关闭的硬条件照旧）",
                                "--gap-acceptance": "人接受覆盖缺口的确认文件"
                                                    "（by/at/quote/source + round + axes）"},
                       "example": "wf.py review-decide --task <id> --main-review main-review.json "
@@ -2811,21 +2815,30 @@ def cmd_review_status(ctx, args):
     coverage = facts.get("coverage") or {}
     uncovered = list(coverage.get("uncovered") or [])
     accepted = set(coverage.get("accepted") or [])
-    if not facts["material_ready"]:
+    result_record = (task.get("reviews") or {}).get("result") or {}
+    if facts.get("ready_to_import"):
+        next_ = (f"报告已写完待导入（{', '.join(facts['ready_to_import'])}）："
+                 "先 review-import；其余槽位可继续写，不必等齐再导入")
+    elif not facts["material_ready"]:
         next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
                  "等 reviewer 产出后 review-import")
     elif facts["eligibility"]["problems"]:
         next_ = ("材料已齐，但判定资格不足："
                  + "；".join(item["reason"] for item in facts["eligibility"]["problems"]))
-    elif uncovered and not set(uncovered) <= accepted:
-        missing = sorted(set(uncovered) - accepted)
-        next_ = (f"材料已齐，但本轮有未覆盖轴（{', '.join(missing)}）："
-                 "补齐后重发一轮，或由人确认接受缺口后用 review-decide --gap-acceptance 重判")
-    elif ((task.get("reviews") or {}).get("result") or {}).get("round") == facts["round"]:
-        next_ = "本轮已产生判定；如需改结论请开新一轮（review-launch），不覆盖已判轮次"
+    elif result_record.get("round") == facts["round"]:
+        if result_record.get("verdict") == "fail":
+            next_ = ("本轮已 fail：先核实是否误报/漏处置；误报可在本轮用 --plan + --main-review "
+                     "同轮重判，已实质修复则重跑 Check 后发新轮")
+        else:
+            next_ = "本轮已产生判定；如需改结论请开新一轮（review-launch），不覆盖已判轮次"
     elif not facts.get("main_review_ready"):
         next_ = ("材料已齐、资格检查通过：先生成并填写主会话复核"
-                 "（review-decide --main-review-draft <file>），再带 --main-review 判定")
+                 "（review-decide --main-review-draft <file>），再带 --main-review 判定；"
+                 "未覆盖轴由你先补证，补不了再交人")
+    elif uncovered and not set(uncovered) <= accepted:
+        missing = sorted(set(uncovered) - accepted)
+        next_ = (f"材料与主会话复核已齐，但本轮仍有未覆盖轴（{', '.join(missing)}）："
+                 "先判断能否同轮补证；仍补不了再请人接受缺口后用 --gap-acceptance 重判")
     else:
         next_ = "材料与主会话复核已齐：下一步 review-decide（结论以判定为准）"
     return codes.result(
@@ -2890,9 +2903,10 @@ COMMANDS = {
     "baseline-apply": _task_command("cmd_baseline_apply"),
     "spec-update": _task_command("cmd_spec_update"),
     "dep": _task_command("cmd_dep"),
-    # `task-rework` 已实现（返工建 R、挂起 T、继承前置）。v42 §4 要求删除它，但机制稿 §6.2
-    # 与 `workflows/instance-flow.md` 仍把 `control.task.rework` 声明为 [required] 步骤；
-    # 删命令会让部署自检（handler entry 必须存在）失败。属权威冲突，保留命令并登记待裁。
+    # `task-rework` 已实现（返工建 R、挂起 T、继承前置）。机制稿 §6.2 与
+    # `workflows/instance-flow.md` 把 `control.task.rework` 声明为 [required] 步骤；机制稿是
+    # 本框架权威，v42 §4 的删除要求属审查稿意见，不再作为待裁冲突。保留命令；要删除须按
+    # 设计稿 §0 的维护协议同批改机制稿、部署声明与 handler 自检。
     "task-rework": _task_command("cmd_task_rework"),
     "task-replace": _task_command("cmd_task_replace"),
     "review-context": _review_command("context"),

@@ -52,6 +52,92 @@ class ReadScopeBoundaryTest(unittest.TestCase):
                                                                         "spec/rules.md"]}))
         self.assertEqual(problems, [])
 
+    def test_read_scope_must_not_hit_launch_exclusions(self):
+        launch = {"exclusions": list(COVERED) + ["private/**"]}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["private/secret.txt"]}), launch=launch)
+        problems = result["checks"].get("read-scope-launch") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["overlaps"][0]["excluded"], "private/**")
+
+    def test_read_scope_must_stay_inside_readable_scope(self):
+        launch = {"readable_scope": {"business_code": ["pkg/**"], "spec": [], "prd": "prd.md"},
+                  "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["docs/**"]}), launch=launch)
+        problems = result["checks"].get("read-scope-readable") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["paths"], ["docs/**"])
+
+    def test_control_directory_itself_is_not_readable(self):
+        launch = {"readable_scope": {"business_code": ["**"], "spec": [], "prd": "prd.md"},
+                  "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": [".wf"]}), launch=launch)
+        problems = result["checks"].get("read-scope-readable") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["paths"], [".wf"])
+
+    def test_default_business_code_does_not_allow_control_surfaces(self):
+        launch = {"readable_scope": {"business_code": ["**"], "spec": [], "prd": "prd.md"},
+                  "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": [".wf/session-bindings/x", ".git/config"]}),
+            launch=launch)
+        problems = result["checks"].get("read-scope-readable") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["paths"], [".wf/session-bindings/x", ".git/config"])
+
+    def test_materials_only_report_passes_empty_readable_scope(self):
+        launch = {"readable_scope": {}, "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["materials"]}), launch=launch)
+        self.assertEqual(result["checks"].get("read-scope"), [])
+        self.assertEqual(result["checks"].get("read-scope-readable") or [], [])
+
+    def test_empty_read_scope_is_allowed_when_readable_is_empty(self):
+        launch = {"readable_scope": {}, "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": []}), launch=launch)
+        self.assertEqual(result["checks"].get("read-scope"), [])
+
+    def test_explicit_empty_readable_scope_rejects_reads(self):
+        launch = {"readable_scope": {}, "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["pkg/a.py"]}), launch=launch)
+        problems = result["checks"].get("read-scope-readable") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["paths"], ["pkg/a.py"])
+
+    def test_task_prd_is_allowed_even_under_task_exclusion(self):
+        prd = ".wf/tasks/t1/prd.md"
+        launch = {"readable_scope": {"business_code": ["pkg/**"], "spec": [], "prd": prd},
+                  "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": [prd]}), launch=launch)
+        self.assertEqual(result["checks"].get("read-scope-excluded") or [], [])
+        self.assertEqual(result["checks"].get("read-scope-launch") or [], [])
+        self.assertEqual(result["checks"].get("read-scope-readable") or [], [])
+
+    def test_glob_read_scope_cannot_be_broader_than_readable(self):
+        launch = {"readable_scope": {"business_code": ["pkg/*"], "spec": [], "prd": "prd.md"},
+                  "exclusions": list(COVERED)}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["pkg/**"]}), launch=launch)
+        problems = result["checks"].get("read-scope-readable") or []
+        self.assertTrue(problems)
+        self.assertEqual(problems[0]["paths"], ["pkg/**"])
+
+    def test_read_scope_must_not_include_an_excluded_subdirectory(self):
+        launch = {"readable_scope": {"business_code": ["**"], "spec": [], "prd": "prd.md"},
+                  "exclusions": list(COVERED) + ["pkg/secret/**"]}
+        result = review.report_input_problems(
+            payload(**{"read-scope": ["pkg"]}), launch=launch)
+        problems = result["checks"].get("read-scope-launch") or []
+        self.assertTrue(problems)
+        self.assertIn("includes the excluded surface",
+                      problems[0]["overlaps"][0]["overlap"])
+
     def test_same_check_name_in_lint_and_input_face(self):
         text = ("<!-- wf-review-agent:v1 status=done -->\n" + review.REPORT_MARKER
                 + "\n\n```json\n" + json.dumps(payload(**{"read-scope": [".env"]}),
@@ -149,6 +235,7 @@ class ContextScopeTest(unittest.TestCase):
                                               "anchor": {"check_anchor": ANCHOR}},
                      "reviews": {"launches": [{"round": 1, "implementation_cli": "dsh",
                                                "slots": [{"slot": "s1"}, {"slot": "s2"}],
+                                               "anchor": {"check_id": "c1", "check_anchor": ANCHOR},
                                                "submitted_scope": {"diff": {"paths": ["pkg/a.py"]}},
                                                "readable_scope": {"business_code": ["**"],
                                                                   "focus_paths": ["pkg/a.py"]},
@@ -160,14 +247,152 @@ class ContextScopeTest(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def test_context_returns_the_launch_scope(self):
+    def test_context_rejects_a_replanned_task_without_approval(self):
+        self.task["plan"] = {"approval": None}
+        records.write_json(self.task_dir / "task.json", self.task)
+        with self.assertRaises(review.ReviewError) as caught:
+            review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_APPROVAL_MISSING")
+
+    def test_stale_launch_reports_where_the_draft_lives(self):
+        with mock.patch.object(review, "_current_anchor", return_value=("sha256:" + "e" * 64, {})):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_CHECK_STALE")
+        self.assertNotIn("stale_round_drafts", caught.exception.facts)
+
+    def test_stale_launch_lists_the_existing_draft(self):
+        staged = Path(review.agent_report_path(SimpleNamespace(root=self.root),
+                                               self.task_id, 1, "s1"))
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        staged.write_text("<!-- wf-review-agent:v1 status=in-progress -->\n", encoding="utf-8")
+        with mock.patch.object(review, "_current_anchor", return_value=("sha256:" + "e" * 64, {})):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        drafts = caught.exception.facts.get("stale_round_drafts") or []
+        self.assertEqual([item["slot"] for item in drafts], ["s1"])
+        self.assertEqual(drafts[0]["status"], "in-progress")
+
+    def test_context_resumes_an_in_progress_draft(self):
+        delivery = {"paths": ["pkg/a.py"],
+                    "buckets": {"e": ["pkg/a.py"], "f": [], "covered_f": [], "uncovered_f": []}}
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery), \
+                mock.patch.object(review, "write_materials", return_value={"problems": []}):
+            first = review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+            second = review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertFalse(first["facts"].get("resumed"))
+        self.assertTrue(second["facts"]["resumed"])
+        self.assertEqual(second["facts"]["report_path"], first["facts"]["report_path"])
+
+    def test_context_rechecks_plan_approval_before_materializing(self):
+        self.task["plan"] = {"approval": {"choice": "批准"}}
+        records.write_json(self.task_dir / "task.json", self.task)
+        with mock.patch("wflib.tasks._is_approved_plan", return_value=False):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_APPROVAL_MISSING")
+
+    def test_context_returns_the_launch_scope(self):
+        delivery = {"paths": ["pkg/a.py"],
+                    "buckets": {"e": ["pkg/a.py"], "f": [], "covered_f": [], "uncovered_f": []}}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery), \
                 mock.patch.object(review, "write_materials", return_value={"problems": []}):
             result = review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
         facts = result["facts"]
         self.assertEqual(facts["submitted_scope"]["diff"]["paths"], ["pkg/a.py"])
         self.assertEqual(facts["readable_scope"]["focus_paths"], ["pkg/a.py"])
         self.assertIn(".env", facts["exclusions"])
+
+    def test_context_materializes_only_declared_paths(self):
+        delivery = {"paths": ["pkg/a.py", "pkg/b.py"],
+                    "buckets": {"e": ["pkg/a.py", "pkg/b.py"], "f": [],
+                                "covered_f": [], "uncovered_f": []}}
+        captured = {}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery), \
+                mock.patch.object(review, "write_materials",
+                                  side_effect=lambda *a, **kw: captured.update(kw) or {}):
+            result = review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(captured.get("paths"), ["pkg/a.py"])
+        self.assertTrue(result["facts"]["narrowed"])
+        self.assertEqual(result["facts"]["delivery_path_count"], 2)
+
+    def test_legacy_scope_filters_launch_exclusions(self):
+        self.task["reviews"]["launches"][0]["submitted_scope"] = {"diff": True}
+        self.task["reviews"]["launches"][0]["exclusions"] = ["pkg/**"]
+        records.write_json(self.task_dir / "task.json", self.task)
+        delivery = {"paths": ["pkg/a.py", "src/b.py", ".env"],
+                    "buckets": {"e": ["pkg/a.py", "src/b.py", ".env"], "f": [],
+                                "covered_f": [], "uncovered_f": []}}
+        captured = {}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery), \
+                mock.patch.object(review, "write_materials",
+                                  side_effect=lambda *a, **kw: captured.update(kw) or {}):
+            result = review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertTrue(result["facts"]["legacy_scope"])
+        self.assertEqual(captured.get("paths"), ["src/b.py"])
+        self.assertTrue(result["facts"]["narrowed"])
+
+    def test_context_rejects_null_paths(self):
+        self.task["reviews"]["launches"][0]["submitted_scope"]["diff"]["paths"] = None
+        records.write_json(self.task_dir / "task.json", self.task)
+        delivery = {"paths": ["pkg/a.py"],
+                    "buckets": {"e": ["pkg/a.py"], "f": [], "covered_f": [], "uncovered_f": []}}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("paths must be an array",
+                      json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_context_rejects_a_path_in_exclusions(self):
+        self.task["reviews"]["launches"][0]["exclusions"] = ["pkg/**"]
+        records.write_json(self.task_dir / "task.json", self.task)
+        delivery = {"paths": ["pkg/a.py"],
+                    "buckets": {"e": ["pkg/a.py"], "f": [], "covered_f": [], "uncovered_f": []}}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("intersects launch exclusions",
+                      json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_context_rejects_a_broadened_scope(self):
+        self.task["reviews"]["launches"][0]["submitted_scope"]["diff"]["paths"] = [
+            "pkg/a.py", "pkg/b.py"]
+        records.write_json(self.task_dir / "task.json", self.task)
+        delivery = {"paths": ["pkg/a.py"],
+                    "buckets": {"e": ["pkg/a.py"], "f": [], "covered_f": [], "uncovered_f": []}}
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set", return_value=delivery):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("pkg/b.py",
+                      json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_context_rejects_a_new_check_id_even_with_same_anchor(self):
+        self.task["reviews"]["launches"][0]["anchor"]["check_id"] = "c2"
+        records.write_json(self.task_dir / "task.json", self.task)
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_CHECK_STALE")
+        self.assertIn("check_id", json.dumps(caught.exception.facts.get("identity"),
+                                             ensure_ascii=False))
+
+    def test_context_rejects_a_drifted_launch_anchor(self):
+        drifted = "sha256:" + "e" * 64
+        with mock.patch.object(review, "_current_anchor", return_value=(drifted, {})):
+            with self.assertRaises(review.ReviewError) as caught:
+                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
+        self.assertEqual(caught.exception.code, "WF_CHECK_STALE")
+        self.assertEqual(caught.exception.facts["launch_anchor"], ANCHOR)
 
 
 if __name__ == "__main__":

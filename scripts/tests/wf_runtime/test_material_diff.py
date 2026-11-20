@@ -150,6 +150,47 @@ class WriteMaterialsTest(unittest.TestCase):
         self.assertEqual(status["paths"], ["notify.py"])
         self.assertEqual(facts["material_problem_count"], 0)
 
+    def test_check_material_does_not_leak_internal_review(self):
+        import json
+
+        root = _repo()
+        os.makedirs(os.path.join(root, ".wf", "tasks"), exist_ok=True)
+        task = {"id": "2026-01-01-abc", "phase": "check",
+                "entry_snapshot": {"touch_paths": []}, "plan": {"touch_paths": []},
+                "baseline_head": None,
+                "check": {"id": "c1", "result": "pass",
+                          "anchor": {"check_anchor": "check-anchor:9"},
+                          "internal_review": {"standard": "pass", "requirement": "作者自评"}}}
+        materials = tempfile.mkdtemp(prefix="wf-materials-")
+        review.write_materials(self._ctx(root), task, 1, "check-anchor:9", materials)
+        with open(os.path.join(materials, "check.json"), encoding="utf-8") as handle:
+            payload = json.load(handle)
+        self.assertEqual(payload["check"]["id"], "c1")
+        self.assertEqual(payload["check"]["result"], "pass")
+        self.assertNotIn("internal_review", payload["check"])
+        self.assertEqual(payload["anchor"], {"check_anchor": "check-anchor:9"})
+
+    def test_status_buckets_only_list_materialized_paths(self):
+        import json
+
+        root = _repo()
+        with open(os.path.join(root, "a.py"), "w", encoding="utf-8") as handle:
+            handle.write("a = 1\n")
+        task = {"id": "2026-01-01-abc", "phase": "execute",
+                "entry_snapshot": {"touch_paths": ["a.py", "b.py"]},
+                "plan": {"touch_paths": ["a.py", "b.py"]}, "baseline_head": None}
+        delivery = {"paths": ["a.py", "b.py"],
+                    "buckets": {"e": ["a.py", "b.py"], "f": [],
+                                "covered_f": [], "uncovered_f": []}}
+        materials = tempfile.mkdtemp(prefix="wf-materials-")
+        review.write_materials(self._ctx(root), task, 1, "check-anchor:9", materials,
+                               paths=["a.py"], delivery=delivery)
+        with open(os.path.join(materials, "status.json"), encoding="utf-8") as handle:
+            status = json.load(handle)
+        self.assertEqual(status["paths"], ["a.py"])
+        self.assertEqual(status["buckets"]["e"], ["a.py"])
+        self.assertEqual(status["buckets"]["f"], [])
+
     def test_empty_delivery_set_writes_explicit_reason(self):
         root = _repo()
         os.makedirs(os.path.join(root, ".wf", "tasks"), exist_ok=True)

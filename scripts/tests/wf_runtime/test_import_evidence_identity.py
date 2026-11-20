@@ -96,6 +96,17 @@ class ImportHarness(unittest.TestCase):
 class ImportIdentityTest(ImportHarness):
     """A4：已登记摘要就是证据身份，删档后换一份不能顶掉它。"""
 
+    def test_report_bound_to_a_previous_check_id_is_rejected(self):
+        self.write_report()
+        task = records.load_json(self.task_dir / "task.json")
+        task["check"]["id"] = "c2"
+        records.write_json(self.task_dir / "task.json", task)
+        with self.assertRaises(review.ReviewError) as caught:
+            self.import_report()
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("check_id", json.dumps(caught.exception.facts, ensure_ascii=False))
+        self.assertFalse(self.imported_copy.exists())
+
     def test_same_bytes_reimport_after_deletion_is_idempotent(self):
         self.write_report()
         self.import_report()

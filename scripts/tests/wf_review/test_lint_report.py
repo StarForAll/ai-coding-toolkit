@@ -99,10 +99,11 @@ class LintReportTest(unittest.TestCase):
                 "<!-- wf-review-agent:v1 status=done -->\n")
         facts = review.lint_report(None, None, tail)
         self.assertFalse(facts["ok"], "状态行在末尾时导入扫不到，lint 不能放行")
-        not_done = review.lint_report(None, None, render(report(), status="in-progress"))
-        self.assertFalse(not_done["ok"])
-        reasons = json.dumps(not_done["problems"], ensure_ascii=False)
-        self.assertIn("not done", reasons)
+        # 草稿阶段 in-progress 是预期状态：lint 不报错，只给“导入前须改 done”的提示。
+        draft = review.lint_report(None, None, render(report(), status="in-progress"))
+        self.assertTrue(draft["ok"], draft["problems"])
+        notes = json.dumps(draft["notes"], ensure_ascii=False)
+        self.assertIn("done", notes)
 
 
 if __name__ == "__main__":

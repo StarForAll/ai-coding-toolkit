@@ -423,6 +423,15 @@ def is_vendor(path):
     return str(path).startswith(VENDOR_PREFIX)
 
 
+def is_vendor_asset(path, root=None):
+    """框架自有资产：`.wf/**` 里**不属项目数据**的部分。
+
+    只按 `.wf/` 前缀判会把 `.wf/spec/**`、`.wf/tasks/**`、`.wf/baseline.md` 等项目数据
+    一起打成 vendor；分类器与交付集合必须用同一个口径，否则"归属正确但交付集合为空"。
+    """
+    return is_vendor(path) and not is_project_data(path, root)
+
+
 def vendor_paths(paths):
     return sorted(path for path in paths or [] if is_vendor(path))
 
@@ -531,7 +540,7 @@ def exclusion_records(root, classified, entries, *, now=None):
                 "reason": "排除只适用于未归属的未提交路径；该路径不在 c 桶",
                 "path": path,
                 "exits": ["核对路径拼写与真实状态",
-                          "该路径若属本任务：用 task-attribute 裁决归属，而不是排除",
+                          "该路径若属本任务：未提交的按批准触碰面归属；已提交的用 task-attribute --commit <sha> 裁决",
                           "若属其他任务：先按其他任务收工/交接处置"]})
             continue
         # 人的确认原话按脱敏协议只留**摘要**：入库的是遮罩+截断后的文本，
@@ -674,8 +683,8 @@ def delivery_set(root, task, receipts=None, classified=None):
             receipts = tasks_mod.task_receipts(root)
         classified = classify_candidates(root, task, receipts=receipts)
     buckets = classified["buckets"]
-    in_scope = sorted(path for path in (buckets.get("e") or []) if not is_vendor(path))
-    out_of_scope = sorted(path for path in (buckets.get("f") or []) if not is_vendor(path))
+    in_scope = sorted(path for path in (buckets.get("e") or []) if not is_vendor_asset(path, root))
+    out_of_scope = sorted(path for path in (buckets.get("f") or []) if not is_vendor_asset(path, root))
     covered, uncovered = [], list(out_of_scope)
     if out_of_scope:
         directory = tasks_mod.task_dir(root, task.get("id"))
@@ -686,7 +695,7 @@ def delivery_set(root, task, receipts=None, classified=None):
     for entry in task.get("curation") or []:
         if entry.get("released") or not entry.get("path"):
             continue
-        if not is_vendor(entry["path"]):
+        if not is_vendor_asset(entry["path"], root):
             paths.add(entry["path"])
     for fixed in (".wf/baseline.md", ".wf/project-config.json"):
         if os.path.exists(join(root, fixed)):
@@ -830,9 +839,7 @@ def vendor_assets(root, task, paths):
     installed = installed_asset_paths(root)
     found = []
     for path in paths or []:
-        if not is_vendor(path):
-            continue
-        if is_project_data(path):              # 集合只来自 protocol，不在这里列前缀
+        if not is_vendor_asset(path, root):    # 项目数据不算框架自有资产
             continue
         if _is_control_record(path, task_id, installed, root):
             continue

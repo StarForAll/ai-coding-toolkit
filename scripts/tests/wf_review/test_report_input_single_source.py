@@ -123,13 +123,24 @@ class SingleSourceTest(ImportHarness):
     def test_status_header_rules_are_shared_but_only_where_the_file_is_staged(self):
         for status in (None, "in-progress"):
             with self.subTest(status=status):
-                text = text_of(payload(), status=status)
-                names, facts = self.check_names(text)
-                self.assertIn("status-head", names)
-                # 扫描模式看不到未完成的报告 → 导入侧给"没有已完成报告"，不是静默成功
                 path = self.write(payload(), status=status or "missing")
                 with self.assertRaises(review.ReviewError):
                     self.import_report(path)
+        # 缺状态行：草稿预检也要报（否则永远无法导入）
+        names, _facts = self.check_names(text_of(payload(), status=None))
+        self.assertIn("status-head", names)
+        # in-progress：草稿预检不报错，导入仍拒绝
+        draft = review.lint_report(None, None, text_of(payload(), status="in-progress"))
+        self.assertTrue(draft["ok"], draft["problems"])
+
+    def test_bad_round_is_reported_not_raised_as_valueerror(self):
+        body = payload(round="bad-round")
+        path = self.write(body)
+        with self.assertRaises(review.ReviewError) as caught:
+            self.import_report(path)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        problems = caught.exception.facts.get("problems") or []
+        self.assertIn("round", json.dumps(problems, ensure_ascii=False))
 
     def test_valid_report_passes_both(self):
         text = text_of(payload())

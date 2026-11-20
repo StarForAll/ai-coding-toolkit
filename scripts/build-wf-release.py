@@ -12,6 +12,7 @@ import filecmp
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -48,6 +49,39 @@ def copy_into(destination_root, release_path, absolute_source):
     shutil.copyfile(absolute_source, destination)
     os.chmod(destination, os.stat(absolute_source).st_mode)
     return destination
+
+
+README_PATH = os.path.join(common.SOURCE_ROOT, "README.md")
+TARGET_VERSION = re.compile(r"\|\s*目标版本\s*\|\s*`([0-9]+\.[0-9]+\.[0-9]+)`")
+
+
+def readme_target_version():
+    """README「目标版本」行的版本号；解析不到即失败，不静默跳过。"""
+    try:
+        with open(README_PATH, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as exc:
+        raise BuildError(f"cannot read wf README: {exc}")
+    match = TARGET_VERSION.search(text)
+    if not match:
+        raise BuildError("wf README has no machine-readable target version row")
+    return match.group(1)
+
+
+def assert_readme_version(version):
+    expected = readme_target_version()
+    if expected != version:
+        raise BuildError(f"README target version {expected} != requested release version {version}")
+
+
+def assert_version_not_tagged(version):
+    """同一版本号只对应一份发行内容：tag 已存在时拒绝重建。"""
+    result = subprocess.run(["git", "tag", "--list", f"wf-v{version}"],
+                            cwd=str(common.REPO_ROOT), capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise BuildError(f"cannot query git tags: {(result.stderr or '').strip()}")
+    if result.stdout.strip():
+        raise BuildError(f"tag wf-v{version} already exists; bump the version instead of reusing it")
 
 
 def _assert_version_consistency(dev_manifest, version):
@@ -169,6 +203,7 @@ def verify_byte_reproduction():
     version = existing.get("version")
     if not version:
         raise BuildError("existing wf-release.json has no version")
+    assert_readme_version(version)
     temp_root = tempfile.mkdtemp(prefix="wf-release-verify-")
     try:
         rebuild_root = os.path.join(temp_root, "wf-release")
@@ -237,6 +272,8 @@ def main(argv=None):
                 print("FAIL  --version must be 0.x.y")
                 return 1
             # 预检失败就退出，绝不动现有发行树
+            assert_readme_version(args.version)
+            assert_version_not_tagged(args.version)
             dev_manifest = preflight()
             if os.path.isdir(RELEASE_ROOT):
                 shutil.rmtree(RELEASE_ROOT)

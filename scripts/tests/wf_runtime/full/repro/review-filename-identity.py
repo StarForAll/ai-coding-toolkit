@@ -4,7 +4,7 @@
 obligation（2026-11-07 人裁）：
 - reviewer 侧只调 `review-context --task <id> [--round n]`，其余信息（锚点/材料/报告路径）由它提供；
 - 报告文件名 `review-<agent>.md` 就是身份，正文不必声明；
-- 同一 agent 同一轮只能审查一次：已有占位或已完成 → 拒绝，审查不开始；
+- 同一 agent 同一轮的 in-progress 草稿可续写；status=done 后不能再起一份，只能导入；
 - 判定按文件名 token 判人数与异种，实施 CLI 取 action 会话身份。
 
 注入形态：不拦"同一 agent 二次审查"（占位检查失效）。
@@ -19,8 +19,8 @@ import _review_flow as F
 import _review_launch as L
 
 SID = "sess-main"
-FROM = '    if status in ("in-progress", "done"):\n'
-TO = '    if False:  # 注入：不拦二次审查\n'
+FROM = '    if status == "done":\n'
+TO = '    if False:  # 注入：不拦已完成报告的二次审查\n'
 COVERED = ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"]
 
 
@@ -85,13 +85,22 @@ def check():
         if not os.path.isfile((pi_facts.get("materials") or {}).get(key) or ""):
             problems.append(f"材料未物化：{key}")
 
-    # ② 同一 agent 同一轮二次审查 → 拒绝（且发生在审查开始前）
+    # ② 同一 agent 的 in-progress 草稿可续写：返回同一材料/路径，不另起一份
     rc2, payload2 = context(project, task_id, round_no, "pi")
-    if rc2 == 0:
-        problems.append("同一 agent 二次审查未被阻止")
+    if rc2 != 0:
+        problems.append("同一 agent 的 in-progress 草稿无法续写")
+    else:
+        facts2 = (payload2 or {}).get("facts") or {}
+        if not facts2.get("resumed") or facts2.get("report_path") != report:
+            problems.append("续写没有返回同一 report_path/resumed")
 
-    # ③ 写报告（status=done）→ 第二个 agent → 导入 → 判定
+    # ③ 写完 status=done 后同一 agent 不能再起一份，只能导入
     open(report, "w", encoding="utf-8").write(report_body(task_id, round_no, anchor, "pi"))
+    rc_done, _payload_done = context(project, task_id, round_no, "pi")
+    if rc_done == 0:
+        problems.append("同一 agent 的已完成报告未被阻止")
+
+    # ④ 第二个 agent → 导入 → 判定
     rc, payload = context(project, task_id, round_no, "zcode")
     if rc != 0:
         raise H.Precondition(f"review-context(zcode) 失败：{payload}")

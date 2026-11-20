@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+import uuid
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
@@ -29,8 +30,11 @@ def write_report(root, relative, payload_text):
 
 
 class ReviewStatusTest(unittest.TestCase):
+    def setUp(self):
+        self._task_id = f"2026-status-{uuid.uuid4().hex[:8]}"
+
     def _task(self, imported=()):
-        return {"id": "2026-x", "title": "t", "status": "in_progress", "phase": "check",
+        return {"id": self._task_id, "title": "t", "status": "in_progress", "phase": "check",
                 "reviews": {"launches": [{"round": 1, "slots": [{"slot": "zcode"}, {"slot": "dsh"}]}],
                             "imported": list(imported)}}
 
@@ -60,6 +64,35 @@ class ReviewStatusTest(unittest.TestCase):
             self.assertEqual(facts["arrived"], 1)
             self.assertFalse(facts["material_ready"])
 
+    def test_in_progress_placeholders_are_writing_not_arrived(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            task_id = "2026-status-writing"
+            for agent in ("zcode", "dsh"):
+                staged = Path(review.agent_report_path(FakeCtx(tmp), task_id, 1, agent))
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_text("<!-- wf-review-agent:v1 status=in-progress -->\n",
+                                  encoding="utf-8")
+            task = self._task()
+            task["id"] = task_id
+            facts = review.status_of_round(FakeCtx(tmp), task)
+        self.assertEqual(facts["arrived"], 0)
+        self.assertEqual(sorted(facts["writing"]), ["dsh", "zcode"])
+        self.assertFalse(facts["material_ready"])
+
+    def test_done_staged_reports_are_ready_to_import(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            task_id = "2026-status-ready"
+            for agent in ("zcode", "dsh"):
+                staged = Path(review.agent_report_path(FakeCtx(tmp), task_id, 1, agent))
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                staged.write_text("<!-- wf-review-agent:v1 status=done -->\n",
+                                  encoding="utf-8")
+            task = self._task()
+            task["id"] = task_id
+            facts = review.status_of_round(FakeCtx(tmp), task)
+        self.assertEqual(sorted(facts["ready_to_import"]), ["dsh", "zcode"])
+        self.assertTrue(facts["material_ready"])
+
     def test_report_changed_after_import_is_stale(self):
         with tempfile.TemporaryDirectory() as tmp:
             rel = "review/round-1/review-zcode.md"
@@ -71,6 +104,81 @@ class ReviewStatusTest(unittest.TestCase):
             slots = {item["slot"]: item for item in facts["slots"]}
             self.assertEqual(slots["zcode"]["state"], "stale")
             self.assertIn("改写", slots["zcode"]["reason"])
+
+
+class ReportShapeTest(unittest.TestCase):
+    def test_lint_reports_malformed_findings_and_round_without_crashing(self):
+        import json
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": "x",
+                   "read-scope": ["pkg/**"], "excluded-scope": [],
+                   "findings": 3, "axes": {axis: "pass" for axis in review.REVIEW_AXES}}
+        text = ("<!-- wf-review-agent:v1 status=done -->\n"
+                + review.REPORT_MARKER + "\n\n```json\n"
+                + json.dumps(payload) + "\n```\n")
+        linted = review.lint_report(None, None, text)
+        self.assertFalse(linted["ok"])
+        reasons = "\n".join(item.get("reason", "") for item in linted["problems"])
+        self.assertIn("findings must be an array", reasons)
+        self.assertIn("positive integer", reasons)
+
+    def test_invalid_severity_is_rejected_not_treated_as_suggestion(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": ["pkg/**"], "excluded-scope": [],
+                   "findings": [{"id": "f1", "severity": "blockng"}],
+                   "axes": {axis: "pass" for axis in review.REVIEW_AXES}}
+        shared = review.report_input_problems(payload)
+        self.assertTrue(shared["checks"]["findings-shape"])
+        self.assertIsNone(shared["verdict"])
+
+    def test_duplicate_finding_ids_are_rejected(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": ["pkg/**"], "excluded-scope": [],
+                   "findings": [{"id": "f1", "severity": "blocking"},
+                                {"id": "f1", "severity": "blocking"}],
+                   "axes": {axis: "fail" for axis in review.REVIEW_AXES}}
+        shared = review.report_input_problems(payload)
+        self.assertTrue(shared["checks"]["findings-shape"])
+
+    def test_subdirectory_sensitive_file_is_mandatory_excluded(self):
+        self.assertTrue(any(review.pattern_overlap("pkg/.env", pattern)
+                            for pattern in review.DEFAULT_EXCLUSIONS))
+
+    def test_finding_without_id_is_rejected(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": ["pkg/**"],
+                   "excluded-scope": [],
+                   "findings": [{"severity": "blocking", "statement": "缺 id"}],
+                   "axes": {axis: "fail" for axis in review.REVIEW_AXES}}
+        shared = review.report_input_problems(payload)
+        self.assertIn("findings-shape", shared["checks"])
+        self.assertTrue(shared["checks"]["findings-shape"])
+
+    def test_dot_prefixed_outside_read_is_rejected(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": ["./.wf/tasks/other/prd.md"], "excluded-scope": [],
+                   "findings": [], "axes": {axis: "pass" for axis in review.REVIEW_AXES}}
+        launch = {"readable_scope": {"business_code": ["pkg/**"], "spec": [],
+                                     "prd": ".wf/tasks/t1/prd.md"},
+                  "exclusions": []}
+        shared = review.report_input_problems(payload, launch=launch)
+        self.assertTrue(shared["checks"]["read-scope-readable"])
+
+    def test_absolute_read_scope_is_rejected(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": ["/etc/passwd"], "excluded-scope": [],
+                   "findings": [], "axes": {axis: "pass" for axis in review.REVIEW_AXES}}
+        shared = review.report_input_problems(payload)
+        self.assertIn("read-scope-path", shared["checks"])
+        self.assertTrue(shared["checks"]["read-scope-path"])
+
+    def test_malformed_collections_return_problems_not_typeerror(self):
+        payload = {"protocol": review.PROTOCOL, "task-id": "t", "round": 1,
+                   "read-scope": 3, "excluded-scope": {}, "findings": {},
+                   "axes": []}
+        shared = review.report_input_problems(payload)
+        text = "\n".join(item.get("reason", "") for item in review.flatten_checks(shared["checks"]))
+        self.assertIn("must be an array", text)
+        self.assertIn("axes must be an object", text)
 
 
 class DeriveVerdictTest(unittest.TestCase):

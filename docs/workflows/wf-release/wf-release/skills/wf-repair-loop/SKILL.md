@@ -14,6 +14,12 @@ disable-model-invocation: false
 - **关闭证据必须指回那个问题**：用哪条证据、它为什么覆盖该问题。不拿"某条宽标准通过了"搪塞。
 - 框架只核四件事实：引用存在、指向内容确实变了、验证确实通过、复核人不是提出者（K4b）；
   **是否真修好由你判**，依据写进 disposition 的 `reason` 与 `judgments add`（kind=关闭）。
+  `evidence_refs` 用 `v/a/f/p/j` 或当前锚点差异里的 `d:`；`v:` 的 passed 以 Check 实际记录为准
+  （计划只提供验证项定义），`s/g/h` 不作关闭证据。关闭会记 `check_id`：本次关闭只认这次 Check，
+  不能借同名旧 passed；后来补证据用新的 accepted 覆盖旧空记录，或 amended 撤回关闭。
+  **修复是改规则/基线**（spec 规则、`.wf/baseline.md`）时用 `p:<该路径>` 作证据——它必须已在
+  交付面内，且规则变动会改锚点，需重跑 Check 后再关。
+  旧轮把某项标 `unable` 不算死结：后续轮提交带证据的 `accepted` 即视为核实完成（不必回头改旧轮复核）。
 - **"不处置"不是"关闭"**：blocking 无处置即阻断项，三条正路是 resolved / reclassification / task-abandon。
 - **"同意某种修法但还没做"不能写 `accepted`**（finding 会立刻消失，light 又没有 C4 兜底）：保持 open，
   或写 `amended` + 理由（不关闭）。
@@ -76,11 +82,12 @@ disable-model-invocation: false
 
 ## 5. 四条容易误判的地方
 
-1. **`check_valid == false` 有两种走法**：内容没变（规则版本/失效登记）通常重查即可；
-   内容已变则先重查还是先重判由你判断——注意**结论写入后再重查会让结论失绑**，这是事实提示，
-   不是"发起早就会失绑"。先重查是建议，不是机制事实。
-2. **fail 轮重判仍是 fail**：`verdict` 由报告载荷推导（存在 blocking finding 即 fail），
-   重判不改结论。
+1. **`check_valid == false` 必须先重查**：正式判定会拒绝失效 Check，不存在“先重判”的合法路径；
+   内容/规则/失效登记处理完后重跑 Check，再判定。结论写入后再重查会让结论失绑，所以顺序是重查在前。
+2. **fail 轮重判看未关闭项**：报告载荷可能仍是 fail，但本轮 verdict 由**未关闭** blocking
+   推导。误报/重分类经复核写 `accepted`（未改内容、锚点仍匹配）后，同轮重判可转 pass；
+   修正复核可追加（旧记录保留并标 `supersedes`），但 pass/unavailable 后不可替换。
+   已修复的 finding 会改变内容，旧报告锚点失配，必须新 Check + 新轮。
 3. **你的否定只清 C2**：把 finding 以 `accepted` 关闭可以让 `open_blocking` 清零，
    但 complex 任务的 C4 仍要求一次 `pass`——否定不能替代审查结论。
 4. **`stale_extra` 非空**：判定之后该轮又导入了未被引用的报告。先读这些新报告，

@@ -13,7 +13,7 @@ user-invoked: true
 
 ## 步骤
 
-1. 先跑 `wf.py enable`，取得启用核对结果（Trellis 互斥、宿主身份能力、activation）。
+1. 若用户明确禁写 `.wf/`、明确要求不启用流程，或当前宿主策略已拒绝写运行态：**不要先跑 `enable` 或试写**，直接如实报告并进入下节「启用无法建立时」由人选择出口。否则先跑 `wf.py enable`，取得启用核对结果（Trellis 互斥、宿主身份能力、activation）。
    - `WF_FLOW_CONFLICT` / `WF_SEMANTIC_DECISION`：停，按 facts 清理或交人核实后再换新会话。
    - `WF_IDENTITY_UNRESOLVED`：停，按 facts 核实宿主身份能力。自动模式会为本会话签发 `issued_id`；
      显式的“换一个新会话标识”命令尚未交付，不要引导人走这条路径。

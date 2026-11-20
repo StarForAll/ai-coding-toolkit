@@ -359,7 +359,7 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 | 判据 | 唯一实现 | 同批必须核 |
 |---|---|---|
 | 主会话五轴复核 | `review.validate_main_review` | `review-decide --main-review` 产生 verdict 时必填；`--main-review-draft` 只生成骨架、不写记录；`reviews.main_reviews[]` 按 `(round, file_digest)` 幂等，判定后不可替换 |
-| 本轮覆盖 | `review.merged_coverage` | 轴由主会话复核或任一报告 `pass/fail` 覆盖；两者都未覆盖才是缺口；全未覆盖 = 输入不成立；`review-status` 同源投影 `main_review_ready`/`sources` |
+| 本轮覆盖 | `review.merged_coverage` | 轴由主会话复核或**主会话采信的报告** `pass/fail` 覆盖：`reliance=none` 不贡献、`partial` 只贡献主会话该轴 `sources` 列出的槽位、`primary` 贡献其全部 `pass/fail` 轴；两者都未覆盖才是缺口；全未覆盖 = 输入不成立；`review-status` 同源投影 `main_review_ready`/`adopted`/`sources` |
 | 报告边界 | `review.report_input_problems` | `read-scope` 与 `excluded-scope` 不得交叠（lint/import/decide 同源）；`scope-exceptions`/`material-gaps` 不再消费；全轴 uncovered 的报告自报 `unavailable` |
 | reviewer 入口范围 | `review.context` | facts 返回 `submitted_scope`/`readable_scope`/`exclusions`；`readable_scope.business_code=["**"]`、`focus_paths` 是审查重点不是读取上限 |
 | 归档收尾 | `tasks._release_after_archive` + `cli._release_writer_locked` | 正常归档持久化成功后锁内释放；释放失败只写 `write_release` facts，不反转归档结果；`writer release` 空闲时幂等成功 |
@@ -375,7 +375,7 @@ A 全 pass、B 全 uncovered 仍算全覆盖；归档后 `writer release` 返回
 `review-decide` 缺主会话复核时直接按报告 pass。
 
 **Tests Required**：
-- `scripts/tests/wf_review/test_review_coverage.py`：无主会话复核 → `WF_SEMANTIC_DECISION`；主会话覆盖 reviewer 缺口 → pass；两源都未覆盖 → 缺口；`fail` 无 finding → 需人裁决；`pass` 不能覆盖未关闭 blocking；复核判定后不可替换。
+- `scripts/tests/wf_review/test_review_coverage.py`：无主会话复核 → `WF_REVIEW_INVALID`；主会话覆盖 reviewer 缺口 → pass；两源都未覆盖 → 缺口；`reliance=none` 不贡献覆盖、`partial` 仅采信轴贡献；`fail` 无 finding → `WF_REVIEW_INVALID`；`pass` 不能覆盖未关闭 blocking；误报 `accepted` 关闭后同轮可重判 pass；复核判定后不可替换。
 - `scripts/tests/wf_review/test_report_boundary.py`：`read-scope` 与 `excluded-scope` 矛盾在 lint/input 同源；`scope-exceptions`/`material-gaps` 不再产生缺口/失败；全 uncovered 报告自报 `unavailable`；`review-context` 返回授权范围。
 - `scripts/tests/wf_runtime/test_archive_writer_release.py`：归档释放成功、失败只报告、空闲幂等。
 - `scripts/tests/wf_runtime/test_envelope_cache.py`：按 `session_id`/`issued_id` 分文件，缺标识不缓存。
@@ -555,3 +555,179 @@ Correct：只写本次成功面的输入指纹；auto 比较当前指纹和 red 
 显式 `--template-cache` 与假树故障传播）、`test_repro_selection`（相位守恒与 writer 范围）、
 `test_results_summary`（schema 4 / `failure_kind` / 历史读取）、`test_test_runner_plan` 与
 `test_source_coverage`（候选资格一致与 audit/基线）。
+
+## 14. 审查判定：采信覆盖、未关闭项与材料绑定（2026-11-20）
+
+### 1. Scope / Trigger
+
+改动 `review.launch` / `review.context` / `merged_coverage` / `review.decide` /
+`report_input_problems` / `write_materials` 或发行版本守卫时适用。触发原因是 2026-11-20
+审查链路修正：旧 Check 可发起新轮、`reliance` 只登记不消费、报告原始 blocking 直接决定
+verdict、`submitted_scope` 不参与物化。
+
+### 2. Signatures
+
+- `merged_coverage(main_review, axis_reports)`：`main_review` 为完整主会话复核（`axes` +
+  `report_review`）或 `None`（status 投影）。
+- `round_open_blocking(ctx, task, round_no, extra_dispositions=())`：把本次 dispositions
+  临时并入后，复用 `open_findings` 取本轮未关闭 blocking。
+- `scope_binding_problems(ctx, task, launch, delivery)`：核 `submitted_scope` 的 diff 路径子集、
+  需求 PRD 与当前 Check。
+- `write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, delivery=None)`：
+  `paths` 缺省取交付集合；launch 声明缩小时传子集。
+- `report_input_problems(payload, *, task=None, text=None, launch=None)`：有 launch 时核
+  `read-scope` 是否命中 launch `exclusions`。
+- `build-wf-release.py --version X.Y.Z`：README 目标版本必须等于 X.Y.Z；已存在
+  `wf-vX.Y.Z` tag 时拒绝重建。
+
+### 3. Contracts
+
+- 覆盖：主会话 `pass/fail` 按其 `sources` 归属（`main` 或采信的报告槽位；仅引用 reviewer 的
+  不记作独立核实）；报告按 `reliance` 采信——`none` 不贡献，`partial` 只贡献主会话该轴
+  `sources` 列出的槽位，`primary` 贡献全部 `pass/fail` 轴。`sources` 列出的槽位必须被采信且
+  该报告确实覆盖该轴；两者都未覆盖才是缺口。
+- verdict：本轮只由**未关闭** blocking 触发；误报/重分类经 `accepted` 关闭后可同轮重判，
+  已修复（内容变化）仍须新 Check + 新轮。
+- 发起/取材料：`review.launch` 复用 `gates.check_validity` 并在发起时核 `submitted_scope`
+  与交付集合/PRD/当前 Check 一致；`diff.paths` 必须显式给出，收窄比例记入 launch
+  `scope.selected/total/narrowed` 与 `review-context` facts。`review.context` 核 launch 的
+  `check_id` 与 `check_anchor`，任一漂移即拒绝。导入/判定同时核报告 `check-anchor.check_id`；
+  重跑 Check 换 id 即旧报告失效。
+- 材料：launch 的 `submitted_scope` 是物化输入；`diff.paths` 只能缩小，不能扩大，且不得与本轮
+  `exclusions` 交叠；显式 `null`/重复路径按非法/去重处理；旧布尔形状回退交付集合扣除
+  `exclusions` 并标 `legacy_scope`。报告 `read-scope` 不得命中 launch `exclusions`，也不得超出 `readable_scope`
+  的业务代码/spec/PRD。`check.json` 只含 Check 公开身份/结果/锚点，不含 `internal_review`。
+- 版本：README 目标版本、发行清单版本、tag 三方一致；同版 tag 已存在不得重建。
+- 复核修正：判定为 `pass`/`unavailable` 后复核不可替换；判定为 `fail` 或尚未判定时允许追加
+  修正复核（旧记录保留并标 `supersedes`）；主会话仍有 `fail` 轴时不得产 `pass`。
+
+### 4. Validation & Error Matrix
+
+| 条件 | 结果 |
+|---|---|
+| Check 失效/锚点漂移仍发起 | `WF_CHECK_STALE`，不写 launch |
+| launch 后锚点漂移仍取材料 | `WF_CHECK_STALE`，不重写材料 |
+| 主会话全 uncovered 且报告均 `reliance=none` | 全未覆盖 → `WF_REVIEW_INVALID` |
+| 主会话 `fail` 无 finding / 缺 `--main-review` | `WF_REVIEW_INVALID`，给骨架/修复/登记出口 |
+| 本轮仍有未关闭 blocking | verdict `fail`，facts 带 `open_blocking` |
+| 误报 `accepted` 且无内容变化 | 同轮可 `pass` |
+| `submitted_scope.diff.paths` 超出交付集合 | `WF_REVIEW_INVALID`，不物化 |
+| 报告 `read-scope` 命中 launch exclusions / 超出 readable_scope | `WF_REVIEW_INVALID` |
+| `submitted_scope.diff.paths` 命中 launch exclusions、为 `null` 或重复 | `WF_REVIEW_INVALID`（重复去重后计 selected） |
+| 旧布尔 `diff` 形状 + launch exclusions | 兼容回退时先扣排除面，`legacy_scope=true`；不得把排除目录写入材料 |
+| `status.json` 的 `buckets` | 只列本轮实际物化的路径，不泄漏整份交付集合 |
+| 报告 `read-scope` 是比 `readable_scope` 更宽的 glob | `read-scope-readable` 拒绝（用可证包含，不按字面匹配） |
+| 请求的 `exclusions` 省略/缩小必排面 | 必排面（`.env`、私钥、配置等）始终并入；请求只能追加；非数组拒绝 |
+| `submitted_scope.diff`/`requirement`/`test_results` 形状非法 | `WF_REVIEW_INVALID`（仅旧布尔形状兼容） |
+| 显式空 `readable_scope` | 表示不授权额外读取；报告有 `read-scope` 即拒绝（缺省未声明才用入口默认） |
+| 报告/launch 的 `check_id` 与当前 Check 不同（即使 `check_anchor` 相同） | `WF_REVIEW_INVALID` / `WF_CHECK_STALE` |
+| 发起请求 `submitted_scope.diff.paths` 缺失或超出交付集合 | `WF_REVIEW_INVALID`，不写 launch |
+| 主会话 `sources` 引用 `reliance=none`、未覆盖该轴的报告，或 `pass` 引用该轴判 `fail` 的报告 | `WF_REVIEW_INVALID` |
+| `verified` finding 的 `accepted` 关闭无 `evidence_refs` | `WF_REVIEW_INVALID`；跨轮按提出轮复核 check 核，不在当前轮找不到就放过 |
+| `evidence_refs` 指向不存在的验证/项或 `v:` 未 passed | `WF_REVIEW_INVALID`（引用可解析、验证通过是事实；证据是否足够仍归 AI） |
+| `evidence_refs` 使用 `s/g/h` 或不在当前漂移里的 `d:` | `WF_REVIEW_INVALID`（关闭证据只收可解析的 `v/a/f/p/j` 或当前 `d:`） |
+| 同一 finding 先空证据关闭、后补有效证据/amended | 按最新处置（含 amended），旧空记录不阻断；历史证据只回退它绑定的 Check |
+| 关闭处置未绑定实际 Check | 新关闭记 `check_id`；本次关闭只认这次 Check，不能借同名旧 passed |
+| `finding_review.check=unable` + accepted（同一轮） | 不关闭 blocking；只有 verified（可解析证据）/disputed 才关闭 |
+| 旧轮 `unable`、后续轮 accepted 带证据 | 视为核实完成；无证据仍拒绝 |
+| 非阻塞建议未写 `finding_review` | 不阻断复核成立，记 `deferred_suggestions` |
+| 修正复核漏写已有 `main_findings` | 入口按 id 并集补齐，并沿用其原核实状态；撤项只能走 dispositions |
+| 追加新 finding 时旧项原本 `unable` | 不得因缺省规则变成 `verified`；沿用旧状态 |
+| 用默认草稿重交复核（旧 finding 齐、核实省略） | 同样继承旧核实状态，不能默认成 verified |
+| 增量登记时继承到 reviewer 核实条目 | 已知集合取任务全量；判成未知 finding 属缺陷 |
+| `--main-review-draft` 生成占位 | 只给 blocking finding 留 `finding_review` 占位；建议留空即视为延后 |
+| 绑定 `check_id` 在历史里不存在 | `WF_REVIEW_INVALID`；不得回退当前 Check 解析同名验证项 |
+| 修复是改 spec 规则/基线 | 证据用 `p:<交付面内路径>`，并重跑 Check |
+| register-only --plan 关闭时 Check/批准失效 | `WF_CHECK_STALE`/`WF_APPROVAL_MISSING`；不能借失效 Check 旧 passed，也不能用 unavailable 规避 |
+| Check 已 invalidated/stale 仍产 verdict | `WF_CHECK_STALE`；正式判定与发起共用 `check_validity` |
+| 规划批准失效但 Check 锚点未变 | `WF_APPROVAL_MISSING`；不得用旧 Check 发起/判定 |
+| blocking finding 缺 id | 输入不成立；不得跳过该条后 pass |
+| 本次处置显式带历史 `check_id` | 入口覆盖为当前 Check；不能借历史 passed |
+| 报告 read-scope 写绝对/项目外路径 | 输入不成立；必须先收回仓库相对路径 |
+| 发起后 PRD/批准或 Check 失效仍取材料 | `review-context` 在物化前复查批准与 Check（含 replan 清空 approval），直接阻断 |
+| 两份报告五轴全 uncovered、主会话自查全 pass | 拒绝；每份 reviewer 报告至少实际覆盖一轴 |
+| 一位 reviewer 全 uncovered、另一位覆盖后主会话补足 | 拒绝 pass；不能由另一位或主会话代偿 |
+| unavailable/register-only 遇到标准漂移 | 仍可登记，不要求先补标准判断；漂移只阻断正式判定 |
+| 同一 agent 重跑 review-context 命中 in-progress 草稿 | 返回同一 materials/report_path 续写，不报已存在 |
+| lint 遇 findings 非数组/round 非数字 | 逐项报错且不崩溃；不拖到导入才暴露 |
+| 读取路径带 `./` 绕过排除/可读面比较 | 比较前归一仓库路径；等价路径同判 |
+| 默认请求含必排敏感文件 | 默认 diff.paths 先扣必排面，不生成会被自己拒绝的请求 |
+| 一份报告 done、一份仍写 | status 先提示已 done 的 review-import，其余继续写 |
+| Check 失效后先重判 | 正式判定拒绝失效 Check；必须先重查 |
+| 子目录 `pkg/.env` 命中触碰面 | 默认必排面 `**/.env` 等覆盖子目录同名敏感文件 |
+| 单份报告两条 blocking 共用 id | 输入不成立；finding id 必须单份唯一 |
+| finding `severity` 写成 `blockng` 等非法值 | 输入不成立；不得静默当非阻塞 |
+| `rule.md#不存在的子句` | 输入不成立；spec 子句引用须精确存在（broken-reference 走人复核） |
+| 草稿阶段（in-progress）lint | `ok=true` + notes 提示导入前改 done；import/decide 仍只认 done |
+| 报告 `round` 非数字 | 导入先给逐项问题，不抛裸 ValueError |
+| `.wf/spec/**` 归了本任务 | 属项目数据，进交付集合/材料/提交（框架自有资产只算非项目数据的 `.wf/**`） |
+| gap acceptance 未绑定 task | 输入不成立；决定文件须含 task |
+| 报告已写完未导入 | status 先提示 review-import，不报人数不合格 |
+| 本轮 fail 且为误报 | status 提示本轮 plan+main-review 重判，不一律新开轮 |
+| 机械修订只改验证项命令/cwd/required/consume_at | `WF_SEMANTIC_DECISION`；验证项定义变化回 Plan 重批 |
+| 两个 in-progress 占位报告 | status 记 writing、arrived 不计、material_ready=false；不制造“已齐/仍缺”双口径 |
+| `finding_review` 省略可唯一推断的 slot | 入口写回解析出的 slot，关闭证据索引不得漏核 |
+| 计划声明 passed 但 Check 记录 failed/缺失 | `WF_REVIEW_INVALID`（通过状态以 Check 实际记录为准） |
+| 报告未到齐但已有 main finding | `review-decide --register-only --main-review` 可先登记，不产生 verdict；最小 task/round/main_findings 由入口补 discovery；保留原 finding 可追加，丢 finding/只降 severity 拒绝 |
+| 本轮已判 pass/unavailable 后用 `--register-only` 改写主会话复核 | `WF_REVIEW_INVALID`（要改结论开新一轮） |
+| 先登记关闭、后把 finding 核实为 verified | 核实那次必须补 `evidence_refs`，否则不得 pass |
+| 主会话自己核实的 blocking 未写 `main_findings` 却想判 fail | 无 reviewer/main finding 可指回，`WF_REVIEW_INVALID` |
+| main blocking 缺 `assertion_ref` 或不属当前批准集合/引用本任务改过的规则 | `WF_REVIEW_INVALID`（与 reviewer finding 同核 K4c） |
+| main finding 声明 `broken-reference` 但无人复核 | `WF_REVIEW_INVALID`（与 reviewer finding 同口径；只有所引规则确实改过才要求） |
+| 修正复核把 main blocking 的 severity 降为 suggestion | 无 accepted disposition 即 `WF_REVIEW_INVALID`（不能只改 severity） |
+| `main_findings` 未写 `finding_review` | 入口按 `verified` 记，不要求重复填写 |
+| 自定义 `readable_scope.prd` 指向其他任务 | `WF_REVIEW_INVALID`（必须等于入口算出的本任务 PRD） |
+| 请求 `export_decision` 与已核验授权不一致 | 轮次记录用已核验摘要，请求字段不覆盖 |
+| 修正复核丢掉上一份复核的 main finding 且未关闭 | `WF_REVIEW_INVALID` |
+| 已确认 blocking 与另一轴未覆盖同时存在 | 直接记录 fail，不先要求缺口接受；提交的缺口接受文件记入 `gap_acceptance_ignored` 事实 |
+| 材料收窄时主会话轴 `uncovered` + 报告 `primary` | 本来要产 pass 时 `WF_REVIEW_INVALID`；已有 blocking 时先 fail，并记 `coverage_conflicts` |
+| 报告 read-scope 指向 `.wf/` 运行态或 `.git/` 私有配置 | 除 spec/PRD 显式放行外，`read-scope-readable` 拒绝；本任务 PRD 即使命中 `.wf/tasks/**` 也在放行后跳过排除冲突 |
+| 只读材料包 | `read-scope` 写 `materials`；显式空 `readable_scope` 时空数组表示未补读 |
+| 五轴全未覆盖但已有经复核的 blocking | 允许记录 fail（不把已知阻塞改写成缺口） |
+| `review-decide` 的 `result.scope` | 必带 selected/unselected/total/narrowed，供只看 verdict 的调用方核对 |
+| 同轮 pass 时主会话仍把轴判 `fail` | `WF_REVIEW_INVALID`，要求修正复核 |
+| 重建已 tag 的版本 / README 版本不一致 | `BuildError`，不动发行树 |
+
+### 5. Good/Base/Bad Cases
+
+- Good：主会话把两份报告都标 `primary`，五轴 pass；报告无 blocking；decide pass。
+- Base：主会话全 uncovered、报告 `none`；decide 拒绝为全未覆盖，而不是 pass。
+- Bad：报告带 blocking，主会话判 `disputed` 但未写 `accepted`；本轮仍 fail（未关闭）。
+- Bad：launch 声明 `pkg/a.py`，`review-context` 却物化整个交付集合；修复后只物化声明子集。
+
+### 6. Tests Required
+
+- `scripts/tests/wf_review/test_review_coverage.py`：`reliance=none` 不贡献；`partial` 仅
+  `sources` 列出的轴贡献；误报 `accepted` 同轮 pass；未关闭仍 fail；缺主会话复核/主会话 fail
+  无 finding 均为 `WF_REVIEW_INVALID`。
+- `scripts/tests/wf_review/test_launch_mechanized.py`：launch 复用 `check_validity`，失效即
+  `WF_CHECK_STALE`。
+- `scripts/tests/wf_review/test_report_boundary.py`：context 漂移拒绝；缩小声明只物化子集；
+  扩大声明拒绝；`read-scope` 命中 launch exclusions 拒绝。
+- `scripts/tests/test_build_wf_release.py`：README 版本不一致、同版 tag 存在均拒绝。
+- `scripts/tests/wf_review/`：Check id 换新后旧报告拒绝；launch 阶段拒绝越界/缺 paths/
+  null/排除面交叠；`reliance=none` 的来源拒绝；`pass` 引用 fail 轴拒绝；`verified` 关闭缺
+  `evidence_refs` 拒绝；已确认 blocking 直接 fail 不被缺口拦住；fail 后同轮修正复核可追加、
+  pass 后不可替换；收窄事实在 launch/context 可见。
+- `scripts/tests/wf_runtime/test_material_diff.py`：`check.json` 不含 `internal_review`；`status.json` 的 buckets
+  只列物化路径。
+- 兼容分支：旧布尔 `diff` + exclusions 扣面；glob 读声明不得用字面匹配放宽；五轴全未覆盖 +
+  blocking 可 fail；判定 `result.scope.unselected` 可见；收窄时 `uncovered`+`primary` 矛盾拒绝；
+  必排面不可被请求整体替换；控制面读取拒绝；只读材料包写 `materials`；主会话 `main_findings`
+  可形成正式 fail，关闭走 `slot:"main"`，修正复核不得静默丢弃或只改 severity；blocking main
+  finding 同核 assertion_ref；`finding_review` 可省（默认 verified）；进入复核草稿与 `f:` 判断引用。
+- 回退注入：临时恢复旧实现时上述断言必须变红。
+
+### 7. Wrong vs Correct
+
+#### Wrong
+```python
+# 报告原始 blocking 即 fail，误报关闭后无法同轮重判
+verdict = "fail" if report_blocking else "pass"
+```
+#### Correct
+```python
+# 只按本次 dispositions 并入后的未关闭 blocking 判
+open_blocking = round_open_blocking(ctx, task, round_no, dispositions)
+verdict = "fail" if open_blocking else "pass"
+```

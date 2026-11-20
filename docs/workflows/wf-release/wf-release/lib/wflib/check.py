@@ -857,7 +857,8 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         if problems:
             raise CheckError("WF_SEMANTIC_DECISION",
                              {"problems": problems,
-                              "exits": ["只排除未归属未提交的路径；属本任务的用 task-attribute 裁决归属"]})
+                              "exits": ["只排除未归属未提交的路径；属本任务的路径在批准触碰面内直接计入交付，"
+                                        "已提交的历史改动才用 task-attribute --commit <sha> 裁决归属"]})
         scope.persist_exclusions(task, new_records)
         classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
     external, external_findings = scope.external_changes(ctx.root, task)
@@ -907,7 +908,7 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         raise CheckError("WF_SEMANTIC_DECISION",
                          dict(scope_facts, external_pending_unchecked=pending_external,
                               exits=["逐条核对影响并给出『已核对无影响』决定",
-                                     "确认属本任务改动则用 task-attribute 裁决归属",
+                                     "确认属本任务且已提交的改动用 task-attribute --commit <sha> 裁决归属",
                                      "影响验收则回 Plan，影响检查则重检"]))
     if buckets.get("d"):
         # 归属语义存疑：交人裁决，不当通过（机制稿 §3.5 d 档）。

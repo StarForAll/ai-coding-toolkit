@@ -86,7 +86,7 @@ class LaunchHarness(unittest.TestCase):
              "by": "human:xzc", "at": "2026-11-12T00:00:00Z",
              "quote": "同意把本任务材料发给两个 reviewer", "source": "user-declared"})
 
-    def launch(self):
+    def _launch(self, validity, request_path=None):
         def _start(_ctx, path, task, *_args, **_kwargs):
             task = dict(task)
             task["action"] = {"id": "a1", "state": "started"}
@@ -94,11 +94,35 @@ class LaunchHarness(unittest.TestCase):
             return task, task["action"]
 
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch("wflib.gates.check_validity", return_value=validity), \
+                mock.patch("wflib.tasks._is_approved_plan", return_value=True), \
                 mock.patch.object(lock, "acquire", lambda *a, **k: _NullLock()), \
                 mock.patch.object(tasks_mod, "_start_task_action", _start), \
                 mock.patch.object(tasks_mod, "_finish_task_action",
                                   lambda _ctx, _path, task, *_a, **_k: (task, {"ok": True})):
-            return review.launch(self.ctx, dict(self.task), None, implementation_cli="dsh")
+            return review.launch(self.ctx, dict(self.task), request_path,
+                                 implementation_cli="dsh")
+
+    def launch(self):
+        return self._launch({"valid": True, "code": None, "facts": {}, "blockers": []})
+
+    def write_request(self, submitted, exclusions=None, readable_scope=None,
+                      export_decision=None):
+        path = self.root / "scope-request.json"
+        payload = {
+            "implementation_clis": ["dsh"],
+            "slots": [{"slot": "s1"}, {"slot": "s2"}],
+            "submitted_scope": submitted,
+            "readable_scope": readable_scope or {"business_code": ["**"], "focus_paths": ["pkg/a.py"],
+                                                 "spec": [], "prd": ".wf/tasks/t1/prd.md"},
+            "exclusions": (exclusions if isinstance(exclusions, str)
+                               else list(exclusions if exclusions is not None
+                                         else [".env", "../**", ".wf/tasks/**"])),
+        }
+        if export_decision is not None:
+            payload["export_decision"] = export_decision
+        path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        return str(path)
 
 
 class LaunchHelpTest(unittest.TestCase):
@@ -113,12 +137,174 @@ class LaunchHelpTest(unittest.TestCase):
 
 
 class MechanizedLaunchTest(LaunchHarness):
+    def test_launch_uses_the_shared_check_validity(self):
+        self.authorize_export()
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": False, "code": "WF_CHECK_STALE",
+                          "facts": {"saved": "a", "current": "b"},
+                          "blockers": ["anchor_drift"]})
+        self.assertEqual(caught.exception.code, "WF_CHECK_STALE")
+        self.assertEqual(caught.exception.facts["blockers"], ["anchor_drift"])
+
+    def test_launch_rejects_scope_outside_delivery(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py", "pkg/b.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        })
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                         request_path=request)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("pkg/b.py", json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_legacy_material_shapes_are_still_accepted(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": "git diff", "requirement": ["prd"], "test_results": ["v1"],
+        })
+        self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                     request_path=request)
+
+    def test_legacy_string_exclusions_are_normalized(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        }, exclusions="pkg/private/**")
+        self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                     request_path=request)
+        task = records.load_json(self.task_dir / "task.json")
+        entry = task["reviews"]["launches"][-1]
+        self.assertIn("pkg/private/**", entry["exclusions"])
+        self.assertIn(".env", entry["exclusions"])
+
+    def test_request_cannot_override_verified_export_decision(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        }, export_decision="sha256:" + "0" * 64)
+        self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                     request_path=request)
+        task = records.load_json(self.task_dir / "task.json")
+        entry = task["reviews"]["launches"][-1]
+        self.assertTrue(entry.get("decision"))
+        self.assertNotEqual(entry.get("decision"), "sha256:" + "0" * 64)
+        self.assertEqual(entry["decision"], entry["export_decision"])
+
+    def test_launch_rejects_other_task_prd_in_readable_scope(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        }, readable_scope={"business_code": ["**"], "spec": [],
+                           "prd": ".wf/tasks/other/prd.md"})
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                         request_path=request)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("readable_scope.prd", json.dumps(caught.exception.facts,
+                                                       ensure_ascii=False))
+
+    def test_launch_rejects_diff_path_in_exclusions(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        }, exclusions=["pkg/**"])
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                         request_path=request)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("intersects launch exclusions",
+                      json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_launch_rejects_null_paths(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": None},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        })
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                         request_path=request)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("paths required", json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_duplicate_paths_do_not_hide_narrowing(self):
+        (self.root / "pkg" / "b.py").write_text("changed-b\n", encoding="utf-8")
+        task = records.load_json(self.task_dir / "task.json")
+        task["entry_snapshot"]["touch_paths"] = ["pkg/a.py", "pkg/b.py"]
+        records.write_json(self.task_dir / "task.json", task)
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py", "pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        })
+        result = self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                              request_path=request)
+        self.assertEqual(result["facts"]["scope"]["selected"], 1)
+        self.assertTrue(result["facts"]["scope"]["narrowed"])
+
+    def test_request_exclusions_cannot_drop_mandatory_surfaces(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set", "paths": ["pkg/a.py"]},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        }, exclusions=[])
+        self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                     request_path=request)
+        task = records.load_json(self.task_dir / "task.json")
+        self.assertIn(".env", task["reviews"]["launches"][-1]["exclusions"])
+
+    def test_legacy_shape_scope_excludes_material(self):
+        self.authorize_export()
+        request = self.write_request({"diff": True, "requirement": True,
+                                      "test_results": True}, exclusions=["pkg/**"])
+        result = self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                              request_path=request)
+        self.assertEqual(result["facts"]["scope"]["selected"], 0)
+        self.assertTrue(result["facts"]["scope"]["legacy"])
+
+    def test_launch_requires_diff_paths_for_new_shape(self):
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set"},
+            "requirement": ".wf/tasks/t1/prd.md",
+            "test_results": {"check": "c1"},
+        })
+        with self.assertRaises(review.ReviewError) as caught:
+            self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                         request_path=request)
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("diff.paths", json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_launch_records_the_verified_export_authorization(self):
+        self.authorize_export()
+        self.launch()
+        task = records.load_json(self.task_dir / "task.json")
+        entry = task["reviews"]["launches"][-1]
+        self.assertTrue(entry.get("decision"))
+        self.assertTrue(entry.get("export_decision"))
+        self.assertEqual(entry["decision"], entry["export_decision"])
+
     def test_defaults_are_generated_from_the_object(self):
         self.authorize_export()
         result = self.launch()
         facts = result["facts"]
         self.assertEqual(facts["round"], 1)
         self.assertEqual(len(facts["temp_paths"]), 2)
+        self.assertFalse(facts["scope"]["narrowed"])
+        self.assertEqual(facts["scope"]["selected"], facts["scope"]["total"])
         request = json.loads((Path(facts["temp_paths"][0]) / "request.json").read_text(encoding="utf-8"))
         scope = request["submitted_scope"]
         self.assertTrue(scope["diff"]["paths"])

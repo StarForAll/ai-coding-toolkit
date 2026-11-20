@@ -445,6 +445,7 @@ class RepairScopeTest(unittest.TestCase):
         self.assertEqual(short["exits"], scope["exits"])
         self.assertNotIn("launches", short)
         self.assertNotIn("conclusion", short)
+        self.assertIn("launch_scope", short)
         self.assertEqual(short["blocking"], precheck["blocking"])
         self.assertEqual(short["unknown_acceptances"], ["acceptance"])   # #46：--short 也强制回显
 
@@ -799,7 +800,8 @@ class SkillDocTest(unittest.TestCase):
                       "pause_for_human", "abandon_task"):
             self.assertIn(token, loop)
         self.assertIn("inferred", loop)
-        self.assertIn("fail 轮重判仍是 fail", loop)
+        self.assertIn("fail 轮重判看未关闭项", loop)
+        self.assertIn("同轮重判可转 pass", loop)
         self.assertIn("你的否定只清 C2", loop)
         self.assertIn("stale_extra", loop)
         self.assertIn("先 `review-launch`", loop)
@@ -827,8 +829,8 @@ class SkillDocTest(unittest.TestCase):
 
     def test_24_c4_hint_accuracy(self):
         loop = self.text("wf-repair-loop")
-        self.assertIn("结论写入后再重查会让结论失绑", loop)
-        self.assertIn("不是\"发起早就会失绑\"", loop)
+        self.assertIn("正式判定会拒绝失效 Check", loop)
+        self.assertIn("不存在“先重判”的合法路径", loop)
 
 
 if __name__ == "__main__":

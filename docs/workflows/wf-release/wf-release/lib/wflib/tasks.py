@@ -1990,13 +1990,20 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
             {"entry": entry, "reason": reason} for entry, reason in touch_errors]})
     touch_paths = [paths_mod.validate_glob(item) for item in block.get("touch_paths") or []]
     acceptance = fingerprint.acceptance_digest(block.get("acceptance") or [])
-    if sorted(touch_paths) != sorted(plan.get("touch_paths") or []) or acceptance != plan.get("acceptance_digest"):
+    current_verifications = block.get("verifications") or []
+    approved_verifications = plan.get("verifications") or []
+    if (sorted(touch_paths) != sorted(plan.get("touch_paths") or [])
+            or acceptance != plan.get("acceptance_digest")
+            or records.H("wf-plan-verifications-v1", current_verifications)
+            != records.H("wf-plan-verifications-v1", approved_verifications)):
         raise TaskError("WF_SEMANTIC_DECISION",
-                        {"reason": "触碰面或验收发生变化，不属机械修订；回 Plan 重新批准",
+                        {"reason": "触碰面、验收或验证项定义发生变化，不属机械修订；回 Plan 重新批准",
                          "approved_touch_paths": plan.get("touch_paths"),
                          "current_touch_paths": touch_paths,
                          "approved_acceptance_digest": plan.get("acceptance_digest"),
-                         "current_acceptance_digest": acceptance})
+                         "current_acceptance_digest": acceptance,
+                         "approved_verifications": approved_verifications,
+                         "current_verifications": current_verifications})
     conditions = [item for item in plan.get("complexity_reasons") or [] if not item.get("downgrade")]
     current_version = compute_plan_version(ctx.root, task, block, plan.get("complexity"),
                                            conditions, plan.get("tdd"))
@@ -2054,7 +2061,8 @@ def _apply_exclusion_entries(ctx, task, classified, entries, *, receipts=None):
     if problems:
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"problems": problems,
-                         "exits": ["只排除未归属未提交的路径；属本任务的用 task-attribute 裁决归属"]})
+                         "exits": ["只排除未归属未提交的路径；属本任务的路径在批准触碰面内直接计入交付，"
+                                   "已提交的历史改动才用 task-attribute --commit <sha> 裁决归属"]})
     scope_mod.persist_exclusions(task, new_records)
     return scope_mod.classify_candidates(ctx.root, task, receipts=receipts)
 
@@ -2152,7 +2160,8 @@ def cmd_task_start(ctx, args):
                             {"reason": "工作区排除只适用于普通任务；该任务类型不使用 c 档门禁",
                              "kind": task.get("kind"),
                              "exits": ["去掉 --workspace-exclusion 后重跑",
-                                       "该路径若确属本任务：用 task-attribute 裁决归属"]})
+                                       "该路径若确属本任务且已提交：用 task-attribute --commit <sha> 裁决归属；"
+                                       "未提交的按批准触碰面归属"]})
         # P2-3：执行候选唯一性对全部 kind 生效（initialize/bootstrap 也不能与别的执行同时存在）
         others = [
             other for _path, other in iter_tasks(ctx.root)
