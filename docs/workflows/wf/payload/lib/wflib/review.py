@@ -72,11 +72,19 @@ AGENT_REPORT = re.compile(r"^review-([a-z0-9._-]+)\.md$")
 AGENT_HEADER = "<!-- wf-review-agent:v1 status={status} -->"
 
 
-def report_skeleton(task_id, round_no, check, anchor):
+def report_skeleton(task_id, round_no, check, anchor, launch=None):
     """reviewer 手边的完整骨架：状态行 + 协议块 + 字段占位。
 
     骨架只铺路，不是门禁：未填的轴/verdict 仍会被 `wf lint report` 与导入端报出来。
+    excluded-scope/read-scope 由入口预填（2026-11-21）：excluded-scope 取本轮
+    mandatory_exclusions 的 launch 口径；read-scope 预填 materials（只读材料包的
+    合法默认值）。reviewer 仍可自行申报，但受同一套导入校验约束——预填只让骨架
+    默认可过，不放宽任何校验。
     """
+    exclusions = []
+    if launch is not None:
+        # 与导入校验同一口径（mandatory_exclusions 是唯一合并实现），不另算第二份
+        exclusions = sorted(mandatory_exclusions((launch or {}).get("exclusions")))
     payload = {
         "protocol": PROTOCOL,
         "task-id": task_id,
@@ -84,8 +92,8 @@ def report_skeleton(task_id, round_no, check, anchor):
         "review-time": records.now_str(),
         "review-focus": REVIEW_FOCUS,
         "check-anchor": {"check_id": (check or {}).get("id"), "check_anchor": anchor},
-        "read-scope": [],
-        "excluded-scope": [],
+        "read-scope": ["materials"],
+        "excluded-scope": exclusions,
         "axes": {axis: "" for axis in REVIEW_AXES},
         "findings": [],
         "verdict": "",
@@ -2799,7 +2807,8 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                            "agent": agent, "round": round_no, "status": status, "path": target,
                            "exits": ["报告已完成，下一步 review-import",
                                      "换一个审查 agent（须与实施 CLI 及其它审查 CLI 不同）"]})
-    records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor))
+    records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor,
+                                                 launch=launch))
     from . import codes
 
     return codes.result(
@@ -2933,12 +2942,33 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                               {"reason": "no finished report in this round", "round": round_no,
                                "agent": wanted, "directory": directory,
                                "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
-        results = [import_report(ctx, task, round_no, None, candidate, _from_discovery=True,
-                                 agent=found)
-                   for found, candidate in targets]
-        last = results[-1]
-        facts = dict((last or {}).get("facts") or {})
-        facts["imported_agents"] = [found for found, _p in targets]
+        # 发现式导入（2026-11-21 调整）：逐份导入，坏报告不中断其余槽位——
+        # 导入是证据入库，能入的先入，失败槽位在 facts.import_errors 单列（含原因与出口）。
+        imported, import_errors = [], []
+        last = None
+        for found, candidate in targets:
+            try:
+                result = import_report(ctx, task, round_no, None, candidate,
+                                       _from_discovery=True, agent=found)
+                imported.append(found)
+                last = result
+            except ReviewError as exc:
+                import_errors.append({"agent": found,
+                                      "code": getattr(exc, "code", "WF_REVIEW_INVALID"),
+                                      "reason": str((exc.facts or {}).get("reason", exc)),
+                                      "exits": list((exc.facts or {}).get("exits") or [])})
+        if not imported and import_errors:
+            # 一份都没能入库：按原语义抛第一份的错误（不伪造部分成功）
+            raise ReviewError(import_errors[0]["code"],
+                              {"reason": import_errors[0]["reason"],
+                               "agent": import_errors[0]["agent"],
+                               "exits": import_errors[0]["exits"]})
+        last = last or {}
+        facts = dict(last.get("facts") or {})
+        facts["imported_agents"] = imported
+        if import_errors:
+            facts["import_errors"] = import_errors
+            facts["note"] = "部分报告未入库：按 import_errors 逐槽位处理，已入库的不受影响"
         last["facts"] = facts
         return last
     if not os.path.isabs(report_path):

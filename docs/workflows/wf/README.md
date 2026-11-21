@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.3`（审查链路、覆盖采信与版本身份修正；`0.1.0` 曾对应不同内容，`0.1.1`/`0.1.2` 未打 tag；本轮重建后由人创建 `wf-v0.1.3`）；正式发布前保持 `0.x.y` |
+| 目标版本 | `0.1.4`（dogfood 二轮修正：抽样门禁降档为试点期提示、机械项入口化——决定错误回显/报告骨架预填/`archive --draft` 草稿/`actual_id` 出口、技能纪律去重与措辞收窄、执行器解析收敛、`project-config` 模板补 `identity_path`；`0.1.3` 未打 tag；本轮重建后由人创建 `wf-v0.1.4`）。**0.1.3 → 0.1.4 无升级路径**（`upgrade` 第三轮未交付、install 仅同引用追加）：已装 0.1.3 的项目复验需卸载重装（保留数据）或整树手工投放，严禁只替换 `payload/lib` 保留旧清单（`declared_step_specs` 与新 lib 比对会 `WF_ASSET_DECISION` 拒绝）；正式发布前保持 `0.x.y` |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与

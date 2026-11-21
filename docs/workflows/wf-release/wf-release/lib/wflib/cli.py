@@ -1098,6 +1098,33 @@ def cmd_enable(ctx, args):
         "start_source": "human:enable",
         "enabled_at": records.now_str(),
     }
+    # 终态绑定出口（2026-11-21）：绑定对象已到终态是可机械判定的事实——
+    # 不让 AI 再查一次 status/run locate 才知道本会话没有可推进对象（dogfood 会话 3/4 卡点）。
+    # 任务看 status=archived；实例看 terminal（normal/abnormal 均为终态，四阶段设计稿 §5.9）。
+    # 探测失败时标记 unknown 并如实说明，不冒充"未结束"。
+    binding_terminal = False
+    binding_terminal_unknown = False
+    if binding:
+        object_ref = binding.get("object") or {}
+        try:
+            if object_ref.get("kind") == "task":
+                from . import tasks as _tasks_mod
+
+                _bound = _tasks_mod.load_task(ctx.root, object_ref.get("id"))
+                if _bound is not None and _bound.get("status") == "archived":
+                    binding_terminal = True
+                elif _bound is None:
+                    binding_terminal_unknown = True
+            elif object_ref.get("kind") == "run":
+                from . import runs as _runs_mod
+
+                _run = _runs_mod.load_run(ctx.root, object_ref.get("id"))
+                if _run is not None and _run.get("terminal") in ("normal", "abnormal"):
+                    binding_terminal = True
+                elif _run is None:
+                    binding_terminal_unknown = True
+        except Exception:  # 只读探测失败不阻断 enable；标记 unknown 不冒充未结束
+            binding_terminal_unknown = True
     return ok(
         facts={
             "session_key": ctx.key(),
@@ -1107,14 +1134,22 @@ def cmd_enable(ctx, args):
             "activation_source": "carried" if activation else "formed_by_enable",
             "cache_hint": "把 facts.activation 原样缓存进本会话，并随每次请求放入 session.activation",
             "binding": ({"object": binding.get("object"),
-                         "instance_id": binding.get("instance_id")} if binding else None),
+                         "instance_id": binding.get("instance_id"),
+                         "terminal": binding_terminal,
+                         "terminal_state": ("archived-or-terminated" if binding_terminal
+                                            else "unknown" if binding_terminal_unknown else "active")}
+                        if binding else None),
             "platforms": ctx.platforms(),
             "trellis_data": state["data"],
             "trellis_disabled_confirmed": disabled,
         },
         position=codes.position(scope="session"),
-        next_=("已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
-               "（同进程内无法区分时开新终端）" if binding
+        next_=(("绑定的对象已到终态：本会话不能继续推进它。"
+                "开新对象需新执行边界/新会话（同进程无法区分时开新终端）" if binding_terminal else
+                "绑定对象状态暂无法确认：先跑 `status`（任务）或 `run locate`（实例）核实后再决定；"
+                "不据猜测推进" if binding_terminal_unknown else
+                "已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
+                "（同进程内无法区分时开新终端）") if binding
                else "人显式选择对象：task-new、bind --task，或 run create"),
         warnings=warnings,
     )
@@ -1740,6 +1775,10 @@ def _handover_accept(ctx):
 # 人的决定输入
 # --------------------------------------------------------------------------
 
+# 决定文件的必填键（唯一事实源，2026-11-21 从 _load_decision 局部元组上升为模块常量）：
+# 预检、草稿生成（archive --draft）与帮助断言共用；测试不再 import 私有函数或抄清单。
+DECISION_FIELDS = ("source", "at", "subject", "object_digest", "choice", "reason")
+
 
 def _load_decision(path):
     try:
@@ -1755,9 +1794,15 @@ def _load_decision(path):
     for item in items:
         if not isinstance(item, dict):
             raise CliError("WF_RECORD_INVALID", {"reason": "decision must be an object or array of objects"})
-        missing = [key for key in ("source", "at", "subject", "object_digest", "choice", "reason") if key not in item]
+        missing = [key for key in DECISION_FIELDS if key not in item]
         if missing:
-            raise CliError("WF_RECORD_INVALID", {"reason": "decision missing fields", "missing": missing})
+            raise CliError("WF_RECORD_INVALID", {
+                "reason": "decision missing fields", "missing": missing,
+                "field_notes": {"at": f"人答复时刻（ISO8601）；无法确知时写当前时刻 {records.now_str()}",
+                                "object_digest": "按决定语义填写（如 task-approve 是 PRD 的 sha256；"
+                                                 "archive/stop 仅要求字段存在）"},
+                "required_fields": list(DECISION_FIELDS),
+            })
         if not item.get("choice"):
             raise CliError("WF_RECORD_INVALID", {"reason": "decision choice is empty"})
         decisions.append(item)
@@ -1766,6 +1811,53 @@ def _load_decision(path):
 
 def cmd_stop(ctx, args):
     path = args.value("--decision")
+    if args.flag("--preview"):
+        # 只读预览（设计稿 §4.4）：**免决定**——预览与决定的顺序是"先看再定"，
+        # 对齐 archive --draft 的只读语义（在 _load_decision 之前返回，不写任何记录、
+        # 不要求写权）。带了 --decision 时一并显示拟用处置；不带则 choice 为 null。
+        choice = None
+        if path:
+            decisions = _load_decision(path)
+            _choices = [item.get("choice") for item in decisions]
+            if not _choices:
+                raise CliError("WF_SEMANTIC_DECISION", {"reason": "收工决定文件为空，需要一条 choice",
+                                                        "choices": [],
+                                                        "accepted": list(decisions_mod.domain("stop_choice"))})
+            if not decisions_mod.accepts("stop_choice", _choices[0]):
+                raise CliError("WF_SEMANTIC_DECISION", {"choices": _choices, "reason": "收工选择必须是 commit/keep/reverse/transfer"})
+            choice = _choices[0]
+        from . import scope as scope_mod
+
+        binding = session_mod.load_binding(ctx.root, ctx.key())
+        object_ref = (binding or {}).get("object") or {}
+        if object_ref.get("kind") != "task":
+            raise CliError("WF_BINDING_MISMATCH",
+                           {"reason": "no task binding for stop preview",
+                            "exits": ["先由人调用 start/`wf.py enable` 建立会话并绑定任务，或 `bind --task <id>`",
+                                      "确认要预览的是哪个任务后重试"]})
+        from . import tasks as tasks_mod
+
+        task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
+        if task is None:
+            raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
+        classified = scope_mod.classify_candidates(ctx.root, task)
+        facts = {
+            "task": {"id": task.get("id"), "phase": task.get("phase"), "title": task.get("title")},
+            "choice": choice,
+            "buckets": classified.get("buckets"),
+            "uncommitted": sorted(scope_mod.uncommitted_paths(ctx.root)),
+            "note": "预览只读；本次未写入任何记录",
+        }
+        # §0.2 试点期抽样提示（2026-11-21 降档为建议，不阻断；无 picks 时附注）
+        from . import sampling as sampling_mod
+
+        if not sampling_mod.selection(task)["picks"]:
+            facts["pilot_sampling_pending"] = True
+        return ok(facts=facts, position=codes.position(scope="task", phase=task.get("phase"),
+                                                       task_id=task.get("id")),
+                  next_="按预览结果选定处置后写决定文件，去掉 --preview 重跑"
+                        + ("；" + sampling_mod.PILOT_HINT
+                           if facts.get("pilot_sampling_pending") else ""))
     if not path:
         raise CliError("WF_PATH_INVALID", {"reason": "stop requires --decision <path>"})
     decisions = _load_decision(path)
@@ -1777,30 +1869,6 @@ def cmd_stop(ctx, args):
                                                 "accepted": list(decisions_mod.domain("stop_choice"))})
     if not decisions_mod.accepts("stop_choice", choices[0]):
         raise CliError("WF_SEMANTIC_DECISION", {"choices": choices, "reason": "收工选择必须是 commit/keep/reverse/transfer"})
-    if args.flag("--preview"):
-        # 只读预览（设计稿 §4.4）：逐路径给出归属/状态/待验证项，不写任何记录
-        from . import scope as scope_mod
-
-        binding = session_mod.load_binding(ctx.root, ctx.key())
-        object_ref = (binding or {}).get("object") or {}
-        if object_ref.get("kind") != "task":
-            raise CliError("WF_BINDING_MISMATCH", {"reason": "no task binding for stop preview"})
-        from . import tasks as tasks_mod
-
-        task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
-        if task is None:
-            raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
-        classified = scope_mod.classify_candidates(ctx.root, task)
-        facts = {
-            "task": {"id": task.get("id"), "phase": task.get("phase"), "title": task.get("title")},
-            "choice": choices[0],
-            "buckets": classified.get("buckets"),
-            "uncommitted": sorted(scope_mod.uncommitted_paths(ctx.root)),
-            "note": "预览只读；本次未写入任何记录",
-        }
-        return ok(facts=facts, position=codes.position(scope="task", phase=task.get("phase"),
-                                                       task_id=task.get("id")),
-                  next_="按预览结果选定处置后去掉 --preview 重跑")
     from . import tasks as tasks_mod
 
     return tasks_mod.stop_work(ctx, decisions, choices[0])
@@ -2133,7 +2201,8 @@ COMMAND_HELP = {
         "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填，JSON 数组）"},
         "inputs": {"decision[]": {"source": "人答复来源（必填）", "at": "时间（必填）",
                                   "subject": "必须含任务 id 或对象摘要（必填）",
-                                  "object_digest": "当前 PRD 的 sha256（必填）",
+                                  "object_digest": "当前 PRD 的 sha256（必填；摘要不符时错误回显 expected_prd_digest，"
+                                                   "入口不代填——人对 PRD 的批准留痕不可替代）",
                                   "choice": f"批准：{PLAN_APPROVAL_CHOICES}；"
                                             f"机械修订：{MECHANICAL_REVISION_CHOICES}（必填）",
                                   "生成代次": "inputs.generation 可显式覆盖；缺省取本会话运行态记录的代次"
@@ -2166,18 +2235,37 @@ COMMAND_HELP = {
                        "args": {"--task": "任务 id（必填）", "--decision": "no-update|updated",
                                 "--no-update": "简写：等价于 --decision no-update",
                                 "--changes": "updated 时的知识变更清单 JSON 数组"},
-                       "example": "wf.py task-knowledge --task <id> --decision no-update --json"},
+                       "inputs": {"--changes[]": {"action": "add|update|merge|rename|delete",
+                                                  "path": "spec 相对路径", "reason": "变更理由",
+                                                  "summary": "≤80 字摘要"}},
+                       "example": "wf.py task-knowledge --task <id> --decision updated --changes changes.json --json",
+                       "changes_example": [{"action": "update", "path": ".wf/spec/guides/x.md",
+                                            "reason": "补充本轮新契约", "summary": "新增骨架预填口径"}]},
     "stop": {"purpose": "收工：先 --preview 看逐路径归属，再按处置执行",
-             "args": {"--decision": "决定文件（必填）", "--preview": "只读预览（不写任何记录）"},
+             "args": {"--decision": "决定文件（正式执行必填；--preview 可不带——免决定只读预览）",
+                      "--preview": "只读预览（不写任何记录、不要求写权）"},
              "inputs": {"decision[]": {"choice": "commit|keep|reverse|transfer",
                                        "subject": "路径或承接对象", "reason": "理由",
                                        "object_digest": "可选"}},
-             "example": "wf.py stop --decision stop.json --preview --json"},
+             "example": "wf.py stop --decision stop.json --preview --json",
+             "example_file": [{"source": "human:chat", "at": "2026-11-21T10:00:00+08:00",
+                               "subject": ["src/a.py", "tests/test_a.py"], "object_digest": "",
+                               "choice": "commit", "reason": "授权提交以上交付路径"}]},
     "archive": {"note": "commit 的 subject 可写数组，或用逗号/分号/换行/空格分隔的多路径字符串",
 "purpose": "正常归档（最终门禁 + 提交授权）",
-                "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填）"},
+                "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填）",
+                         "--draft": "只读生成决定文件草稿（免 --decision，不要求写权与绑定；"
+                                    "人确认后把草稿写成决定文件即授权）"},
                 "inputs": {"decision[]": "至少一条 choice=finish；提交需 choice=commit 的授权条目"},
-                "example": "wf.py archive --task <id> --decision finish.json --json"},
+                "example": "wf.py archive --task <id> --decision finish.json --json",
+                "example_file": [
+                    {"source": "human:chat", "at": "2026-11-21T10:00:00+08:00",
+                     "subject": "t-20261121-1 已了解结果与未核实项", "object_digest": "",
+                     "choice": "finish", "reason": "结果符合预期，未核实项已在 next 声明"},
+                    {"source": "human:chat", "at": "2026-11-21T10:00:00+08:00",
+                     "subject": ["src/a.py", "tests/test_a.py"], "object_digest": "",
+                     "choice": "commit", "reason": "授权提交以上交付路径"}],
+                "draft_example": "wf.py archive --task <id> --draft --json"},
     "baseline-apply": {"purpose": "把已批准提案成组应用到基线/配置/spec",
                        "args": {"--task": "任务 id（必填）",
                                 "--files": "逗号分隔的路径（推荐：由入口读工作树生成提案）",
@@ -2868,7 +2956,9 @@ def cmd_help(ctx, args):
                                            "known": sorted(COMMAND_HELP)})
     facts = dict(entry)
     facts["command"] = name
-    facts["envelope"] = "所有业务命令都从 stdin 或 --envelope <file> 收请求信封（provider=host + identity.host_id + session_id）"
+    facts["envelope"] = ("自动模式（默认）不手写信封：直接运行 `wf.py <子命令>`，身份由执行边界派生、"
+                         "写权代次由会话运行态携带。仅显式信封模式（拿不到执行边界时）才从 stdin 或 "
+                         "--envelope <file> 提供请求信封（provider=host + identity.host_id + session_id）")
     return ok(facts=facts, position=codes.position(scope="session"), next_="按 example 调用")
 
 
@@ -2994,7 +3084,14 @@ def main(argv=None):
             facts=dict(exc.facts, capability=exc.capability, round=exc.round_no),
         )
     except records.RecordInvalid as exc:
-        payload = codes.result("WF_RECORD_INVALID", facts={"reason": str(exc)})
+        # carries_id（load_task 的目录名/id 错配）给结构化出口；其余 RecordInvalid
+        # 原因（duplicate/unreadable 等）不扩权，保持纯 reason（2026-11-21）。
+        carries_id = getattr(exc, "carries_id", None)
+        facts = {"reason": str(exc)}
+        if carries_id:
+            facts["actual_id"] = carries_id
+            facts["exits"] = [f"改用记录 id {carries_id} 重试（传入的可能是目录名）"]
+        payload = codes.result("WF_RECORD_INVALID", facts=facts)
     except lock.LockBusy as exc:
         payload = codes.result("WF_WRITER_BUSY", facts={"reason": str(exc), "path": exc.path})
     except lock.LockUnavailable as exc:

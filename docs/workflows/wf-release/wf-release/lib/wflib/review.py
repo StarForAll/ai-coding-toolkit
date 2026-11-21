@@ -72,11 +72,19 @@ AGENT_REPORT = re.compile(r"^review-([a-z0-9._-]+)\.md$")
 AGENT_HEADER = "<!-- wf-review-agent:v1 status={status} -->"
 
 
-def report_skeleton(task_id, round_no, check, anchor):
+def report_skeleton(task_id, round_no, check, anchor, launch=None):
     """reviewer 手边的完整骨架：状态行 + 协议块 + 字段占位。
 
     骨架只铺路，不是门禁：未填的轴/verdict 仍会被 `wf lint report` 与导入端报出来。
+    excluded-scope/read-scope 由入口预填（2026-11-21）：excluded-scope 取本轮
+    mandatory_exclusions 的 launch 口径；read-scope 预填 materials（只读材料包的
+    合法默认值）。reviewer 仍可自行申报，但受同一套导入校验约束——预填只让骨架
+    默认可过，不放宽任何校验。
     """
+    exclusions = []
+    if launch is not None:
+        # 与导入校验同一口径（mandatory_exclusions 是唯一合并实现），不另算第二份
+        exclusions = sorted(mandatory_exclusions((launch or {}).get("exclusions")))
     payload = {
         "protocol": PROTOCOL,
         "task-id": task_id,
@@ -84,8 +92,8 @@ def report_skeleton(task_id, round_no, check, anchor):
         "review-time": records.now_str(),
         "review-focus": REVIEW_FOCUS,
         "check-anchor": {"check_id": (check or {}).get("id"), "check_anchor": anchor},
-        "read-scope": [],
-        "excluded-scope": [],
+        "read-scope": ["materials"],
+        "excluded-scope": exclusions,
         "axes": {axis: "" for axis in REVIEW_AXES},
         "findings": [],
         "verdict": "",
@@ -2799,7 +2807,8 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                            "agent": agent, "round": round_no, "status": status, "path": target,
                            "exits": ["报告已完成，下一步 review-import",
                                      "换一个审查 agent（须与实施 CLI 及其它审查 CLI 不同）"]})
-    records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor))
+    records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor,
+                                                 launch=launch))
     from . import codes
 
     return codes.result(

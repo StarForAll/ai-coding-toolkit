@@ -161,9 +161,13 @@ def load_task(root, task_id):
         return None
     task = records.load_json(os.path.join(path, "task.json"))
     if isinstance(task, dict) and task.get("id") not in (None, task_id):
-        raise records.RecordInvalid(
+        # carries_id：目录名被当 task id 传入时的结构化出口（2026-11-21）——cli 兜底
+        # 分支据此给 "改用记录 id <X>" 提示；其余 RecordInvalid 原因不携带该属性。
+        error = records.RecordInvalid(
             f"task record {os.path.basename(path)} carries id {task.get('id')!r}, expected {task_id!r}"
         )
+        error.carries_id = task.get("id")
+        raise error
     return task
 
 
@@ -1691,8 +1695,10 @@ def cmd_task_approve(ctx, args):
         if approval.get("object_digest") and approval.get("object_digest") != prd_digest:
             raise TaskError("WF_APPROVAL_MISSING",
                             {"reason": "approval decision does not cover the current PRD",
-                             "decision_digest": approval.get("object_digest"), "current_digest": prd_digest},
-                            next_="针对当前 PRD 重新出批准决定")
+                             "decision_digest": approval.get("object_digest"), "current_digest": prd_digest,
+                             "expected_prd_digest": prd_digest},
+                            next_="针对当前 PRD 重新出批准决定（object_digest 应为 expected_prd_digest；"
+                                  "入口不代填——人对 PRD 的批准留痕不可替代）")
         subject = str(approval.get("subject") or "")
         # 最低绑定：subject 必须写明任务 id，或 object_digest 精确等于当前 PRD 摘要；
         # 两者都空的决定不得批准任何任务（第十九轮复审外部 N-2）。
@@ -2310,7 +2316,7 @@ def cmd_task_replan(ctx, args):
                 "reason": "replan 决定的 object_digest 不等于当前规划版本或 PRD 摘要",
                 "task": task_id, "object_digest": decision.get("object_digest"),
                 "current_plan_version": current_version, "current_prd_digest": prd_digest,
-                "exits": ["用当前 PRD 摘要或 plan.version 重出决定",
+                "exits": [f"用当前 PRD 摘要（{prd_digest}）或 plan.version（{current_version}）重出决定",
                           "继续沿用现有规划，不改回 Plan"],
             })
         # 实质规划变更：旧批准必须失效（机制稿 §2.2），但历史保留可追
@@ -2617,9 +2623,20 @@ def check_next_hint(task, check):
     """
     if (check or {}).get("result") != "pass":
         return "Check 未通过：按 facts 与 wf-repair-loop 处置后重查"
+    hint = None
     if (task.get("plan") or {}).get("complexity") == "complex":
-        return "复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
-    return "人了解结果后调用 finish（wf-finish）"
+        hint = "复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
+    else:
+        hint = "人了解结果后调用 finish（wf-finish）"
+    # §0.2 试点期抽样提示（2026-11-21 降档为建议，不阻断；无 picks 时附注）
+    try:
+        from . import sampling as sampling_mod
+
+        if not sampling_mod.selection(task)["picks"]:
+            hint += "；" + sampling_mod.PILOT_HINT
+    except Exception:  # 提示失败不影响下一跳本身
+        pass
+    return hint
 
 
 def cmd_task_check(ctx, args):
@@ -3526,13 +3543,73 @@ def _release_after_archive(ctx, task_id, holder=None):
                 "next": "按 status 核对写权后重跑 `wf writer release`"}
 
 
+def _archive_draft(ctx, task_id):
+    """archive --draft 的草稿生成（2026-11-21）：只读、不要求写权与绑定。
+
+    条目为 archive 决定域形状（archive_finish + commit_grant 骨架），每条含
+    DECISION_FIELDS 六键占位；只有 commit 条目预填 subject 路径（finish 条目
+    的 subject/quote 留占位——框架不替人写"已了解结果与未核实项"）。
+    """
+    from . import cli
+
+    task = load_task(ctx.root, task_id)
+    if task is None:
+        raise TaskError("WF_RECORD_INVALID", {"missing_task": task_id})
+    pending = pending_delivery_paths(ctx, task) or []
+    granted = [str(item) for item in (commit_grant_paths(task) or [])]
+
+    def _entry(choice, subject):
+        # 六键占位从 DECISION_FIELDS 生成，不手抄（唯一事实源）
+        return {
+            "source": "human:（人复核草稿后填写）",
+            "at": records.now_str() + "（提交时刻由人确认后写）",
+            "subject": subject,
+            "object_digest": "（按决定语义填写：finish 条目可留空由字段校验放行）",
+            "choice": choice,
+            "reason": "（人填写：为什么这样处置）",
+        }
+
+    entries = [
+        _entry("finish", "（人写：已了解结果与未核实项）"),
+    ]
+    for path in sorted(set(pending) - set(granted)):
+        entries.append(_entry("commit", [path]))
+    for path in sorted(set(granted) & set(pending)):
+        entries.append(_entry("commit", [path]))
+    from . import sampling as sampling_mod
+
+    return {
+        "title": task.get("title"),
+        "entries": entries,
+        "pilot_sampling_pending": not sampling_mod.selection(task)["picks"],
+    }
+
+
 def cmd_archive(ctx, args):
     persisted = None      # 首归档路径没有续做分支，必须先初始化（否则引用未定义变量）
     from . import cli, gates, lock
 
     task_id = args.value("--task")
     decision_path = args.value("--decision")
-    if not task_id or not decision_path:
+    if not task_id:
+        raise TaskError("WF_PATH_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
+    if args.flag("--draft"):
+        # 草稿模式（2026-11-21）：只读、免决定；在 _load_decision/action 启动/取锁之前返回，
+        # 不要求写权与绑定。由 pending_delivery_paths/commit_grant_paths 生成决定文件草稿
+        # （archive_finish + commit_grant 骨架，每条含 DECISION_FIELDS 六键占位；
+        # 只有 commit 条目预填 subject 路径；finish 条目 subject/quote 留占位——
+        # 框架不替人写"已了解结果与未核实项"）。人把草稿写成决定文件即授权。
+        if decision_path:
+            raise TaskError("WF_PATH_INVALID", {"reason": "--draft 与 --decision 互斥：草稿模式不消费决定文件"})
+        draft = _archive_draft(ctx, task_id)
+        return codes.result(
+            "WF_OK",
+            object={"id": task_id, "name": draft["title"]},
+            position_=codes.position(scope="task", task_id=task_id),
+            next_="草稿只打印不落盘；人确认后把内容写成决定文件，再以 --decision 正式归档",
+            facts={"draft": draft["entries"], "pilot_sampling_pending": draft["pilot_sampling_pending"],
+                   "note": "草稿只读；本次未写入任何记录"})
+    if not decision_path:
         raise TaskError("WF_PATH_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     finish = [item for item in decisions if decisions_mod.accepts("archive_finish", item.get("choice"))]
@@ -3671,7 +3748,7 @@ def cmd_archive(ctx, args):
                                 {"missing_action": "repo_rules",
                                  "repo_rule_paths": rule_hits,
                                  "uncovered": uncovered,
-                                 "reason": "提交范围含仓库级规则文件，但确认未覆盖这些路径（K6 第 5 类）",
+                                 "reason": "提交范围含环境级规则文件（K6 第 5 类：环境级规则变更确认），但确认未覆盖这些路径",
                                  "exits": ["在本次决定文件里写一条 repo_rules 确认，paths 覆盖上面未覆盖的路径后重入",
                                            "把这些路径移出本次提交范围"]})
         # K6 第 2 类：本次提交范围里的**删除**要有一次确认（删除是不可逆动作）

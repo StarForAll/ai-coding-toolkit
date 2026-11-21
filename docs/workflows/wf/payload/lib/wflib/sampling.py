@@ -201,6 +201,11 @@ def frozen(task):
     return (task.get("sampling") or {}) if isinstance(task.get("sampling"), dict) else {}
 
 
+# 试点期抽样提示（2026-11-21 降档）：唯一定义位。试点结束时删除本常量与三处引用即完成下线，
+# 不留第二份文案（交付纪律"同一口径只写一处"）。
+PILOT_HINT = "试点期建议收工前跑一次 `wf sampling pick --task <id> --freeze`（不跑不阻断）"
+
+
 def selection(task):
     """选样投影（供门禁 P 与回显）：只有 seed/events/picks 三个键与选样有关。"""
     state = frozen(task)

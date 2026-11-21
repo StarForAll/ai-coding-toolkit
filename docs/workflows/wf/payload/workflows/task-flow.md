@@ -31,13 +31,13 @@
 
 - 时点：归档前（before_archive）
 - enforcement: `wflib/check.py::run_check`（执行）＋ `wflib/gates.py::verify_step`（锚点核验）
-- 动作：固定五步：范围核对 → 验证就绪 → 实际执行 → 双轴内部审查 → 写结果与指纹。
+- 动作：固定五步：范围核对 → 验证就绪 → 实际执行 → 双轴内部审查（判断指引见 `wf-code-review`）→ 写结果与指纹。
 - 出口：范围越界 `WF_SCOPE_VIOLATION`；检查失败 `WF_CHECK_FAILED`；对象变化 `WF_CHECK_STALE`。
 
 ### task.tdd-verified [required · repeatable]
 
 - 时点：归档前（before_archive，仅 TDD 开启时适用）
-- enforcement: `wflib/check.py::run_check` 的 `tdd_evidence` 核验
+- enforcement: `wflib/check.py::run_check` 的 `tdd_evidence` 核验（红绿证据与适用性判断见 `wf-tdd`）
 - 动作：对同一真实行为有红→绿证据；文档类对象以已批准的适用性与独立可观察验证代替。
 - 出口：开关开启而缺证据 → `WF_CHECK_FAILED`，不得以其余检查通过顶替。
 
@@ -59,15 +59,18 @@
 
 - 时点：归档前（before_archive，仅存在触发事实时适用）
 - enforcement: `wflib/tasks.py::cmd_task_retrospect`（写入）＋ `wflib/gates.py::retrospective_triggers`（触发集合重建）
-- 动作：复盘结论覆盖当前触发集合（返工、审查失败、已确认的重复调试）。
+- 动作：复盘结论覆盖当前触发集合（返工、审查失败、已确认的重复调试；调试判重与诊断指引见 `wf-diagnosing-bugs`）。
 - 出口：触发事实未被覆盖 → `WF_SEMANTIC_DECISION`；复盘后新增事实形成新期次。
 
-### task.sampled [required · repeatable]
+### 试点期抽样 [pilot · 可选 · 不阻断]
 
-- 时点：归档前（before_archive）
-- enforcement: `wflib/gates.py`（P = `{seed, picks}`）＋ `wflib/sampling.py::freeze`
-- 动作：本任务已跑过一次试点期抽样并冻结选样（种子 + 事件集），AI 不可挑选事件。
-- 出口：无冻结选样 → `WF_SEMANTIC_DECISION`，出口是跑一次 `wf sampling pick --task <id>`。
+- 时点：收工前建议（2026-11-21 降档：不再是归档门禁，未跑不阻断）
+- 事实：`wflib/gates.py` 投影（P = `{seed, picks}`）＋ `wflib/sampling.py::freeze`
+- 动作：试点期自验证手段（v42 §0.2）：建议收工前跑一次
+  `wf sampling pick --task <id> --freeze` 冻结选样（种子 + 事件集），AI 不可挑选事件。
+- 提示：未跑抽样时，task-check 的 next_ 与收工预览 facts 附建议语/`pilot_sampling_pending`
+  （仅建议，不产生任何错误码）；有 picks 则不提示。
+- 试点结束：由人决定保留/降频/取消，届时一次代码改动删除提示并发版。
 
 ### task.changes-persisted [required · repeatable]
 

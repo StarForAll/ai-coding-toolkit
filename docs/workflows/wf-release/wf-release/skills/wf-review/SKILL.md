@@ -26,7 +26,7 @@ user-invoked: true
   --envelope <本会话信封> --json
 ```
 
-返回的 `facts` 里给全了你需要的：`report_path`（报告要写到哪）、`materials`（`diff.patch` / `prd.md` / `check.json` / `tests.json`）、`submitted_scope` / `readable_scope` / `exclusions`（本次授权边界）、`anchor`（`check_anchor`）、以及 `agent`（你的署名，取自本会话宿主身份）。若 `narrowed` 为真，材料只是交付集合的子集（`submitted_paths` / `delivery_path_count`）：按声明范围审，不把未选路径当作已覆盖；需要更多材料时停止回报，不自行扩大。
+返回的 `facts` 里给全了你需要的：`report_path`（报告要写到哪）、`materials`（材料目录，文件名以 facts 返回为准）、`submitted_scope` / `readable_scope` / `exclusions`（本次授权边界）、`anchor`（`check_anchor`）、以及 `agent`（你的署名，取自本会话宿主身份）。若 `narrowed` 为真，材料只是交付集合的子集（`submitted_paths` / `delivery_path_count`）：按声明范围审，不把未选路径当作已覆盖；需要更多材料时停止回报，不自行扩大。
 
 **同一 agent 在同一轮只能审查一次**：`review-context` 会先占位；`status=in-progress` 是你自己的草稿，重入会返回同一 `materials`/`report_path` 让你续写；只有 `status=done` 才拒绝并指向 `review-import`。不要绕过去重跑。
 
@@ -46,16 +46,8 @@ user-invoked: true
 
 ```
 <!-- wf-review-agent:v1 status=done -->
-<!-- wf-review-report:v1 -->
-```json
-{"protocol":"wf-review-v1","task-id":"…","round":1,
- "review-time":"…","review-focus":"…","check-anchor":{"check_id":"…","check_anchor":"sha256:…"},
- "read-scope":[…],"excluded-scope":[…],
- "axes":{"range":"…","acceptance":"…","contract":"…","regression":"…","testability":"…"},
- "findings":[{"id":"f1","location":"…","evidence":"…","impact":"…",
-              "severity":"blocking|suggestion","assertion_ref":"验收项/验证 id 或 spec 位置"}],
- "verdict":"pass|fail|unavailable"}
-```
+报告协议**以 `review-context` 生成的骨架为权威版本**（字段、必填、枚举一次给全，不在此复制）：
+骨架已预填 `excluded-scope`（必排敏感面）与 `read-scope=["materials"]`，按需自行申报仍受同一套导入校验约束。
 
 同一份报告内 `findings[].id` 必须唯一；不同报告之间可以复用同名 id（身份由 round+slot+id 组成）。
 
@@ -73,10 +65,7 @@ user-invoked: true
 
 ## 纪律
 
-- 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
-- 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
-- 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
-- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
 
 ## 来源与差异
 

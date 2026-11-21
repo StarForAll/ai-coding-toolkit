@@ -61,8 +61,7 @@ disable-model-invocation: false
   `facts.not_closing` 会如实回报"未关闭"，别把"已答复"当成"已了结"。
 - **误报也写 `accepted`**，并在 `reason` 里写明性质（"经复核认定误报，无需改代码"）。
   不要用 `rejected` 表达"我不同意"——那不会关闭，机制也不追溯翻转历史。
-- `recheck_by` 必填且**不得等于提出者**（同一份报告不能自证）；它可以带 `human:` 前缀
-  （人工复核路径），这条路径与"必须 ∈ 已导入 agent 集合"不冲突。
+- `recheck_by` 必填且**不得等于提出者**——后果是"同一份报告不能自证"（校验细节见机制稿，本 skill 只写后果）。
 - `accepted` 只能表示「**处置结果已成立**」：① 已修复且已重查通过 ② 经复核认定误报 ③ 已重分类。
   **「同意某种修法但还没做」不得写 `accepted`**——finding 会立刻从 `open_blocking` 消失，
   light 任务又没有 C4 兜底；此时保持 open，或写 `amended` + 理由（不关闭）。
@@ -100,15 +99,12 @@ disable-model-invocation: false
 
 ## 判定边界
 
-`review-decide` 的 pass/fail 由入口按事实推导（人数、CLI 差异、锚点、主会话复核与采信报告的覆盖、未关闭 blocking）；本 skill 不给 verdict。
+`review-decide` 的 pass/fail 由入口按已落盘事实与 AI 声明推导（人数、CLI 差异、锚点、主会话复核与采信报告的覆盖、未关闭 blocking；声明本身不被机制验证）；本 skill 不给 verdict。
 单 reviewer 只是 degraded 参考，不满足复杂任务完成条件。
 
 ## 纪律
 
-- 身份只在请求信封里：不读环境变量、不从命令行或文件猜身份；信封缺失就报 `WF_IDENTITY_UNRESOLVED`。
-- 不代人作答、不代跑终端确认与令牌；人的决定只经 `--decision` / `--plan` / `--disposition` 文件承载。
-- 入口输出的 `tier` / `code` / `facts` / `next` 是唯一判定源；不自行改写状态或补写门禁结论。
-- 解释器按 `.wf/workflows/session-flow.md`「运行约定」选择并整会话固定；`WF_EXECUTOR_UNCONFIRMED` 或审批拒绝时停下报告，不换解释器重试。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
 
 ## 来源与差异
 

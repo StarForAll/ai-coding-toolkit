@@ -23,9 +23,9 @@ TASK_STEP_SPECS = (
     ("task.knowledge-disposed", "once", "all", "before_archive"),
     ("task.retrospective-done", "once", "retrospective", "before_archive"),
     ("task.changes-persisted", "repeatable", "all", "before_archive"),
-    # §0.2 抽样排在**最后**：先把真实问题（前置/依赖/审查/检查）报出来，抽样是收工前的最后一道。
-    # 若排前面，会让"依赖不满足"这类负路径变成"还没抽样"，把具体问题藏起来（cp4 A1 实测）。
-    ("task.sampled", "repeatable", "all", "before_archive"),
+    # §0.2 抽样是试点期自验证手段而非交付承诺（2026-11-21 降档）：
+    # 不再作为归档硬门禁；未跑抽样只降为提示（check_next_hint 与收工预览 facts），
+    # 试点结束由人决定，届时一次代码改动删除提示并发版。
     ("task.archived", "once", "all", "after_archive"),
 )
 
@@ -34,7 +34,6 @@ RULE_CLASS_STEPS = (
     "task.tdd-verified",
     "task.review-passed",
     "task.changes-persisted",
-    "task.sampled",
 )
 
 # 机制稿 §11.3 状态动作的固定名称（scope=control）
@@ -473,6 +472,8 @@ def compute_P(ctx, task, step_id, *, check=None, rule_version=None):
             "paths": sorted(check_mod.object_paths(ctx, task), key=lambda value: value.encode("utf-8")),
         }
     if step_id == "task.sampled":
+        # 2026-11-21 降档：不再是归档门禁；保留投影给提示消费（check_next_hint/
+        # 收工预览 facts 的 pilot_sampling_pending 以 selection.picks 为准）。
         from . import sampling as sampling_mod
 
         selection = sampling_mod.selection(task)
@@ -821,16 +822,11 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             return False, "WF_SEMANTIC_DECISION", {"reason": "retrospective conclusion missing"}
         return True, None, {}
     if step_id == "task.sampled":
-        from . import sampling as sampling_mod
-
-        selection = sampling_mod.selection(task)
-        if not selection["picks"]:
-            return False, "WF_SEMANTIC_DECISION", {
-                "reason": "收工前必须先跑试点期抽样（事件由框架确定性选取）",
-                # 一跳出口：这条命令会同时冻结事件集并落盘选样，不需要再试第二遍
-                "exits": ["跑 `wf sampling pick --task <id> --freeze`（一次完成冻结与选样）后重入"],
-            }
-        return True, None, {"picks": len(selection["picks"])}
+        # 2026-11-21 降档：verify_step 不再核 task.sampled（已从 TASK_STEP_SPECS 移除）。
+        # 该分支保留为防御性拒绝（未知步骤不该被当满足），触发即测试迁移有遗漏。
+        return False, "WF_RECORD_INVALID", {
+            "reason": "task.sampled is no longer a required step (pilot-only, 2026-11-21)",
+        }
     if step_id == "task.changes-persisted":
         return tasks_mod.changes_persisted_fact(ctx, task)
     if step_id == "task.archived":
