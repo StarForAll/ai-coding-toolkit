@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/docs/wf-delivery-discipline.md", "reason": "wf 模块交付纪律：登记链四件套、单实现纪律、断言锚点、分层验证顺序（T0/T1/T2）与并行/收口契约——实施全阶段约束"}
+{"file": ".trellis/spec/docs/wf-design-revision-gate.md", "reason": "上位稿（DSGN/MECH/IMPL）修订闸门：十九号闸门、稿内矛盾三档处置、索引反扫——W2-9 与 §5 文档批的前置"}
+{"file": "docs/workflows/wf/analysis/backlog-dogfood-round2.md", "reason": "「下一任务待办」全集（a 组 4 项 + b 组 P1/P2）与维持已声明边界清单——本任务需求来源与收尾处置标注对象"}
+{"file": ".trellis/spec/docs/workflow-implementation-constraints.md", "reason": "workflow 实现约束（模块源码/变体文本/安装器契约的 authoring 护栏）——W3 hook 资产与 W4 install.py 改动的边界依据"}
+{"file": ".trellis/spec/guides/review-phase-discipline.md", "reason": "方案审查阶段纪律：阶段内只按已批方案实施、评审意见只登记不擅自扩面——三阶段审查门的行为约束"}

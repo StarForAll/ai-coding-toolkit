@@ -276,9 +276,12 @@ class MechanizedLaunchTest(LaunchHarness):
         self.assertTrue(result["facts"]["scope"]["legacy"])
 
     def test_launch_requires_diff_paths_for_new_shape(self):
+        # 四轮审查后口径：--launch-request 是嵌套覆盖/补充——只改 diff.source 时
+        # 默认 paths 由入口生成并保留（不再因浅替换整体丢失而拒绝）。
+        # 该用例保留的负例是**显式非法**：diff.paths 给 null 仍须拒（不猜整份交付面）。
         self.authorize_export()
         request = self.write_request({
-            "diff": {"source": "delivery_set"},
+            "diff": {"source": "delivery_set", "paths": None},
             "requirement": ".wf/tasks/t1/prd.md",
             "test_results": {"check": "c1"},
         })
@@ -287,6 +290,19 @@ class MechanizedLaunchTest(LaunchHarness):
                          request_path=request)
         self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
         self.assertIn("diff.paths", json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_launch_partial_override_keeps_default_paths(self):
+        # 四轮：只覆盖 diff.source，默认 diff.paths 保留、requirement/test_results 不丢
+        self.authorize_export()
+        request = self.write_request({
+            "diff": {"source": "delivery_set"},
+        })
+        result = self._launch({"valid": True, "code": None, "facts": {}, "blockers": []},
+                             request_path=request)
+        # WF_OK 本身即断言：深合并保留了默认三类材料与 diff.paths——
+        # 旧浅替换会因 submitted_scope 缺 requirement/test_results 被 WF_REVIEW_INVALID 拒。
+        self.assertEqual(result.get("code"), "WF_OK")
+        self.assertTrue((result.get("facts") or {}).get("scope"))
 
     def test_launch_records_the_verified_export_authorization(self):
         self.authorize_export()
@@ -318,9 +334,10 @@ class MechanizedLaunchTest(LaunchHarness):
         self.assertEqual(review.exclusion_gaps({"excluded-scope": request["exclusions"]}), [])
 
     def test_missing_export_authorization_still_blocks(self):
+        # 三轮二审 A6：外发缺确认改用专属码 WF_EXPORT_NOT_AUTHORIZED（与提交授权分离）
         with self.assertRaises(review.ReviewError) as caught:
             self.launch()
-        self.assertEqual(caught.exception.code, "WF_COMMIT_NOT_AUTHORIZED")
+        self.assertEqual(caught.exception.code, "WF_EXPORT_NOT_AUTHORIZED")
 
     def test_generated_materials_match_the_authorized_scope(self):
         # 授权只覆盖 diff+requirement 时，机械生成的三类材料不能匹配

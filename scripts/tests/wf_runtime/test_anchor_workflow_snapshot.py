@@ -44,7 +44,10 @@ class Harness(unittest.TestCase):
         path.write_text(snapshot, encoding="utf-8")
 
     def task(self, run_id=None):
-        task = {"id": "t1", "plan": {"version": "v1"}, "entry_snapshot": {}, "curation": []}
+        # W2-2：anchor_parts 现含 control_plane_digest（v 桶取 classify 单一来源），
+        # 夹具按已开工记录口径补全 entry_snapshot.touch_paths（空数组合法）。
+        task = {"id": "t1", "plan": {"version": "v1"},
+                "entry_snapshot": {"touch_paths": []}, "curation": []}
         if run_id:
             task["run_id"] = run_id
         return task

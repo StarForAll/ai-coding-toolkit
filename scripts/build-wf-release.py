@@ -215,6 +215,9 @@ def verify_byte_reproduction():
 
 
 def verify_token_parity(nonce="0123456789abcdef0123456789abcdef"):
+    # W4-1（三轮）：比对路径集扩为含 payload/install.py——升级的令牌实现同源。
+    # install.py 的 --token-parity-check 在其 argparse 三必填之前分支（parity 调用不带
+    # --target/--release-ref/--source，先过 required 校验会被拒掉）。
     outputs = {}
     for name in ("repair.py", "uninstall.py"):
         script = os.path.join(common.PAYLOAD, "bin", name)
@@ -223,7 +226,20 @@ def verify_token_parity(nonce="0123456789abcdef0123456789abcdef"):
         if result.returncode != 0:
             raise BuildError(f"{name} token parity check failed: {result.stderr.strip()}")
         outputs[name] = result.stdout.strip().splitlines()
+    installer = os.path.join(common.PAYLOAD, "install.py")
+    result = subprocess.run([sys.executable, installer, "--token-parity-check", "--nonce", nonce],
+                            capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise BuildError(f"install.py token parity check failed: {result.stderr.strip()}")
+    outputs["install.py"] = result.stdout.strip().splitlines()
     first = outputs["repair.py"]
+    for other_name in ("uninstall.py", "install.py"):
+        if first != outputs[other_name]:
+            raise BuildError(f"token parity mismatch (repair vs {other_name}):\n" + "\n".join(
+                f"- repair: {a} | {other_name}: {b}"
+                for a, b in zip(first, outputs[other_name])) + (
+                f"\n  length {len(first)} vs {len(outputs[other_name])}"
+                if len(first) != len(outputs[other_name]) else ""))
     second = outputs["uninstall.py"]
     if first != second:
         raise BuildError("token parity mismatch:\n" + "\n".join(

@@ -890,10 +890,20 @@ class DecisionDraftCommandsTest(unittest.TestCase):
         except cli.CliError as exc:
             self.assertIn("TODO", exc.facts.get("reason", ""))
 
-    def test_replan_draft_gives_both_choices(self):
-        result = self._draft_of("cmd_task_replan", ["--task", "t-d", "--draft"])
-        choices = [e["choice"] for e in result["facts"]["draft"]]
-        self.assertEqual(choices, ["replan", "机械修订"])
+    def test_mechanical_revision_draft_routing(self):
+        # a 组 a-2：机械修订骨架移到 task-approve（真实入口），replan 草稿不再含。
+        approve = self._draft_of("cmd_task_approve", ["--task", "t-d", "--draft"])
+        approve_choices = [e["choice"] for e in approve["facts"]["draft"]]
+        self.assertEqual(approve_choices, ["approve", "机械修订"])
+        mechanical = [e for e in approve["facts"]["draft"] if e["choice"] == "机械修订"][0]
+        # 占位前置：仅本任务已有批准、只改排版/转义时保留，否则删除——
+        # plan 阶段照抄骨架必被 WF_APPROVAL_MISSING 拒。
+        self.assertIn("已有批准", mechanical["reason"])
+        self.assertIn("否则删除", mechanical["reason"])
+
+        replan = self._draft_of("cmd_task_replan", ["--task", "t-d", "--draft"])
+        replan_choices = [e["choice"] for e in replan["facts"]["draft"]]
+        self.assertEqual(replan_choices, ["replan"])
 
     def test_rework_draft(self):
         result = self._draft_of("cmd_task_rework", ["--task", "t-d", "--draft"])

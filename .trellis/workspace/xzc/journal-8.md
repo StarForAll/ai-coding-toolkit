@@ -1408,3 +1408,20 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## 2026-11-22 wf dogfood 三轮修正收口（11-22-wf-dogfood-fixes-round3）
+
+- 交付：W1 四项 P0（a-1 patterns 合并/a-2 机械修订路由/a-3 started_at 物化+证据身份核对/a-4 covers 三态）；
+  W2 全部（K6 通道统一+分码、control_plane_digest 进锚点+paths 伴随键、单 reviewer 留痕降级、
+  框架改动 kind、指引/文档一致性）；W3 会话身份（enable --new-session、Codex SessionStart hook
+  适配层 host_hook 资产类 per-asset platform、hooks.json 合并/卸载对称、四态解析+instance 回填+
+  import-error 自愈、status host_mapping 投影）；W4 升级闭环（install.py --upgrade 三方匹配+前置
+  机器判据+PreviewToken 三方 parity+export-deviations 偏离导出+0.1.5 重建+candidate 审计对 0.1.5
+  重生成）；骨架尾项 --plan-draft / judgments --draft（用户裁决不做顺延）。
+- 外部审查五轮全收敛：每轮逐条核实后修/裁/排期，回退注入累计 20+ 次全红→绿。
+- 自举验证：0.1.4 夹具 ← 0.1.5 候选 --upgrade --apply 实跑通过（pty 驱动，30 路径，回执
+  applied_pending_commit）；自举过程抓到并修复 write_bytes 只创建语义缺陷（升级覆盖写）。
+- 验证：T0 1585 全绿；T2 run_all --full --repro green GATE-OK（59+5+85）；install repro 组绿；
+  validate-wf-design/check-doc-refs/validate-skills/build --verify --verify-token-parity 全绿。
+- 手动项：真实 Codex 宿主 hook 实跑登记为 full README 手动项（d2_codex_hook）。

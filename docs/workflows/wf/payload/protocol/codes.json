@@ -40,6 +40,21 @@
    "prohibited_repairs": "不借维护确认执行提交；不捎带授权外路径",
    "tier": "blocked"
   },
+  "WF_EXPORT_NOT_AUTHORIZED": {
+   "exit": "等人给出本次审查外发的范围确认（authorize record choice=export，task + materials + quote/by/source）后重发",
+   "prohibited_repairs": "不以声明替代确认文件；不沿用旧任务/旧材料类集合的授权",
+   "tier": "blocked"
+  },
+  "WF_DELETE_NOT_AUTHORIZED": {
+   "exit": "删除前取得人确认：authorize record choice=delete（paths 覆盖被删路径，绑定被删内容）后重入",
+   "prohibited_repairs": "先删后确认不生效；不捎带授权外路径",
+   "tier": "blocked"
+  },
+  "WF_REPO_RULES_NOT_AUTHORIZED": {
+   "exit": "取得环境级规则变更确认：authorize record choice=repo_rules（paths 覆盖规则文件 + 内容绑定）后重入",
+   "prohibited_repairs": "确认后再改内容即失效，不沿用旧内容确认",
+   "tier": "blocked"
+  },
   "WF_DEFINITION_INVALID": {
    "exit": "按静态校验清单修正定义",
    "prohibited_repairs": "不猜测承载步骤；不用自由文本占位",

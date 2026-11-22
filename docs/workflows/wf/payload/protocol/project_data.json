@@ -5,7 +5,8 @@
     ".wf/install/",
     ".wf/out-of-scope/",
     ".wf/spec/",
-    ".wf/tasks/"
+    ".wf/tasks/",
+    ".wf/user-workflows/"
   ],
   "files": [
     ".wf/baseline.md",

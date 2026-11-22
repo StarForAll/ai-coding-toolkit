@@ -26,6 +26,10 @@ from .paths import join
 ROUTES_REL = ".wf/.runtime/anchors.json"
 ATTACHMENTS_REL = ".wf/.runtime/attachments"
 CLAIMS_REL = ".wf/.runtime/review-claims"
+# W3-2（三轮 P0-1）：宿主适配层持久化的宿主会话标识通道（hook 落点）。
+# 入口读它的逻辑等价于读信封的宿主会话标识，仅作宿主身份来源，不得用作其他身份通道。
+HOST_MAP_REL = ".wf/.runtime/host-session-map"
+HOST_MAP_IMPORT_ERROR = "import-error"
 
 # C2 分级的阻断原因
 CONCURRENT_CALLER = "concurrent_unregistered_caller"
@@ -345,3 +349,60 @@ def conflicting_owners(routes, anchor_keys, session_key):
             if owner != session_key and owner not in owners:
                 owners.append(owner)
     return owners
+
+
+# --------------------------------------------------------------------------
+# 宿主会话标识映射（W3-2：适配层持久化的宿主标识通道）
+# --------------------------------------------------------------------------
+
+def host_map_dir(root):
+    return join(root, HOST_MAP_REL)
+
+
+def host_map_path(root, anchor_key):
+    return os.path.join(host_map_dir(root), f"{anchor_key}.json")
+
+
+def host_map_import_error_path(root):
+    return os.path.join(host_map_dir(root), HOST_MAP_IMPORT_ERROR)
+
+
+def load_host_map(root, anchor_keys):
+    """按锚点键读宿主映射：`{status, payload, anchor_key}`。
+
+    status ∈ hit / absent / import-error——import-error 是 hook 写入的失败标记
+    （hook import wflib 失败时落时间戳+异常摘要，不留静默黑洞），status 只报事实。
+    优先级：hit > import-error > absent（hit 即本边界有宿主标识，别的状态不再细看）。
+    """
+    keys = [key for key in (anchor_keys or []) if key]
+    for key in keys:
+        data = records.load_json(host_map_path(root, key), None)
+        if isinstance(data, dict) and data.get("session_id") and data.get("host_id"):
+            return {"status": "hit", "payload": data, "anchor_key": key}
+    if keys and os.path.isfile(host_map_import_error_path(root)):
+        marker = records.load_json(host_map_import_error_path(root), None)
+        return {"status": "import-error", "payload": marker, "anchor_key": None}
+    return {"status": "absent", "payload": None, "anchor_key": None}
+
+
+def remove_host_map(root, anchor_keys):
+    """轮换时移除本边界的宿主映射条目（适配层通道状态，不属"保留历史"的路由/附件）。
+
+    import-error 标记一并清除：轮换是人显式动作，旧失败事实不再投影。
+    """
+    removed = []
+    for key in (anchor_keys or []):
+        path = host_map_path(root, key)
+        if os.path.isfile(path):
+            try:
+                os.remove(path)
+                removed.append(key)
+            except OSError:
+                pass
+    error_path = host_map_import_error_path(root)
+    if os.path.isfile(error_path):
+        try:
+            os.remove(error_path)
+        except OSError:
+            pass
+    return removed

@@ -66,6 +66,7 @@ scope 内 HOME 会让候选流程 f0 的 `task-check` 变成 `WF_CHECK_STALE`（
 | `r64_tests.py` | 第二十七轮 R64（P3：spec facts 收缩、generation 校验、未知 step 留痕、源树卫生等） |
 | `r65_tests.py` | 第二十八轮 R65（review-passed 恢复 complex、降级核验入 final_gate、outcome 单调、调查判据收紧） |
 | `d1_tests.py` | D1 实跑（真实 `$DSH_SESSION_ID` 绑定/重入/压缩边界/新会话/wf 身份拒绝面）；**手动执行，需真实宿主压缩，不计入 `run_all.sh` 分母** |
+| `d2_codex_hook.md`（登记项） | **W3 真实 Codex 宿主核验（2026-11-22 三轮）**：SessionStart hook 实跑 → 映射落位 → `enable` 建立 host 会话（四态次序）→ 后续命令解析为该会话 → `/clear` 后新 session_id 覆盖映射、对象终态后走③接管；**手动执行（需真实 Codex 宿主），不计入分母**。机制侧等价面已由 `test_w3_session_identity.py`（四态/接管/instance 回填/import-error 自愈）与 hook 脚本子进程实跑覆盖；本项核验的是宿主真实载荷与锚点链 |
 | `d1_wf_tests.py` | D1 的 wf 签发路径（`provider=wf` 携带/恢复/复制到新会话/丢失）；**同上，手动执行、不计入分母** |
 | `r66_tests.py` | 第二十九轮 R66（实例标识、写者结构、终态、义务来源、重复记录） |
 | `r67_tests.py` | 第三十轮 R67（写权入口实例/能力、baseline 状态与提案、清单声明、聚合脚本退出码） |

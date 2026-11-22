@@ -214,23 +214,33 @@ rec("A16 分派表与命令面一致", "无问题", f"{len(problems)} problems",
 # 但它的 `advance/pause/terminate` 子动作仍报能力不可用）。这里**按当前命令面动态找**
 # 一个仍是桩的承接命令，再挑一个声明为它的 control 步骤——断言核的是检查器本身，
 # 不应绑死在某一个命令名上（绑死的话每次解封一处就要改这条用例）。
-_stub_handlers = sorted(name for name, handler in wf_cli.COMMANDS.items()
-                        if getattr(handler, "wf_delivery_round", None))
-_stub_steps = sorted(step for step, handler in wf_gates.HANDLERS.items()
-                     if handler in _stub_handlers and step.startswith("control."))
-if not _stub_steps:
-    raise SystemExit("A16 前置失败：当前命令面已没有能力桩，这条断言需要改写")
-_stub_step = _stub_steps[0]
+# 2026-11-22 三轮 W4：upgrade 已从能力桩改为引导层转交报错——真实命令面不再有桩。
+# 这条断言核的是**检查器本身**（support_report 必须抓到"声明已交付但承接命令是桩"），
+# 改用合成桩探针：给 upgrade 处理器临时装回 wf_delivery_round 标记，验证检测逻辑后还原。
+_probe_commands = dict(wf_cli.COMMANDS)
+_original_upgrade = _probe_commands.get("upgrade")
+_probe_step = "control.asset.apply"
+
+
+def _probe_stub(ctx, args):
+    raise wf_cli.CliError("WF_CAPABILITY_UNAVAILABLE", {"probe": True})
+
+
+_probe_stub.wf_delivery_round = 3
+_probe_commands["upgrade"] = _probe_stub
 overclaimed = {"delivery_round": wf_gates.CURRENT_DELIVERY_ROUND,
                "required_steps": [dict(step, delivery_round=(wf_gates.CURRENT_DELIVERY_ROUND
-                                                             if step["id"] == _stub_step
+                                                             if step["id"] == _probe_step
                                                              else step["delivery_round"]))
                                   for step in manifest["required_steps"]]}
-claimed_problems = wf_gates.support_report(overclaimed, wf_cli.COMMANDS)
-rec("A16 已交付步骤不得是能力桩", f"报 capability stub（{_stub_step}）",
+claimed_problems = wf_gates.support_report(overclaimed, _probe_commands)
+rec("A16 已交付步骤不得是能力桩（合成桩探针）", f"报 capability stub（{_probe_step}）",
     claimed_problems[:1],
-    any(p.get("required_step") == _stub_step and "capability stub" in p.get("reason", "")
+    any(p.get("required_step") == _probe_step and "capability stub" in p.get("reason", "")
         for p in claimed_problems))
+# 还原真实命令面（upgrade 是转交报错，不是桩）
+if _original_upgrade is not None:
+    _probe_commands["upgrade"] = _original_upgrade
 missing_round = {"required_steps": [{"id": "task.archived"}]}
 rec("A16 缺交付轮次被拒", "报 delivery_round missing",
     wf_gates.support_report(missing_round, wf_cli.COMMANDS)[:1],

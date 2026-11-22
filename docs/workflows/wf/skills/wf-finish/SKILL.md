@@ -34,9 +34,11 @@ user-invoked: true
    `repair_scope` 的读法见 `wf-repair-loop`；`unverifiable` 未放行时按 `wf-review-accept-unknown`
    找人裁（先呈现事实、再由人写 quote）。预检通过不等于可以归档：本 skill 只呈现事实，不宣告结论。
 1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论（含每轮 `launch_scope` 的
-   `selected/total/narrowed` 与判定 `scope.unselected`）、知识处置状态、待提交路径，以及当前生效的放行清单
-   （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺确认直接归档会被 `WF_COMMIT_NOT_AUTHORIZED` 拦）。若 `judgments show` 有 `[vendor]` 框架自有改动，
-   单列说明它不计交付/审查/业务提交；本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
+   `selected/total/narrowed` 与判定 `scope.unselected`；发起前的人外发确认——choice=export——见
+   `wf-continue`「复杂任务审查」）、知识处置状态、待提交路径，以及当前生效的放行清单
+   （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先跑 `authorize record --draft` 取只读骨架）、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
+   单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` vendor 段落库；
+   本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
 2. 人确认后，把「finish 调用证据 + 按精确路径的提交授权」写入决定文件数组
    （拿不准结构时先跑 `archive --task <id> --draft`：入口按待提交路径生成决定文件草稿、
    只打印不落盘，人把内容写成决定文件即授权）：
@@ -53,15 +55,12 @@ user-invoked: true
 
 ## 工作习惯（2026-11-08 起）
 
-- **同一终端同时只推进一个任务**（阻断机制见 `wf-continue`「工作习惯」）；并行请另开终端/窗口。
-  同一终端里的第二个 agent 会被 `WF_IDENTITY_UNRESOLVED(concurrent_unregistered_caller)` 阻断，
-  须人显式 `wf.py enable` 登记后才放行，且此后与前者共享同一执行会话。
-- **自动模式下不手写 session 信封**：直接跑 `wf.py <子命令>`；身份由执行边界派生，
-  写权代次由本会话运行态携带（显式 `inputs.generation` 可覆盖，不填不报错）。
+- 同一终端只推进一个任务、自动模式不手写信封（含 generation 口径）——完整定义见
+  `wf-continue`「工作习惯」（唯一完整定义位），此处不重复论述。
 
 ## 纪律
 
-- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只经信封或宿主映射通道；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
 
 ## 证据文件纪律
 

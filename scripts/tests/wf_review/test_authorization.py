@@ -117,7 +117,7 @@ class CoverageTest(unittest.TestCase):
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            authorize.record_authorization(tmp, "commit", {"choice": "commit", "paths": ["src/**"]})
+            authorize.record_authorization(tmp, "delete", {"choice": "delete", "paths": ["src/**"]})
             covered, uncovered = authorize.covers(tmp, "expand", ["src/x.py"])
         self.assertFalse(covered)
 
@@ -144,12 +144,16 @@ class EntryPointContractTest(unittest.TestCase):
         help_entry = cli.COMMAND_HELP["authorize"]
         self.assertIn("record", help_entry["purpose"])
 
-    def test_authorize_records_all_five_actions_from_one_file(self):
-        """一条命令能落多类确认（人的一次决定覆盖多类动作），且每类单独成文件。"""
+    def test_authorize_records_all_four_actions_from_one_file(self):
+        """一条命令能落多类确认（人的一次决定覆盖多类动作），且每类单独成文件。
+
+        W2-1（三轮裁决②）：`commit` 类已从 authorize ACTIONS 删除——提交授权唯一
+        通道是 finish 决定的 commit_grants；此处按真实四类断言。
+        """
         import tempfile
 
         with tempfile.TemporaryDirectory() as tmp:
-            for action in ("commit", "delete", "export", "expand", "repo_rules"):
+            for action in ("delete", "export", "expand", "repo_rules"):
                 decision = {"choice": action, "paths": ["src/x.py"], "quote": "人确认"}
                 if action == "export":
                     # 外发确认必须绑定"本次范围"：任务 + 材料类集合
@@ -158,6 +162,20 @@ class EntryPointContractTest(unittest.TestCase):
                 info = authorize.record_authorization(tmp, action, decision)
                 self.assertTrue(Path(info["path"]).is_file())
                 self.assertIsNotNone(authorize.require(tmp, action))
+            self.assertEqual(sorted(authorize.ACTIONS),
+                             ["delete", "expand", "export", "repo_rules"])
+
+    def test_commit_choice_is_rejected_with_real_actions(self):
+        """W2-1：choice=commit 不再是 authorize 动作类——record_authorization 直接拒绝，
+        CLI record 分支按 ACTIONS 白名单给出真实四类出口。"""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                authorize.record_authorization(tmp, "commit", {"choice": "commit", "paths": ["src/**"]})
+        source = (REPO / "docs/workflows/wf/payload/lib/wflib/authorize.py").read_text(encoding="utf-8")
+        self.assertNotIn('"commit": "提交 / 推送"', source)
+        self.assertIn("commit_grants", source)   # 唯一通道句在模块 docstring 声明
 
     def test_export_guard_is_wired_into_launch(self):
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/review.py").read_text(encoding="utf-8")

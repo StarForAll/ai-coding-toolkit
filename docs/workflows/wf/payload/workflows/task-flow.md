@@ -45,7 +45,7 @@
 
 - 时点：归档前（before_archive，仅复杂任务适用）
 - enforcement: `wflib/review.py::decide`（判定）＋ `wflib/gates.py::verify_step`（核验结果与当前 check 绑定）
-- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过；锚点与当前 Check 一致。
+- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过，或单 reviewer + 人签残余风险接受（留痕降级，不默认——机制稿 §9.2）；锚点与当前 Check 一致。
 - 出口：报告缺失/身份或人数不合格/锚点失配 → `WF_REVIEW_INVALID`；环境不足 → `WF_REVIEW_UNAVAILABLE`。
 
 ### task.knowledge-disposed [required · once]

@@ -1244,6 +1244,24 @@ def cmd_task_new(ctx, args):
             # v42 §4 / dogfood A3：`task-new` 不得把"已绑定的旧任务"当成功返回。
             # 中断后的续做由 writer 上的 `task.create` 父动作承载（上面 `_writer_create_intent`），
             # 不靠一个 `already_completed` 标记；绑定终身，第二对象只能由新会话选择。
+            # W2-6：绑定对象已终态时 next_ 与 enable 终态出口同口径（开新对象需新执行边界/
+            # 新会话/换新会话标识）——archived 对象没有"continue/bind"可继续。
+            _bound_obj = bound.get("object") or {}
+            _bound_terminal = False
+            if _bound_obj.get("kind") == "task":
+                _record_bound = load_task(ctx.root, str(_bound_obj.get("id")))
+                _bound_terminal = bool(_record_bound) and _record_bound.get("status") == "archived"
+            elif _bound_obj.get("kind") == "run":
+                from . import runs as _runs_mod
+
+                _run_bound = _runs_mod.load_run(ctx.root, str(_bound_obj.get("id")))
+                _bound_terminal = bool(_run_bound) and _run_bound.get("terminal") is not None
+            if _bound_terminal:
+                raise TaskError("WF_BINDING_MISMATCH",
+                                {"reason": "session already bound (object terminal)",
+                                 "object": bound.get("object")},
+                                next_="旧对象已终态：开新对象需新执行边界或换新会话"
+                                      "（或 `wf enable --new-session` 换新会话标识）")
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "session already bound",
                              "object": bound.get("object")},
@@ -1643,16 +1661,27 @@ def cmd_task_approve(ctx, args):
     if args.flag("--draft"):
         # 十六轮批V：批准决定草稿——object_digest 由入口按当前 PRD 算好，
         # 人只填 source/quote/reason（TODO 占位，照抄会被预检拒）。
+        # a 组 a-2：机械修订骨架移到这里（真实入口是 task-approve 的等价链）；
+        # 前置占位必须写明"仅本任务已有批准后使用"——机械修订需先有已批准版本
+        # （_mechanical_revision 的 WF_APPROVAL_MISSING），plan 阶段照抄必被拒。
         task_id = args.value("--task")
         if not task_id:
             raise TaskError("WF_USAGE_INVALID", {"reason": "task-approve requires --task <id>"})
+        digest = _prd_digest_for_task(ctx, task_id)
         entry = {"source": "TODO human:<来源>",
                 "at": records.now_str(),
                 "subject": f"approve {task_id}",
-                "object_digest": _prd_digest_for_task(ctx, task_id),
+                "object_digest": digest,
                 "choice": "approve",
                 "reason": "TODO（人填写：为什么批准本规划）"}
-        return _decision_draft_result(ctx, task_id, [entry], command="task-approve")
+        mechanical = {"source": "TODO human:<来源>",
+                      "at": records.now_str(),
+                      "subject": f"机械修订 {task_id}",
+                      "object_digest": digest,
+                      "choice": "机械修订",
+                      "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"
+                      "——仅本任务已有批准、且只改排版/转义时保留本条，否则删除"}
+        return _decision_draft_result(ctx, task_id, [entry, mechanical], command="task-approve")
     from . import cli, lock
 
     task_id = args.value("--task")
@@ -2281,8 +2310,9 @@ def _load_decision_list(path):
 
 def cmd_task_replan(ctx, args):
     if args.flag("--draft"):
-        # 十六轮批V：规划变更决定草稿——replan 与 机械修订 两条骨架一次给全，
-        # 人按实际变更类型留一条、删另一条（object_digest 预填 PRD 摘要）。
+        # 十六轮批V：规划变更决定草稿（object_digest 预填 PRD 摘要）。
+        # 机械修订骨架已移到 task-approve --draft（a 组 a-2）：本命令正式执行只认
+        # choice=replan——机械修订走 task-approve 的等价链，不重复人批。
         task_id = args.value("--task")
         if not task_id:
             raise TaskError("WF_USAGE_INVALID", {"reason": "task-replan requires --task <id>"})
@@ -2291,9 +2321,6 @@ def cmd_task_replan(ctx, args):
             {"source": "TODO human:<来源>", "at": records.now_str(),
              "subject": f"replan {task_id}", "object_digest": digest, "choice": "replan",
              "reason": "TODO（人填写：实质规划变化是什么）"},
-            {"source": "TODO human:<来源>", "at": records.now_str(),
-             "subject": f"机械修订 {task_id}", "object_digest": digest, "choice": "机械修订",
-             "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"},
         ]
         return _decision_draft_result(ctx, task_id, entries, command="task-replan")
     from . import lock
@@ -2312,6 +2339,18 @@ def cmd_task_replan(ctx, args):
                       "如需放弃任务，用 task-abandon（同样需要 Decision）"],
         })
     decisions = _load_decision_list(decision_path)
+    # a 组 a-2：机械修订的真实入口是 task-approve（等价链）；本命令只认 replan。
+    # 拒绝时给出指向真实入口的出口，不再让人在不成立的动作上空转。
+    _mechanical_misrouted = [item for item in decisions
+                             if isinstance(item, dict) and item.get("choice") == MECHANICAL_REVISION
+                             and not any(decisions_mod.accepts("replan", other.get("choice"))
+                                         for other in decisions if isinstance(other, dict))]
+    if _mechanical_misrouted:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "机械修订不经 task-replan（本命令只认 choice=replan）",
+                         "choices": [d.get("choice") for d in decisions]},
+                        next_="用 task-approve --task <id> --decision <文件> 提交 choice=机械修订 的决定"
+                              "（等价链核验后不重复人批）")
     if not any(decisions_mod.accepts("replan", item.get("choice")) for item in decisions):
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"reason": "决定文件里没有 choice=replan", "choices": [d.get("choice") for d in decisions]})
@@ -2650,7 +2689,7 @@ def cmd_task_curate(ctx, args):
                         facts={"curation": curation, "control_assertion": assertion})
 
 
-def check_next_hint(task, check):
+def check_next_hint(task, check, ctx=None):
     """Check 成功后的下一跳（唯一实现）：复杂任务先审查，light 直接收工。
 
     此前固定写 "finish"，模型要么读文档、要么撞一次 `WF_REVIEW_INVALID` 才知道要先
@@ -2659,10 +2698,46 @@ def check_next_hint(task, check):
     if (check or {}).get("result") != "pass":
         return "Check 未通过：按 facts 与 wf-repair-loop 处置后重查"
     hint = None
+    # A3（三轮二审）：审查轮里仍有未关闭 blocking 时，下一跳不静默换到收工——
+    # 可稳定计算（open_findings 唯一实现），让"修复→重查→再判"三步出现在 AI 必读的 next_。
+    open_blocking_hint = ""
+    if ctx is not None:
+        try:
+            from . import review as _review_mod
+
+            _open = _review_mod.open_findings(ctx, task)["blocking"]
+            if _open:
+                rounds = sorted({int(item.get("round") or 0) for item in _open})
+                open_blocking_hint = (f"；注意：审查仍有未关闭 blocking（轮次 {rounds}）——"
+                                      "在批准范围内修复 → 重跑 task-check → 重新发起判定"
+                                      "（误报/重分类经复核登记 accepted 后可同轮重判，见 wf-review-action）")
+        except Exception:   # 投影失败不阻断下一跳本身
+            pass
     if (task.get("plan") or {}).get("complexity") == "complex":
-        hint = "复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
+        export_note = ""
+        if ctx is not None:
+            # 三轮三审 b2／四轮 b3：外发确认是 launch 的前置门禁——与门禁**同一判据**
+            # （export_scope_problems：任务 + 材料类集合都要匹配），不是"有没有文件"。
+            # 已有确认但范围不符（如早期只确认了部分材料类）同样前置提示，
+            # 不让 AI 按 next_ 撞 WF_EXPORT_NOT_AUTHORIZED。
+            try:
+                from . import authorize as _authorize_mod
+                from . import tasks as _tasks_mod_self
+
+                _dir = _tasks_mod_self.task_dir(ctx.root, task.get("id"))
+                if _dir:
+                    _problems = _authorize_mod.export_scope_problems(
+                        _dir, task.get("id"), ["diff", "requirement", "test_results"])
+                    if _problems:
+                        export_note = ("；发起前先取人外发范围确认：`authorize record` 一条 choice=export"
+                                       "（task + materials 三类，同任务同材料类集合持续有效）")
+            except Exception:   # 投影失败不阻断下一跳本身
+                pass
+        hint = ("复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
+                + export_note)
     else:
         hint = "人了解结果后调用 finish（wf-finish）"
+    hint += open_blocking_hint
     # §0.2 试点期抽样提示（2026-11-21 降档为建议，不阻断；无 picks 时附注）
     try:
         from . import sampling as sampling_mod
@@ -2766,7 +2841,7 @@ def cmd_task_check(ctx, args):
                                               evidence_refs=[check["id"]])
     if code:
         raise TaskError(code, dict(facts, check=check["id"]))
-    next_hint = check_next_hint(task, check)
+    next_hint = check_next_hint(task, check, ctx=ctx)
     return codes.result(
         "WF_OK",
         object={"id": task_id, "name": task.get("title")},
@@ -2779,6 +2854,10 @@ def cmd_task_check(ctx, args):
                # vendor_dirty 消费点（2026-11-21 批C）：框架自有改动不入交付/审查，但必须可见——
                # 非阻断；出现时由人确认归属（回源仓库立项），不能悄悄并入业务任务。
                "vendor_dirty": facts.get("vendor_dirty") or [],
+               # W2-7：vendor 归属确认的可审计记录投影（kind=框架改动 的判断条目）——
+               # 不阻断、不参与判定，纯事实：出现 vendor_dirty 时人已确认过归属与否一目了然。
+               "vendor_judgments": [entry for entry in (task.get("judgments") or [])
+                                    if isinstance(entry, dict) and entry.get("kind") == "框架改动"],
                # b-1（九轮，事实不阻断）：开工前已存在的交付路径，Check facts 同步可见
                "preexisting_in_scope": facts.get("preexisting_in_scope") or []},
     )
@@ -3749,6 +3828,9 @@ def cmd_archive(ctx, args):
                        # vendor_dirty 消费点（2026-11-21 批C）：归档收尾同样可见，人确认归属后不阻断
                        "vendor_dirty": (scope.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
                                         .get("buckets", {}).get("v", [])),
+                       # W2-7：vendor 归属确认记录（kind=框架改动）随终态可见，纯事实投影
+                       "vendor_judgments": [entry for entry in (task.get("judgments") or [])
+                                            if isinstance(entry, dict) and entry.get("kind") == "框架改动"],
                        # ⑥：归档强制回显当前生效的放行清单（人裁接受的风险必须跟着终态可见）
                        "unknown_acceptances": review_acceptance_echo(task)},
             )
@@ -3803,7 +3885,7 @@ def cmd_archive(ctx, args):
                 action = actions.fail(dict(task["action"]), "repo-level rule files without authorization")
                 task["action"] = action
                 save_task(ctx.root, path, task)
-                raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
+                raise TaskError("WF_REPO_RULES_NOT_AUTHORIZED",
                                 {"missing_action": "repo_rules",
                                  "repo_rule_paths": rule_hits,
                                  "uncovered": uncovered,
@@ -3818,7 +3900,7 @@ def cmd_archive(ctx, args):
                 action = actions.fail(dict(task["action"]), "delete without authorization")
                 task["action"] = action
                 save_task(ctx.root, path, task)
-                raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
+                raise TaskError("WF_DELETE_NOT_AUTHORIZED",
                                 {"missing_action": "delete", "deleted_paths": uncovered,
                                  "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
                                  "exits": ["把人的确认写成文件（choice=delete + paths 覆盖这些路径 + quote/by/source），经 `wf authorize record --task <id> --file <文件>` 登记后重入——门禁消费的是 authorization-delete.json，写进 archive 决定文件不会生效",

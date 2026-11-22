@@ -36,10 +36,11 @@ class BuildOrderingTest(unittest.TestCase):
         self.assertNotIn("unlisted", build_body, "检查不该回到 build()：那会在删树之后才失败")
 
     def test_readme_version_must_match_the_release(self):
-        self.assertEqual(MODULE.readme_target_version(), "0.1.4")
-        MODULE.assert_readme_version("0.1.4")
+        # 0.1.5（三轮 W4-3）：版本唯一源 = README「目标版本」+ builder --version
+        self.assertEqual(MODULE.readme_target_version(), "0.1.5")
+        MODULE.assert_readme_version("0.1.5")
         with self.assertRaises(MODULE.BuildError):
-            MODULE.assert_readme_version("0.1.5")
+            MODULE.assert_readme_version("0.1.6")
 
     def test_existing_tag_refuses_rebuilding_the_same_version(self):
         tags = subprocess.run(["git", "tag", "--list", "wf-v*"], cwd=REPO,

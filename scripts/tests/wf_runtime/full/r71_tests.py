@@ -185,7 +185,8 @@ def reset_writer():
     proc.wait(timeout=90)
 
 
-def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot_specs=None):
+def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot_specs=None,
+                acceptance=False):
     reset_writer()
     task_id, directory, sid = build_task(f"R71 轴 {name}", f"sess-Y-{name}")
     rc_c, payload_c, _ = wf(["task-check", "--task", task_id, "--review-notes", NOTES,
@@ -249,8 +250,17 @@ def review_case(name, axes, expect_code, expect_verdict=None, single=False, slot
     main_path = wfdrive.write_main_review(wfdrive.temp("r71_main.json"), task_id,
                                          [slot for slot, _cli in slot_specs],
                                          findings=_findings)
-    rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "1",
-                         "--main-review", main_path, "--json"],
+    decide_argv = ["review-decide", "--task", task_id, "--round", "1",
+                   "--main-review", main_path]
+    if acceptance:
+        # W2-3：单 reviewer + 人签残余风险接受 → 允许产出 verdict（留痕降级）
+        single_path = wfdrive.temp(f"r71_single_{name}.json")
+        json.dump({"by": "human:test", "at": AT, "quote": "只审一遍可接受",
+                   "source": "user-declared", "residual_risk": "漏检风险由我承担",
+                   "round": 1, "task": task_id},
+                  open(single_path, "w"), ensure_ascii=False)
+        decide_argv += ["--single-reviewer-acceptance", single_path]
+    rc, payload, _ = wf(decide_argv + ["--json"],
                         {"generation": gen()}, sid)
     if rc != 0:
         print("   decide facts:", (payload or {}).get("code"),
@@ -268,14 +278,24 @@ rec("3 五轴齐全且通过 → pass", "WF_OK/pass", f"{code}/{verdict}", code 
 # Invalid axes 3b–3e live in wf_review/test_report_variants.py.
 
 single_code, single_verdict, single_facts, single_record = review_case("single", all_pass, "WF_REVIEW_INVALID", None, single=True)
-rec("3f 单 reviewer 不产生判定结论", "WF_REVIEW_INVALID + degraded + 两个出口",
+rec("3f 单 reviewer 不产生判定结论", "WF_REVIEW_INVALID + degraded + 三个出口（W2-3 增人签接受出口）",
     f"{single_code} degraded={single_facts.get('degraded')} exits={len(single_facts.get('exits') or [])}",
     single_code == "WF_REVIEW_INVALID" and single_verdict is None
     and single_facts.get("degraded") == "single-provider"
-    and len(single_facts.get("exits") or []) == 2
+    and len(single_facts.get("exits") or []) == 3
     and single_facts.get("imported_reports")
     and ((single_record.get("reviews") or {}).get("result")) is None
     and not any((a.get("outcome") == "fail") for a in ((single_record.get("reviews") or {}).get("attempts") or [])))
+
+single_acc_code, single_acc_verdict, single_acc_facts, single_acc_record = review_case(
+    "single-acc", all_pass, "WF_OK", "pass", single=True, acceptance=True)
+_acc_facts = (single_acc_record.get("reviews") or {}).get("result") or {}
+rec("3f2 单 reviewer + 人签接受 → 判定可产出（W2-3 留痕降级）", "WF_OK/pass + degraded + acceptance 引用",
+    f"{single_acc_code}/{single_acc_verdict} degraded={single_acc_facts.get('degraded')}",
+    single_acc_code == "WF_OK" and single_acc_verdict == "pass"
+    and _acc_facts.get("degraded") == "single-provider"
+    and bool((_acc_facts.get("facts") or {}).get("single_reviewer_accepted"))
+    and bool(single_acc_record.get("reviews", {}).get("single_reviewer_acceptances")))
 
 # 有效输入但审查结论 fail：必须写 verdict=fail 并留可重建的历史（§91 曾错指 3b）
 fail_axes = {axis: {"conclusion": "fail", "basis": "b"} for axis in AXES}

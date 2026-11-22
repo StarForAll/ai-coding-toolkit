@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.4`（dogfood 二轮修正：抽样门禁降档为试点期提示、机械项入口化——决定错误回显/报告骨架预填/`archive --draft` 草稿/`actual_id` 出口、技能纪律去重与措辞收窄、执行器解析收敛、`project-config` 模板补 `identity_path`；`0.1.3` 未打 tag；本轮重建后由人创建 `wf-v0.1.4`）。**0.1.3 → 0.1.4 无升级路径**（`upgrade` 第三轮未交付、install 仅同引用追加）：已装 0.1.3 的项目复验需卸载重装（保留数据）或整树手工投放，严禁只替换 `payload/lib` 保留旧清单（`declared_step_specs` 与新 lib 比对会 `WF_ASSET_DECISION` 拒绝）；正式发布前保持 `0.x.y` |
+| 目标版本 | `0.1.5`（dogfood 三轮修正：W1 四项 P0 实测收口——机械修订路由/验证日志物化/`content_bound_patterns` 合并/covers 三态归因；W2 收口——K6 commit 通道统一、`control_plane_digest` 进锚点（既有 Check 一次性失效，升级后需重跑）、单 reviewer 人签降级、judgments kind=框架改动、帮助/出口/码值修正；W3 会话身份——`enable --new-session`、Codex SessionStart hook 适配层（host-hook 资产按平台投放）、四态解析；W4 升级闭环——`install.py --upgrade` 三方匹配 + `--export-deviations` 偏离导出、预览令牌三方同源；本轮重建后由人创建 `wf-v0.1.5`）。**0.1.4 → 0.1.5 可用 upgrade 升级**：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.5 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.3/更早版本仍需卸载重装（跨多版升级不在本通道） |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -31,7 +31,8 @@
   `installation.json.roots`（相对路径），平台名写入 `installation.platforms`——**平台清单即身份事实**；R93（commit `20e3ae8`）
   已删除 `--host-id`、`--verify-capability` 与 `installation.json.session_profile`，不要按旧口径描述它们。
   目标已安装时的处理：**同发行引用只允许追加平台**（`install.py` 亦然），资产与项目数据不动；不同发行引用属升级，
-  走 `wf.py upgrade --apply`（第三轮），开发态工具不按新装覆盖。
+  走 `wf.py upgrade --release <检出根> --release-ref refs/tags/wf-vX.Y.Z --apply`（已交付，
+  经引导层转交 install.py --upgrade），开发态工具不按新装覆盖。
 - 两个工具：仅标准库、在作者机运行、**不进入发行清单**。发行根里的 `install.py` 才是安装入口，
   它按 `target_class=release_only` 计入 `rules_digest`。
 
@@ -66,7 +67,7 @@ tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 3. 人按授权暂存精确路径并提交；
 4. 人创建 `refs/tags/wf-v0.x.y`；
 5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> --platform <平台> [--confirm]`；
-6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --apply --release-ref … --source …`（第三轮交付；
+6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply]`——预览含全部路径动作与偏离清单，`--apply` 在交互终端输入预览指纹确认；`--export-deviations --out <dir>` 可只读导出接受偏离的 O→L 补丁回源；
    当前返回 `WF_CAPABILITY_UNAVAILABLE`）。
 
 打包脚本不提交、不建 tag、不推送；安装器只在本地已检出的发行目录解析人给的引用。

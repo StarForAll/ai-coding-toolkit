@@ -21,8 +21,12 @@ GITIGNORE_MANAGED = {
     "begin_marker": "# wf-managed-v1",
     "end_marker": "# wf-managed-end",
     # v42 S10 的五项：运行态与锁不进库（writer/绑定/缓存都是可丢弃重建的运行态）
+    # 三轮补：.wf 内 Python 字节码是框架资产的派生文件（reviewer/dogfood 实测会把
+    # .wf/lib 的 __pycache__ 当 vendor_dirty 噪声、扰动 control_plane_digest）——
+    # 忽略集合唯一枚举仍是 gitignore_managed，派生文件按同一机制收口，只限 .wf/ 内。
     "lines": ["/.wf/.runtime/", "/.wf/session-bindings/", "/.wf/writer.json",
-              "/.wf/.cache/", "/.wf-lock"],
+              "/.wf/.cache/", "/.wf-lock",
+              "/.wf/**/__pycache__/", "/.wf/**/*.pyc"],
 }
 
 STEP_LINE = re.compile(
@@ -81,6 +85,10 @@ def target_of(source_path):
     """源路径 → (target_class, target_relative, kind, executable)。"""
     if source_path == "payload/install.py":
         return "release_only", None, "installer", True
+    if source_path.startswith("payload/hooks/"):
+        # W3-2（三轮 P0-1）：host-hook 资产——按 per-asset platform 投放声明平台
+        # （目标名固定 wf-session-identity.py，命令串按该名登记所有权）。
+        return "host_hook", ".codex/hooks/wf-session-identity.py", "hook", True
     for prefix, target_class, target_prefix, kind, executable in PROJECT_CLASSES:
         if source_path.startswith(prefix):
             relative = target_prefix + source_path[len(prefix):]
@@ -105,18 +113,28 @@ def expand_assets(dev_manifest, source_root=SOURCE_ROOT):
         if not os.path.isfile(absolute):
             raise ReleaseError(f"declared asset missing in source tree: {source_path}")
         target_class, target_relative, kind, executable = target_of(source_path)
-        entries.append(
-            {
-                "source_path": source_path,
-                "target_class": target_class,
-                "target_relative": target_relative,
-                "kind": entry.get("kind") or kind,
-                "required": bool(entry.get("required", True)),
-                "file_kind": "file",
-                "executable": bool(entry.get("executable", executable)),
-                "digest": wf_records.file_digest(absolute),
-            }
-        )
+        platform = entry.get("platform")
+        # W3-2（三轮）：per-asset 平台条件——可选附加键，**仅 host_hook 类合法且必须**；
+        # 须属安装器 --platform 声明集（安装器侧另核）。schema 版本不递增（可选键，
+        # 对已知类的旧读取方不破坏；host_hook 类本身需新安装器，发行单元同源，见机制稿 §10.2）。
+        if target_class == "host_hook":
+            if not isinstance(platform, str) or not platform.strip():
+                raise ReleaseError(f"host_hook asset requires a platform: {source_path}")
+        elif platform is not None:
+            raise ReleaseError(f"platform key only allowed on host_hook assets: {source_path}")
+        item = {
+            "source_path": source_path,
+            "target_class": target_class,
+            "target_relative": target_relative,
+            "kind": entry.get("kind") or kind,
+            "required": bool(entry.get("required", True)),
+            "file_kind": "file",
+            "executable": bool(entry.get("executable", executable)),
+            "digest": wf_records.file_digest(absolute),
+        }
+        if platform is not None:
+            item["platform"] = platform
+        entries.append(item)
     entries.sort(key=lambda item: item["source_path"].encode("utf-8"))
     return entries
 

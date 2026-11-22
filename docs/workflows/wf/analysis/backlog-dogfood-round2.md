@@ -134,37 +134,80 @@
 
 用户裁决：先提交 0.1.4 当前已验证状态；以下项在紧随的下一个任务逐批处置，按优先级排。
 
+> **处置标注（2026-11-22，任务 `11-22-wf-dogfood-fixes-round3` 收口）**：
+> 下列全部条目已在本任务处置完毕；标注形态＝`已处置（本任务 W<x>）`＋处置摘要。
+> 用户裁决"不做顺延"后，登记为"可并入下一轮"的骨架尾项（--plan/judgments --draft）同批完成。
+
 ## P0（a 组，上一轮实现的真实缺陷）
 
 - **a-3 验证日志物化未生效**：`write_materials` 读了 `check.started`，实际 Check 字段是
   `started_at`——**分支在真实数据上从不执行，reviewer 看不到完整日志的问题实际未解决**。
   修复：字段对齐 + 用真实 Check 记录的端到端断言。
+  **已处置（本任务 W1-a3）**：`started`→`started_at` 对齐；后续审查再补"按命令记录
+  证据身份核对"（`logs[].verified`）与 wf-review 判读指引——日志被改写标 verified=false、
+  缺失进 status.json.problems，端到端断言落 `test_check_logs_materialization.py`。
 - **a-1 content_bound_patterns 合并遗漏**：追加授权只合并 paths/digests 不合并该字段——
   先确认 `.gitignore` 再确认 `requirements-*.txt` 后，新增的 `requirements-prod.txt`
   仍按 legacy 路径级放行。修复：并入合并白名单 + 组合场景断言。
+  **已处置（本任务 W1-a1）**：合并段并入 `content_bound_patterns` 并集（与 digests 同型），
+  组合场景断言（先 .gitignore 后 requirements-*.txt 再新增 prod.txt ⇒ 未覆盖）入库并做过回退注入。
 - **a-2 机械修订路由指错入口**：`wf-continue` 与 `task-replan --draft` 都指向
   `choice=机械修订`，但该命令正式执行只认 replan；机械修订实际在 `task-approve`
   （等价链）。修复：路由句改 `task-approve`（choice=机械修订、PRD 只改排版/转义时不
   重复人批）；草稿入口同步；顺带审视"仍需新的人签决定"与"不重复问人"的口径。
+  **已处置（本任务 W1-a2）**：路由句改 `task-approve`；`task-approve --draft` 补机械修订
+  骨架（占位写明"仅已有批准后使用"）、`task-replan --draft` 删该骨架；replan 拒绝给
+  task-approve 出口。口径审视结论（设计稿记录）：人签保留（散文等价性签认），"不重复问人"
+  由"不重复批准"承载。
 - **a-4 OSError≠删除**：covers 把权限/IO 错误折成 current=None 后按"确认后已删除"放行。
   修复：改用 `records.file_digest_state` 三态归因，missing 才走删除例外、unreadable 判未覆盖。
+  **已处置（本任务 W1-a4）**：covers 与 record 侧同批统一 `file_digest_state`；删除例外
+  收紧为 `cause=="missing"`（目录替换不再冒充已删除）；三态断言 + 回退注入入库。
 
 ## P1/P2（b 组，需裁决或指引补强）
 
 - b-P1-3：审查序列开头补"authorize record export → 再 review-launch"一句（指引）。
+  **已处置（本任务 W2-4）**：wf-continue/wf-review-action/wf-finish 三处补外发确认步；
+  后续审查修正口径为"同任务同材料类集合持续有效，不每轮重签"，且 task-check 的 next_
+  与门禁同判据前置提示（export_scope_problems）。
 - b-P1-4：K6 commit 双轨（authorize record commit 无消费方，实际走 finish 的 commit_grants）——
   **需人裁**：删 commit 类并声明 finish 决定唯一，或让归档守卫消费它。
+  **已处置（本任务 W2-1，人裁②）**：删 commit 类（ACTIONS 四类）；提交授权唯一通道＝
+  finish 决定 commit_grants；机制稿/设计稿/帮助同批。后续审查补 K6 分码
+  （delete/repo_rules/export 各有专属码，不再共用提交码）。
 - b-P1-5：control_plane_digest 非交付维度事实（vendor 改动不进锚点、旧 pass 可静默复用）——
   设计变更，**需人裁**。
+  **已处置（本任务 W2-2，人裁③）**：常开第 11 键进 Check 锚点（一次性全量失效）；
+  呈现伴随键 control_plane_paths 使 drift 可归因"改了哪个框架文件"；
+  分类失败归因不改写契约码。
 - b-P1-6：review-notes help 示例路径 `<id>/notes.json` 与真实目录 `<id>-<slug>` 不符——
   改为指 `status` 回显的 directory 或加 --review-notes-draft（机械）。
+  **已处置（本任务 W2-5）**：帮助改指 `status` 回显的 `<id>-<slug>` 真实目录。
 - b-P1-7：单 reviewer 无正常降级路径——**需人裁**：单 reviewer+人接受残余风险留痕，或
   把双 CLI 写进安装前置声明。
+  **已处置（本任务 W2-3，人裁④）**：`review-decide --single-reviewer-acceptance`（人签
+  残余风险留痕降级，不默认）；接受只降人数，其余门槛照旧；双 reviewer 仍是默认要求；
+  收工预览（irreversible.review_degraded）单列降级事实供人判。
 - b-P2-8：repo_rules 逐文件硬确认粒度——**需人裁**：任务级合并或降 facts+人判。
+  **维持现状（本任务 W2-8，理由留档）**：K6 ⑤ 确认对象恰是"环境级规则变更对后续任务的
+  影响"——逐次内容变化逐次确认正是该承诺本体；dogfood 摩擦实例是门禁正确工作。任务级
+  合并引入"确认后内容再变仍放行"窗口，与内容绑定不变量冲突，不降档。
 - b-P2-9/10/11：重复句收敛、§1.1 边界补充（本地完整路径补异种 CLI 依赖；固定流转清单的
   "三方升级匹配"标第三轮未交付）、两处小文案（archived 绑定 next 提"继续当前对象"无效、
   vendor_dirty 确认无记录载体）。
+  **已处置（本任务 W2-9/W2-6/W2-7）**：工作习惯唯一完整定义位收敛＋正面授权与"需人签
+  封闭清单"进设计稿 §1.1；三方升级匹配已交付（W4-1）并在固定清单标注交付状态；
+  archived 绑定 next 按 enable 终态出口同口径分档；vendor_dirty 确认载体＝judgments
+  kind=框架改动（经 --file 条目、task-check/归档 facts 投影 vendor_judgments）。
 
 ## 维持已声明边界（勿重复提议）
 
 - 会话身份轮换（P0-1）与 upgrade/回传闭环（P0-2）：既有声明边界，待第三轮交付计划。
+  **已处置（本任务 W3/W4）**：P0-1＝`enable --new-session` + Codex SessionStart hook
+  适配层（host_hook 资产类、per-asset platform、hooks.json 合并/卸载对称）+ 四态解析
+  （在途会话续用优先，不夺走在途任务）；P0-2＝`install.py --upgrade` 三方匹配 +
+  预览令牌（三方同源 parity）+ `--export-deviations` 偏离导出回源闭环；0.1.4→0.1.5
+  自举升级实跑验证通过（30 路径变更、applied_pending_commit、自检绿）。
+  **登记为"可并入下一轮"的骨架尾项（五轮审查 b5）按用户"不做顺延"裁决同批完成**：
+  `review-decide --plan-draft`、`judgments add --draft`——至此全部"AI 必须手写的
+  结构化文件"均有只读骨架入口。

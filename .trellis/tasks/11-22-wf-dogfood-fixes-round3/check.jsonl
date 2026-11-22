@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/docs/wf-delivery-discipline.md", "reason": "检查判据：轮次收口三清单逐行核、机制义务逐句核、双模 repro、'有实现无断言'处理、分层验证边界——检查阶段的核对表"}
+{"file": ".trellis/spec/docs/wf-design-revision-gate.md", "reason": "检查上位稿改动：validate-wf-design 绿 + 双列反扫 + 限定词复查 + 证据类型标注——§5 文档批的验收口径"}
+{"file": ".trellis/spec/guides/diagnosis-and-fixture-hygiene.md", "reason": "收尾验证纪律：先证字节复现再全量回归、跑完核对 git status、静默失败必须出声——C2/C4 收尾步骤约束"}
+{"file": "docs/workflows/wf/analysis/backlog-dogfood-round2.md", "reason": "「下一任务待办」处置标注完整性检查对象（C1）：不留未标注条目"}

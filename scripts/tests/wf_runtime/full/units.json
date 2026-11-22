@@ -455,7 +455,7 @@
     {
       "name": "r71_tests",
       "kind": "suite",
-      "expect": 16,
+      "expect": 17,
       "tags": [
         "review",
         "handover",
