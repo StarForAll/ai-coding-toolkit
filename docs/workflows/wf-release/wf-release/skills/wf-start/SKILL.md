@@ -16,8 +16,12 @@ user-invoked: true
 1. 若用户明确禁写 `.wf/`、明确要求不启用流程，或当前宿主策略已拒绝写运行态：**不要先跑 `enable` 或试写**，直接如实报告并进入下节「启用无法建立时」由人选择出口。否则先跑 `wf.py enable`，取得启用核对结果（Trellis 互斥、宿主身份能力、activation）。
    - `WF_FLOW_CONFLICT` / `WF_SEMANTIC_DECISION`：停，按 facts 清理或交人核实后再换新会话。
    - `WF_IDENTITY_UNRESOLVED`：停，按 facts 核实宿主身份能力。自动模式会为本会话签发 `issued_id`；
-     显式的“换一个新会话标识”命令尚未交付，不要引导人走这条路径。
-2. `enable` 的 `facts.binding` 给出当前绑定。已绑定：只恢复原对象，不换对象。人想开新任务时，停止并说明需要新的执行边界（宿主提供会话标识时可用新会话；否则开新终端）；**不要用 `task-new` 试探**——它只会报 `WF_BINDING_MISMATCH`。
+     旧对象的绑定已到终态、人想换新会话身份时用 `wf.py enable --new-session`（宿主无关轮换：
+     旧附件/绑定保留为历史，新对象用 `task-new` 选择；对象仍在途会被 `WF_BINDING_MISMATCH` 拒并给出口）。
+     宿主提供会话标识的平台（部署表 session_identity 声明）由适配层自动映射，`/clear` 后新会话标识
+     使宿主身份换新；宿主标识缺位时同边界按在途会话续用（`host_identity_present`/`session_provider`
+     facts 如实报告），在途期内 /clear 仍不可区分是已声明边界。
+2. `enable` 的 `facts.binding` 给出当前绑定。已绑定：只恢复原对象，不换对象。人想开新任务时：旧对象已终态的，用 `wf.py enable --new-session` 在本边界换新会话后 `task-new`；宿主提供会话标识的平台可用新会话；否则开新终端。**不要用 `task-new` 试探**——对象在途时它只会报 `WF_BINDING_MISMATCH`。
 3. 未绑定：由人选择
    - 新普通任务：`task-new --kind ordinary|initialize|bootstrap --title <t> --template <项目根>/.wf/templates/task`；
    - 既有就绪任务：`bind --task <id>`；
@@ -84,10 +88,9 @@ user-invoked: true
 
 ## 工作习惯（2026-11-08 起）
 
-- **同一终端同时只推进一个任务**（阻断机制见 `wf-continue`「工作习惯」）；需要并行时另开终端或窗口。
-  同一终端内的第二个 agent 会被 `WF_IDENTITY_UNRESOLVED(concurrent_unregistered_caller)` 阻断，
-  必须由人显式 `wf.py enable` 登记后才放行，且此后与前者**共享同一执行会话**。
+- 同一终端只推进一个任务；自动模式不手写信封——完整定义见 `wf-continue`「工作习惯」
+  （唯一完整定义位），此处不重复论述。
 
 ## 纪律
 
-- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只经信封或宿主映射通道；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。

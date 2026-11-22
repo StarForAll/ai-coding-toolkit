@@ -518,6 +518,48 @@ def main(argv):
     root, rest, error = locate_project(argv)
     if error:
         return fail(error[1], {"detail": error[0]}, "用 --project <绝对路径> 显式给目标，或按恢复说明重取入口", json_mode)
+    if rest and rest[0] == "upgrade":
+        # W4-1：升级转交引导层——--release <发行检出根> --release-ref <ref> [--apply]
+        # 缺一即报三要素；只转交不判定（判定在 install.py）。
+        opts = rest[1:]
+        release_root = None
+        release_ref = None
+        apply_flag = False
+        index = 0
+        while index < len(opts):
+            if opts[index] == "--release" and index + 1 < len(opts):
+                release_root = opts[index + 1]; index += 2
+            elif opts[index] == "--release-ref" and index + 1 < len(opts):
+                release_ref = opts[index + 1]; index += 2
+            elif opts[index] == "--apply":
+                apply_flag = True; index += 1
+            else:
+                index += 1
+        if not release_root or not release_ref:
+            return fail(
+                "WF_USAGE_INVALID",
+                {"missing": [name for name, value in (("--release", release_root),
+                                                      ("--release-ref", release_ref)) if not value]},
+                "wf upgrade 需要三要素：--release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply]；"
+                "或直接运行 <检出根>/install.py --upgrade --target <项目> --release-ref <ref> --source <检出根>",
+                json_mode,
+            )
+        installer = os.path.join(release_root, "install.py")
+        if not os.path.isfile(installer):
+            return fail(
+                "WF_CAPABILITY_UNAVAILABLE",
+                {"missing": f"{release_root}/install.py"},
+                "发行检出根不含 install.py：核实 --release 指向的是发行检出根"
+                "（其下直接有 install.py、wf-release.json 与 wf-release/）",
+                json_mode,
+            )
+        env = dict(os.environ)
+        env["WF_PROJECT_ROOT"] = root
+        transfer = [sys.executable, installer, "--upgrade", "--target", root,
+                   "--release-ref", release_ref, "--source", release_root]
+        if apply_flag:
+            transfer.append("--apply")
+        os.execve(sys.executable, transfer, env)
     if rest and rest[0] in ("repair", "uninstall"):
         script = os.path.join(root, ".wf", "bin", f"{rest[0]}.py")
         if not os.path.isfile(script):

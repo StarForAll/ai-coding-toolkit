@@ -25,12 +25,12 @@ class CheckError(Exception):
 # --------------------------------------------------------------------------
 
 
-def object_paths(ctx, task):
+def object_paths(ctx, task, classified=None):
     """本次 Check 对象的内容域：`scope.delivery_set()` 的路径集合（唯一口径）。"""
-    return list(scope.delivery_set(ctx.root, task)["paths"])
+    return list(scope.delivery_set(ctx.root, task, classified=classified)["paths"])
 
 
-def spec_versions(ctx, task):
+def spec_versions(ctx, task, classified=None):
     """当前命中或策展的 spec（机制稿 §3.5）：新增的命中规则必须进入锚点输入。"""
     from . import spec as spec_mod
     from . import tasks as tasks_mod
@@ -40,7 +40,10 @@ def spec_versions(ctx, task):
         if entry.get("released") or not entry.get("path"):
             continue
         paths.add(entry["path"])
-    classified = scope.classify_candidates(ctx.root, task, receipts=tasks_mod.task_receipts(ctx.root))
+    if classified is None:
+        # 三轮三审 b6：锚点计算路径统一由 anchor_parts 一次分类后透传；
+        # 独立调用面缺省自行分类（口径不变，只是不再在锚点内重复扫描）。
+        classified = scope.classify_candidates(ctx.root, task, receipts=tasks_mod.task_receipts(ctx.root))
     candidates = sorted(set(classified["buckets"]["e"]) |
                         {item for item in (".wf/baseline.md", ".wf/project-config.json")
                          if os.path.exists(join(ctx.root, item))})
@@ -132,12 +135,51 @@ def workflow_snapshot_digest(ctx, task):
                                                  "snapshot_digest": snapshot_digest})
 
 
-def anchor_parts(ctx, task, *, check=None):
+def anchor_parts(ctx, task, *, check=None, classified=None):
+    """锚点输入快照（check.parts 与 check_anchor 覆盖面同源）。
+
+    W2-2（三轮裁决③）：新增常开键 control_plane_digest——vendor 脏路径集合的内容
+    指纹（v 桶取 classify_candidates 单一来源）。Check 流程把已算分类传入
+    （`classified`，与 delivery_set 同型）；只读调用面（judgments show /
+    archive --draft / stop --preview 等锚点计算）缺省自行分类——只读面每次
+    多一轮分类扫描的成本如实可见，不静默省略。
+    """
     from . import tasks as tasks_mod
 
     plan = task.get("plan") or {}
     entry = task.get("entry_snapshot") or {}
-    paths = object_paths(ctx, task)
+    # 三轮三审 b6：锚点计算只做**一次**分类——classify 在此统一计算（缺省时），
+    # object_paths/spec_versions 都透传复用；此前只读面一次锚点要扫 2–3 轮。
+    if classified is None:
+        from . import scope as scope_mod
+        from . import tasks as _tasks_mod
+
+        try:
+            classified = scope_mod.classify_candidates(ctx.root, task,
+                                                        receipts=_tasks_mod.task_receipts(ctx.root))
+        except (CheckError, _tasks_mod.TaskError, records.RecordInvalid):
+            # 契约错误原样传播：classify_candidates 对入口快照问题本就抛
+            # WF_RECORD_INVALID（scope.py 既有口径）——不改写、不折 None，
+            # 否则 current_anchor 折成 missing_anchor_inputs → WF_APPROVAL_MISSING 误归因。
+            raise
+        except Exception as exc:
+            raise CheckError("WF_SCOPE_UNRESOLVED",
+                             {"reason": "control-plane classification failed",
+                              "detail": str(exc),
+                              "exits": ["按 §5.4/repair 核对任务记录与入口快照后重试",
+                                        "核对基线/记录归属后重跑 Check"]}) from exc
+    try:
+        paths = object_paths(ctx, task, classified=classified)
+    except (CheckError, tasks_mod.TaskError, records.RecordInvalid):
+        raise                    # 契约错误（WF_RECORD_INVALID 等）原样传播
+    except Exception as exc:
+        # delivery_set 消费同一份 classified，理论不再触发分类；保留同口径包装
+        # 防御透传面之外的路径（不漏裸异常）。
+        raise CheckError("WF_SCOPE_UNRESOLVED",
+                         {"reason": "control-plane classification failed",
+                          "detail": str(exc),
+                          "exits": ["按 §5.4/repair 核对任务记录与入口快照后重试",
+                                    "核对基线/记录归属后重跑 Check"]}) from exc
     return {
         "plan_version": tasks_mod.normalized_plan_version(task),
         "entry_snapshot_digest": fingerprint.snapshot_digest(entry) if entry else None,
@@ -145,16 +187,22 @@ def anchor_parts(ctx, task, *, check=None):
         "paths_digest": fingerprint.paths_digest(paths),
         "content_digest": fingerprint.content_digest(fingerprint.items(ctx.root, paths)),
         "acceptance_digest": plan.get("acceptance_digest"),
-        "spec_versions": spec_versions(ctx, task),
+        "spec_versions": spec_versions(ctx, task, classified=classified),
         "assertions_digest": assertions_digest(ctx, task),
         "baseline_digest": records.file_digest(join(ctx.root, ".wf/baseline.md")),
         "config_digest": records.file_digest(join(ctx.root, ".wf/project-config.json")),
         "workflow_snapshot_digest": workflow_snapshot_digest(ctx, task),
+        "control_plane_digest": fingerprint.control_plane_digest(
+            (classified.get("buckets") or {}).get("v") or [], ctx.root),
+        # 五轮审查 b2：呈现伴随键（不进 check_anchor 白名单、不参与哈希）——
+        # control_plane_digest 失配时 drift 输出只有两串哈希，无法归因"改了哪个框架文件"；
+        # v 桶路径集合并排保存，"变了什么"与"变了"同屏可见。空桶为 []（不进缺项判定）。
+        "control_plane_paths": sorted((classified.get("buckets") or {}).get("v") or []),
     }
 
 
-def current_anchor(ctx, task):
-    parts = anchor_parts(ctx, task)
+def current_anchor(ctx, task, *, classified=None):
+    parts = anchor_parts(ctx, task, classified=classified)
     missing = [key for key, value in parts.items() if value is None and key not in ("entry_snapshot_digest",
                                                                                    "workflow_snapshot_digest")]
     if missing:
@@ -948,7 +996,9 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
                               period_problems=coverage.get("period_problems"), exits=exits))
 
     scan_before = fingerprint.items(ctx.root, object_paths(ctx, task))
-    anchor, parts = current_anchor(ctx, task)
+    # W2-2：Check 流程把已算分类传给锚点计算（与 delivery_set 同型），
+    # 不在 anchor_parts 里再扫一轮；classified 变量沿用本函数 ① 段的结果。
+    anchor, parts = current_anchor(ctx, task, classified=classified)
     plan = task.get("plan") or {}
     started = records.now_str()      # 本次 Check 的起点（`check.started_at`），供两段共用
 

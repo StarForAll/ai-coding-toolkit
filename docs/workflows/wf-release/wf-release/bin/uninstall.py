@@ -221,7 +221,48 @@ def resolve(root, relative):
 
 
 # release_only 只存在于发行树、不落目标项目：出现在待删集合里属清单异常之外的正常登记
-ASSET_CLASSES = ("project_wf", "skill_root")
+ASSET_CLASSES = ("project_wf", "skill_root", "host_hook")
+
+HOOK_SCRIPT_RELATIVE = ".codex/hooks/wf-session-identity.py"
+
+
+def _hooks_entry_matches(entry, script_name):
+    hooks = entry.get("hooks") if isinstance(entry, dict) else None
+    if not isinstance(hooks, list):
+        return False
+    return any(isinstance(hook, dict) and script_name in str(hook.get("command") or "")
+               for hook in hooks)
+
+
+def remove_hooks_json_entry(project_root, script_name=HOOK_SCRIPT_RELATIVE):
+    """W3-2：卸载对称移除——只删命令串引用本脚本的条目；空列表保留文件结构（用户文件不删）。
+
+    返回移除的条目数；hooks.json 文件本身不删（还可能承载用户其他条目；空对象也留给宿主）。
+    """
+    path = os.path.join(os.path.abspath(project_root), ".codex", "hooks.json")
+    if not os.path.isfile(path):
+        return 0
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError):
+        return 0
+    if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
+        return 0
+    removed = 0
+    for event, entries in list(data["hooks"].items()):
+        if not isinstance(entries, list):
+            continue
+        kept = [item for item in entries if not _hooks_entry_matches(item, script_name)]
+        removed += len(entries) - len(kept)
+        data["hooks"][event] = kept          # 空列表保留结构：用户文件不删
+    if removed:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
+        os.replace(tmp, path)
+    return removed
+
 NON_DEPLOYED_CLASSES = ("release_only",)
 
 
@@ -304,7 +345,8 @@ def collect_targets(root, installation, manifest):
         if not _safe_relative(relative):
             problems.append({"reason": "asset path is not a safe relative path", "path": relative})
             continue
-        if target_class == "project_wf":
+        if target_class in ("project_wf", "host_hook"):
+            # W3-2（三轮）：host_hook 落点在项目内（.codex/hooks/…），与 project_wf 同判
             resolved = resolve(project_root, relative)
             try:
                 resolved_real = _resolve_location(resolved)
@@ -317,7 +359,7 @@ def collect_targets(root, installation, manifest):
                                  "resolved": resolved_real, "project": project_real})
                 continue
             project.append(relative)
-        else:
+        elif target_class == "skill_root":
             for root_ref in roots:
                 if not isinstance(root_ref, str) or not root_ref:
                     problems.append({"reason": "skill root reference invalid", "root": root_ref})
@@ -409,7 +451,7 @@ def main(argv=None):
     expected = {}
     for asset in manifest.get("assets") or []:
         target_class = asset.get("target_class")
-        if target_class == "project_wf":
+        if target_class in ("project_wf", "host_hook"):
             expected[asset["target_relative"]] = asset.get("digest")
         elif target_class == "skill_root":
             for root_ref in installation.get("roots") or []:
@@ -526,7 +568,7 @@ def main(argv=None):
             now_expected = {}
             for asset in manifest.get("assets") or []:
                 target_class = asset.get("target_class")
-                if target_class == "project_wf":
+                if target_class in ("project_wf", "host_hook"):
                     now_expected[asset["target_relative"]] = asset.get("digest")
                 elif target_class == "skill_root":
                     for root_ref in installation.get("roots") or []:
@@ -592,6 +634,13 @@ def main(argv=None):
                 except OSError:
                     pass
                 removed.append({"path": path, "digest": digest})
+            # W3-2：host_hook 资产已删 ⇒ 对称移除 hooks.json 里引用本脚本的条目
+            _hook_assets = [asset for asset in manifest.get("assets") or []
+                            if isinstance(asset, dict)
+                            and asset.get("target_class") == "host_hook"
+                            and asset.get("platform") == "codex"]
+            if _hook_assets:
+                remove_hooks_json_entry(root)
             # 托管段：移除整段，保留 /.wf-lock 裸行
             if bounds:
                 lines = gitignore_text.splitlines()

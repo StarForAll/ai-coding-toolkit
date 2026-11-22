@@ -42,7 +42,7 @@ disable-model-invocation: false
 ## 报告还能不能沿用（内容或标准变了之后）
 
 - 三条路：① **沿用**（说明为什么变更不影响该结论）② **重发**（说明为什么影响）③ **`escalated` 交人**（判不了时的默认出口）。
-- 判"沿用"必须点名漂移差异里的**具体位置**（`d:` + hunk/字段/行号）；框架只校验位置存在，**相关性与粒度由人复核**。
+- 判"沿用"必须点名漂移差异里的**具体位置**（`d:` + hunk/字段/行号）；框架只校验位置存在，**相关性与粒度是你的判断**——写进 `kind=沿用` 的 judgment（依据写实），判不了才 `outcome=escalated` 交人，不默认请示。
 - **纠错型漂移**（`broken-reference`，旧验证从未成功执行）不给"沿用"这条路：锚点指向被纠错 check 的报告只能重发。
 - 框架不判决后果，只保证"带 `standard_drift` 且没有对应 judgment 的报告不能产出 pass"。
 - 关闭证据要指回问题本身：见 `wf-repair-loop`「这条 blocking 真的修了吗」。
@@ -84,7 +84,7 @@ disable-model-invocation: false
 
 1. 在**当前批准触碰面内**修（要碰面外路径：单点且人同意直接改时走轻量通道——`authorize record` 一条 `choice=expand` 后按 `wf-continue` 扩面段处理；批量扩面/改验收口径才回 Plan 扩范围）；
 2. 重跑 `task-check`（旧 Check 与旧锚点一律失效，不能沿用旧 pass）；
-3. 用 `review-launch` 发下一轮，在新锚点上重新判。
+3. 发下一轮前先取人外发范围确认（choice=export，见 `wf-continue`「复杂任务审查」），再用 `review-launch` 在新锚点上重新判。
 
 - 轮次不设上限；"这轮算过"的唯一依据是 `review-decide` 的 pass 加上既有 disposition 关闭事实，
   不是"报告读完了"或"建议都登记了"。
@@ -93,18 +93,21 @@ disable-model-invocation: false
 
 ## pass 之后：建议取舍与主动收敛
 
-- `review-decide` 判 pass 后，纯建议**不阻塞收工**。逐条判断本轮是否采纳：明显值得且不改验收/范围才改。采纳后**按锚点规则判断**：改动进入交付面 → 内容指纹变化 → 重跑 Check、旧报告失效、发新轮；只是控制记录/叙述性调整（不进交付面、不改锚点）→ 报告继续有效，不追加轮次。不要拿旧 pass 掩盖实质变更。
+- `review-decide` 判 pass 后，纯建议**不阻塞收工**。逐条判断本轮是否采纳：明显值得且不改验收/范围才改。
+  采纳后按锚点规则判断后果（改动进交付面 ⇒ 内容指纹变化 ⇒ 重跑 Check + 发新轮；控制记录/叙述性调整 ⇒ 报告继续有效）——
+  完整判定口径见 `wf-continue`「复杂任务审查」与 `wf-repair-loop`，此处不重复论述。不要拿旧 pass 掩盖实质变更。
 - 不采纳的留档并写明理由（影响面、为什么不值得本轮做、是否留作后续）；不要为了“把所有建议都做完”无限加轮。
 - 没有未关闭 blocking、缺口已接受或无需缺口时，准备收工材料（Check 结果、未核实项、待提交路径），交人调用 `wf-finish`；不要停在“报告读完了”。
 
 ## 判定边界
 
 `review-decide` 的 pass/fail 由入口按已落盘事实与 AI 声明推导（人数、CLI 差异、锚点、主会话复核与采信报告的覆盖、未关闭 blocking；声明本身不被机制验证）；本 skill 不给 verdict。
-单 reviewer 只是 degraded 参考，不满足复杂任务完成条件。
+单 reviewer 默认不产生判定；人签残余风险接受（`--single-reviewer-acceptance`）时留痕降级可判定——
+完整口径见 `wf-review` 适用面，此处不重复论述。
 
 ## 纪律
 
-- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只经信封或宿主映射通道；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
 
 ## 来源与差异
 

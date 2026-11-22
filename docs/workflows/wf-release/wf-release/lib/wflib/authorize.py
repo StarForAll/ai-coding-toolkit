@@ -1,7 +1,9 @@
 """authorize.py — K6 五类不可逆动作的确认与"授权原件脱敏入库"（v42 K6 / S7）。
 
-五类动作（一次确认绑定变化摘要）：① 提交/推送；② 删除数据；③ 外发内容；
+五类动作（一次确认绑定变化摘要）：① 提交/推送——确认通道是 finish 决定的
+`commit_grants`（tasks.py 唯一口径），不经本模块；② 删除数据；③ 外发内容；
 ④ 越出批准面的修改（先确认后改）；⑤ 仓库级规则文件（集合由 `protocol/repo_rules.json` 声明；该类是环境级规则变更确认——确认的是对后续任务行为环境的影响，不等于动作本身不可逆）。
+本模块只承载②③④⑤的确认文件（`authorization-<action>.json`）。
 
 两条性质：
 - **授权是可审计凭证**：脱敏后的确认原件进 **committed**（任务目录），敏感原文留 runtime；
@@ -18,7 +20,6 @@ from . import protocol as protocol_mod
 from . import records
 
 ACTIONS = {
-    "commit": "提交 / 推送",
     "delete": "删除数据",
     "export": "外发内容",
     "expand": "越出批准面的修改（先确认后改）",
@@ -196,10 +197,11 @@ def record_authorization(task_dir, action, decision, *, raw_copy_dir=None, root=
                 from . import records as _records_mod
 
                 rel = os.path.relpath(hit, str(root)).replace(os.sep, "/")
-                try:
-                    digests[rel] = "sha256:" + _records_mod.sha256_hex(open(hit, "rb").read())
-                except OSError:
-                    digests[rel] = None      # 记录时不可读：守卫将按"无法核对"处理
+                # a 组 a-4 记录侧同批统一：内容留档的读取归因也走 file_digest_state
+                # （C1 唯一实现）——missing/unreadable 均 None＝未绑内容，记录侧本就
+                # 不区分两态，但不再在第二处内联解释 OSError。
+                digest, _cause, _reason = _records_mod.file_digest_state(hit)
+                digests[rel] = digest
         redacted["content_digests"] = digests
     path = authorization_path(task_dir, action)
     # 每次确认的范围—原话留痕（十二轮 P2-2）：顶层 quote/by/at 取最新，
@@ -243,6 +245,13 @@ def record_authorization(task_dir, action, decision, *, raw_copy_dir=None, root=
         digests.update(redacted.get("content_digests") or {})
         if digests:
             merged["content_digests"] = digests
+        # 内容绑定模式（a 组 a-1）：与 digests 同型并集——先确认 `.gitignore` 再确认
+        # `requirements-*.txt` 时，旧实现只合并 digests 不合并 patterns，追加确认的
+        # 绑定模式丢失，covers 对新增的 `requirements-prod.txt` 按 legacy 路径级放行。
+        bound_patterns = sorted(set(_as_list_value(existing.get("content_bound_patterns")))
+                                | set(_as_list_value(redacted.get("content_bound_patterns"))))
+        if bound_patterns:
+            merged["content_bound_patterns"] = bound_patterns
         # export 的材料类并集后**重算范围身份**（十二轮 P1-1：合并不重算
         # scope_digest 会让"追加材料类后再确认"永远无效，出口指向已不成立的动作）
         if action == "export":
@@ -394,11 +403,11 @@ def covers(task_dir, action, paths, *, root=None):
         from . import records as _records_mod
 
         for path in sorted(paths or []):
-            current = None
-            try:
-                current = "sha256:" + _records_mod.sha256_hex(open(os.path.join(str(root), path), "rb").read())
-            except OSError:
-                current = None
+            # a 组 a-4：当前内容的读取走 records.file_digest_state 三态归因（C1 唯一实现）——
+            # missing 才是删除例外（确认时存在、当前已删 ⇒ 覆盖）；unreadable 按未覆盖
+            # （无法核对即未覆盖），不再把权限/IO 错误折成 None 冒充"已删除"。
+            current, cause, _reason = _records_mod.file_digest_state(
+                os.path.join(str(root), path))
             if path not in recorded:
                 # 缺摘要三档（十五轮 b-2 + 十六轮 a-1）：
                 # ① 命中本次确认声明的模式（content_bound_patterns）→ 确认后才出现/才命中的
@@ -412,10 +421,11 @@ def covers(task_dir, action, paths, *, root=None):
                 elif action == "delete" and current is None:
                     uncovered.append(path)
                 continue
-            if current is None and action in ("delete", "repo_rules") and recorded[path] is not None:
+            if (current is None and cause == "missing"
+                    and action in ("delete", "repo_rules") and recorded[path] is not None):
                 # 删除类确认（八轮审查 P0-1）：record 在删除**之前**落档（绑定被删时的内容），
                 # "确认时存在、当前已删除"正是被确认的效果——视为覆盖。
-                # 确认时读不到（recorded None）仍按未覆盖处理，不静默放行。
+                # a-4 后仅 cause == "missing" 走这里；unreadable 落到下面按未覆盖处理。
                 continue
             if recorded[path] is None or current is None:
                 # 七轮审查 b-2：任何一端读不到即无法核对——按未覆盖处理（需人处置），

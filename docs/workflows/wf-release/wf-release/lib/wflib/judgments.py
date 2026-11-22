@@ -16,7 +16,9 @@ from os.path import join
 from . import codes, records
 
 # v42 §5.2：只记三类，种类取既有判断类（`by=human` 只是字段，不新增第十类）
-KINDS = ("归属", "关闭", "沿用", "扩面", "标准变更", "缺口", "未核实", "规模")
+# W2-7（三轮）：增中文类「框架改动」——vendor 改动归属确认（回源仓库立项/另开任务/保持现场）
+# 的可审计记录载体；不参与判定、纯事实投影（task-check/archive 的 vendor_judgments 消费）。
+KINDS = ("归属", "关闭", "沿用", "扩面", "标准变更", "缺口", "未核实", "规模", "框架改动")
 DECISIONS = ("applied", "escalated")
 OUTCOMES = ("applied", "escalated")
 BY = ("ai", "human")

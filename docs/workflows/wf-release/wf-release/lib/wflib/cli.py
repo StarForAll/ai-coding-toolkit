@@ -169,20 +169,103 @@ class Context:
         return value or "P1"
 
     def _auto_resolve(self):
-        """从锚点解析当前会话：返回 (session_key, attachment) 或 (None, None)。
+        """四态解析（W3-2，三轮 P0-1）——返回**单一结构**，三处消费不重判。
 
-        只做"命中"判定（§2.2b #1/#2/#3）；未命中时返回 (None, None)，由调用方决定
-        是建立新会话（enable）还是拒绝（其它命令）。
+        `{state, key, attachment, evidence, host_identity_present}`：
+        - `host_resume`（①）：映射命中且 host 会话有附件 → 续用；
+        - `inflight_reuse`（②）：映射命中、host 无附件、锚点路由有在途会话
+          （有附件 + 绑定文件存在可读 + 实例标识匹配 + 对象未终态）→ 续用该会话，
+          不改写不接管——在途会话的身份不因 hook 上线/换聊天被夺走；
+        - `host_establish`（③）：映射命中、host 无附件、路由无在途会话 → 由
+          `cmd_enable` 以 host 身份建立并接管路由（本结构只报状态）；
+        - `anchor_resume`（④）：无映射时按锚点路由解析（既有语义不变）；
+        - `no_session`：无锚点/无路由可命中；
+        - `unresolved`：绑定不可读/实例标识与附件不符——**只在写/推进入口阻断**
+          （抛错由消费方决定），只读面降级为 facts 可见事实继续运行。
         """
+        from . import identity_store as store
+
+        resolution = self._auto_resolve_inner()
+        self._resolution = resolution
+        return resolution
+
+    def _auto_resolve_inner(self):
         from . import identity_store as store
 
         candidates = session_mod.candidates()
         if not candidates:
-            return None, None
+            return {"state": "no_session", "key": None, "attachment": None,
+                    "evidence": {"reason": "no execution boundary"},
+                    "host_identity_present": False}
         keys = [session_mod.anchor_key(item) for item in candidates]
         routes = store.load_routes(self.root)
         path = self.identity_path()
         current_root = candidates[-1] if candidates[-1]["kind"] == "pid" else candidates[0]
+
+        # 宿主映射前置查询（W3-2）：命中即宿主提供了会话标识。
+        mapping = store.load_host_map(self.root, keys)
+        host_present = mapping["status"] == "hit"
+        if host_present:
+            payload = mapping["payload"]
+            host_id = str(payload.get("host_id"))
+            installed = self.platforms()
+            if host_id not in [item for item in installed if isinstance(item, str)]:
+                # host_id 按安装记录 platforms 清单校验（设计 §3.2.1③）——不在清单即
+                # 无法核实宿主身份来源，回落锚点路由（④）并在 facts 如实报告，
+                # 不因映射不可核而丢掉锚点上仍可续用的会话。
+                resolution = self._anchor_resolve(candidates, keys, routes, path, current_root,
+                                                  host_present=False, import_error=False)
+                resolution["evidence"] = dict(resolution.get("evidence") or {},
+                                              host_mapping_rejected="host_id not in installed platforms",
+                                              host_id=host_id)
+                return resolution
+            host_key = session_mod.session_key(
+                {"provider": "host",
+                 "identity": {"host_id": host_id, "session_id": str(payload.get("session_id"))}})
+            host_attachment = store.load_attachment(self.root, host_key)
+            if host_attachment is not None:
+                # ① 映射命中 + host 身份有附件：按既有解析续用该 host 会话。
+                return {"state": "host_resume", "key": host_key, "attachment": host_attachment,
+                        "evidence": {"host_mapping": "hit", "session_id": payload.get("session_id"),
+                                     "host_id": host_id},
+                        "host_identity_present": True}
+            # ②/③ 分流：查锚点路由上的在途会话（绑定文件存在且可读、实例标识匹配、
+            # 绑定对象未终态——paused/suspended 都算在途）。
+            inflight = self._inflight_session(routes, keys)
+            if inflight["state"] == "inflight_reuse":
+                return {"state": "inflight_reuse", "key": inflight["key"],
+                        "attachment": inflight["attachment"],
+                        "evidence": dict(inflight["evidence"],
+                                         host_mapping="hit",
+                                         host_session_id=payload.get("session_id"),
+                                         note="宿主会话标识已变化；当前边界按既有在途会话续用",
+                                         exits=["继续当前对象",
+                                                "完成/暂停/放弃对象后 `wf enable --new-session` 换新会话"]),
+                        "host_identity_present": True}
+            if inflight["state"] == "unresolved":
+                return {"state": "unresolved", "key": None, "attachment": None,
+                        "evidence": dict(inflight["evidence"],
+                                         host_mapping="hit",
+                                         host_session_id=payload.get("session_id")),
+                        "host_identity_present": True}
+            # ③ 映射命中、host 无附件、路由无在途会话（全部终态/无附件）：
+            # 建立 host 身份会话并接管路由——由 enable 承载；非 enable 命令按"无会话"处理。
+            return {"state": "host_establish", "key": None, "attachment": None,
+                    "evidence": {"host_mapping": "hit", "host_id": host_id,
+                                 "session_id": payload.get("session_id"),
+                                 "host_session_key": host_key,
+                                 "reason": "no inflight session on this boundary"},
+                    "host_identity_present": True}
+
+        # ④ 无映射：锚点路由解析（既有语义原样保留）。
+        return self._anchor_resolve(candidates, keys, routes, path, current_root,
+                                    host_present=host_present,
+                                    import_error=mapping["status"] == "import-error")
+
+    def _anchor_resolve(self, candidates, keys, routes, path, current_root,
+                        *, host_present=False, import_error=False):
+        """④：锚点路由命中判定（原 `_auto_resolve` 主体，语义不变）。"""
+        from . import identity_store as store
 
         l1_owners = store.owners_of(routes, keys[0]) if candidates[0]["kind"] == "sid" else []
         l2_owners = []
@@ -190,8 +273,11 @@ class Context:
             if item["kind"] == "pid":          # 锚点 kind 是 pid；路由 via 才叫 proc
                 l2_owners = store.owners_of(routes, key)
 
+        base = {"host_identity_present": host_present,
+                "evidence": {"host_mapping_import_error": True} if import_error else {}}
         if len(l1_owners) == 1:                       # #1 / #2：L1 单主命中即以此为准
-            return l1_owners[0], store.load_attachment(self.root, l1_owners[0])
+            return dict(base, state="anchor_resume", key=l1_owners[0],
+                        attachment=store.load_attachment(self.root, l1_owners[0]))
         if l2_owners:
             states = []
             for owner in l2_owners:
@@ -207,7 +293,8 @@ class Context:
             verdict = session_mod.adjudicate(states, current_root, path)
             if verdict["verdict"] == session_mod.USE:
                 owner = verdict["session_key"]
-                return owner, store.load_attachment(self.root, owner)
+                return dict(base, state="anchor_resume", key=owner,
+                            attachment=store.load_attachment(self.root, owner))
             raise CliError("WF_IDENTITY_UNRESOLVED",
                            {"reason": verdict["reason"], "facts": verdict.get("facts"),
                             "owners": l2_owners,
@@ -215,33 +302,111 @@ class Context:
                                       "结束另一个调用者后重试",
                                       EXPLICIT_ENVELOPE_EXIT]},
                            next_="按 facts.reason 的出口处置后重试")
-        return None, None
+        return dict(base, state="no_session", key=None, attachment=None,
+                    evidence=dict(base["evidence"], reason="no route matched"))
+
+    def _inflight_session(self, routes, keys):
+        """② 的边界输入判定：锚点路由上有无**在途会话**（W3-2）。
+
+        在途 = 路由命中的会话有附件、绑定文件存在且可读、实例标识匹配
+        （`instance_expected ∈ {None, "", binding.instance_id}`——None/空以
+        binding.instance_id 回填附件，`sync_attachment_instance` 唯一写回实现）、
+        且绑定对象未终态（task 非 archived / run terminal 为 null；paused/suspended
+        都算在途）。绑定文件缺失 ⇒ 启用未绑定 ⇒ **不算在途**（没有要保护的对象）；
+        绑定不可读 / 实例已有不同值 ⇒ `unresolved`（需人裁，只读面降级可见）。
+        """
+        from . import identity_store as store
+        from . import session as session_mod_
+        from . import tasks as tasks_mod
+
+        seen_owners = []
+        for key in keys:
+            for owner in store.owners_of(routes, key):
+                if owner not in seen_owners:
+                    seen_owners.append(owner)
+        for owner in seen_owners:
+            attachment = store.load_attachment(self.root, owner)
+            if attachment is None:
+                continue
+            binding = session_mod_.load_binding(self.root, owner)
+            if binding is None:
+                continue          # 启用未绑定：没有要保护的对象，不算在途
+            if not isinstance(binding, dict) or not isinstance(binding.get("object"), dict):
+                return {"state": "unresolved",
+                        "evidence": {"reason": "binding_unreadable", "session_key": owner}}
+            expected = attachment.get("instance_expected")
+            bound_instance = binding.get("instance_id")
+            if expected not in (None, "", bound_instance):
+                return {"state": "unresolved",
+                        "evidence": {"reason": "instance_mismatch",
+                                     "session_key": owner,
+                                     "instance_expected": expected,
+                                     "binding_instance_id": bound_instance}}
+            if expected in (None, "") and bound_instance:
+                # 历史会话 instance_expected 为空：以 binding.instance_id 回填附件
+                # （既有唯一写回实现）——否则 auto_session 把 None 作 instance_id，
+                # 写入口因 carried 缺失拒绝。
+                store.sync_attachment_instance(self.root, owner, bound_instance)
+                attachment["instance_expected"] = bound_instance
+            obj = binding.get("object") or {}
+            obj_kind, obj_id = obj.get("kind"), str(obj.get("id"))
+            if obj_kind == "task":
+                record = tasks_mod.load_task(self.root, obj_id)
+                if record is not None and isinstance(record, dict) and record.get("status"):
+                    if record.get("status") == "archived":
+                        continue      # 已终态：不算在途
+                    evidence = {"task_status": record.get("status"), "binding_id": obj_id,
+                                "session_key": owner}
+                else:
+                    # 记录缺失/不可解析：对象已不在，没有要保护的东西——不算在途
+                    continue
+            elif obj_kind == "run":
+                from . import runs as runs_mod
+
+                run = runs_mod.load_run(self.root, obj_id)
+                if run is not None and isinstance(run, dict):
+                    if run.get("terminal") is not None:
+                        continue      # 已终态：不算在途
+                    evidence = {"run_terminal": run.get("terminal"), "binding_id": obj_id,
+                                "session_key": owner}
+                else:
+                    continue
+            else:
+                continue              # 未知对象类别：不猜，不算在途
+            return {"state": "inflight_reuse", "key": owner, "attachment": attachment,
+                    "evidence": evidence}
+        return {"state": "none", "evidence": {"reason": "no inflight session"}}
 
     def auto_session(self, establish=False):
-        """自动身份模式：返回合成 session（`source="auto"`）或 None。"""
-        from . import identity_store as store
+        """自动身份模式：返回合成 session（`source="auto"`）或 None。
 
-        key, attachment = self._auto_resolve()
-        if key is None:
-            if not establish:
-                return None
-            return None
-        session = {"provider": "wf",
-                   "identity": (attachment or {}).get("identity") or {},
-                   "instance_id": (attachment or {}).get("instance_expected"),
-                   "activation": (attachment or {}).get("activation"),
-                   "source": "auto"}
-        if attachment and attachment.get("activation_stale"):
-            raise CliError("WF_NOT_ENABLED",
-                           {"reason": "activation_stale", "session_key": key,
-                            "roots": attachment.get("roots")},
-                           next_="人重新调用 /wf-start（旧调用者已停或无法核实）")
-        self._auto_attachment = attachment
-        self._auto_key = key
-        self._auto_root = next((item for item in session_mod.candidates()
-                                if item["kind"] == "pid"), None) or \
+        只消费 `_auto_resolve` 的单一结构，不重判四态（W3-2 单实现纪律）。
+        `host_establish`/`no_session`：非 establish 返回 None（由调用方报"需 /wf-start"）；
+        establish 时也返回 None——建立由 `cmd_enable`/`_establish_auto_session` 承载。
+        `unresolved`：返回 None 并把证据挂到 `self._resolution` 供 facts 投影
+        （只读面不在此抛错——写入口的阻断由 `session(required=True)` 的既有路径给出）。
+        """
+        resolution = self._auto_resolve()
+        state = resolution["state"]
+        if state in ("host_resume", "inflight_reuse", "anchor_resume"):
+            key, attachment = resolution["key"], resolution["attachment"]
+            session = {"provider": (attachment or {}).get("provider") or "wf",
+                       "identity": (attachment or {}).get("identity") or {},
+                       "instance_id": (attachment or {}).get("instance_expected"),
+                       "activation": (attachment or {}).get("activation"),
+                       "source": "auto"}
+            if attachment and attachment.get("activation_stale"):
+                raise CliError("WF_NOT_ENABLED",
+                               {"reason": "activation_stale", "session_key": key,
+                                "roots": attachment.get("roots")},
+                               next_="人重新调用 /wf-start（旧调用者已停或无法核实）")
+            self._auto_attachment = attachment
+            self._auto_key = key
+            self._auto_root = next((item for item in session_mod.candidates()
+                                    if item["kind"] == "pid"), None) or \
                                (session_mod.candidates() or [None])[-1]
-        return session
+            return session
+        return None
 
     # -- 信封 ------------------------------------------------------------
     def envelope(self, required=True):
@@ -728,6 +893,20 @@ def cmd_status(ctx, args):
         "generation": record.get("generation"),
         "holder": record.get("holder"),
     }
+    # W3-2 可见性：宿主映射状态投影（hit/absent/import-error）——映射缺失/导入失败
+    # 不再不可见；只读 facts，不参与判定。
+    try:
+        from . import identity_store as _store_mod
+
+        _keys = [session_mod.anchor_key(item) for item in session_mod.candidates()]
+        mapping = _store_mod.load_host_map(ctx.root, _keys)
+        facts["host_mapping"] = {"status": mapping["status"],
+                                 "session_id": (mapping["payload"] or {}).get("session_id"),
+                                 "host_id": (mapping["payload"] or {}).get("host_id"),
+                                 "import_error": (mapping["payload"] or {}).get("error")
+                                 if mapping["status"] == "import-error" else None}
+    except Exception:   # noqa: BLE001 — 投影失败不阻断只读状态页
+        pass
     position = codes.position(scope="maintenance" if (record.get("holder") or {}).get("kind") == "maintenance" else None)
     key = ctx.key(required=False)
     if key:
@@ -943,10 +1122,15 @@ def _sync_attachment_instance(ctx, key, instance_id):
         ctx._session["instance_id"] = instance_id
 
 
-def _establish_auto_session(ctx):
+def _establish_auto_session(ctx, host_establish=None):
     """自动模式首次启用：签发身份、写附件、登记路由（§3.1/§2.2a）。
 
     只在"当前锚点没有任何路由"时调用；已有路由由 `_auto_resolve` 命中，不走这里。
+    W3-2③：`host_establish` 非空（映射命中且路由无在途会话）时以 **host 身份**建立——
+    `session_key = H({provider:"host", identity:{host_id, session_id}})`，host_id 按
+    安装记录 platforms 清单核过；建立前对同锚点既有其他 owner 先 `replace_owner`
+    组更新（否则 sid 锚点撞 register 的 L1 单主 StoreError）；接管启用未绑定的会话时
+    facts 点明"旧会话路由已让出，后续要重新 enable"，不静默丢弃。
     """
     from . import identity_store as store
 
@@ -958,19 +1142,36 @@ def _establish_auto_session(ctx):
              "exits": ["在保留的终端里重试", EXPLICIT_ENVELOPE_EXIT]},
             next_="换到支持的终端形态后重跑 /wf-start",
         )
-    issued_id = uuid.uuid4().hex
-    identity_value = {"issued_id": issued_id}
-    session_key = records.sha256_hex(
-        records.canonical_bytes({"provider": "wf", "identity": identity_value}))
-    current_root = candidates[-1]
     at = records.now_str()
+    if host_establish is not None:
+        identity_value = {"host_id": host_establish["host_id"],
+                          "session_id": host_establish["session_id"]}
+        provider = "host"
+    else:
+        issued_id = uuid.uuid4().hex
+        identity_value = {"issued_id": issued_id}
+        provider = "wf"
+    session_key = records.sha256_hex(
+        records.canonical_bytes({"provider": provider, "identity": identity_value}))
+    current_root = candidates[-1]
     activation = {"enabled": True, "start_source": "human:enable", "enabled_at": at}
-    attachment = store.new_attachment(identity_value, "wf", session_key, current_root, activation, at)
+    attachment = store.new_attachment(identity_value, provider, session_key, current_root, activation, at)
     l1 = next((item for item in candidates if item["kind"] == "sid"), None)
     if l1:
         attachment["attached_l1"] = {"kind": "sid", "boot": l1["boot"], "sid": l1["sid"],
                                      "sid_start": l1["sid_start"]}
     routes = store.load_routes(ctx.root)
+    took_over = []
+    for item in candidates:
+        key = session_mod.anchor_key(item)
+        for other in store.owners_of(routes, key):
+            if other != session_key and other not in took_over:
+                took_over.append(other)
+    # ③ 接管路由：同锚点既有其他 owner 先 replace_owner 组更新（轮换=组更新，
+    # 且必须先于 register——L1 单主 register 撞既有 owner 会抛 StoreError）。
+    # 旧附件/绑定保留为历史，不改写。
+    for other in took_over:
+        store.replace_owner(routes, other, session_key)
     for item in candidates:
         key = session_mod.anchor_key(item)
         store.register(routes, key, session_key,
@@ -979,25 +1180,156 @@ def _establish_auto_session(ctx):
     store.save_routes(ctx.root, routes)                        # ② 再提交路由（组原子）
     ctx._auto_key = session_key
     ctx._auto_attachment = attachment
-    ctx._session = {"provider": "wf", "identity": identity_value,
+    ctx._session = {"provider": provider, "identity": identity_value,
                     "instance_id": None, "activation": activation, "source": "auto"}
     ctx._envelope = {"session": None, "inputs": {}}
-    return {"session_key": session_key, "issued_id": issued_id, "roots": attachment["roots"]}
+    facts = {"session_key": session_key, "roots": attachment["roots"]}
+    if provider == "host":
+        facts["issued_id"] = None
+        facts["host_id"] = host_establish["host_id"]
+        facts["host_session_id"] = host_establish["session_id"]
+    else:
+        facts["issued_id"] = identity_value["issued_id"]
+    if took_over:
+        # 接管启用未绑定的会话：旧会话路由已让出——没有绑定对象要保护，
+        # 但旧会话下次想用时须重新 enable（诚实可见，不静默丢弃）。
+        unbound_taken = [other for other in took_over
+                         if session_mod.load_binding(ctx.root, other) is None]
+        facts["route_taken_over_from"] = took_over
+        if unbound_taken:
+            facts["note"] = "旧会话路由已让出；旧会话后续要重新 enable"
+    return facts
+
+
+def _rotate_session(ctx):
+    """W3-1：`enable --new-session` —— 同边界显式换新会话身份（宿主无关）。
+
+    前置：本边界已有可续用会话；其绑定对象已终态（或绑定为空）——在途时
+    `WF_BINDING_MISMATCH`（完成/暂停/放弃对象后重试，不给 bind 之类不成立指引）。
+    写权语义：轮换不触碰写权——对象终态但写权未释放 ⇒ 拒绝并给 release 出口
+    （防把在途写权带进新会话）。
+    动作：签发新 `issued_id`，`replace_owner(old, new)` 组更新（既有"轮换=组更新"），
+    旧附件/绑定保留为历史（结束不解除绑定）；同锚点的宿主映射条目一并移除
+    （适配层通道状态：不移除会让下一次映射命中把旧身份接回来，轮换形同虚设）。
+    """
+    from . import identity_store as store
+    from . import writer as writer_mod
+
+    resolution = ctx._auto_resolve()
+    if resolution["state"] in ("no_session", "host_establish"):
+        # 锚点无路由（或仅待建立）＝普通 enable（等价首次启用），不存在"旧身份"可轮换。
+        if ctx.explicit_session() is not None:
+            raise CliError("WF_SEMANTIC_DECISION",
+                           {"reason": "--new-session 只在自动身份模式下轮换本边界会话；"
+                                      "显式信封会话由宿主承载，不经本命令"},
+                           next_="自动模式直接跑 enable；显式模式换信封身份即可")
+        host_establish = None
+        if resolution["state"] == "host_establish":
+            evidence = resolution.get("evidence") or {}
+            host_establish = {"host_id": evidence.get("host_id"),
+                              "session_id": evidence.get("session_id")}
+        facts = _establish_auto_session(ctx, host_establish=host_establish)
+        facts["rotated"] = False
+        facts["note"] = "本边界此前无会话：本次为首次启用，不属轮换"
+        return codes.result("WF_OK", position_=codes.position(scope="session"),
+                             next_="新会话已启用；继续 task-new 选择对象",
+                             facts=facts)
+    if resolution["state"] == "unresolved":
+        raise CliError("WF_IDENTITY_UNRESOLVED",
+                       dict(resolution.get("evidence") or {},
+                            exits=["按 §5.4/repair 修复绑定/附件后重试",
+                                   "人核实对象终态后走 enable --new-session"]),
+                       next_="绑定不可读或实例不符：先修复再轮换")
+    old_key = resolution["key"]
+    binding = session_mod.load_binding(ctx.root, old_key)
+    if binding is not None and isinstance(binding, dict):
+        obj = binding.get("object") or {}
+        terminal = False
+        if obj.get("kind") == "task":
+            from . import tasks as tasks_mod
+
+            record = tasks_mod.load_task(ctx.root, str(obj.get("id")))
+            terminal = record is None or (isinstance(record, dict) and record.get("status") == "archived")
+        elif obj.get("kind") == "run":
+            from . import runs as runs_mod
+
+            run = runs_mod.load_run(ctx.root, str(obj.get("id")))
+            terminal = run is None or (isinstance(run, dict) and run.get("terminal") is not None)
+        if not terminal:
+            raise CliError("WF_BINDING_MISMATCH",
+                           {"reason": "绑定对象仍在途，不得轮换会话身份",
+                            "object": obj, "session_key": old_key,
+                            "exits": ["继续当前对象直至完成/归档后重试",
+                                      "task-pause 暂停对象后重试（paused 仍在途，须先完成/放弃）",
+                                      "task-abandon 放弃对象后重试",
+                                      "新开终端/新执行边界（换边界即换会话）"]},
+                           next_="完成/暂停/放弃当前对象后重试 enable --new-session")
+    # 写权语义：轮换不触碰写权；对象终态但写权未释放 ⇒ 拒绝并给 release 出口。
+    writer_record = writer_mod.load(ctx.root) or {}
+    if writer_record.get("state") != "idle":
+        raise CliError("WF_WRITER_BUSY",
+                       {"reason": "写权仍在持有（对象终态但未释放）——不得把在途写权带进新会话",
+                        "holder": writer_record.get("holder")},
+                       next_="先 `writer release` 释放写权，再重试 enable --new-session")
+    candidates = session_mod.candidates()
+    keys = [session_mod.anchor_key(item) for item in candidates]
+    at = records.now_str()
+    issued_id = uuid.uuid4().hex
+    identity_value = {"issued_id": issued_id}
+    new_key = records.sha256_hex(
+        records.canonical_bytes({"provider": "wf", "identity": identity_value}))
+    routes = store.load_routes(ctx.root)
+    store.replace_owner(routes, old_key, new_key)
+    attachment = store.new_attachment(identity_value, "wf", new_key,
+                                      candidates[-1] if candidates else None,
+                                      {"enabled": True, "start_source": "human:new-session",
+                                       "enabled_at": at}, at)
+    store.save_attachment(ctx.root, new_key, attachment)
+    store.save_routes(ctx.root, routes)
+    removed_mapping = store.remove_host_map(ctx.root, keys)
+    ctx._auto_key = new_key
+    ctx._auto_attachment = attachment
+    ctx._session = {"provider": "wf", "identity": identity_value, "instance_id": None,
+                    "activation": attachment["activation"], "source": "auto"}
+    facts = {"rotated": True, "old_session_key": old_key, "session_key": new_key,
+             "issued_id": issued_id,
+             "old_binding_preserved": binding is not None,
+             "removed_host_mapping": removed_mapping}
+    if removed_mapping:
+        facts["note"] = "宿主映射条目已随轮换移除；下次宿主 SessionStart 会按新会话标识重建"
+    return codes.result("WF_OK", position_=codes.position(scope="session"),
+                         next_="新会话已生效；旧附件/绑定保留为历史，新对象用 task-new 选择",
+                         facts=facts)
 
 
 def _identity_facts(ctx, session_key):
-    """K1：宿主会话标识优先、进程锚只作冲突判据；缺宿主标识时显式报告看不见 /clear。"""
+    """K1：宿主会话标识优先、进程锚只作冲突判据；缺宿主标识时显式报告看不见 /clear。
+
+    W3-2（三轮 P0-1）拆两字段、不覆盖 `source`：
+    - `host_identity_present`：显式信封**或**宿主映射命中即 true（宿主是否提供会话标识的客观事实）；
+    - `session_provider`：**实际解析到的会话身份**的 provider（②续用时是 wf，不得报 host）；
+    - `source`：保持实际来源语义（host=显式信封 / anchor=自动解析）。
+    "无法区分 /clear"警告只在 host_identity_present=false 时出现。
+    """
     from . import identity_store as store
 
     explicit = ctx.explicit_session()
+    resolution = getattr(ctx, "_resolution", None) or {}
+    host_present = explicit is not None or bool(resolution.get("host_identity_present"))
     anchor_keys = [session_mod.anchor_key(item) for item in session_mod.candidates()]
     facts = {
         "source": "host" if explicit is not None else "anchor",
-        "host_identity_absent": explicit is None,
+        "host_identity_present": host_present,
+        "host_identity_absent": not host_present,
         "anchor_candidates": len(anchor_keys),
         "anchor_conflict": store.conflicting_owners(store.load_routes(ctx.root), anchor_keys, session_key),
     }
-    if explicit is None:
+    session = (ctx.session(required=False) or {}) if hasattr(ctx, "session") else {}
+    facts["session_provider"] = session.get("provider")
+    if host_present and resolution.get("state") == "inflight_reuse":
+        facts["host_session_changed"] = True
+        facts["inflight_reuse"] = resolution.get("evidence") or {}
+    if not host_present:
         # 只有进程锚时，同一进程内新开的会话（宿主自带的新会话命令如 /clear、或同一终端再开一个聊天）
         # 不换进程 ⇒ 框架无法区分（设计稿 §1.3 的已知限制）。措辞不绑定具体宿主命令：
         # 各宿主是否提供会话标识、其 /clear 是否改变标识，由部署表的 session_identity 声明。
@@ -1022,13 +1354,38 @@ def _pin_identity(ctx, session_key, facts):
     store.save_attachment(ctx.root, session_key, attachment)
 
 
+def _transfer_stub():
+    """W4-1：upgrade 经引导层转交，不经本层用法校验（help 一致性保留该注册条目）。"""
+    def _handler(ctx, args):
+        raise CliError(
+            "WF_CAPABILITY_UNAVAILABLE",
+            {"reason": "upgrade 经引导层转交：本层不实现升级判定",
+             "transfer": ".wf/bin/wf.py upgrade --release <检出根> --release-ref <ref> [--apply]",
+             "direct": "<检出根>/install.py --upgrade --target <项目> "
+                      "--release-ref refs/tags/wf-vX.Y.Z --source <检出根> [--apply]"},
+            next_="终端直接运行 wf.py upgrade（引导层转交）或 install.py --upgrade；"
+                  "升级须交互终端预览令牌，模型不代跑",
+        )
+    return _handler
+
+
 def cmd_enable(ctx, args):
     _check_layout(ctx.root)
-    # 自动模式且尚无路由 ⇒ 本次 enable 就是"建立执行会话"（§3.1）
+    # W3-1：`--new-session` —— 人在当前执行边界显式换新会话身份（宿主无关）。
+    if args.flag("--new-session"):
+        return _rotate_session(ctx)
+    # 自动模式且尚无可续用会话 ⇒ 本次 enable 就是"建立执行会话"（§3.1）。
+    # W3-2③：映射命中且路由无在途会话时也走建立（以 host 身份接管路由）。
+    established_facts = None
     if ctx.explicit_session() is None:
-        key, _attachment = ctx._auto_resolve()
-        if key is None:
-            _establish_auto_session(ctx)
+        resolution = ctx._auto_resolve()
+        if resolution["state"] in ("no_session", "host_establish"):
+            host_establish = None
+            if resolution["state"] == "host_establish":
+                evidence = resolution.get("evidence") or {}
+                host_establish = {"host_id": evidence.get("host_id"),
+                                  "session_id": evidence.get("session_id")}
+            established_facts = _establish_auto_session(ctx, host_establish=host_establish)
     session = ctx.session()
     session_key = ctx.key(required=False)
     identity_facts = _identity_facts(ctx, session_key)
@@ -1142,10 +1499,13 @@ def cmd_enable(ctx, args):
             "platforms": ctx.platforms(),
             "trellis_data": state["data"],
             "trellis_disabled_confirmed": disabled,
+            # W3-2③：建立/接管事实透传（旧会话路由让出须可见，不静默丢弃）
+            **({"established": established_facts} if established_facts else {}),
         },
         position=codes.position(scope="session"),
         next_=(("绑定的对象已到终态：本会话不能继续推进它。"
-                "开新对象需新执行边界/新会话（同进程无法区分时开新终端）" if binding_terminal else
+                "同边界开新对象用 `wf enable --new-session` 换新会话后 task-new；"
+                "或开新执行边界/新会话（同进程无法区分时开新终端）" if binding_terminal else
                 "绑定对象状态暂无法确认：先跑 `status`（任务）或 `run locate`（实例）核实后再决定；"
                 "不据猜测推进" if binding_terminal_unknown else
                 "已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
@@ -1886,6 +2246,19 @@ def _irreversible_projection(root, task):
                "missing_authorizations": missing}
     if unavailable:
         payload["unavailable"] = "; ".join(unavailable)
+    # 三轮二审：单 reviewer 留痕降级随收工预览上抛——人判点必须看到"这轮是接受过
+    # 残余风险的单 reviewer 审查"，不能只看 verdict=pass（与放行清单 unknown_acceptances 同型）。
+    try:
+        _result = ((task.get("reviews") or {}).get("result") or {})
+        if (_result.get("verdict") in ("pass", "fail")
+                and (_result.get("facts") or {}).get("degraded") == "single-provider"):
+            payload["review_degraded"] = {
+                "kind": "single-provider",
+                "accepted": (_result.get("facts") or {}).get("single_reviewer_accepted"),
+                "note": "本轮审查为人签残余风险接受的单 reviewer 留痕降级（非两异种 reviewer）",
+            }
+    except Exception:   # noqa: BLE001 — 投影失败不阻断预览
+        pass
     return payload
 
 
@@ -2242,6 +2615,21 @@ def _review_command(kind):
         if kind == "launch":
             # `--launch-request` 可选：三类材料/只读范围/排除面由入口按当前对象生成；
             # 给了就作为覆盖/补充（例如人工缩小材料面）。
+            # `--preview`（三轮三审 b8）：只读回显生成后的请求与外发授权状态，
+            # 不落盘、不启动轮次——人签 export 前先看到将外发的路径清单。
+            if args.flag("--preview"):
+                try:
+                    facts = review_mod.launch_preview(ctx, task, args.value("--launch-request"),
+                                                      implementation_cli=args.value("--implementation-cli"))
+                except review_mod.ReviewError as exc:
+                    raise CliError(exc.code, exc.facts)
+                return codes.result(
+                    "WF_OK", object={"id": task.get("id"), "name": task.get("title")},
+                    position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
+                    next_=("外发授权已入库：可直接 review-launch" if facts["export_authorization"]["recorded"]
+                           else "先 authorize record choice=export（人核对 preview 的路径清单后签）再 review-launch"),
+                    facts=facts,
+                )
             try:
                 return review_mod.launch(ctx, task, args.value("--launch-request"),
                                          implementation_cli=args.value("--implementation-cli"))
@@ -2278,12 +2666,52 @@ def _review_command(kind):
                 )
             except review_mod.ReviewError as exc:
                 raise CliError(exc.code, exc.facts)
+        plan_draft = args.value("--plan-draft")
+        if plan_draft:
+            # 五轮审查 b5 尾项：处置数组只读骨架——当前轮未关闭 blocking 逐条占位，
+            # decision=TODO 占位照抄会被 dispositions 校验拒（decision 只认 accepted/rejected/amended）
+            from . import review as _review_mod
+
+            _open = _review_mod.open_findings(ctx, task)["blocking"]
+            skeleton = [{"finding_id": item.get("id"),
+                         "decision": "TODO（accepted|rejected|amended——只有 accepted 关闭）",
+                         "reason": "TODO（处置依据：已修复并重查通过 / 经复核认定误报 / 已重分类）",
+                         "recheck_by": "TODO human:<来源>（不得等于提出者槽位）"}
+                        for item in _open]
+            if not skeleton:
+                skeleton = [{"finding_id": "TODO（无未关闭 blocking 时本文件不需要）",
+                             "decision": "TODO", "reason": "TODO", "recheck_by": "TODO"}]
+            return codes.result(
+                "WF_OK", object={"id": task.get("id"), "name": task.get("title")},
+                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
+                next_="逐条填完后存成 JSON 数组，用 --plan <文件> 随 review-decide 提交",
+                facts={"draft": skeleton, "open_blocking": len(_open)},
+            )
+        acceptance_draft = args.value("--single-reviewer-acceptance-draft")
+        if acceptance_draft:
+            # 三轮三审 b9：单 reviewer 接受文件只读骨架（与其他 --draft 同型，只打印不落盘）
+            _launches = [entry for entry in ((task.get("reviews") or {}).get("launches") or [])
+                         if isinstance(entry, dict)]
+            _round = int(round_no) if round_no else (max((int(e.get("round") or 0) for e in _launches),
+                                                         default=0))
+            skeleton = {"by": "TODO human:<来源>", "at": records.now_str(),
+                        "quote": "TODO（人填写：接受只审一遍的原话）",
+                        "source": "user-declared",
+                        "residual_risk": "TODO（人填写：接受的残余风险具体是什么）",
+                        "round": _round, "task": task.get("id")}
+            return codes.result(
+                "WF_OK", object={"id": task.get("id"), "name": task.get("title")},
+                position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
+                next_="人填 TODO 后存成文件，用 --single-reviewer-acceptance <文件> 判定",
+                facts={"draft": skeleton},
+            )
         try:
             return review_mod.decide(ctx, task, int(round_no) if round_no else None,
                                      args.value("--plan"), args.value("--unavailable"),
                                      register_only=args.flag("--register-only"),
                                      gap_acceptance_path=args.value("--gap-acceptance"),
-                                     main_review_path=args.value("--main-review"))
+                                     main_review_path=args.value("--main-review"),
+                                     single_reviewer_acceptance_path=args.value("--single-reviewer-acceptance"))
         except review_mod.ReviewError as exc:
             raise CliError(exc.code, exc.facts)
 
@@ -2339,7 +2767,7 @@ COMMAND_HELP = {
                    "example": "wf.py task-start --task <id> --json"},
     "task-check": {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
-        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；建议放在当前任务目录内，如 .wf/tasks/<id>/notes.json——放错目录会被当成其他任务改动）",
+        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）",
                  "--decision": "可选：人工验收决定",
                  "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
@@ -2402,7 +2830,9 @@ COMMAND_HELP = {
     "review-launch": {"purpose": "发起一轮审查（默认要两份；实施 CLI 由 --implementation-cli 声明）",
                       "args": {"--task": "任务 id（必填）",
                                "--implementation-cli": "本次实施所用 CLI（必填，异种审查的判定输入）",
-                               "--launch-request": "可选：覆盖/补充入口自动生成的请求"},
+                               "--launch-request": "可选：覆盖/补充入口自动生成的请求",
+                               "--preview": "只读预览：回显生成/合并后的请求与外发授权状态，"
+                                            "不落盘、不启动轮次（人签 export 前核对路径清单）"},
                       "inputs": {"--launch-request": {
                           "export_decision": "可选：留痕标签；权威是已入库的外发确认（task + materials）",
                           "submitted_scope": "可选：入口默认生成 {diff:{paths}, requirement, test_results:{check}}；旧请求可省略本参数让入口重建",
@@ -2429,12 +2859,13 @@ COMMAND_HELP = {
                         "--reason": "收窄理由（narrow 必填）", "--impact": "影响面（narrow 必填）",
                         "--compensation": "补偿措施（narrow 必填）"},
                "example": "wf.py verify resolve --task 2026-xxxx --id a5 --kind narrow --evidence ... --json"},
-    "authorize": {"purpose": "K6 五类不可逆动作的确认入口：record 落盘（脱敏入库）/ show 查看已确认",
+    "authorize": {"purpose": "K6 不可逆动作的确认入口：record 落盘（脱敏入库）/ show 查看已确认（四类：delete/export/expand/repo_rules；提交授权唯一通道是 finish 决定的 commit_grants）",
                   "args": {"record|show": "子命令", "--task": "任务 id（必填）",
-                           "--file": "决定文件（record 必填，每条含 choice∈五类 + quote）"},
+                           "--file": "决定文件（record 必填，每条含 choice∈四类 + quote）",
+                           "--draft": "record：只读生成四类确认骨架（TODO 占位，只打印不落盘）"},
                   "example": "wf.py authorize record --task 2026-xxxx --file decisions.json --json"},
     "prefs": {"purpose": "判断偏好（只在本机）：ask_always 强制交人 / ai_decides 自己定",
-              "args": {"set|show": "子命令", "--kind": "判断类（归属/关闭/沿用/扩面/标准变更/缺口/未核实/规模）",
+              "args": {"set|show": "子命令", "--kind": "判断类（归属/关闭/沿用/扩面/标准变更/缺口/未核实/规模/框架改动）",
                        "--value": "ask_always|ai_decides"},
               "example": "wf.py prefs set --kind 标准变更 --value ask_always --json"},
     "sampling": {"purpose": "试点期判断抽样：pick 冻结事件集与种子并选样 / report 出按类统计 / "
@@ -2448,7 +2879,8 @@ COMMAND_HELP = {
                   "example": "wf.py sampling pick --task 2026-xxxx --freeze --json"},
     "judgments": {"purpose": "判断清单：add 追加一条（append-only）/ show 渲染收工预览",
                   "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）",
-                           "--attestation": "add：豁免（waived_by=human:…）时的人确认文件"},
+                           "--attestation": "add：豁免（waived_by=human:…）时的人确认文件",
+                                  "--draft": "add：只读生成判断条目骨架（TODO 占位，只打印不落盘）"},
                   "example": "wf.py judgments show --task 2026-xxxx --json",
                   # v42 §4：判断指引写进 skill 与 help，不写进代码逻辑。
                   # 2026-11-12 人裁：**不单独成 skill**——十条散在"用得上它的那一步"的流程 skill 判据位上，
@@ -2461,7 +2893,8 @@ COMMAND_HELP = {
                                  "blocking 关闭：证据指回问题 → `wf-repair-loop` 0 节",
                                  "报告有效性：沿用必须点名 d: 位置 → `wf-review-action`",
                                  "影响面 / 规模 / 计划没覆盖的缺口 / 未核实项 → `wf-finish` 收工四项",
-                                 "标准变更：改的是尺子还是判断 → `wf-spec-update`"],
+                                 "标准变更：改的是尺子还是判断 → `wf-spec-update`",
+                                 "框架改动（vendor 归属确认）→ `wf-continue`「改仓库级规则文件」段"],
                       "escalate": "判断不了就 write outcome=escalated + 一个具体问题；人回答后用新条目 supersedes 收口"}},
     "lint": {"purpose": "报告一次性全量预检（格式/轴/verdict 一致性/引用/回执），不是门禁",
              "args": {"report": "子命令（唯一支持值）", "--file": "报告路径", "--task": "任务 id（给定时可核批准集合与规则状态）"},
@@ -2477,14 +2910,21 @@ COMMAND_HELP = {
                                "--register-only": "只登记复核关闭或主会话 finding：不产生结论、不校验人数/异种"
                                                   "（需 --plan 或 --main-review；关闭的硬条件照旧）",
                                "--gap-acceptance": "人接受覆盖缺口的确认文件"
-                                                   "（by/at/quote/source + round + axes）"},
+                                                   "（by/at/quote/source + round + axes）",
+                               "--single-reviewer-acceptance": "单 reviewer 判定的留痕降级：人接受残余风险的"
+                                                              "确认文件（by/at/quote/source + round + residual_risk）——"
+                                                              "不默认；两位异种 reviewer 仍是复杂任务默认要求",
+                               "--single-reviewer-acceptance-draft": "只读生成上述接受文件骨架（只打印不落盘）",
+                               "--plan-draft": "只读生成处置数组骨架（当前未关闭 blocking 逐条占位，只打印不落盘）"},
                       "example": "wf.py review-decide --task <id> --main-review main-review.json "
                                  "--gap-acceptance gap.json --json"},
     # ---- 2026-11-21（五轮审查 P0-1）：help 覆盖补全至全命令面（48/48）----
     # 参数面以各 handler 实际消费为准；子命令以 dispatch 分支为准。
     "enable": {"purpose": "启用本会话：身份确认 + 激活登记 + 回显绑定对象与代次",
-               "args": {"--identity": "可选，仅接受 host（显式确认以宿主标识为准）"},
-               "example": "wf.py enable --json"},
+               "args": {"--identity": "可选，仅接受 host（显式确认以宿主标识为准）",
+                        "--new-session": "可选：本执行边界显式换新会话身份（宿主无关）。"
+                                          "前置＝旧绑定对象已终态且写权空闲；旧附件/绑定保留为历史"},
+               "example": "wf.py enable --new-session --json"},
     "status": {"purpose": "只读总览：绑定对象、阶段、门禁/步骤状态、待决与下一步",
                "args": {"--short": "可选：只输出单行摘要"},
                "example": "wf.py status --json"},
@@ -2535,9 +2975,11 @@ COMMAND_HELP = {
                                  "--to": "begin：接收会话标识（必填）",
                                  "--decision": "accept：交接确认决定（必填）"},
                         "example": "wf.py writer-handover accept --decision h.json --json"},
-    "upgrade": {"purpose": "第三轮能力桩（--apply 未交付）；调用返回 WF_CAPABILITY_UNAVAILABLE",
-                "args": {"--apply": "预览 + 令牌（未交付）"},
-                "example": "wf.py upgrade --apply --json"},
+    "upgrade": {"purpose": "三方升级（W4-1，经引导层转交 install.py --upgrade；本层不判定）",
+               "args": {"--release": "发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/）",
+                        "--release-ref": "发行引用 refs/tags/wf-vX.Y.Z",
+                        "--apply": "应用预览（交互终端输入预览指纹；同一进程完成）"},
+               "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.5 --apply"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
                    "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
                    "example": "wf.py task-pause --task 2026-xxxx --reason '等人答复' --json"},
@@ -2545,8 +2987,9 @@ COMMAND_HELP = {
                     "args": {"--task": "必填：任务 id"},
                     "example": "wf.py task-resume --task 2026-xxxx --json"},
     "task-replan": {"purpose": "实质规划变更：回 Plan（只做状态迁移，不改写 PRD）",
-                    "args": {"--task": "必填：任务 id", "--decision": "必填：choice=replan/机械修订 的决定文件",
-                             "--draft": "只读生成 replan 与 机械修订 两条决定草稿"},
+                    "args": {"--task": "必填：任务 id", "--decision": "必填：choice=replan 的决定文件"
+                                                            "（机械修订走 task-approve，不经本命令）",
+                             "--draft": "只读生成 replan 决定草稿"},
                     "example": "wf.py task-replan --task 2026-xxxx --decision replan.json --json"},
     "task-rework": {"purpose": "返工：新建返工任务并挂起原任务（继承前置与上下文）",
                     "args": {"--task": "必填：原任务 id", "--decision": "必填：返工决定文件",
@@ -2661,7 +3104,9 @@ def cmd_authorize(ctx, args):
 
     K6 五类不可逆动作的**人执行确认入口**：决定文件是人写的，入口把每一类落成
     `authorization-<action>.json`（脱敏后进任务目录=committed，敏感原文留 runtime）。
-    守卫（vendor/delete/expand/repo_rules/export）只认这些文件，不认"模型说的已获授权"。
+    守卫（delete/expand/repo_rules/export）只认这些文件，不认"模型说的已获授权"；
+    K6 第①类（提交/推送）不经本入口——提交授权唯一通道是 finish 决定的
+    `commit_grants`（choice=commit 的授权条目在 finish/stop 归档守卫消费）。
     """
     from . import authorize as authorize_mod, tasks as tasks_mod
 
@@ -2698,6 +3143,26 @@ def cmd_authorize(ctx, args):
     if sub != "record":
         raise CliError("WF_USAGE_INVALID", {"reason": "authorize requires record|show",
                                           "known": ["record", "show"]})
+    if args.flag("--draft"):
+        # 三轮三审 b9：人签确认文件的只读骨架（与 task-approve --draft 同型）——
+        # 只打印不落盘；TODO 占位照抄会被入口预检拒（quote/by 缺失即拒）。
+        draft = []
+        for action, action_zh in authorize_mod.ACTIONS.items():
+            entry = {"choice": action,
+                     "task": task_id,
+                     "paths": ["TODO（人填写：本确认覆盖的具体路径/glob）"],
+                     "quote": "TODO（人填写：谁在什么范围确认了什么）",
+                     "by": "TODO human:<来源>",
+                     "at": records.now_str(),
+                     "source": "user-declared",
+                     "reason": f"TODO（人填写：为什么需要{action_zh}确认；不需要的条目删除）"}
+            if action == "export":
+                entry["materials"] = ["diff", "requirement", "test_results"]
+            draft.append(entry)
+        return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                            next_="人按需保留条目、填 TODO 后存成文件，再 authorize record --file 落档",
+                            facts={"draft": draft})
     file_value = args.value("--file")
     if not file_value:
         raise CliError("WF_USAGE_INVALID", {"reason": "authorize record requires --file <决定.json>"})
@@ -3009,6 +3474,19 @@ def cmd_judgments(ctx, args):
         )
     if sub != "add":
         raise CliError("WF_USAGE_INVALID", {"reason": "judgments requires add|show", "known": ["add", "show"]})
+    if args.flag("--draft"):
+        # 五轮审查 b5 尾项：判断条目只读骨架（kind 列全合法类，TODO 占位照抄会被校验拒）
+        draft = {"kind": "TODO（人填：" + "、".join(judgments_mod.KINDS) + "）",
+                 "decision": "TODO（判断内容/归属去向）",
+                 "basis": "TODO（依据：留下可核实的理由，不规定结论）",
+                 "outcome": "applied",
+                 "by": "human",
+                 "at": records.now_str(),
+                 "note": "TODO 与非法 kind 在 validate 处被拒；escalated 才必须写 escalated_question"}
+        return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                            position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                            next_="填完 TODO 存成 JSON 文件，再 `judgments add --task <id> --file <文件>` 入库",
+                            facts={"draft": draft, "known_kinds": list(judgments_mod.KINDS)})
     path_value = args.value("--file")
     if not path_value:
         raise CliError("WF_USAGE_INVALID", {"reason": "judgments add requires --file <json>"})
@@ -3145,6 +3623,13 @@ def cmd_review_status(ctx, args):
         raise CliError(exc.code, exc.facts)
     # A9：无法归属到精确身份的历史处置**不关闭**任何 finding，在这里单列待人裁
     facts["pending_dispositions"] = review_mod.open_findings(ctx, task)["ambiguous"]
+    # A6（三轮二审）：实施宿主与最近 launch 的实施 CLI 是否一致是可稳定计算的客观事实——
+    # 换宿主后未重新 launch 时提前可见（F18 残余），不留给 AI 临场发现。
+    latest_launch_cli = None
+    for entry in (task.get("reviews") or {}).get("launches") or []:
+        if isinstance(entry, dict) and int(entry.get("round") or 0) == facts["round"]:
+            latest_launch_cli = review_mod.review_cli(entry.get("implementation_cli"))
+    facts["implementation_cli_of_round"] = latest_launch_cli
     # B1：status 只报材料与资格，不承诺判定资格（结论只能由 review-decide 产生）
     coverage = facts.get("coverage") or {}
     uncovered = list(coverage.get("uncovered") or [])
@@ -3260,7 +3745,7 @@ COMMANDS = {
     "verify": cmd_verify,
     "definition": _runs_command("definition"),
     "run": _runs_command("run"),
-    "upgrade": _unavailable(3, "upgrade --apply / release identity (D22/D37)"),
+    "upgrade": _transfer_stub(),
 }
 
 
@@ -3298,16 +3783,16 @@ GLOBAL_FLAGS = ("--json", "--envelope", "--envelope-last", "--session")
 
 COMMAND_FLAGS = {
     "archive": {"--task", "--decision", "--draft"},
-    "authorize": {"--task", "--file"},
+    "authorize": {"--task", "--file", "--draft"},
     "baseline-apply": {"--task", "--files", "--decision", "--proposal", "--preview"},
     "bind": {"--task", "--run"},
     "confirm-executor": {"--scope"},
     "definition": {"--id"},
     "dep": {"--task", "--op", "--prereq"},
-    "enable": {"--identity"},
+    "enable": {"--identity", "--new-session"},
     "gate": {"--due"},
     "inspect": set(),
-    "judgments": {"--task", "--file", "--attestation"},
+    "judgments": {"--task", "--file", "--attestation", "--draft"},
     "lint": {"--file", "--task"},
     "prefs": {"--kind", "--value"},
     "project": {"--kind", "--task", "--check"},
@@ -3315,9 +3800,11 @@ COMMAND_FLAGS = {
     "review-accept-unknown": {"--task", "--file", "--batch", "--revoke", "--round", "--slot", "--digest"},
     "review-context": {"--task", "--round", "--reset", "--as"},
     "review-decide": {"--task", "--round", "--plan", "--unavailable", "--gap-acceptance",
-                      "--main-review", "--main-review-draft", "--register-only"},
+                      "--main-review", "--main-review-draft", "--register-only",
+                      "--single-reviewer-acceptance", "--single-reviewer-acceptance-draft",
+                      "--plan-draft"},
     "review-import": {"--task", "--round", "--slot", "--report", "--as", "--restore"},
-    "review-launch": {"--task", "--launch-request", "--implementation-cli"},
+    "review-launch": {"--task", "--launch-request", "--implementation-cli", "--preview"},
     "review-status": {"--task", "--round"},
     "run": {"--run", "--creation", "--decision", "--reason", "--plan", "--preview"},
     "sampling": {"--task", "--freeze", "--file", "--attestation", "--quote"},
@@ -3341,7 +3828,8 @@ COMMAND_FLAGS = {
     "task-retrospect": {"--task", "--decision", "--evidence", "--commit"},
     "task-rework": {"--task", "--decision", "--draft"},
     "task-start": {"--task", "--workspace-exclusion"},
-    "upgrade": {"--apply"},
+    # W4-1：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
+    "upgrade": {"--apply", "--release", "--release-ref"},
     "verify": {"--task", "--id", "--kind", "--reason", "--impact", "--compensation",
                "--evidence", "--by"},
     "help": set(),
@@ -3370,9 +3858,13 @@ COMMAND_SUB_FLAGS = {
 GLOBAL_BOOL_FLAGS = frozenset({"--json", "--envelope-last"})
 COMMAND_BOOL_FLAGS = {
     "project": {"--check"},
+    "authorize": {"--draft"},
+    "enable": {"--new-session"},
+    "judgments": {"--draft"},
     "review-accept-unknown": {"--revoke"},
     "review-context": {"--reset"},
     "review-decide": {"--register-only"},
+    "review-launch": {"--preview"},
     "review-import": {"--restore"},
     "sampling": {"--freeze"},
     "status": {"--short"},
@@ -3385,6 +3877,7 @@ COMMAND_BOOL_FLAGS = {
     "task-replace": {"--preview"},
     "baseline-apply": {"--preview"},
     "run": {"--preview"},
+    # W4-1：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
     "upgrade": {"--apply"},
 }
 

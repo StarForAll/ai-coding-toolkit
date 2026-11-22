@@ -1419,6 +1419,51 @@ def main_review_draft(ctx, task, round_no, path):
 
 
 GAP_ACCEPTANCE_DOMAIN = "wf-gap-acceptance-v1"
+SINGLE_REVIEWER_ACCEPTANCE_DOMAIN = "wf-single-reviewer-acceptance-v1"
+
+
+def single_reviewer_acceptance(decision, round_no, task_id=None):
+    """W2-3（三轮裁决④）：人签残余风险接受的单校验点，gap_acceptance 同型。
+
+    单 reviewer 判定的**留痕降级**（不默认）：形状与 attestation 同源
+    （`by/at/quote/source`，AI 自述不被接受），另要求 `round` 精确等于本轮、
+    `residual_risk` 声明（人对"只审一遍"残余风险的具体接受说明）。
+    接受只降级"人数"：主会话复核、未关闭 blocking 等其余门槛照旧，不豁免。
+    记录作者归属是声明边界（DSGN §1.5）：文件记录无法可靠辨别人写/模型代笔，
+    沿用乙口径来源声明，不新增防伪声明。
+    """
+    from . import attestation as attestation_mod
+
+    if decision is None:
+        return None, []
+    problems = list(attestation_mod.problems_of(decision, action="review.single-reviewer-acceptance"))
+    if not str(decision.get("residual_risk") or "").strip():
+        problems.append({"reason": "single reviewer acceptance requires a residual_risk statement",
+                         "action": "review.single-reviewer-acceptance"})
+    try:
+        accepted_round = int(decision.get("round"))
+    except (TypeError, ValueError):
+        accepted_round = None
+    if accepted_round != int(round_no):
+        problems.append({"reason": "single reviewer acceptance round does not match this round",
+                         "accepted_round": decision.get("round"), "round": int(round_no)})
+    if task_id is not None:
+        accepted_task = str(decision.get("task") or decision.get("task-id") or "")
+        if accepted_task != str(task_id):
+            problems.append({"reason": "single reviewer acceptance task does not match this task",
+                             "accepted_task": accepted_task, "task": str(task_id)})
+    if problems:
+        return None, problems
+    digest = records.H(SINGLE_REVIEWER_ACCEPTANCE_DOMAIN,
+                       {"by": decision.get("by"), "at": decision.get("at"),
+                        "quote": decision.get("quote"), "source": decision.get("source"),
+                        "residual_risk": decision.get("residual_risk"),
+                        "task": str(task_id) if task_id is not None else None,
+                        "round": int(round_no)})
+    return {"round": int(round_no), "residual_risk": decision.get("residual_risk"),
+            "by": decision.get("by"), "at": decision.get("at"),
+            "quote": decision.get("quote"), "source": decision.get("source"),
+            "attestation_digest": digest}, []
 
 
 def gap_acceptance(decision, uncovered, round_no, task_id=None):
@@ -1581,6 +1626,18 @@ def status_of_round(ctx, task, round_no=None):
                             if isinstance(item, dict) and int(item.get("round") or 0) == round_no
                             for axis in item.get("axes") or []})
     coverage["accepted"] = accepted_axes
+    # W2-3：单 reviewer 留痕降级可见——本轮有人签残余风险接受记录时如实投影
+    single_accepted = [item for item in ((task.get("reviews") or {}).get("single_reviewer_acceptances") or [])
+                       if isinstance(item, dict) and int(item.get("round") or 0) == round_no]
+    single_reviewer = None
+    if single_accepted:
+        last = single_accepted[-1]
+        single_reviewer = {"accepted": True,
+                          "attestation_digest": last.get("attestation_digest"),
+                          "by": last.get("by"), "round": round_no}
+    elif reviewers and len(reviewers) < 2 and len(declared) < 2:
+        single_reviewer = {"accepted": False,
+                           "note": "单 reviewer：判定需人签残余风险接受记录（--single-reviewer-acceptance）"}
     return {"round": round_no, "required": len(declared), "arrived": len(arrived),
             "arrived_slots": [item["slot"] for item in arrived], "missing": missing,
             "stale": stale, "unreadable": unreadable,
@@ -1595,6 +1652,7 @@ def status_of_round(ctx, task, round_no=None):
                                              imported_count=len(imported),
                                              declared_slots=len(declared)),
             "coverage": coverage,
+            "single_reviewer": single_reviewer,
             "launch_scope": (launch or {}).get("scope"),
             "slots": slots, "anchor_current": anchor}
 
@@ -2233,6 +2291,19 @@ def review_scope_facts(ctx, task, launch):
             "legacy": legacy, "scope_recompute_failed": recompute_failed}
 
 
+def _deep_merge_launch_request(base, override):
+    """四轮审查：launch 请求的**嵌套字段级**深合并（dict 逐键下沉；列表/标量整体替换）——
+    只覆盖 submitted_scope.diff.paths 之类局部项时不再连带丢掉其余默认材料。
+    """
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_launch_request(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 def default_launch_request(ctx, task, implementation_cli=None):
     """按当前对象生成发起请求（材料三类、只读范围、排除面都由入口算）。
 
@@ -2276,13 +2347,77 @@ def default_launch_request(ctx, task, implementation_cli=None):
     }
 
 
+def launch_preview(ctx, task, request_path=None, implementation_cli=None):
+    """三轮三审 b8：`review-launch --preview` 的只读出口——按当前对象生成（并与
+    `--launch-request` 覆盖/补充合并后的）请求内容并回显，**不落盘、不启动轮次、不取锁**。
+
+    用途：人签 export 确认前先看到将被外发的路径清单、排除面与范围统计——
+    签字的信息基础不弱于被保护的动作；授权口径（task + materials）不变。
+    """
+    from . import authorize as authorize_mod
+
+    request = default_launch_request(ctx, task, implementation_cli)
+    if request_path:
+        supplied = records.load_json(request_path)
+        if not isinstance(supplied, dict):
+            raise ReviewError("WF_PATH_INVALID", {"reason": "launch request missing or not an object"})
+        request = _deep_merge_launch_request(request, supplied)
+    diff_paths = (((request.get("submitted_scope") or {}).get("diff") or {}).get("paths") or [])
+    directory = _task_dir(ctx, task)
+    recorded = authorize_mod.require(directory, "export") if directory else None
+    delivery = scope_mod.delivery_set(ctx.root, task)
+    # 四轮审查 a-P1：preview 展示 test_results 的实际内容身份——
+    # 本轮 Check 的日志文件清单 + 逐文件摘要（与 write_materials 同源计算，不复制本体）。
+    check = task.get("check") or {}
+    logs_preview = []
+    _logs_omitted = 0
+    _started = (check.get("started_at") or "").replace(":", "").replace(".", "")
+    if _started and directory:
+        _log_root = os.path.join(directory, "check-logs", _started)
+        if os.path.isdir(_log_root):
+            _names_all = sorted(_name for _name in os.listdir(_log_root)
+                                if os.path.isfile(os.path.join(_log_root, _name)))
+            for _name in _names_all[:20]:
+                _src = os.path.join(_log_root, _name)
+                _fd, _cause, _why = records.file_digest_state(_src)
+                logs_preview.append({"file": _name, "digest": _fd,
+                                      "unavailable_cause": _cause})
+            _logs_omitted = max(0, len(_names_all) - 20)   # 截断可见：预览不假装全量
+    return {
+        "request": request,
+        "export_authorization": {
+            "recorded": recorded is not None,
+            "scope_digest": (recorded or {}).get("scope_digest"),
+            "note": ("已入库（同任务同材料类集合持续有效）" if recorded is not None else
+                     "未入库：正式 launch 前先 authorize record choice=export"),
+        },
+        "scope_stats": {"diff_paths": len(diff_paths),
+                        "delivery_total": len(delivery["paths"]),
+                        "exclusions": list(request.get("exclusions") or [])},
+        "test_results_preview": {"check_id": check.get("id"),
+                                 "commands": len(check.get("commands") or []),
+                                 "check_logs": logs_preview,
+                                 "check_logs_omitted": _logs_omitted,
+                                 "note": "确认覆盖材料类；每轮内容由批准范围与排除面约束"
+                                         "（类集合不变不要求重签，也不等于逐轮内容核对）"},
+    }
+
+
 def launch(ctx, task, request_path=None, implementation_cli=None):
     from . import cli, lock
 
     if request_path:
-        request = records.load_json(request_path)
-        if not isinstance(request, dict):
+        # 三轮三审：`--launch-request` 只作**覆盖/补充**（机制稿 §9.1 登记口径）——
+        # 三类材料/只读范围/排除面仍由入口按当前对象生成，请求里显式给的键覆盖对应项，
+        # 不再要求模型为调一个局部选项重写整份材料范围。
+        supplied = records.load_json(request_path)
+        if not isinstance(supplied, dict):
             raise ReviewError("WF_PATH_INVALID", {"reason": "launch request missing or not an object"})
+        default = default_launch_request(ctx, task, implementation_cli)
+        # 四轮审查：**嵌套字段级**深合并（dict 逐键下沉；列表/标量整体替换）——
+        # 只想覆盖 submitted_scope.diff.paths 时不再连带丢掉 requirement/test_results。
+        # 实现与 launch_preview 共用 `_deep_merge_launch_request`（同一判定一处实现）。
+        request = _deep_merge_launch_request(default, supplied)
     else:
         # 固定流转程序化（设计稿 §1.1）：材料三类、只读范围、排除面都是可机械得到的，
         # 不再要求模型手写 JSON；`--launch-request` 仍可用于覆盖/补充。
@@ -2309,10 +2444,18 @@ def launch(ctx, task, request_path=None, implementation_cli=None):
     implementation = [impl]
     # 2026-11-07：身份由报告文件名承载，launch 不再要求预先声明审查 CLI；
     # `slots` 缺省即"要两份审查"，只作计数用（可显式给 --reviewers N）。
+    # 三轮三审：显式 reviewers=1 是**声明的降级**（单 reviewer 轮）——按声明值生成，
+    # 不再被 max(2, …) 吞掉；判定侧的人数门禁照旧（无接受记录仍拒）。
     slots = request.get("slots")
     if not slots:
-        count = int(request.get("reviewers") or 2)
-        slots = [{"slot": f"s{index + 1}"} for index in range(max(2, count))]
+        if "reviewers" in request:
+            count = int(request.get("reviewers") or 0)
+            if count < 1:
+                raise ReviewError("WF_REVIEW_INVALID",
+                                  {"reason": "reviewers must be >= 1", "reviewers": count})
+        else:
+            count = 2
+        slots = [{"slot": f"s{index + 1}"} for index in range(count)]
     if not isinstance(slots, list) or not slots:
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "at least one slot required"})
     for slot in slots:
@@ -2379,7 +2522,9 @@ def launch(ctx, task, request_path=None, implementation_cli=None):
     export_problems = authorize_mod.export_scope_problems(_task_dir(ctx, task), task.get("id"),
                                                           materials)
     if export_problems:
-        raise ReviewError("WF_COMMIT_NOT_AUTHORIZED",
+        # 三轮二审 A6：外发缺确认与提交缺授权是两件不可逆动作——各自有码，
+        # 不再让 AI 把外发拦截误读成提交权限问题（码表闭集只增）。
+        raise ReviewError("WF_EXPORT_NOT_AUTHORIZED",
                           {"missing_action": "export",
                            "materials": materials,
                            "problems": export_problems,
@@ -2701,7 +2846,17 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
     # commands 摘要、无法复核具体输出。按当前 Check 引用把已脱敏日志复制到
     # materials/check-logs/，tests.json 附带清单与摘要；不开放任务目录、不新增审查步骤。
     logs_manifest = []
-    _check_started = ((task.get("check") or {}).get("started") or "").replace(":", "").replace(".", "")
+    # a 组 a-3：Check 记录的真实字段是 started_at（与 check.py 日志目录命名同源）——
+    # 此前读 check.started 恒为空，日志复制分支在真实数据上从不执行。
+    _check_started = ((task.get("check") or {}).get("started_at") or "").replace(":", "").replace(".", "")
+    # a-3（三轮外部审查 a4）：日志必须按命令记录的证据身份核对——
+    # commands[].evidence_ref + log_digest 是执行时已保存的身份；复制时逐文件比对，
+    # 被改写的日志如实标 verified=false（不再把新字节冒充该 Check 的原始证据），
+    # 引用了却复制不到的日志进 status.json.problems（不静默省略）。
+    _expected_logs = {os.path.basename(str(cmd.get("evidence_ref"))): cmd.get("log_digest")
+                      for cmd in commands
+                      if isinstance(cmd, dict) and cmd.get("evidence_ref") and cmd.get("log_digest")}
+    _log_problems = []
     if _check_started:
         _log_root = os.path.join(_task_dir(ctx, task), "check-logs", _check_started)
         if os.path.isdir(_log_root):
@@ -2715,9 +2870,29 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
 
                 _shutil.copyfile(_src, os.path.join(_dest, _name))
                 _fd, _cause, _why = records.file_digest_state(_src)
-                logs_manifest.append({"file": f"check-logs/{_name}",
-                                      "digest": _fd,
-                                      "unavailable_cause": _cause if not _fd else None})
+                _entry = {"file": f"check-logs/{_name}",
+                          "digest": _fd,
+                          "unavailable_cause": _cause if not _fd else None}
+                if _name in _expected_logs:
+                    _entry["recorded_digest"] = _expected_logs[_name]
+                    _entry["verified"] = bool(_fd) and _fd == _expected_logs[_name]
+                else:
+                    _entry["verified"] = None      # 非命令引用的日志：无身份可核，如实标注
+                logs_manifest.append(_entry)
+    for _name in sorted(set(_expected_logs) - {os.path.basename(item["file"])
+                                                for item in logs_manifest}):
+        _log_problems.append({"reason": "check log referenced by a command was not materialized",
+                              "file": _name})
+    if _log_problems:
+        material["problems"] = list(material["problems"]) + _log_problems
+        records.write_json(os.path.join(materials_dir, "status.json"),
+                           {"paths": paths, "files": material["files"],
+                            "problems": material["problems"], "empty": material["empty"],
+                            "diff_base": material.get("diff_base"),
+                            "diff_base_problem": material.get("diff_base_problem"),
+                            "buckets": {key: [path for path in delivery["buckets"][key]
+                                              if path in selected]
+                                        for key in ("e", "f", "covered_f", "uncovered_f")}})
     tests_payload = {"commands": commands}
     if logs_manifest:
         tests_payload["logs"] = logs_manifest
@@ -3281,13 +3456,26 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         )
     from . import codes
 
+    # A2（三轮二审）：导入是半完成态——next_ 给全收敛引线，不给"只差另一份报告"的错觉。
+    # 全部在机制内可判：按 launch 声明槽位与已导入槽位求差集。
+    launch_slots_now = [slot.get("slot") for slot in ((launch or {}).get("slots") or [])
+                        if isinstance(slot, dict) and slot.get("slot")]
+    imported_slots_now = sorted({str(entry.get("slot")) for entry in imported
+                               if int(entry.get("round") or 0) == int(round_no)})
+    missing_slots = [slot for slot in launch_slots_now if slot not in imported_slots_now]
+    next_text = ("本轮报告已齐：用 `review-decide --main-review-draft` 生成复核骨架，"
+                 "填完五轴/逐报告/逐 finding 后 `--main-review` 判定（处置与判定步骤见 wf-review-action）"
+                 if not missing_slots else
+                 f"还差槽位报告：{'、'.join(missing_slots)}——补齐后按 wf-review 产出并 review-import；"
+                 "本轮报告已齐后用 `review-decide --main-review-draft` 生成复核骨架再判定")
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
-        next_="导入另一槽位报告后 review-decide",
+        next_=next_text,
         facts={"round": int(round_no), "slot": record_slot, "report_digest": digest,
                "verdict": payload.get("verdict"), "findings": payload.get("findings"),
+               "missing_slots": missing_slots,
                **(dict(agent=identity) if discovered else {}),
                "control_assertion": assertion},
     )
@@ -3935,7 +4123,7 @@ def _accept_result(task, facts, kept, assertion):
 
 
 def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False,
-           gap_acceptance_path=None, main_review_path=None):
+           gap_acceptance_path=None, main_review_path=None, single_reviewer_acceptance_path=None):
     """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。
 
     `register_only=True`（A8）：**只登记复核关闭**，不产生结论——不推导 verdict、不写
@@ -3961,6 +4149,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
     if register_only and unavailable_path:
         raise ReviewError("WF_SEMANTIC_DECISION",
                           {"reason": "--register-only 只登记关闭，不能同时声明审查不可用"})
+    if single_reviewer_acceptance_path and (register_only or unavailable_path):
+        raise ReviewError("WF_SEMANTIC_DECISION", {
+            "reason": "单 reviewer 接受文件只对产生判定的那次 review-decide 有效",
+            "exits": ["去掉 --single-reviewer-acceptance 只做登记/不可用声明",
+                      "需要判定时单独跑一次 review-decide（带 --single-reviewer-acceptance）"]})
     if register_only and not (plan_path or main_review_path):
         raise ReviewError("WF_SEMANTIC_DECISION",
                           {"reason": "--register-only 需要 --plan 或 --main-review（没有可登记的内容）"})
@@ -4003,6 +4196,13 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             raise ReviewError("WF_PATH_INVALID",
                               {"reason": "gap acceptance file missing or not an object",
                                "path": gap_acceptance_path})
+    single_decision = None
+    if single_reviewer_acceptance_path:
+        single_decision = records.load_json(single_reviewer_acceptance_path)
+        if not isinstance(single_decision, dict):
+            raise ReviewError("WF_PATH_INVALID",
+                              {"reason": "single reviewer acceptance file missing or not an object",
+                               "path": single_reviewer_acceptance_path})
     with lock.acquire(ctx.root, holder_hint="review-decide"):
         _record, holder = ctx.require_held(task=task.get("id"))
         path = _task_dir(ctx, task)
@@ -4249,6 +4449,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         proposers = proposers_from_history(ctx, task)   # (round, slot, finding_id) → 提出者
         gaps_out = []       # uncovered 轴形成的缺口（按缺口处置，不进 failures）
         main_record = None  # 只有产生 verdict 的路径才写主会话复核
+        single_reviewer_facts = None   # W2-3：单 reviewer 留痕降级的事实（有接受记录时非 None）
         if unavailable:
             verdict = "unavailable"
             facts = {"unavailable": unavailable}
@@ -4275,18 +4476,58 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             else:
                 declared_slot_ids = sorted(set(launch_slots))
             if len(declared_slot_ids) < 2:
-                # 单 reviewer：报告可留档参考，但不产生判定结论（设计稿 §6.5）。
-                # 拒绝时把已导入报告与两个合法出口一并给出，避免人误以为"再跑一次就能判"。
-                raise ReviewError("WF_REVIEW_INVALID", {
-                    "reason": "single reviewer cannot produce a decision (degraded: single-provider)",
-                    "declared": declared_slot_ids,
+                # 单 reviewer（W2-3，三轮裁决④）：默认仍拒——复杂任务要求两位异种 reviewer。
+                # 有人签残余风险接受记录（--single-reviewer-acceptance）时允许产出 verdict，
+                # 留痕降级（degraded: single-provider + acceptance 引用）；接受只降级"人数"，
+                # 主会话复核/未关闭 blocking 等其余门槛照旧。
+                single_acceptance, single_problems = single_reviewer_acceptance(
+                    single_decision, round_no, task_id=task.get("id"))
+                if single_problems:
+                    raise ReviewError("WF_REVIEW_INVALID", {
+                        "reason": "single reviewer cannot produce a decision (degraded: single-provider)",
+                        "declared": declared_slot_ids,
+                        "degraded": "single-provider",
+                        "problems": single_problems,
+                        "imported_reports": [{"slot": entry.get("slot"), "report_path": entry.get("report_path")}
+                                             for entry in imported],
+                        "exits": ["人接受残余风险：写接受文件（by/at/quote/source + round + residual_risk）"
+                                  "后用 --single-reviewer-acceptance 重跑 review-decide",
+                                  "补第二个与实施 CLI 不同、且与它彼此不同的 reviewer CLI 后重发一轮"],
+                    })
+                if single_acceptance is None:
+                    raise ReviewError("WF_REVIEW_INVALID", {
+                        "reason": "single reviewer cannot produce a decision (degraded: single-provider)",
+                        "declared": declared_slot_ids,
+                        "degraded": "single-provider",
+                        "imported_reports": [{"slot": entry.get("slot"), "report_path": entry.get("report_path")}
+                                             for entry in imported],
+                        "exits": ["人接受残余风险：先 record single-reviewer-acceptance"
+                                  "（by/at/quote/source + round + residual_risk）再判定",
+                                  "补第二个与实施 CLI 不同、且与它彼此不同的 reviewer CLI 后重发一轮",
+                                  "按设计稿 §6.5 的不可用处置：review-decide --unavailable <声明文件> 留痕，"
+                                  "复杂任务暂停或异常归档（不得据此判 pass）"],
+                    })
+                # 接受记录落任务记录（按轮绑定，判定后不可替换——main_reviews 幂等同型）
+                existing_single = [entry for entry in reviews.get("single_reviewer_acceptances") or []
+                                   if isinstance(entry, dict)
+                                   and int(entry.get("round") or 0) == int(round_no)]
+                if existing_single:
+                    if existing_single[-1].get("attestation_digest") != single_acceptance["attestation_digest"]:
+                        raise ReviewError("WF_REVIEW_INVALID", {
+                            "reason": "本轮已有单 reviewer 接受记录，判定后不可替换",
+                            "round": int(round_no),
+                            "exits": ["保留既有接受记录直接判定",
+                                      "确需撤回：按需人裁决处置（新轮重发）"],
+                        })
+                else:
+                    reviews["single_reviewer_acceptances"] = list(
+                        reviews.get("single_reviewer_acceptances") or []) + [single_acceptance]
+                single_reviewer_facts = {
                     "degraded": "single-provider",
-                    "imported_reports": [{"slot": entry.get("slot"), "report_path": entry.get("report_path")}
-                                         for entry in imported],
-                    "exits": ["补第二个与实施 CLI 不同、且与它彼此不同的 reviewer CLI 后重发一轮",
-                              "按设计稿 §6.5 的不可用处置：review-decide --unavailable <声明文件> 留痕，"
-                              "复杂任务暂停或异常归档（不得据此判 pass）"],
-                })
+                    "single_reviewer_accepted": {
+                        "attestation_digest": single_acceptance["attestation_digest"],
+                        "quote_summary": str(single_acceptance.get("quote") or "")[:80],
+                        "by": single_acceptance.get("by"), "round": int(round_no)}}
             imported_slots = [normalize_agent(entry.get("slot")) for entry in imported]
             missing_slots = ([] if discovered_mode
                              else [slot for slot in declared_slot_ids if slot not in imported_slots])
@@ -4318,9 +4559,16 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             eligibility = review_eligibility(distinct, implementation,
                                              imported_count=len(imported),
                                              declared_slots=len((launch or {}).get("slots") or []))
-            if eligibility["problems"]:
+            if single_reviewer_facts is not None:
+                # W2-3：人签接受已消费"人数不合格"——留痕降级只降人数；
+                # 实施 CLI 重叠（异种门禁）不在降级范围，仍拒绝。
+                eligibility_problems = [p for p in eligibility["problems"]
+                                        if "人数不合格" not in str(p.get("reason"))]
+            else:
+                eligibility_problems = eligibility["problems"]
+            if eligibility_problems:
                 raise ReviewError("WF_REVIEW_INVALID", {
-                    "problems": eligibility["problems"],
+                    "problems": eligibility_problems,
                     "degraded": (launch or {}).get("degraded"),
                     "imported_reports": [{"slot": entry.get("slot"), "report_path": entry.get("report_path")}
                                          for entry in imported],
@@ -4330,6 +4578,9 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                 })
             verdict = "pass"
             facts = {"reviewer_clis": distinct}
+            if single_reviewer_facts is not None:
+                # W2-3：留痕降级进判定 facts（degraded + acceptance 引用）
+                facts.update(single_reviewer_facts)
             # 主会话复核（2026-11-13）：报告是辅助证据；产生 verdict 前必须有本轮五轴复核。
             # 覆盖由「主会话复核 + 主会话采信的报告」合并：主会话能补足的轴不触发补轮，两者都未覆盖才交人。
             if not main_review_path:

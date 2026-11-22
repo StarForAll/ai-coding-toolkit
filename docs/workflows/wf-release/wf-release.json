@@ -11,7 +11,7 @@
       "target_relative": ".wf/bin/repair.py"
     },
     {
-      "digest": "sha256:b6792122128bd87cd3fff8f0c125b9ca2f7bc2c9416a97a5cb5bcd342f0ad965",
+      "digest": "sha256:85108523a0a5b10ca4a75f67cee1e78bc4354d99ff25ae07113a85c814a97b29",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -21,7 +21,7 @@
       "target_relative": ".wf/bin/uninstall.py"
     },
     {
-      "digest": "sha256:f2abc6b1e508bf005fda6cee174e97f05aca81632aaeff8a75d43a6233ee2bbd",
+      "digest": "sha256:51dbc8083c82de715676ab21b04a36cf4fcc7500924257dcefb93ac3ba283ec5",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -31,7 +31,18 @@
       "target_relative": ".wf/bin/wf.py"
     },
     {
-      "digest": "sha256:10bc588caa6c4cc5d5772885f368d15ae6a0a2d1d93b7c69e290cc1e901eef87",
+      "digest": "sha256:abf33b6c6ccdece9490348869cd1a8e7fc5b4847424c7cd2ef83e15966a15d6d",
+      "executable": true,
+      "file_kind": "file",
+      "kind": "hook",
+      "platform": "codex",
+      "required": true,
+      "source_path": "wf-release/hooks/codex-session-identity.py",
+      "target_class": "host_hook",
+      "target_relative": ".codex/hooks/wf-session-identity.py"
+    },
+    {
+      "digest": "sha256:ecd269c120308225adf86d632dc9dbb0c8ff3e7a01d08dc7e6b62290ed44f2df",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -81,7 +92,7 @@
       "target_relative": ".wf/lib/wflib/attestation.py"
     },
     {
-      "digest": "sha256:882eeaecaab401ad0c11e265fac274b6081e562f20ab0797ee997dff8f4db254",
+      "digest": "sha256:97542fd2bdc5da0793fc7e9bbe734c01a9140bf9fb13491494f7782eabeb25d0",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -91,7 +102,7 @@
       "target_relative": ".wf/lib/wflib/authorize.py"
     },
     {
-      "digest": "sha256:41dfd72581c0bc2014e8df38c5a17f57ce5f3209ec1a31f3fbde92f753c3ef64",
+      "digest": "sha256:dd0838ee63c4212afb9484a7740b9cee74981a8767abac86463ccd21f0056465",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -101,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:c774dd993dc553d7c33e342e615c7d8f9afebbed7c0a8a217270ab7e1364d5ac",
+      "digest": "sha256:6c74b4d78af2b955f5b31822774dabc938fe52796d8f14eda92f3c1f9a015b26",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -131,7 +142,7 @@
       "target_relative": ".wf/lib/wflib/config.py"
     },
     {
-      "digest": "sha256:52b2a3002ecc75ec84b725ec476dc90f69a6dcf9bfebfe344d5284e5201c3668",
+      "digest": "sha256:26143119ac41fba56b2a741793097c3d5d334404bc6906d7e8e44bf3fd9551e3",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -141,7 +152,7 @@
       "target_relative": ".wf/lib/wflib/decisions.py"
     },
     {
-      "digest": "sha256:e1da0372d84349115e7d04c3486d9c7c6f5e280d98c2e4272f608f79137d0f82",
+      "digest": "sha256:3133ec4078c57bfb75c43ffce5dc3826234224438c2ccd79f3b0c62f23c2e55d",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -161,7 +172,7 @@
       "target_relative": ".wf/lib/wflib/gates.py"
     },
     {
-      "digest": "sha256:aa8d028664fc3e454aaa5b8c64b79f6be72af7df1e1e2de52f73653003a405c6",
+      "digest": "sha256:1e796fefb8de46b6d9f12f23eec45d79ebfa3034fa1fcedf54cf883aeabfb199",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -171,7 +182,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:022c5c2fa19215ec1825285c60999fb6881b147e800bed12ab34f5b70747dc8e",
+      "digest": "sha256:b4919576bc1488e1b333ec5e922b97cfaf2c711377df7c6766d1008ae700c92c",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -251,7 +262,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:14240310e65c77525d032ea97806088ffc9187bf8e6529ece87b966220cb135c",
+      "digest": "sha256:a5d99db9ee1be89e805f2f86f9f482cf5444c88cfd25263eff8c93149443d074",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -301,7 +312,7 @@
       "target_relative": ".wf/lib/wflib/scope.py"
     },
     {
-      "digest": "sha256:f1e7c57efccd56d1187bd8ed0fe09dfdba011042f51088be57f9dff46b240314",
+      "digest": "sha256:45fda5b2f52919f3023ca5cdc79c78177df4e14d4100d333fef2257c522e51e7",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -331,7 +342,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:8c6530a2ae57e49a31e03733ecd43af86281b29e3d3e955540a23aea474c027e",
+      "digest": "sha256:a7903fbe2eb4d634e68dd418bbbb417564336e4a1771da8e1c7d2db791cd4543",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -361,7 +372,7 @@
       "target_relative": ".wf/lib/wflib/writer.py"
     },
     {
-      "digest": "sha256:3c4457e507f75dc32f86c0ba7d8c9e5339a99be7558edf902aad51585d984196",
+      "digest": "sha256:c29800028122663b3315176b8474caff5873c1c46fb4af054710ce293f1fb0ed",
       "executable": false,
       "file_kind": "file",
       "kind": "protocol",
@@ -371,7 +382,7 @@
       "target_relative": ".wf/protocol/codes.json"
     },
     {
-      "digest": "sha256:fa832e014c8784696c59b879853fa7cd71facfa7f369acb1d320de4ac8f9552b",
+      "digest": "sha256:3d3d097e9d4f5350c34ac920a70fd8d0b766ac504afcd4413785644a7cd9cfc6",
       "executable": false,
       "file_kind": "file",
       "kind": "protocol",
@@ -581,7 +592,7 @@
       "target_relative": ".wf/workflows/review-flow.md"
     },
     {
-      "digest": "sha256:64550245c49a28e17461832cc2fbd7302af3964df9b3df9d047a2ad13027cdc2",
+      "digest": "sha256:b7dbb7ca7b7754f4239d45346f25dcfc00be08ffc634b53a95edcb8ebac2ec13",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -591,7 +602,7 @@
       "target_relative": ".wf/workflows/session-flow.md"
     },
     {
-      "digest": "sha256:70315457f9021b8696c5b20bcebe3f37a62a57be394bc1112244396bfb38e50b",
+      "digest": "sha256:30adefe6e3aa6fbd59a8345c6b05dc5d770eb70ecf229b333bcb1eedf3ab825a",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -601,7 +612,7 @@
       "target_relative": ".wf/workflows/task-flow.md"
     },
     {
-      "digest": "sha256:f30b7aab48b58e86e3800f8cccb9367ce30fcfc7e97d6c7dbb6011ddbd4622d1",
+      "digest": "sha256:2da8bd0bc2461dcfc76f911f13911e5261aaeef8c26abd3d2f1ea7e5bf590dc8",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -611,7 +622,7 @@
       "target_relative": "wf-bootstrap/SKILL.md"
     },
     {
-      "digest": "sha256:b6e8ac54151ba11cdbc35a8374627d011f281268cb831f15359a4ad3151e30db",
+      "digest": "sha256:835bbc87429240ffd773752a4c0cdc43eac585eaff5a80e0c8592339829cba22",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -621,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:06cb0bbe0d8493c9e994690045822f3dc74a1bb5a143d0de7d088010af7c79ff",
+      "digest": "sha256:f6310293a6b8d5ccfcd09db3b8e21c6b028b1d3a6df8971ab8c01190164cd5bf",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -631,7 +642,7 @@
       "target_relative": "wf-continue/SKILL.md"
     },
     {
-      "digest": "sha256:a7629563cffa4201ad38c100bac8b881f5b566bb32c7a183f49b06b93191095a",
+      "digest": "sha256:ed1b475894189a6d95432fbc5ca30969ab18e2476f29150f710cf7e817d309f0",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -641,7 +652,7 @@
       "target_relative": "wf-diagnosing-bugs/SKILL.md"
     },
     {
-      "digest": "sha256:bc142e2445cd2a92b557b6977cdfff2096cda73b1f7788b40d27c61be8ab44a6",
+      "digest": "sha256:6e7921d4921560da03de4742141b6613fabeab296a366e334e9f7ef22d8f2321",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -651,7 +662,7 @@
       "target_relative": "wf-finish/SKILL.md"
     },
     {
-      "digest": "sha256:48a3b292100f727cb835e4c26911a728153efc86cce96c74fdac70fb5ff51d53",
+      "digest": "sha256:bf94e5f6fcb386f2ed7d2eb7e7bd2657c8ccf5c29bfea662ca9718fb86d625fa",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -661,7 +672,7 @@
       "target_relative": "wf-grilling/SKILL.md"
     },
     {
-      "digest": "sha256:d37221fb71d8535de1269533fc6d825e4e1c4f3358656d3e49024bce07cfb6b3",
+      "digest": "sha256:d467ab2b6b4a27b3c9077f282643a4f8e57190209b1b61b5493dbad9d608d878",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -671,7 +682,7 @@
       "target_relative": "wf-repair-loop/SKILL.md"
     },
     {
-      "digest": "sha256:04ab0b592f50f15ea4609b6755eac3aea4b1ffcfd7fdab645073956f1492ac8c",
+      "digest": "sha256:1042d1030e4e33846fc506a122fc6b4dc0be6daf6656456bd3972ca3a4c01ec2",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -681,7 +692,7 @@
       "target_relative": "wf-review-accept-unknown/SKILL.md"
     },
     {
-      "digest": "sha256:b9781a444a3978f5a69f5489bfe5c048a36a4fba802a0da524e0810b63dba63f",
+      "digest": "sha256:6992af20b17283dce5d2a59fbde8fa38b1e7d9fc9c02b688e03f2c2c83f8dfdc",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -691,7 +702,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:e2c9251ee59cb27c65c6a88e2ce34e21d48c2dc191d3a5a2d8139a26bf2f7447",
+      "digest": "sha256:d46c27a761330205ba3ee9ae4eca91cd6e950c107a3e0c70d04cc4e3b301d73d",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -701,7 +712,7 @@
       "target_relative": "wf-review/SKILL.md"
     },
     {
-      "digest": "sha256:ca6c11530377d4e6827583690fbdbde2bf21e4d93054761d202bb1b96f9786cd",
+      "digest": "sha256:596025d7534c1dab0ce8c8ed9e659e2bc4a8129c2ee234174c58ea2d9cb54334",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -711,7 +722,7 @@
       "target_relative": "wf-spec-update/SKILL.md"
     },
     {
-      "digest": "sha256:84601aa8b46346a4e0f8eb4d0865d5e59265ad59bd180577b17854d05e7ee080",
+      "digest": "sha256:a2304c1635d70bb92a323bdf3d353b3e15c3a498bb5b1b9d56c6b670cd063ee7",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -721,7 +732,7 @@
       "target_relative": "wf-start/SKILL.md"
     },
     {
-      "digest": "sha256:5b7e16589dc1958a730092cb17033b4de46b5ad3db160ae4a463eef9ca2397c1",
+      "digest": "sha256:3631ad3ca7aec5faae5829a29298eff20cbf182ff9ab5d9116e95f6ef8d2c0d7",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -791,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:79ea780cb702edf6bd54352cdeb84bf5e9190cf4c44436cfe684abfef416a22a",
+    "rules_digest": "sha256:f41034325ea68f076f2326a3a77229dbe1e0ac11e9b95d6cdb1033e2e280cefa",
     "systems": [
       "linux"
     ],
@@ -811,7 +822,9 @@
       "/.wf/session-bindings/",
       "/.wf/writer.json",
       "/.wf/.cache/",
-      "/.wf-lock"
+      "/.wf-lock",
+      "/.wf/**/__pycache__/",
+      "/.wf/**/*.pyc"
     ]
   },
   "required_steps": [
@@ -1539,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.1.4"
+  "version": "0.1.5"
 }

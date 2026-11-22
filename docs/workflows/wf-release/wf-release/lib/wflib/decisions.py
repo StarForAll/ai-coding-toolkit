@@ -22,7 +22,7 @@ from __future__ import annotations
 DOMAINS = {
     # 规划批准（`task-approve`、`baseline-apply` 的批准决定、最终门禁的批准复核）
     "plan_approval": ("approve", "批准"),
-    # 机械修订（`task-replan` 的非实质修订路径）
+    # 机械修订（`task-approve` 的等价链路径——a 组 a-2：不经 task-replan）
     "mechanical_revision": ("机械修订",),
     # 实质规划变更（`task-replan --decision` 的必填取值）
     "replan": ("replan", "重新规划"),

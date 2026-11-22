@@ -25,7 +25,7 @@ disable-model-invocation: false
 | 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute --task <id> --commit <sha>` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止。决定文件结构拿不准时先跑 `archive --task <id> --draft`（只打印不落盘）。试点期可跑一次 `wf sampling pick --task <id> --freeze`（不跑不阻断，入口会在 Check next_ 里提示） |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
-| PRD 只改排版/转义等、验收与触碰面不变（机械修订） | 取人签的 `choice=机械修订` 决定 → `task-replan --decision <文件>`：入口经等价链核验后**不重复人批**，回到执行继续（改语义仍走上一行的 replan） |
+| PRD 只改排版/转义等、验收与触碰面不变（机械修订） | 取人签的 `choice=机械修订` 决定 → `task-approve --task <id> --decision <文件>`：入口经等价链核验后**不重复人批**，回到执行继续。该签认是对散文等价性（只改排版/转义）的人签，"不重复问人"由"不重复批准"承载；前置是本任务已有批准（改语义仍走上一行的 replan，不经 task-replan） |
 | 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
 | 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance --run <id> [--decision <path>]` 推进；`run pause --run <id> --reason <text>` 受控暂停；只读回读用 `run locate --run <id>` |
 | 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |
@@ -61,8 +61,17 @@ disable-model-invocation: false
   **新增/改一条验证项**（新的必需证据），那是改验收证据、不是等价实现，属规划变化，走回 Plan 重批。
 - **vendor_dirty / 框架自有改动**：`status`/`task-check`/归档回显的 `vendor_dirty` 非空即说明工作区有
   `.wf/**` 框架自有改动——它不阻断推进，但**必须向人确认一次归属**（回源仓库立项/另开任务/保持现场），
-  不确认就继续会把框架缺陷悄悄并入业务任务。不要把它当业务交付或审查材料：现场改 vendor 升级会丢、
-  也不进提交。当前任务只记录“发现框架缺陷”的归属与边界。
+  不确认就继续会把框架缺陷悄悄并入业务任务。确认留痕走判断记录（可审计）：写判断文件条目
+  `{kind: "框架改动", decision: <归属去向：回源仓库立项/另开任务/保持现场>, basis: <依据>,
+  outcome: "applied", by: "human"}`，经 `judgments add --task <id> --file <文件>` 入库
+  （judgments add 无 --kind 旗标，kind 在判断文件条目里；task-check/归档回显的
+  `vendor_judgments` 可见）。回源仓库立项的修复在源仓库按补丁/记录立项，归属与取舍仍是人判。
+  不要把它当业务交付或审查材料：现场改 vendor 升级会丢、也不进提交。改 `.wf/**`
+  会使当前 Check 失效（`WF_CHECK_STALE`——锚点的 `control_plane_digest` 随 vendor 内容
+  变化），这是预期后果、不是误报；drift 的 `d:control_plane_paths` 会列出变化的框架
+  文件清单。当前任务只记录“发现框架缺陷”的归属与边界。回源仓库立项的修复在源仓库
+  按补丁/记录立项——当前版本尚无机制导出通道，需人手工带 diff 回源（如
+  `git diff .wf/lib > patch`）；`--export-deviations` 只读出口与 upgrade 通道交付后按新口径操作。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；
   不自行取舍、不隐瞒、不改限制本身。冲突无法调和时停下报告是合法终态。
 
@@ -99,9 +108,21 @@ disable-model-invocation: false
 
 ## 复杂任务审查
 
-Check pass 后：`review-launch --task <id> --implementation-cli <cli>`（请求文件可选，入口按当前对象生成） → 人按回显文本在 reviewer CLI 里调用 `wf-review`
-→ `review-import`（每个槽位一次） → `review-decide --main-review-draft <file>` → 主会话填写五轴复核 → `review-decide --main-review <file>`。
+发起前**先取人外发范围确认**：`authorize record` 一条 choice=export（task + materials
+["diff","requirement","test_results"] + quote/by/source；结构拿不准先跑
+`authorize record --draft` 取只读骨架）——没有它 review-launch 会报
+`WF_EXPORT_NOT_AUTHORIZED`（外发确认绑任务与材料类集合）。**同一任务、同一材料类集合的
+确认持续有效**：只有换任务或新增材料类才需要人重签，后续轮次直接发起即可，不要每轮
+机械重签。外发属 K6 第③类不可逆动作，这个一次性范围确认是安全底线。
+**授权的边界（显式声明）**：确认覆盖的是材料**类**集合，不覆盖每轮的具体内容——
+每轮材料内容由批准触碰面、交付集合与排除面约束并随 Check 重跑重新生成；
+人签字前可用 `review-launch --preview` 只读核对本轮路径清单与日志文件摘要，
+但不必每轮重看（内容变化的约束是范围规则，不是这份签字）。
+然后：`review-launch --task <id> --implementation-cli <cli>`（请求文件可选，入口按当前对象生成） → 人按回显文本在 reviewer CLI 里调用 `wf-review`
+→ `review-import`（**一次调用导入本轮全部已完成报告**；有失败槽位按回显 `import_errors` 逐个处置） → `review-decide --main-review-draft <file>` → 主会话填写五轴复核 → `review-decide --main-review <file>`。
 报告是辅助证据，主会话必须在判定前完成自己的逐轴复核；报告未覆盖的轴，主会话能核实就自己补，补不了才交人接受缺口。
+单 reviewer 判定需人签残余风险接受（`review-decide --single-reviewer-acceptance`，留痕降级、不默认；
+骨架用 `--single-reviewer-acceptance-draft` 生成）；完整口径见 `wf-review` 适用面。
 
 ## 证据文件纪律（2026-11-07 起）
 
@@ -116,15 +137,16 @@ Check pass 后：`review-launch --task <id> --implementation-cli <cli>`（请求
 - 不调用 `wf-finish`、不归档、不提交（提交只在拿到精确路径授权时由归档动作执行）。
 - 不替人回答 `plan-q`、不伪造 review 结论。
 
-## 工作习惯（2026-11-08 起）
+## 工作习惯（2026-11-08 起；唯一完整定义位）
 
 - **同一终端同时只推进一个任务**；并行请另开终端/窗口。
   同一终端里的第二个 agent 会被 `WF_IDENTITY_UNRESOLVED(concurrent_unregistered_caller)` 阻断，
   须人显式 `wf.py enable` 登记后才放行，且此后与前者共享同一执行会话。
-- **自动模式下不需要手写信封**：直接跑 `wf.py <子命令>`；身份由执行边界派生。
+- **自动模式下不需要手写信封**：直接跑 `wf.py <子命令>`；身份由执行边界派生，
+  写权代次由本会话运行态携带（显式 `inputs.generation` 可覆盖，不填不报错）。
 
 ## 纪律
 
-- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只在请求信封里；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
+- 运行纪律见 `.wf/workflows/session-flow.md`「运行约定」：身份只经信封或宿主映射通道；不代人作答；入口输出是唯一判定源；解释器整会话固定、失效即停。
 - **机制已经判过的事不要重新论证，也不要找路绕过**：归属分类、范围核对、锚点失效、写权代次、实例游标、
   输入必填与类型 —— 这些是事实与阻断，不是"建议"。按 `facts` 修正或按 `next` 换路；判不了就交人，不编依据。

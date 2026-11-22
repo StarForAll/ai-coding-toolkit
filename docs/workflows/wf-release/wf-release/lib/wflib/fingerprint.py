@@ -62,7 +62,12 @@ def snapshot_digest(snapshot):
 
 
 def check_anchor(parts: dict) -> str:
-    """十键锚点；键名与顺序取机制稿 §3.2（C 排序后逐键进入哈希）。"""
+    """十一键锚点；键名与顺序取机制稿 §3.2（C 排序后逐键进入哈希）。
+
+    W2-2（三轮裁决③）：新增常开键 control_plane_digest（vendor 脏路径集合的内容
+    指纹，v 桶空时为常量摘要）——既有 Check 因新增锚点输入一次性全量失效，升级后
+    需重跑 Check（WF_CHECK_STALE 既有语义）。
+    """
     keys = [
         "plan_version",
         "entry_snapshot_digest",
@@ -74,9 +79,25 @@ def check_anchor(parts: dict) -> str:
         "baseline_digest",
         "config_digest",
         "workflow_snapshot_digest",
+        "control_plane_digest",
     ]
     payload = {key: parts.get(key) for key in keys}
     return records.H("wf-check-anchor-v1", payload)
+
+
+def control_plane_digest(v_paths, root):
+    """控制面非交付维度事实（W2-2）：vendor 脏路径集合的内容指纹。
+
+    键值恒非 None：v 桶空 ⇒ 常量摘要（空集合的哈希），vendor 内容变化即改变。
+    逐路径 file_digest_state 归因（digest/cause/reason 原样入摘要——读取归因是
+    锚点事实，不折 None）；v 桶唯一来源是 scope.classify_candidates(...)["buckets"]["v"]
+    （与 vendor_dirty facts 同源单一实现）。
+    """
+    entries = {}
+    for path in sorted(v_paths or []):
+        digest, cause, reason = records.file_digest_state(join(root, path))
+        entries[path] = {"digest": digest, "cause": cause, "reason": reason}
+    return records.H("wf-control-plane-v1", entries)
 
 
 def anchor_rule_version(rules_digest: str, installed_assets) -> str:
