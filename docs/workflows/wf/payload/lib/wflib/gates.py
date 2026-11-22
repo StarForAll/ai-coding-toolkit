@@ -471,13 +471,6 @@ def compute_P(ctx, task, step_id, *, check=None, rule_version=None):
             "content_digest": check_mod.object_content_digest(ctx, task),
             "paths": sorted(check_mod.object_paths(ctx, task), key=lambda value: value.encode("utf-8")),
         }
-    if step_id == "task.sampled":
-        # 2026-11-21 降档：不再是归档门禁；保留投影给提示消费（check_next_hint/
-        # 收工预览 facts 的 pilot_sampling_pending 以 selection.picks 为准）。
-        from . import sampling as sampling_mod
-
-        selection = sampling_mod.selection(task)
-        return {"seed": selection["seed"], "picks": selection["picks"]}
     if step_id == "task.archived":
         return {"archive_action_id": (task.get("action") or {}).get("id")}
     raise KeyError(step_id)
@@ -821,19 +814,15 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
         if not retrospective.get("conclusion"):
             return False, "WF_SEMANTIC_DECISION", {"reason": "retrospective conclusion missing"}
         return True, None, {}
-    if step_id == "task.sampled":
-        # 2026-11-21 降档：verify_step 不再核 task.sampled（已从 TASK_STEP_SPECS 移除）。
-        # 该分支保留为防御性拒绝（未知步骤不该被当满足），触发即测试迁移有遗漏。
-        return False, "WF_RECORD_INVALID", {
-            "reason": "task.sampled is no longer a required step (pilot-only, 2026-11-21)",
-        }
     if step_id == "task.changes-persisted":
         return tasks_mod.changes_persisted_fact(ctx, task)
     if step_id == "task.archived":
         if task.get("terminal") != "normal":
             return False, "WF_PERSISTENCE_FAILED", {"terminal": task.get("terminal")}
         return True, None, {}
-    return True, None, {}
+    # 未注册步骤一律拒绝（2026-11-21 五轮审查 P2-12）：默认满足会把未知步骤当已满足，
+    # 上游迁移遗漏时错误被静默吞掉；调用面只允许 HANDLERS 注册的 step id。
+    return False, "WF_RECORD_INVALID", {"reason": f"unknown step id: {step_id}"}
 
 
 def evaluate(ctx, task, due, *, rule_version=None):

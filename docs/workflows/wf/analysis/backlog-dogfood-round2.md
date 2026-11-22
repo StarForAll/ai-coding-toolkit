@@ -1,5 +1,20 @@
 # backlog：dogfood 二轮修正（11-21）遗留跟进项
 
+> **状态更新（2026-11-21 收口）**：本文件 §1–§7 全部条目已在本任务内完成处理
+>（用户裁决"不留 backlog"）：§1 help 48/48+注册表断言、§2 未知参数校验+WF_USAGE_INVALID
+>（37 码）、§3 现场出口（stop preview 免决定/enable 终态/摘要锁定 exits 已存在核验）、
+> §4 usage 码迁移（cli 29 处+tasks 20 处）、§5 vendor_dirty 消费点（check/archive
+> facts+wf-continue 确认指引）、§6 死指针改写/repo_rules 前置确认指引/五轴 basis 粒度/
+> §1.1 归位标注/curation.py 删除、§7 t:<触碰面路径> 判据扩展（K4c 登记）。
+> 本文件保留作为处置记录；"已裁决不做"两维持原判（同轮重导入、upgrade 桩）。
+> 六轮审查补强（同日收口）：t: 引用绑定 finding 实际位置；repo_rules/delete 确认按内容摘要绑定
+>（确认后再改即失效，旧无档确认保持路径级语义不追溯）；归档门禁 exits 指向 authorize record
+> 真实通道；expand 单点轻量通道进指引；review-import 摘要冲突补出口；help 补 10 个缺失 flag
+> 并加双向断言；task-resume 去掉未消费的 --decision；草稿 at 占位改全匹配 ISO；
+> request.json 经 review-context materials 暴露给 reviewer；部分导入聚合各槽位 facts。
+
+# backlog：dogfood 二轮修正（11-21）遗留跟进项
+
 > 来源：2026-11-21 任务 `11-21-wf-dogfood-fixes-round2` 收口前的第三轮外部审查
 > （两份报告）。本轮已修项见该任务 implement.md「第三轮审查补充」；
 > 本文件只登记**裁决延后**的项。处理时机：下一轮 wf 任务（建议与 0.1.5 同批）。
@@ -67,3 +82,89 @@
   **维持"导入后不可覆盖"声明边界**，本 backlog 不重开。
 - `upgrade --apply`：第三轮能力桩，属已知交付计划；0.1.3→0.1.4 已按
   "卸载重装/整树手工投放"如实声明。
+> 七轮审查补强（同日）：K6 确认通道补齐定义位（机制稿登记段 + 设计稿 §6.5 指针 + 索引 140）；
+> covers glob 通用展开（requirements-*.txt 类清单原样授权可用）；内容核验任一端读不到即未覆盖；
+> t: 引用强制携带 location；码级出口补 expand/--workspace-exclusion 轻量通道；
+> record 时序定死为"改动后落档"；草稿占位照抄被全匹配 ISO 拒绝（含断言）。
+> 八轮审查补强（同日）：删除类确认补齐可满足口径——record 在删除前落档（绑定被删内容），
+> 守卫按"确认时存在、当前已删 ⇒ 覆盖"判定；模式匹配不到已删文件不再算确认不可用。
+> 机制稿 K6 段与 wf-continue 指引同步删除例外顺序；删除流正反断言入库。
+> （P2-3 草稿占位、b-2 t: 缺 location 为旧树主张——批K 已修且有断言在库。）
+> 九轮审查补强（同日）：收工决策面补不可逆确认投影（stop --preview / archive --draft 的
+> irreversible facts + wf-finish K6 项 + judgments 删除渲染行）；预存脏文件归属改为
+> preexisting_in_scope 事实+指引（不阻断——硬路由会把"在途工作补进任务"的合法主流程拦死）；
+> expand 单点确认闭合（classify 判 in_scope + t: 判据面含 expand + delivery 语义升级）；
+> 用法校验支持 --flag=value 与 run 子命令级参数收窄；排除声明 help 两入口形状统一。
+> 十轮审查补强（同日）：irreversible 投影与归档门禁同源（拟提交路径∪已登记授权，同一
+> repo_rule_paths/_deleted_paths 实现）+ 降级 unavailable 可见；草稿占位统一 TODO 前缀、
+> 六字段等拒（不再半可过）；check facts 上抛 preexisting_in_scope（断链修复）+ 排除声明
+> 接受 preexisting 路径且排除后移出交付（e→x）；布尔旗标注册表 + 缺值旗标拒绝
+> （--reason --json 不再吞值、--short stray 不再静默）。
+> 十一轮审查补强（11-22）：BOOL_FLAGS 改按命令注册表（--check 在 project 布尔、task-curate 取值；
+> upgrade --apply 按 help 登记布尔——帮助示例全部可过用法校验，example 断言入库）；
+> 布尔旗标拒绝赋值形态（--preview=true 不再绕过只读分支）；同动作重复授权按累计合并
+>（路径并集+摘要并入，quote 取最新）——重复单点扩面不再丢失先前授权（机制稿登记）。
+> 十二轮审查补强（11-22）：授权合并三缺口收口——export 落档带 materials 清单、
+> 合并材料类并集后**重算 scope_digest**（追加材料类再确认从永远无效变为即时生效；
+> legacy 无 materials 记录按新范围整体替换，与 content_digests 兼容口径一致）；
+> 路径类键归一列表并集（字符串/列表混用不再碎成单字符、不再静默丢新路径）；
+> record_log 按序保留每次 {quote,by,at,source,paths,materials}（原话留痕，
+> 顶层凭证字段取最新）——三断言入库；旧 materials 不入库断言迁移为新口径。
+> 十三轮审查补强（11-22）：record_log 三缺口收口——条目改取 redact() 后的值（quote 与顶层
+> 同遮罩截断，committed 不再落第二条明文原话，含断言）；上限 20 条折叠计数标记；
+> 消费点接 authorize show（审计视图输出 record_log，不再只写不读）；legacy 无 materials
+> 键的 export 记录按新范围整体替换（注释与实现对齐，出口不再指向无效动作，含断言）。
+> 十四轮审查补强（11-22）：legacy 无 content_digests 键时新确认照档（确认后改内容即失效，断言入库）；
+> 截断改顶层 record_log_truncated 累计（20 真实条目、标记不占窗口、计数不重复累积，断言入库）；
+> 超限逐条原话不再保留记为声明边界（机制稿登记，authorize show 计数可见）。
+> 十五轮审查补强（11-22）：covers 的 legacy 并行语义——缺摘要键的路径按 legacy 路径级确认保留
+> （追加新确认不溯及旧路径失效；delete 例外：不可逆性最高，legacy 删除须重新确认，断言入库）；
+> authorize show 投影补 record_log_truncated/materials/scope_digest（机制稿"计数可见"的声明边界落地，断言入库）。
+> 十六轮审查补强（11-22，第 14 次外部审查）：covers 缺摘要三档（content_bound_patterns 区分
+> “确认后新增匹配文件须重 record”与 legacy 路径级；repo_rules 确认后删除与 delete 同型例外，
+> 断言入库）；reassess 未持权“待复评”分支可达（写权要求后移）；当前 Check 完整脱敏日志
+> 物化进材料包（materials/check-logs/ + tests.json 清单，reviewer 不再只能看摘要）；
+> 指引五处漂移收敛（扩面通道/采纳建议锚点规则/首轮返工过时句/围栏闭合）；机械修订路由、
+> review-notes 位置、__all__ 卫生、writer.json 口径收口；task-approve/replan/rework/stop
+> --draft 只读草稿（object_digest/路径预填，TODO 占位预检拒，断言入库）；
+> §1.1 两处收窄（客观事实直接核实、残余风险并入判据句主句）。
+
+
+# 下一任务待办（第 15 次外部审查，2026-11-22 收口时登记——已核验成立、未实施）
+
+用户裁决：先提交 0.1.4 当前已验证状态；以下项在紧随的下一个任务逐批处置，按优先级排。
+
+## P0（a 组，上一轮实现的真实缺陷）
+
+- **a-3 验证日志物化未生效**：`write_materials` 读了 `check.started`，实际 Check 字段是
+  `started_at`——**分支在真实数据上从不执行，reviewer 看不到完整日志的问题实际未解决**。
+  修复：字段对齐 + 用真实 Check 记录的端到端断言。
+- **a-1 content_bound_patterns 合并遗漏**：追加授权只合并 paths/digests 不合并该字段——
+  先确认 `.gitignore` 再确认 `requirements-*.txt` 后，新增的 `requirements-prod.txt`
+  仍按 legacy 路径级放行。修复：并入合并白名单 + 组合场景断言。
+- **a-2 机械修订路由指错入口**：`wf-continue` 与 `task-replan --draft` 都指向
+  `choice=机械修订`，但该命令正式执行只认 replan；机械修订实际在 `task-approve`
+  （等价链）。修复：路由句改 `task-approve`（choice=机械修订、PRD 只改排版/转义时不
+  重复人批）；草稿入口同步；顺带审视"仍需新的人签决定"与"不重复问人"的口径。
+- **a-4 OSError≠删除**：covers 把权限/IO 错误折成 current=None 后按"确认后已删除"放行。
+  修复：改用 `records.file_digest_state` 三态归因，missing 才走删除例外、unreadable 判未覆盖。
+
+## P1/P2（b 组，需裁决或指引补强）
+
+- b-P1-3：审查序列开头补"authorize record export → 再 review-launch"一句（指引）。
+- b-P1-4：K6 commit 双轨（authorize record commit 无消费方，实际走 finish 的 commit_grants）——
+  **需人裁**：删 commit 类并声明 finish 决定唯一，或让归档守卫消费它。
+- b-P1-5：control_plane_digest 非交付维度事实（vendor 改动不进锚点、旧 pass 可静默复用）——
+  设计变更，**需人裁**。
+- b-P1-6：review-notes help 示例路径 `<id>/notes.json` 与真实目录 `<id>-<slug>` 不符——
+  改为指 `status` 回显的 directory 或加 --review-notes-draft（机械）。
+- b-P1-7：单 reviewer 无正常降级路径——**需人裁**：单 reviewer+人接受残余风险留痕，或
+  把双 CLI 写进安装前置声明。
+- b-P2-8：repo_rules 逐文件硬确认粒度——**需人裁**：任务级合并或降 facts+人判。
+- b-P2-9/10/11：重复句收敛、§1.1 边界补充（本地完整路径补异种 CLI 依赖；固定流转清单的
+  "三方升级匹配"标第三轮未交付）、两处小文案（archived 绑定 next 提"继续当前对象"无效、
+  vendor_dirty 确认无记录载体）。
+
+## 维持已声明边界（勿重复提议）
+
+- 会话身份轮换（P0-1）与 upgrade/回传闭环（P0-2）：既有声明边界，待第三轮交付计划。

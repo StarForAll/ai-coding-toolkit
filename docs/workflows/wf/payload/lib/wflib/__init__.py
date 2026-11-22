@@ -14,7 +14,6 @@ __all__ = [
     "tasks",
     "gates",
     "check",
-    "curation",
     "spec",
     "runs",
     "review",

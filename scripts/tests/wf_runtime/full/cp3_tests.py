@@ -133,7 +133,7 @@ wf(["task-check", "--task", task3, "--review-notes", NOTES, "--json"], {"generat
 launch = {"implementation_clis": ["dsh"],
           "slots": [{"slot": "r1", "reviewer_cli": "claude"}, {"slot": "r2", "reviewer_cli": "codex"}],
           "submitted_scope": {"diff": "git diff", "requirements": ["prd"], "test_results": ["v1"]},
-          "readable_scope": {"code": ["src/**"], "spec": [".wf/spec/**"], "prd": [".wf/tasks/**/prd.md"]},
+          "readable_scope": {"code": ["src/**"], "spec": [".wf/spec/**"], "prd": os.path.relpath(os.path.join(dir3, "prd.md"), F)},
           "exclusions": [".env"], "export_decision": "human (test)"}
 json.dump(launch, open(wfdrive.temp("cp3_launch.json"), "w"), ensure_ascii=False)
 # K6 第 3 类：外发以"确认入库"为准（请求里的 export_decision 只是声明）

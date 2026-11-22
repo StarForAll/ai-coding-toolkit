@@ -400,7 +400,7 @@ rec("R23 无写权不得续做", "WF_SEMANTIC_DECISION 或 WF_WRITER_BUSY", (bus
 if (payload or {}).get("code") != "WF_OK":
     print("R23 重入 archive reason:", json.dumps((payload or {}).get("facts") or {}, ensure_ascii=False)[:400])
 # 对象仍处于 paused：先恢复，再取写权，然后才能重入续做归档
-wf(["writer", "acquire", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
+wf(["writer", "acquire", "--json"], {"generation": cur_gen()}, "sess-U23")
 wf(["task-resume", "--task", task23, "--json"], {"generation": cur_gen()}, "sess-U23")
 _rec23 = json.load(open(os.path.join(wf_tasks.task_dir(F, task23), "task.json"), encoding="utf-8"))
 print("R23 续做前记录 check.id=", ((_rec23.get("check") or {}).get("id")),

@@ -161,7 +161,7 @@ def export_decision_problems(decision):
     return problems
 
 
-def record_authorization(task_dir, action, decision, *, raw_copy_dir=None):
+def record_authorization(task_dir, action, decision, *, raw_copy_dir=None, root=None):
     """写脱敏原件到**任务目录（committed）**；敏感原文只留在 runtime（若调用方给了目录）。"""
     if action not in ACTIONS:
         raise ValueError(f"unknown action: {action}")
@@ -172,8 +172,110 @@ def record_authorization(task_dir, action, decision, *, raw_copy_dir=None):
         problems = export_decision_problems(decision)
         if problems:
             raise ValueError(f"export authorization is incomplete: {problems}")
+        redacted["materials"] = sorted(str(item) for item in decision.get("materials") or [])
         redacted["scope_digest"] = export_scope(decision.get("task"), decision.get("materials") or [])
+    if action in ("repo_rules", "delete") and root is not None:
+        # 确认时尝试内容绑定的模式清单（十六轮 a-1）：covers 用它区分
+        # "缺摘要 = legacy 路径级"与"缺摘要 = 确认后新增的匹配文件"——
+        # 后者承诺了内容绑定，须重新 record 才覆盖，不得按 legacy 放行。
+        _bound_patterns = sorted({str(item)
+                                  for key in ("paths", "path")
+                                  for item in (_as_list_value(decision.get(key)))})
+        if _bound_patterns:
+            redacted["content_bound_patterns"] = _bound_patterns
+        # 内容绑定（2026-11-21 六轮审查 a-2）：按确认时的具体文件内容摘要留档——
+        # 归档守卫对比当前内容，同一路径后续改动不再被旧确认覆盖（环境级变更逐次确认）。
+        digests = {}
+        raw_paths = decision.get("paths")
+        candidates = ([raw_paths] if isinstance(raw_paths, str) else
+                      list(raw_paths) if isinstance(raw_paths, list) else [])
+        for pattern in candidates:
+            if not isinstance(pattern, str):
+                continue
+            for hit in _concrete_hits(pattern, root):
+                from . import records as _records_mod
+
+                rel = os.path.relpath(hit, str(root)).replace(os.sep, "/")
+                try:
+                    digests[rel] = "sha256:" + _records_mod.sha256_hex(open(hit, "rb").read())
+                except OSError:
+                    digests[rel] = None      # 记录时不可读：守卫将按"无法核对"处理
+        redacted["content_digests"] = digests
     path = authorization_path(task_dir, action)
+    # 每次确认的范围—原话留痕（十二轮 P2-2）：顶层 quote/by/at 取最新，
+    # record_log 按序保留每次的 {quote, by, at, source, paths, materials}——
+    # 路径累积后仍能回答"谁为什么确认了哪条路径"。
+    # 十三轮审查 P0-1：log 条目一律取 redact() 之后的值——quote 走同一遮罩+截断，
+    # committed 授权文件里不再有第二条未脱敏的原话；by/at/source/paths 同为保留白名单口径。
+    _log_entry = {"quote": redacted.get("quote"), "by": redacted.get("by"),
+                  "at": redacted.get("at"), "source": redacted.get("source"),
+                  "paths": redacted.get("paths") or redacted.get("path"),
+                  "materials": redacted.get("materials")}
+    _stored = records.load_json(path) or {}
+    _existing_log = _stored.get("record_log") or []
+    # 上限（十三→十四轮 P2-1/P2-2）：保留最近 20 条**真实条目**；更早的折叠数记顶层
+    # `record_log_truncated`（累计、不占窗口、不重复累积）——标记塞列表会让计数错报、
+    # 真实条目被挤掉；超限后逐条原话不再保留是**声明边界**（计数可见，见机制稿登记）。
+    _truncated_before = int(_stored.get("record_log_truncated") or 0)
+    _overflow = max(0, len(_existing_log) - 20)
+    if _overflow:
+        _existing_log = list(_existing_log[-20:])
+    # 十一/十二轮审查：同动作重复授权按**累计**合并——覆盖会让先前的扩面路径
+    # 重新变回未归属、delete 丢失已删文件的内容摘要，Check/归档随即阻断。
+    existing = records.load_json(path)
+    if isinstance(existing, dict) and existing.get("action") == action:
+        merged = dict(existing)
+
+        # 路径类键：归一为列表后并集去重（字符串/列表混用同判）
+        for key in ("paths", "path", "subject"):
+            combined = _as_list_value(existing.get(key)) + _as_list_value(redacted.get(key))
+            seen, unique = set(), []
+            for item in combined:
+                marker = item if isinstance(item, (str, dict)) else str(item)
+                if marker in seen:
+                    continue
+                seen.add(marker)
+                unique.append(item)
+            merged[key] = unique
+        # 内容摘要：并入（新值覆盖同路径）；legacy 记录无该键时从新记录起档——
+        # 否则 covers 回退路径级授权，新确认的路径可在确认后被替换内容（十四轮 P1）
+        digests = dict(existing.get("content_digests") or {})
+        digests.update(redacted.get("content_digests") or {})
+        if digests:
+            merged["content_digests"] = digests
+        # export 的材料类并集后**重算范围身份**（十二轮 P1-1：合并不重算
+        # scope_digest 会让"追加材料类后再确认"永远无效，出口指向已不成立的动作）
+        if action == "export":
+            # 十二轮 P1-1：材料类并集后**重算范围身份**；legacy 记录没有 materials
+            # 键（无法还原旧集合）→ 新范围整体替换（与 content_digests 的兼容口径一致）
+            old_materials = _as_list_value(existing.get("materials"))
+            new_materials = _as_list_value(redacted.get("materials"))
+            if old_materials:
+                materials = sorted(set(old_materials) | set(new_materials))
+                merged["materials"] = materials
+                merged["scope_digest"] = export_scope(decision.get("task"), materials)
+            elif new_materials:
+                # legacy 记录没有 materials 键（无法还原旧集合）→ 新范围整体替换
+                # （十三轮 P1-3：跳过会让"重新记录一条"永远无效，出口指向不成立的动作）
+                merged["materials"] = sorted(new_materials)
+                merged["scope_digest"] = export_scope(decision.get("task"), new_materials)
+        # 每次确认的范围—原话留痕（十二轮 P2-2：路径累积但原话只留最新，
+        # 事后无法回答"谁为什么确认了那条路径"）；顶层 quote/by/at 取最新
+        # 顶层凭证字段取最新（十二轮 P2-2：原话留痕进 record_log，顶层 quote/by/at
+        # 反映最近一次确认——路径累积后仍能回答"谁为什么确认了哪条路径"）
+        merged.update({key: redacted[key] for key in ("quote", "by", "at", "source",
+                                                         "original_digest", "redaction")
+                       if key in redacted})
+        redacted = merged
+    # 合并可能整体替换了 redacted（= merged），log 统一在此追加——每次记录都在案；
+    # 追加后立即裁窗：存档形态恒为 ≤20 条真实条目 + 顶层累计折叠数。
+    _log = list(_existing_log) + [_log_entry]
+    if len(_log) > 20:
+        _overflow += len(_log) - 20
+        _log = list(_log[-20:])
+    redacted["record_log"] = _log
+    if _truncated_before or _overflow:
+        redacted["record_log_truncated"] = _truncated_before + _overflow
     records.write_json(path, redacted)
     if raw_copy_dir:
         os.makedirs(raw_copy_dir, exist_ok=True)
@@ -216,6 +318,33 @@ def _pattern_hits(pattern, root):
     return any(paths_mod.match_path(str(pattern), item) for item in files)
 
 
+def _concrete_hits(pattern, root):
+    """把确认里的路径模式展开成实际存在的具体文件（相对项目根的绝对路径）。
+
+    通用 glob（2026-11-21 七轮审查 b-3）：`requirements-*.txt`、`docs/**` 等与
+    repo_rules.json 同语法的模式都要能展开——只认精确路径或 /** 结尾会让按清单
+    原样授权的模式永远拿不到内容摘要，形成"record 成功、归档永远未覆盖"的死循环。
+    """
+    if root is None:
+        return []
+    import glob as _glob
+
+    full = os.path.join(str(root), pattern)
+    hits = [item for item in _glob.glob(full, recursive=True) if os.path.isfile(item)]
+    if not hits and os.path.isfile(full):
+        hits = [full]
+    return hits
+
+
+def _as_list_value(value):
+    """路径值的列表归一（record/covers 共用）：str→[str]，list→list，None→[]，dict→[dict]。"""
+    if value is None or value == "":
+        return []
+    if isinstance(value, list):
+        return list(value)
+    return [value]
+
+
 def covers(task_dir, action, paths, *, root=None):
     """已入库的确认是否覆盖这些路径（K6 第 2/4 类：删除数据、越出批准面的修改）。
 
@@ -235,10 +364,63 @@ def covers(task_dir, action, paths, *, root=None):
                             if isinstance(item, (str, dict)))
     declared = [item.get("path") if isinstance(item, dict) else item for item in declared]
     declared = [str(item) for item in declared if item]
-    # 展开为空的模式视为**确认不可用**：人确认了一片不存在的区域，不能算覆盖
-    broken = [pattern for pattern in declared if not _pattern_hits(pattern, root)]
+    # 展开为空的模式视为**确认不可用**：人确认了一片不存在的区域，不能算覆盖。
+    # 例外（八轮审查 P0-1）：删除类 + 内容留档——确认时存在的文件（留了摘要）现在已删，
+    # 模式匹配不到是**删除本身的效果**，不算"确认不可用"；否则删除确认永远过不了门禁。
+    def _pattern_usable(pattern):
+        if _pattern_hits(pattern, root):
+            return True
+        if action in ("delete", "repo_rules") and "content_digests" in payload:
+            # 十六轮 a-2：规则文件"确认后按计划删除"——模式匹配不到是删除本身的效果，
+            # 与删除类同型不算"确认不可用"；旧模式留在累计记录不再产生新前置。
+            recorded_keys = payload.get("content_digests") or {}
+            return any(key == pattern or key.startswith(pattern + "/")
+                       or paths_mod.match_path(pattern, key)
+                       for key in recorded_keys)
+        return False
+
+    broken = [pattern for pattern in declared if not _pattern_usable(pattern)]
     usable = [pattern for pattern in declared if pattern not in broken]
     uncovered = [path for path in paths or []
                  if not any(path == pattern or paths_mod.match_path(pattern, path)
                             for pattern in usable)]
+    # 内容绑定（2026-11-21 六轮）：repo_rules/delete 的确认按确认时内容摘要核对——
+    # 同一路径在确认之后又改动（或确认时留档缺失）即未覆盖，需按当前内容重新确认。
+    # 内容绑定只对**带留档**的确认生效：旧确认（无 content_digests 键）保持原路径级语义，
+    # 不追溯失效——新确认一律经 authorize record 落档后即受内容绑定。
+    if (action in ("repo_rules", "delete") and not uncovered
+            and "content_digests" in payload):
+        recorded = payload.get("content_digests") or {}
+        from . import records as _records_mod
+
+        for path in sorted(paths or []):
+            current = None
+            try:
+                current = "sha256:" + _records_mod.sha256_hex(open(os.path.join(str(root), path), "rb").read())
+            except OSError:
+                current = None
+            if path not in recorded:
+                # 缺摘要三档（十五轮 b-2 + 十六轮 a-1）：
+                # ① 命中本次确认声明的模式（content_bound_patterns）→ 确认后才出现/才命中的
+                #    文件——新确认承诺了内容绑定，须对它重新 record 才覆盖，不得冒充 legacy；
+                # ② delete 且当前已删 → 未覆盖（legacy 无摘要的删除必须重新确认）；
+                # ③ 其余 → legacy 路径级确认（合并前已授权、当时未绑摘要；不追溯失效）。
+                bound_patterns = payload.get("content_bound_patterns") or []
+                if any(path == pat or path.startswith(pat + "/")
+                       or paths_mod.match_path(pat, path) for pat in bound_patterns):
+                    uncovered.append(path)
+                elif action == "delete" and current is None:
+                    uncovered.append(path)
+                continue
+            if current is None and action in ("delete", "repo_rules") and recorded[path] is not None:
+                # 删除类确认（八轮审查 P0-1）：record 在删除**之前**落档（绑定被删时的内容），
+                # "确认时存在、当前已删除"正是被确认的效果——视为覆盖。
+                # 确认时读不到（recorded None）仍按未覆盖处理，不静默放行。
+                continue
+            if recorded[path] is None or current is None:
+                # 七轮审查 b-2：任何一端读不到即无法核对——按未覆盖处理（需人处置），
+                # 不因"读不到"而静默放行；确认端读不到说明授权时就没绑上内容。
+                uncovered.append(path)
+            elif recorded[path] != current:
+                uncovered.append(path)
     return (not uncovered and not broken), sorted(uncovered)

@@ -19,17 +19,19 @@ disable-model-invocation: false
 |---|---|
 | 未开工 / plan，未批准 | 呈现 PRD 机读块、复杂度与 TDD，请人批准 → `task-approve --task <id> --decision <path>` |
 | 已批准，未开工 | `task-start --task <id>` |
-| in_progress/execute | 在批准触碰面内实施；读规则用 `spec --file <path>`；需要时 `task-curate` |
+| in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先向人确认这些是本任务交付还是外来——外来走排除声明，是本任务交付就继续；不默认归属、也不阻断）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
+**改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
 | 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute --task <id> --commit <sha>` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止。决定文件结构拿不准时先跑 `archive --task <id> --draft`（只打印不落盘）。试点期可跑一次 `wf sampling pick --task <id> --freeze`（不跑不阻断，入口会在 Check next_ 里提示） |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
+| PRD 只改排版/转义等、验收与触碰面不变（机械修订） | 取人签的 `choice=机械修订` 决定 → `task-replan --decision <文件>`：入口经等价链核验后**不重复人批**，回到执行继续（改语义仍走上一行的 replan） |
 | 暂停 / 恢复（任务） | `task-pause --task <id> [--reason]` / `task-resume --task <id>` |
 | 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance --run <id> [--decision <path>]` 推进；`run pause --run <id> --reason <text>` 受控暂停；只读回读用 `run locate --run <id>` |
 | 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |
 | 收工 | `stop --decision <path>`（一个去向：commit/keep/reverse/transfer）；先看后定用 `stop --preview`（免决定只读） |
-| 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]` |
-| `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | 若写权已被释放，先 `writer acquire --task <id>`；再**重入 `archive --task <id> --decision <同一决定>` 续做**。该入口会补做目录移动，不另开恢复命令 |
+| 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]`。提交范围含删除时另需 K6 第 2 类确认：**删除前** `authorize record` 一条 `choice=delete`（paths 覆盖被删路径——摘要绑定被删时的内容；先删后 record 绑不上、会被拒） |
+| `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | 若写权已被释放，先 `writer acquire`（不收 --task，对象来自会话绑定）；再**重入 `archive --task <id> --decision <同一决定>` 续做**。该入口会补做目录移动，不另开恢复命令 |
 | 归档成功但回显 `write_release.released=false` | 按回显事实重跑 `writer release`（对象已终态，`ensure_releasable` 放行）；正常归档成功时入口已自动释放 |
 
 ## 修复态先读什么（⑥）
@@ -57,9 +59,10 @@ disable-model-invocation: false
   人的挑战：「这些新文件是哪条问题逼出来的？总量是不是该回计划？」
 - **补测试 vs 改验证定义**：为已批准的验证项补测试文件是你的事，不需要回 Plan；若要在 PRD 里
   **新增/改一条验证项**（新的必需证据），那是改验收证据、不是等价实现，属规划变化，走回 Plan 重批。
-- **vendor_dirty / 框架自有改动**：`status`/`repair_scope` 给出 `.wf/lib/**` 的 vendor 改动且本任务声称修框架时，
-  不要把它当业务交付或审查材料：现场改 vendor 升级会丢、也不进提交。向人说明后按源仓库维护任务处理
-  （回源仓库立项/另开任务），当前任务只记录“发现框架缺陷”的归属与边界。
+- **vendor_dirty / 框架自有改动**：`status`/`task-check`/归档回显的 `vendor_dirty` 非空即说明工作区有
+  `.wf/**` 框架自有改动——它不阻断推进，但**必须向人确认一次归属**（回源仓库立项/另开任务/保持现场），
+  不确认就继续会把框架缺陷悄悄并入业务任务。不要把它当业务交付或审查材料：现场改 vendor 升级会丢、
+  也不进提交。当前任务只记录“发现框架缺陷”的归属与边界。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；
   不自行取舍、不隐瞒、不改限制本身。冲突无法调和时停下报告是合法终态。
 
@@ -70,7 +73,7 @@ disable-model-invocation: false
 | `facts` | 含义 | 你该做什么 |
 |---|---|---|
 | 有 `task`、无 `waiting` | 首达该任务步骤，已建任务（`run_id`=本实例、顺序前置=上一个未略过 task 步骤的任务），游标指向它 | 在那个任务上走四阶段（Plan→批准→开工→Check→Finish→由人归档）。**实例不代批准、不代归档** |
-| `waiting: true` | 当前步骤的任务还没正常归档（含"还在做"与"异常归档"两种，异常归档会另报 `WF_SEMANTIC_DECISION`） | 回到那个任务推进；异常归档时按 4.3/4.9 与机制稿 §6.4 的出口处置，**不要**靠再 advance 一次绕过 |
+| `waiting: true` | 当前步骤的任务还没正常归档（含"还在做"与"异常归档"两种，异常归档会另报 `WF_SEMANTIC_DECISION`） | 回到那个任务推进；异常归档时按本行出口处置：确认放弃范围与逐项去向（保留/反向修正/具名承接），写 `choice=放弃` 停止决定 + `--disposition` 逐项去向，交 `task-abandon`，**不要**靠再 advance 一次绕过 |
 | `skipped: true` | 该步骤按 `creation.steps` 声明略过，决定已记录 | 继续 `advance`；若你认为这个决定此时不成立（条件变了），回人确认，不要自己改记录 |
 | `answer: <choice>` | human 步骤的答复已记录 | 继续 `advance`；答复内容由人给，不要代答 |
 | `settled: <step>` | 上一任务已正常归档且持久化可核，该步骤记 `satisfied` | 继续 `advance` 推进下一步 |

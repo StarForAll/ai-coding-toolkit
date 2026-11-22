@@ -157,3 +157,4 @@ C 开头的行定位 [wf-framework-charter.md](./wf-framework-charter.md) 的条
 | 137 | 项目标识 · §3 | §1.1、§5.5、§8.1、§8.2 | 无 | §1.1（确认记录按标识匹配）、§5.3（生成后不改、repair 可重建）、§7.3（重装沿用）、§8.2（身份断言） | 已核对·有消费 |
 | 138 | 主会话复核 · §6.5 | §1.3、§8.2 | 无 | §1.3（机制入口清单：continue 在 review-decide 前完成复核）；§4.1（continue 路由）；§5.3（review 结论由入口写入）；§8.1（action 侧适配交付）；§8.2（审查覆盖缺口与单 reviewer 场景） | 已核对·有消费 |
 | 139 | 试点期抽样 · §6.5 | 无跨节词面命中（不作语义结论） | 无 | §6.5（非门禁登记：写者 sampling pick、消费点 task-check next_/收工预览提示与 sampling report/evaluate/reviewed、失败出口无、试点结束由人决定） | 已核对·有消费 |
+| 140 | K6 不可逆确认通道 · §6.5 | 无跨节词面命中（不作语义结论） | 无 | §6.5（门禁段指针：授权记录形态 authorize record / authorization-<action>.json 与消费点归机制稿 K6 通道登记段） | 已核对·有消费 |

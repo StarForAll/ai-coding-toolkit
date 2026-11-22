@@ -21,28 +21,37 @@ def step(name):
 
 
 class SamplingTimingTest(unittest.TestCase):
-    def test_sampling_step_exists_and_is_due_before_archive(self):
+    """2026-11-21 降档：task.sampled 不再是归档硬门禁（试点期手段，见 gates.py 注释）。
+
+    保留的断言改为：步骤已从 SPECS 移除（不阻断归档）、投影仍可供提示消费、
+    verify_step 对残留调用防御性拒绝（触发即测试迁移有遗漏）。
+    """
+
+    def test_sampling_step_removed_from_required_specs(self):
         spec = step("task.sampled")
-        self.assertIsNotNone(spec, "缺 task.sampled 步骤：抽样没有门禁时点")
-        self.assertEqual(spec["due"], "before_archive")
+        self.assertIsNone(spec, "task.sampled 不应是 required 步骤（2026-11-21 降档为试点期提示）")
 
-    def test_sampling_step_is_not_due_before_execute_or_check(self):
-        dues = [item["due"] for item in [step("task.sampled")]]
-        self.assertNotIn("before_execute", dues)
-        self.assertNotIn("before_check", dues)
+    def test_sampling_not_in_rule_class_steps(self):
+        self.assertNotIn("task.sampled", gates.RULE_CLASS_STEPS)
 
-    def test_sampling_projection_comes_from_the_production_writer(self):
-        """用生产的写入口造状态，不手搓 dict（P1 的教训：手搓的形状没人写得出）。"""
+    def test_sampling_selection_is_the_single_read_surface(self):
+        """提示消费（check_next_hint / 收工预览 facts）唯一读取面是 sampling.selection。"""
         from wflib import sampling
 
         task = {"id": "t1"}
         sampling.freeze(task, {"changed_paths": ["p:a"], "closures": ["f1"]}, seed="s1")
         sampling.record_picks(task, [{"class": "关闭", "event": "f1"}])
-        projection = gates.compute_P(None, task, "task.sampled")
-        self.assertEqual(projection["seed"], "s1")
-        self.assertEqual(projection["picks"][0]["event"], "f1")
+        selection = sampling.selection(task)
+        self.assertEqual(selection["seed"], "s1")
+        self.assertEqual(selection["picks"][0]["event"], "f1")
 
-    def test_missing_selection_blocks_with_an_exit(self):
+    def test_compute_P_rejects_unknown_step(self):
+        """task.sampled 已不在步骤体系：compute_P 对未知步骤 raise KeyError（不留死分支）。"""
+        with self.assertRaises(KeyError):
+            gates.compute_P(None, {"id": "t1"}, "task.sampled")
+
+    def test_verify_step_rejects_unregistered_step(self):
+        """verify_step 对不在 HANDLERS 的步骤拒绝（task.sampled 已移除，无专属分支）。"""
         class Ctx:
             root = str(REPO)
 
@@ -50,33 +59,28 @@ class SamplingTimingTest(unittest.TestCase):
                 return 1
 
         task = {"id": "t1", "sampling": {}}
-        ok, code, facts = gates.verify_step(Ctx(), task, "task.sampled")
+        ok, code, _facts = gates.verify_step(Ctx(), task, "task.sampled")
         self.assertFalse(ok)
-        self.assertEqual(code, "WF_SEMANTIC_DECISION")
-        self.assertTrue(any("sampling" in str(item) for item in facts.get("exits") or []))
+        self.assertEqual(code, "WF_RECORD_INVALID")
 
-    def test_frozen_selection_satisfies_the_step(self):
-        class Ctx:
-            root = str(REPO)
+    def test_check_next_hint_mentions_pilot_sampling_when_no_picks(self):
+        from wflib import tasks as tasks_mod
 
-            def rule_version(self):
-                return 1
-
+        task = {"id": "t1", "plan": {"complexity": "light"}}
+        hint = tasks_mod.check_next_hint(task, {"result": "pass"})
+        self.assertIn("sampling pick", hint)
+        # 有 picks 时不再提示
         from wflib import sampling
 
-        task = {"id": "t1"}
-        sampling.freeze(task, {"changed_paths": ["p:a"]}, seed="s")
         sampling.record_picks(task, [{"class": "关闭", "event": "f1"}])
-        ok, code, _facts = gates.verify_step(Ctx(), task, "task.sampled")
-        self.assertTrue(ok, code)
+        hint2 = tasks_mod.check_next_hint(task, {"result": "pass"})
+        self.assertNotIn("sampling pick", hint2)
 
-    @staticmethod
-    def _via_internal(task):
-        for name in ("_step_satisfied", "step_satisfied", "_check_step"):
-            func = getattr(gates, name, None)
-            if func:
-                return func(None, task, "task.sampled")
-        raise unittest.SkipTest("找不到单步判定入口")
+    def test_failed_check_hint_has_no_sampling_note(self):
+        from wflib import tasks as tasks_mod
+
+        hint = tasks_mod.check_next_hint({"plan": {"complexity": "light"}}, {"result": "fail"})
+        self.assertNotIn("sampling pick", hint)
 
 
 class EscalatedHangsOnlyTheEndingTest(unittest.TestCase):
@@ -307,7 +311,9 @@ class SubjectAndWriterTest(unittest.TestCase):
     def test_idle_writer_raises_with_acquire_exit(self):
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/cli.py").read_text(encoding="utf-8")
         self.assertIn("先取得写权", source)
-        self.assertIn("writer acquire --task", source)
+        # 2026-11-21：writer 不收 --task（对象来自绑定）；出口文案改为裸 `writer acquire`
+        self.assertIn("writer acquire", source)
+        self.assertNotIn("writer acquire --task", source)
 
 
 class AttributionConsumptionTest(unittest.TestCase):

@@ -853,7 +853,8 @@ def lint_report(ctx, task, text):
                     refs.append({"reason": "blocking finding must cite an assertion_ref",
                                  "finding": finding.get("id")})
                 continue
-            problem = assertion_ref_problem(ref, index, changed, payload.get("check_fix_kind"))
+            problem = assertion_ref_problem(ref, index, changed, payload.get("check_fix_kind"), task=task,
+                                            finding_location=finding.get("location"))
             if problem:
                 refs.append(dict(problem, finding=finding.get("id")))
             base, _, clause_id = str(ref).partition("#")
@@ -1084,7 +1085,7 @@ def merge_main_findings(payload, previous):
 
 def validate_main_review(payload, *, task_id, round_no, imported, findings, open_blocking,
                          axis_reports, by, file_digest=None,
-                         assertion_ids=None, changed_rules=None, discovery=False):
+                         assertion_ids=None, changed_rules=None, discovery=False, task=None):
     """主会话复核的结构校验（不是语义判决）。
 
     返回 `(record, problems, semantic)`：
@@ -1156,7 +1157,8 @@ def validate_main_review(payload, *, task_id, round_no, imported, findings, open
                                  "finding_id": finding_id})
             elif assertion_ids is not None:
                 problem = assertion_ref_problem(ref, assertion_ids, changed_rules or {},
-                                                item.get("check_fix_kind"))
+                                                item.get("check_fix_kind"), task=task,
+                                                finding_location=item.get("location"))
                 if problem:
                     problems.append(dict(problem, finding_id=finding_id))
         normalized_main.append(item)
@@ -1192,8 +1194,13 @@ def validate_main_review(payload, *, task_id, round_no, imported, findings, open
                 problems.append({"reason": "main review axis conclusion invalid", "axis": axis,
                                  "conclusion": conclusion, "known": list(AXIS_CONCLUSIONS)})
                 continue
+            # 粒度收敛（2026-11-21 批D，五轮审查 P1-5）：判 pass/fail 仍必须写 basis，
+            # 但允许"一句指向采信来源"（如"与 r1 报告一致，见 sources"）——basis 质量属人/AI
+            # 判断，机制只保证不空；复核的独立核实义务由 sources 与 finding_review 承载。
             if conclusion in ("pass", "fail") and not basis:
-                problems.append({"reason": "main review pass/fail requires a basis", "axis": axis})
+                problems.append({"reason": "main review pass/fail requires a basis", "axis": axis,
+                                 "hint": "与采信报告一致的轴可写一句指向（如'与 r1 一致'），"
+                                         "不必逐轴重述完整依据；分歧轴写清差异"})
             if not isinstance(sources, list):
                 problems.append({"reason": "main review sources must be a list", "axis": axis})
                 sources = []
@@ -1639,6 +1646,20 @@ def assertion_index(ctx, task):
             if curation_changed(before, entry["digest"], file_digest):
                 changed[spec_path] = {"curation_digest": before, "current_digest": entry["digest"],
                                       "current_file_digest": file_digest}
+    # 触碰面路径类引用（2026-11-21 批I，五轮审查 b#2）：`t:<批准触碰面内路径>`。
+    # 指引（wf-review-action）要求"批准判据之外、仍在批准触碰面内的缺陷继续修、不降建议"，
+    # 此前这类缺陷无法作为 blocking finding 进记录（K4c 只认验收/验证/spec）。登记形状：
+    # 与 p:/f: 等证据引用同族——引用的事实是"该路径在本任务批准触碰面内"，可机械核验。
+    from . import scope as _scope_mod
+    from . import tasks as tasks_mod
+    from . import paths as paths_mod
+
+    # 九轮审查 b-3：t: 判据面 = 批准触碰面 ∪ 已生效 expand 单点确认——
+    # 按指引"先授权再创建"的面外路径同样可作 blocking 判据。
+    _patterns = list(tasks_mod.approved_touch_paths(task) or [])
+    _patterns += _scope_mod._expand_authorization_patterns(ctx.root, task)
+    for touch in _patterns:
+        index[f"t:{touch}"] = "touch-path"
     return index, changed
 
 
@@ -1719,14 +1740,47 @@ def standard_drift_positions(diffs):
             if isinstance(item, dict) and item.get("where") in STANDARD_PARTS]
 
 
-def assertion_ref_problem(ref, index, changed, fix_kind=None, deprecated=None):
+def assertion_ref_problem(ref, index, changed, fix_kind=None, deprecated=None, task=None,
+                          finding_location=None):
     """单条引用的判定（K3b 引用属当前集合、K4c 规则不得自证）；返回问题字典或 None。
 
     `deprecated` 是已停用子句的位置集合（`<规则>#<子句>`）：引用停用判据等于用旧尺子量新活，
     直接拒（v42 §4.5「`d:` 引用 deprecated 条目被拒」同型）。
     """
-    base = str(ref).split("#", 1)[0]
-    if deprecated and str(ref) in deprecated:
+    ref_text = str(ref)
+    if ref_text.startswith("t:"):
+        # 触碰面路径引用：只核存在性（glob 按可证包含匹配），不参与"规则不得自证"——
+        # 它引用的不是规则，是"缺陷落在批准触碰面内的这一事实"。
+        from . import paths as _paths_mod
+
+        target = ref_text[2:]
+        # 判据面唯一来源是 index 的 t: 条目（批准触碰面 ∪ 已生效 expand，见 assertion_index）
+        patterns = sorted(key[2:] for key in index if key.startswith("t:"))
+        if not any(target == pat or target.startswith(pat + "/")
+                   or _paths_mod.match_path(pat, target) for pat in patterns):
+            return {"reason": "t: 引用的路径不在本任务批准触碰面（含已生效的 expand 确认）内",
+                    "assertion_ref": ref_text, "known_t_patterns": patterns,
+                    "exits": ["确认缺陷在批准触碰面内，或先 authorize record 一条 choice=expand 后引用",
+                              "面外且未扩面确认的缺陷回 Plan 扩面重批"]}
+        # 六轮审查 a-1 + 七轮 b-1：t: 引用必须携带并覆盖 finding 的实际位置——
+        # 缺 location 的 finding 不得用 t:（否则任意面内路径都能当判据绕过位置核验）。
+        if finding_location is None:
+            return {"reason": "t: 引用要求 finding 提供 location（缺陷实际位置）",
+                    "assertion_ref": ref_text,
+                    "exits": ["在 finding 里补 location 字段后重试",
+                              "改用验收项/验证项/spec 判据引用"]}
+        if True:
+            location = str(finding_location).strip()
+            covered = (location == target or location.startswith(target + "/")
+                       or _paths_mod.match_path(target, location))
+            if not covered:
+                return {"reason": "t: 引用与 finding 实际位置不符（引用必须是缺陷位置或其上级目录）",
+                        "assertion_ref": ref_text, "finding_location": location,
+                        "exits": ["把 t: 改为 finding 实际位置（或其上级目录/触碰面条目）",
+                                  "缺陷确在别处时：修正 location 或换引用"]}
+        return None
+    base = ref_text.split("#", 1)[0]
+    if deprecated and ref_text in deprecated:
         return {"reason": "引用指向已停用的判据子句（只增不改：停用后不得再作依据）",
                 "assertion_ref": ref,
                 "exits": ["换用当前 active 的子句或验收项", "若确需恢复该条件，重新加一条新子句"]}
@@ -2642,6 +2696,32 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
                        {"check": check_public, "anchor": {"check_anchor": anchor}})
     commands = (task.get("check") or {}).get("commands") or []
     records.write_json(os.path.join(materials_dir, "tests.json"), {"commands": commands})
+    # 十六轮 a-3：当前 Check 的完整脱敏验证日志物化进材料包——
+    # 日志本体在任务目录 check-logs/ 下（reviewer 必排面），此前 reviewer 只能看到
+    # commands 摘要、无法复核具体输出。按当前 Check 引用把已脱敏日志复制到
+    # materials/check-logs/，tests.json 附带清单与摘要；不开放任务目录、不新增审查步骤。
+    logs_manifest = []
+    _check_started = ((task.get("check") or {}).get("started") or "").replace(":", "").replace(".", "")
+    if _check_started:
+        _log_root = os.path.join(_task_dir(ctx, task), "check-logs", _check_started)
+        if os.path.isdir(_log_root):
+            _dest = os.path.join(materials_dir, "check-logs")
+            os.makedirs(_dest, exist_ok=True)
+            for _name in sorted(os.listdir(_log_root)):
+                _src = os.path.join(_log_root, _name)
+                if not os.path.isfile(_src):
+                    continue
+                import shutil as _shutil
+
+                _shutil.copyfile(_src, os.path.join(_dest, _name))
+                _fd, _cause, _why = records.file_digest_state(_src)
+                logs_manifest.append({"file": f"check-logs/{_name}",
+                                      "digest": _fd,
+                                      "unavailable_cause": _cause if not _fd else None})
+    tests_payload = {"commands": commands}
+    if logs_manifest:
+        tests_payload["logs"] = logs_manifest
+    records.write_json(os.path.join(materials_dir, "tests.json"), tests_payload)
     return {"material_paths": len(paths),
             "material_problems": material["problems"][:5],
             "material_problem_count": len(material["problems"]),
@@ -2795,7 +2875,10 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                                  "prd": os.path.join(materials, "prd.md"),
                                  "check": os.path.join(materials, "check.json"),
                                  "tests": os.path.join(materials, "tests.json"),
-                                 "status": os.path.join(materials, "status.json")},
+                                 "status": os.path.join(materials, "status.json"),
+                                 # P2-8（2026-11-21 六轮）：本槽位的授权请求原件——
+                                 # reviewer 需要时可核对"本轮授权我读什么、排除什么"
+                                 "request": os.path.join(directory, "request.json")},
                    **material_facts, "legacy_scope": legacy_scope, "narrowed": narrowed,
                    "delivery_path_count": len(delivery["paths"]),
                    "submitted_paths": (sorted(str(item) for item in declared_paths)
@@ -2944,13 +3027,14 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
         # 发现式导入（2026-11-21 调整）：逐份导入，坏报告不中断其余槽位——
         # 导入是证据入库，能入的先入，失败槽位在 facts.import_errors 单列（含原因与出口）。
-        imported, import_errors = [], []
+        imported, import_errors, results_by_agent = [], [], {}
         last = None
         for found, candidate in targets:
             try:
                 result = import_report(ctx, task, round_no, None, candidate,
                                        _from_discovery=True, agent=found)
                 imported.append(found)
+                results_by_agent[found] = result
                 last = result
             except ReviewError as exc:
                 import_errors.append({"agent": found,
@@ -2966,6 +3050,18 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         last = last or {}
         facts = dict(last.get("facts") or {})
         facts["imported_agents"] = imported
+        # P2-9（2026-11-21 六轮）：部分导入时保留每个成功槽位的关键 facts——
+        # 主会话判断"两份都入库且锚点一致"需要对称信息，不能只留最后一份。
+        if len(imported) > 1 or (import_errors and imported):
+            facts["imports"] = []
+            for _idx, (found, _cand) in enumerate(targets):
+                if found in imported:
+                    slot_facts = (results_by_agent.get(found) or {}).get("facts") or {}
+                    facts["imports"].append({"agent": found,
+                                             "report_digest": slot_facts.get("report_digest"),
+                                             "findings": slot_facts.get("findings_count",
+                                                                        len(slot_facts.get("findings") or [])),
+                                             "anchor_ok": slot_facts.get("anchor_ok")})
         if import_errors:
             facts["import_errors"] = import_errors
             facts["note"] = "部分报告未入库：按 import_errors 逐槽位处理，已入库的不受影响"
@@ -3075,7 +3171,8 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                        "finding": finding.get("id"), "slot": record_slot,
                                        "known": sorted(index)})
                 continue
-            problem = assertion_ref_problem(ref, index, changed, fix_kind,
+            problem = assertion_ref_problem(ref, index, changed, fix_kind, task=task,
+                                            finding_location=finding.get("location"),
                                             deprecated=deprecated_refs)
             if problem:
                 problem["finding"] = finding.get("id")
@@ -3137,7 +3234,9 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
             raise ReviewError("WF_REVIEW_INVALID",
                               {"reason": "report digest differs from the imported one",
                                "slot": record_slot, "existing": existing_digest,
-                               "incoming": incoming_digest},
+                               "incoming": incoming_digest,
+                               "exits": ["同一轮不覆盖已导入报告：开新一轮 `review-launch` 重新发起审查",
+                                         "只是文件被误动过字节：恢复为导入时的原内容（existing 摘要）后重试"]},
                               )
         if existing_digest:
             # 同摘要重入：幂等，不重复写
@@ -4058,7 +4157,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     open_blocking=open_items,
                     axis_reports=axis_reports, by=ctx.key(),
                     file_digest=main_digest, assertion_ids=assertion_ids,
-                    changed_rules=changed_rules, discovery=discovery)
+                    changed_rules=changed_rules, discovery=discovery, task=task)
                 if discovery and main_record is not None:
                     main_record["discovery"] = True
                 if main_problems or main_semantic:
@@ -4265,7 +4364,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                 imported=imported, findings=main_findings, open_blocking=open_items,
                 axis_reports=report_facts.get("report_axes") or {},
                 by=ctx.key(), file_digest=main_digest,
-                assertion_ids=assertion_ids, changed_rules=changed_rules)
+                assertion_ids=assertion_ids, changed_rules=changed_rules, task=task)
             if main_problems:
                 raise ReviewError("WF_REVIEW_INVALID", {
                     "problems": main_problems,

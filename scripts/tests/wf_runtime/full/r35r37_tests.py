@@ -105,7 +105,7 @@ rec("R36 准备：开工", "WF_OK", (start2 or {}).get("code"), rc_s == 0)
 wf(["task-pause", "--task", task2, "--reason", "R36", "--json"], {"generation": gen2}, "sess-Y2")
 rc, payload, _ = wf(["writer", "release", "--json"], {"generation": gen2}, "sess-Y2")
 rec("R36 准备：释放第 1 代", "WF_OK", (payload or {}).get("code"), rc == 0)
-rc, payload, _ = wf(["writer", "acquire", "--task", task2, "--json"], {"generation": gen2}, "sess-Y2")
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": gen2}, "sess-Y2")
 gen3 = ((payload or {}).get("facts") or {}).get("generation")
 rec("R36 准备：重新取得新代次", "WF_OK 且代次前进",
     f"{(payload or {}).get('code')} gen={gen3}", rc == 0 and gen3 and int(gen3) > int(gen2))
@@ -141,7 +141,7 @@ except Exception as exc:
     caught = getattr(exc, "code", None)
 rec("R37 保留 WIP 阻断空闲释放", "WF_WORKSPACE_UNRESOLVED", caught, caught == "WF_WORKSPACE_UNRESOLVED")
 # 保留路径消失后再恢复 → 阻断
-rc, payload, _ = wf(["writer", "acquire", "--task", task3, "--json"], {"generation": gen3b}, "sess-Y3")
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": gen3b}, "sess-Y3")
 gen_after = ((payload or {}).get("facts") or {}).get("generation") or gen3b
 rec("R37 准备：恢复前取得写权", "WF_OK", (payload or {}).get("code"), rc == 0)
 os.remove(os.path.join(F, "a37/k.txt"))

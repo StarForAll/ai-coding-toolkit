@@ -35,7 +35,7 @@ user-invoked: true
    找人裁（先呈现事实、再由人写 quote）。预检通过不等于可以归档：本 skill 只呈现事实，不宣告结论。
 1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论（含每轮 `launch_scope` 的
    `selected/total/narrowed` 与判定 `scope.unselected`）、知识处置状态、待提交路径，以及当前生效的放行清单
-   （`unknown_acceptances`，归档回显会再列一次）。若 `judgments show` 有 `[vendor]` 框架自有改动，
+   （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺确认直接归档会被 `WF_COMMIT_NOT_AUTHORIZED` 拦）。若 `judgments show` 有 `[vendor]` 框架自有改动，
    单列说明它不计交付/审查/业务提交；本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
 2. 人确认后，把「finish 调用证据 + 按精确路径的提交授权」写入决定文件数组
    （拿不准结构时先跑 `archive --task <id> --draft`：入口按待提交路径生成决定文件草稿、

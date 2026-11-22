@@ -514,7 +514,10 @@ def exclusion_records(root, classified, entries, *, now=None):
 
     幂等：同一路径已按**相同摘要**排除时不再重复写入（重跑同一声明照常成功）。
     """
+    # 十轮审查 b-1：preexisting_in_scope（开工前已在的未提交交付路径）同样可排除——
+    # 人确认它不属于本任务时，指引所指的排除出口必须可用，不能因"还在 e 桶"被拒。
     c_paths = set(classified["buckets"].get("c") or [])
+    c_paths |= set(classified.get("preexisting_in_scope") or [])
     already = {item["path"]: item
                for item in (classified.get("exclusions") or {}).get("applied") or []}
     # 同一路径在声明里出现多次：后者覆盖前者（按路径收敛），不写重复记录
@@ -590,6 +593,27 @@ def exclusion_states(root, task):
     return {"applied": applied, "lapsed": lapsed}
 
 
+def _expand_authorization_patterns(root, task):
+    """已入库 expand 确认里声明的路径模式（唯一来源 authorize；无确认返回空）。"""
+    from . import authorize as _authorize_mod
+    from . import tasks as _tasks_mod
+
+    directory = _tasks_mod.task_dir(str(root), task.get("id"))
+    if not directory:
+        return []
+    payload = _authorize_mod.require(directory, "expand")
+    if not payload:
+        return []
+    out = []
+    for key in ("paths", "path", "subject"):
+        value = payload.get(key)
+        if isinstance(value, str):
+            out.append(value)
+        elif isinstance(value, list):
+            out.extend(str(item) for item in value if isinstance(item, str))
+    return out
+
+
 def classify_candidates(root, task, receipts=None):
     """返回 {a: [...], b: [...], c: [...], d: [...], e: [...], f: [...], facts...}。"""
     task_id = task.get("id")
@@ -609,6 +633,19 @@ def classify_candidates(root, task, receipts=None):
     claimed_by = {}
     for item in conflicts:
         claimed_by.setdefault(item["path"], []).append(item.get("claimed_by"))
+    # 九轮审查 b-3：已生效的 expand 单点确认把面外路径纳入本次范围——
+    # 按指引"先授权再创建"的文件不能仍按外来（c）拦下。
+    expand_patterns = _expand_authorization_patterns(root, task)
+    expand_covered = {}
+    if expand_patterns:
+        from . import paths as _p
+
+        def _expand_hit(path):
+            return any(path == pat or path.startswith(pat + "/")
+                       or _p.match_path(pat, path) for pat in expand_patterns)
+
+        expand_covered = {"hit": _expand_hit}
+
     buckets = {"a": [], "b": [], "c": [], "d": [], "e": [], "f": [], "v": [], "x": []}
     receipt_paths = set()
     for receipt in receipts or []:
@@ -631,8 +668,16 @@ def classify_candidates(root, task, receipts=None):
             # 先判存疑再判归属：宽 glob 命中不能覆盖他任务已显式登记的归属（机制稿 §3.3）
             buckets["d"].append(path)
             continue
-        owned = path in attributed or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
-        in_scope = any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
+        _expand_ok = bool(expand_covered) and expand_covered["hit"](path)
+        owned = (path in attributed
+                 or any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
+                 or _expand_ok)
+        in_scope = (any(paths_mod.match_path(entry_pattern, path) for entry_pattern in touch_paths)
+                    or _expand_ok)
+        # 九轮审查 b-1（收敛为事实+指引，不阻断）：开工前已存在的未提交路径命中触碰面，
+        # 只证明"允许改"、不证明"是本任务改的"——仍进交付（"把在途工作补进任务"是合法主流程），
+        # 但在 preexisting_in_scope 里如实上抛，收工/检查面提示人/AI 确认归属，
+        # 外来路径走排除声明；与 vendor_dirty 同型（可见、不设门禁）。
         if owned and in_scope:
             buckets["e"].append(path)
             continue
@@ -645,16 +690,29 @@ def classify_candidates(root, task, receipts=None):
         buckets["d"].append(path)
     # 人确认「这些外来改动不属于本任务、保持原样」的记录：只把**摘要仍匹配**的路径从 c 移到 x。
     # 内容一变即失配 → 路径回到 c（排除不是永久豁免），x 不进交付/指纹/材料/提交面。
+    _pre_set = set(entry.get("preexisting_uncommitted") or [])
+    preexisting_in_scope = sorted(
+        path for path in buckets["e"] if path in uncommitted and path in _pre_set)
     exclusions = exclusion_states(root, task)
     applied_paths = {item["path"] for item in exclusions["applied"]}
     if applied_paths:
         buckets["x"] = sorted(path for path in buckets["c"] if path in applied_paths)
         buckets["c"] = [path for path in buckets["c"] if path not in applied_paths]
+        # 十轮 b-1：preexisting_in_scope 被人排除后同样移出交付（e→x）——
+        # 排除是"不属于本任务"的确认，留在 e 会继续进交付/指纹/材料。
+        pre = sorted(path for path in (preexisting_in_scope or []) if path in applied_paths)
+        if pre:
+            buckets["x"] = sorted(set(buckets["x"]) | set(pre))
+            buckets["e"] = [path for path in buckets["e"] if path not in applied_paths]
+            preexisting_in_scope = [path for path in preexisting_in_scope
+                                    if path not in applied_paths]
     return {
         "buckets": buckets,
         "candidates": candidates,
         "touch_paths": touch_paths,
         "entry_snapshot": entry,
+        # 开工前就在的未提交交付路径：归属需要人/AI 确认（指引见 wf-continue），不是门禁
+        "preexisting_in_scope": preexisting_in_scope,
         "vendor_dirty": buckets["v"],
         "exclusions": exclusions,
         # d 档的展开事实（谁在争抢）：交人裁决时要看到双方，不能只给一个裸路径

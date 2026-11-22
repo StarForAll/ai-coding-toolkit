@@ -87,7 +87,7 @@ rec("R31 准备：目录回到活动位置", "活动目录存在、归档目录�
     os.path.exists(active_dir) and not os.path.exists(archived_dir))
 # 正常归档成功后入口已自动释放写权；模拟“终态已写、目录未移动”的中断时，
 # 需要重新取得写权，否则重入会因写权空闲被拒（这正是自动释放后的正常出口）。
-rc, payload, _ = wf(["writer", "acquire", "--task", task1, "--json"], {}, "sess-X1")
+rc, payload, _ = wf(["writer", "acquire", "--json"], {}, "sess-X1")
 gen1 = ((payload or {}).get("facts") or {}).get("generation") or gen1
 wf(["sampling", "pick", "--task", task1, "--freeze", "--json"],
                        {"generation": gen1}, "sess-X1")   # 归档前置：先冻结并落盘选样
@@ -225,7 +225,7 @@ rec("R33 他任务未处置 WIP 被识别", "列出该任务与其 pending",
     f"blocked={json.dumps(blockers, ensure_ascii=False)[:120]}",
     bool(blockers) and blockers[0].get("task") == task3)
 rec("R33 排除自身后不阻断", "空列表", wf_cli.wip_blockers(F, exclude_id=task3), not wf_cli.wip_blockers(F, exclude_id=task3))
-rc, payload, _ = wf(["writer", "acquire", "--task", task3, "--json"], {"generation": gen3}, "sess-X3")
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": gen3}, "sess-X3")
 rec("R33 准备：重新获取写权", "WF_OK", (payload or {}).get("code"), rc == 0)
 gen_after = ((payload or {}).get("facts") or {}).get("generation") or gen3
 rc, payload, _ = wf(["writer", "release", "--json"], {"generation": gen_after}, "sess-X3")

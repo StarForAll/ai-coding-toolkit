@@ -53,7 +53,9 @@ class ExportScopeTest(unittest.TestCase):
         stored = records.load_json(authorize.authorization_path(self.task_dir, "export"))
         self.assertTrue(stored["scope_digest"].startswith("sha256:"))
         # 范围元数据本身不入库（只保留摘要），但 digest 足以复算
-        self.assertNotIn("materials", stored)
+        # 2026-11-22（十二轮）：materials 改为有意落档（合并并集来源；类名非敏感原文）
+        self.assertEqual(stored.get("materials"),
+                         ["diff", "requirement", "test_results"])
         self.assertEqual(authorize.export_scope_problems(self.task_dir, "t1", MATERIALS), [])
 
     def test_reuse_across_tasks_or_material_sets_is_refused(self):

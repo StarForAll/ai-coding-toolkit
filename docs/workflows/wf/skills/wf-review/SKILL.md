@@ -46,6 +46,8 @@ user-invoked: true
 
 ```
 <!-- wf-review-agent:v1 status=done -->
+```
+
 报告协议**以 `review-context` 生成的骨架为权威版本**（字段、必填、枚举一次给全，不在此复制）：
 骨架已预填 `excluded-scope`（必排敏感面）与 `read-scope=["materials"]`，按需自行申报仍受同一套导入校验约束。
 

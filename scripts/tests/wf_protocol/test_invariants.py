@@ -242,3 +242,23 @@ class ProtocolInvariantTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SkeletonTemplateParityTest(unittest.TestCase):
+    """2026-11-21（dogfood 二轮 AC9）：发行模板键集 == config.skeleton() 键集。
+
+    模板是手维护静态文件、无生成器，此前无一致性断言（identity_path 曾漂移）。
+    """
+
+    def test_template_keys_equal_skeleton_keys(self):
+        import json
+        from pathlib import Path
+
+        repo = Path(__file__).resolve().parents[3]
+        template_path = repo / "docs" / "workflows" / "wf" / "payload" / "templates" / "project-config.skeleton.json"
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+        from wflib import config as _config
+
+        skeleton = _config.skeleton()
+        self.assertEqual(set(template), set(skeleton),
+                         f"模板与 skeleton() 键集漂移：{set(template) ^ set(skeleton)}")

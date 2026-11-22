@@ -96,7 +96,8 @@ class DeliverySetTest(unittest.TestCase):
         _authorize(root, "expand", {"paths": ["other/extra.py"]})
         task = _task(attribution={"inherited": [{"paths": ["other/extra.py"]}]})
         delivery = scope.delivery_set(root, task)
-        self.assertEqual(delivery["buckets"]["covered_f"], ["other/extra.py"])
+        # 2026-11-21 九轮 b-3：expand 已确认路径直接进交付（e 桶），不再绕 f→covered_f
+        self.assertIn("other/extra.py", delivery["paths"])
         self.assertEqual(delivery["buckets"]["uncovered_f"], [])
         self.assertIn("other/extra.py", delivery["paths"])
         self.assertIn("other/extra.py", check.object_paths(SimpleNamespace(root=root), task))
@@ -122,8 +123,9 @@ class DeliverySetTest(unittest.TestCase):
         _authorize(root, "expand", {"paths": ["docs/new.md"]})
         task = _task(attribution={"inherited": [{"paths": ["docs/new.md"]}]})
         delivery = scope.delivery_set(root, task)
+        # 2026-11-21 九轮 b-3：同上——未跟踪新文件经 expand 直接进交付
         self.assertEqual(delivery["buckets"]["uncovered_f"], [])
-        self.assertEqual(delivery["buckets"]["covered_f"], ["docs/new.md"])
+        self.assertIn("docs/new.md", delivery["paths"])
 
 
 if __name__ == "__main__":

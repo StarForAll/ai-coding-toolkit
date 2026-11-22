@@ -479,7 +479,7 @@ class Context:
             if record.get("state") == "idle" and not holder:
                 # 空闲但没持有：这不是"被别人占着"，给一条能直接执行的出口
                 # （审查询问过：绑定了任务、writer 空闲时 AI 只能靠读源码猜出路）
-                hint = f"writer acquire --task {task}" if task else "writer acquire --task <id>"
+                hint = "writer acquire"      # writer 不收 --task（对象来自会话绑定），2026-11-21 修正误导文案
                 raise CliError(
                     "WF_SEMANTIC_DECISION",
                     {"writer_state": "idle", "reason": "写权空闲且本会话未持有",
@@ -848,7 +848,7 @@ def _short_repair(scope, precheck, acceptances=()):
 def cmd_gate(ctx, args):
     due = args.value("--due")
     if due not in ("before_execute", "before_check", "before_archive"):
-        raise CliError("WF_PATH_INVALID", {"reason": "gate requires --due before_execute|before_check|before_archive"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "gate requires --due before_execute|before_check|before_archive"})
     from . import gates as gates_mod
 
     return gates_mod.evaluate_cli(ctx, due)
@@ -1289,7 +1289,7 @@ def cmd_bind(ctx, args, kind="task"):
         kind = "run"      # `--run` 走实例分支（此前该分支不可达，属死代码）
     target = args.value("--task") or args.value("--run")
     if not target:
-        raise CliError("WF_PATH_INVALID", {"reason": "bind requires --task <id> or --run <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "bind requires --task <id> or --run <id>"})
     session = ctx.session()
     key = ctx.key()
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
@@ -1466,7 +1466,7 @@ def cmd_writer(ctx, args):
         return _writer_acquire(ctx)
     if sub == "release":
         return _writer_release(ctx)
-    raise CliError("WF_PATH_INVALID", {"reason": "writer requires acquire|release"})
+    raise CliError("WF_USAGE_INVALID", {"reason": "writer requires acquire|release"})
 
 
 def retained_wip(task):
@@ -1676,14 +1676,14 @@ def cmd_writer_handover(ctx, args):
     if sub == "accept":
         ctx.require_activation()   # 模型可调入口同样先确认本会话已启用（机制稿 §1.3）
         return _handover_accept(ctx)
-    raise CliError("WF_PATH_INVALID", {"reason": "writer-handover requires begin --to <session-key>|accept"})
+    raise CliError("WF_USAGE_INVALID", {"reason": "writer-handover requires begin --to <session-key>|accept"})
 
 
 def _handover_begin(ctx, args):
     receiver = args.value("--to")
     decision_path = args.value("--decision")
     if not receiver or not decision_path:
-        raise CliError("WF_PATH_INVALID", {"reason": "handover begin requires --to <session-key> --decision <path>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "handover begin requires --to <session-key> --decision <path>"})
     decision = _load_decision(decision_path)
     record, holder = ctx.require_held()
     _require_instance_match(ctx, session_mod.load_binding(ctx.root, ctx.key()) or {})
@@ -1805,12 +1805,120 @@ def _load_decision(path):
             })
         if not item.get("choice"):
             raise CliError("WF_RECORD_INVALID", {"reason": "decision choice is empty"})
+        # 值形态校验（2026-11-21 五轮审查 P2-11）：占位文案照抄进记录会污染时间排序与摘要比对。
+        at_value = str(item.get("at") or "")
+        if not re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$", at_value):
+            raise CliError("WF_RECORD_INVALID", {
+                "reason": "decision at must be ISO8601 (YYYY-MM-DDTHH:MM:SS…)",
+                "value": at_value[:80],
+                "exits": [f"写人答复时刻；无法确知时写当前时刻 {records.now_str()}"]})
+        digest_value = str(item.get("object_digest") or "")
+        if digest_value and not re.match(r"^sha256:[0-9a-f]{64}$", digest_value):
+            raise CliError("WF_RECORD_INVALID", {
+                "reason": "decision object_digest must be 'sha256:' + 64 hex chars (or empty when the command allows)",
+                "value": digest_value[:80],
+                "exits": ["按决定语义填写：approve=PRD 摘要（错误回显 expected_prd_digest）",
+                          "archive/stop 可留空"]})
+        if not str(item.get("reason") or "").strip():
+            raise CliError("WF_RECORD_INVALID", {"reason": "decision reason is empty",
+                                                 "exits": ["写明为什么这样处置（人可读的理由）"]})
+        # 十轮审查 P2-3：草稿占位（TODO 前缀）不得照抄进决定——
+        # "人已了解结果与未核实项 / 为什么这样处置"正是决定存在的理由，占位句不算人签字。
+        todo_fields = [key for key in DECISION_FIELDS
+                       if str(item.get(key) or "").strip().startswith("TODO")]
+        if todo_fields:
+            raise CliError("WF_RECORD_INVALID",
+                           {"reason": "decision still carries draft placeholders (TODO)",
+                            "todo_fields": todo_fields,
+                            "exits": ["把 TODO 占位逐项替换为人的真实表述后重试",
+                                      "来源写 human:<来源>；理由/结论写人可读的原文"]})
         decisions.append(item)
     return decisions
 
 
+def _irreversible_projection(root, task):
+    """本次拟提交会触发的 K6 不可逆确认与缺口（与归档门禁同源，预览/草稿共用）。
+
+    十轮审查 P1-1：输入集合与归档守卫一致——守卫核的是 `grant_paths`（提交授权路径）
+    的规则文件命中与未提交删除；预览尚无决定文件时按"待提交路径 ∪ 已登记提交授权"
+    投影同一集合（repo_rule_paths / _deleted_paths 同一实现，不另写口径）。
+    计算失败显式标 unavailable（不与"确实没有"混同，§1.5 降级可见）。
+    """
+    from . import authorize as authorize_mod
+    from . import tasks as tasks_mod
+
+    unavailable = []
+    try:
+        _pending = tasks_mod.pending_delivery_paths(
+            type("C", (), {"root": str(root)})(), task) or []
+        grant_paths = sorted(set(_pending) | set(tasks_mod.commit_grant_paths(task) or []))
+    except Exception as exc:  # noqa: BLE001 — 只读投影失败不阻断预览，但必须可见
+        return {"repo_rule_files": [], "deleted_paths": [], "missing_authorizations": [],
+                "unavailable": f"拟提交路径不可得：{exc}",
+                "exits": ["先跑 `status`/`stop --preview` 的 buckets 确认交付面后重试"]}
+    rule_hits, deleted = [], []
+    try:
+        # 真上下文（十一轮 a P1-1 附带）：不传 None——helper 现在恰好不读 ctx，
+        # 一旦读取会被外层 except 折成"不可得"预览静默降级。
+        rule_hits = authorize_mod.repo_rule_paths(
+            type("C", (), {"root": str(root)})(), grant_paths)
+    except Exception as exc:  # noqa: BLE001
+        unavailable.append(f"规则文件命中不可得：{exc}")
+    try:
+        deleted = tasks_mod._deleted_paths(str(root), grant_paths)
+    except Exception as exc:  # noqa: BLE001
+        unavailable.append(f"删除路径不可得：{exc}")
+    missing = []
+    task_dir = tasks_mod.task_dir(str(root), task.get("id"))
+    if rule_hits:
+        covered, uncovered = authorize_mod.covers(task_dir, "repo_rules", rule_hits, root=str(root))
+        if not covered:
+            missing.append({"action": "repo_rules", "paths": uncovered,
+                            "exits": ["把人的确认写成文件（choice=repo_rules + paths + quote/by/source），"
+                                      "经 `wf authorize record --task <id> --file <文件>` 登记后重入"]})
+    if deleted:
+        covered, uncovered = authorize_mod.covers(task_dir, "delete", deleted, root=str(root))
+        if not covered:
+            missing.append({"action": "delete", "paths": uncovered,
+                            "exits": ["删除须在删除前确认：`authorize record` 一条 choice=delete"
+                                      "（paths 覆盖被删路径，绑定被删内容）"]})
+    payload = {"repo_rule_files": rule_hits, "deleted_paths": deleted,
+               "missing_authorizations": missing}
+    if unavailable:
+        payload["unavailable"] = "; ".join(unavailable)
+    return payload
+
+
 def cmd_stop(ctx, args):
     path = args.value("--decision")
+    if args.flag("--draft"):
+        # 十六轮批V：收工决定草稿——commit 条目的 subject 预填待提交路径，
+        # choice/reason 由人定（TODO 占位，照抄会被预检拒）；不要求写权，只读绑定。
+        import os as _os
+
+        binding = session_mod.load_binding(ctx.root, ctx.key())
+        object_ref = (binding or {}).get("object") or {}
+        if object_ref.get("kind") != "task":
+            raise CliError("WF_BINDING_MISMATCH",
+                           {"reason": "no task binding for stop draft",
+                            "exits": ["先由人调用 start/`wf.py enable` 建立会话并绑定任务"]})
+        from . import tasks as _tasks_mod
+
+        task = _tasks_mod.load_task(ctx.root, object_ref.get("id"))
+        if task is None:
+            raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
+        pending = _tasks_mod.pending_delivery_paths(
+            type("C", (), {"root": ctx.root})(), task) or []
+        entry = {"source": "TODO human:<来源>", "at": records.now_str(),
+                 "subject": pending or "TODO（人填写：处置对象或路径）",
+                 "object_digest": "", "choice": "TODO（人选一个：commit|keep|reverse|transfer）",
+                 "reason": "TODO（人填写：为什么这样处置）"}
+        return ok(facts={"draft": [entry],
+                         "note": "草稿只读；choice 是人的选择，照抄 TODO 会被预检拒绝",
+                         "pilot_sampling_pending": None},
+                  position=codes.position(scope="task", phase=task.get("phase"),
+                                         task_id=task.get("id")),
+                  next_="草稿只打印不落盘；人确认后把内容写成决定文件，去掉 --draft 重跑")
     if args.flag("--preview"):
         # 只读预览（设计稿 §4.4）：**免决定**——预览与决定的顺序是"先看再定"，
         # 对齐 archive --draft 的只读语义（在 _load_decision 之前返回，不写任何记录、
@@ -1848,6 +1956,12 @@ def cmd_stop(ctx, args):
             "uncommitted": sorted(scope_mod.uncommitted_paths(ctx.root)),
             "note": "预览只读；本次未写入任何记录",
         }
+        # P1-1（九轮）：不可逆确认投影——提交会触发哪类 K6 确认、缺哪条 record，
+        # 在"先看后定"的决策位就要给（不要等 archive 拒绝时才暴露）。
+        facts["irreversible"] = _irreversible_projection(ctx.root, task)
+        # b-1（九轮，事实不阻断）：开工前已存在的交付路径——归属要人确认
+        if classified.get("preexisting_in_scope"):
+            facts["preexisting_in_scope"] = classified["preexisting_in_scope"]
         # §0.2 试点期抽样提示（2026-11-21 降档为建议，不阻断；无 picks 时附注）
         from . import sampling as sampling_mod
 
@@ -1859,7 +1973,7 @@ def cmd_stop(ctx, args):
                         + ("；" + sampling_mod.PILOT_HINT
                            if facts.get("pilot_sampling_pending") else ""))
     if not path:
-        raise CliError("WF_PATH_INVALID", {"reason": "stop requires --decision <path>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "stop requires --decision <path>"})
     decisions = _load_decision(path)
     choices = [item.get("choice") for item in decisions]
     if not choices:
@@ -1994,7 +2108,7 @@ def cmd_ready(ctx, args):
 def cmd_spec(ctx, args):
     path = args.value("--file")
     if not path:
-        raise CliError("WF_PATH_INVALID", {"reason": "spec requires --file <RepoPath>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "spec requires --file <RepoPath>"})
     key = ctx.key()
     from . import spec as spec_mod
 
@@ -2198,7 +2312,8 @@ COMMAND_HELP = {
     },
     "task-approve": {
         "purpose": "记录人的规划批准（含复杂度与 TDD 的人工确认）",
-        "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填，JSON 数组）"},
+        "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填，JSON 数组）",
+                 "--draft": "只读生成批准决定草稿（object_digest 预填当前 PRD 摘要；TODO 占位须人替换）"},
         "inputs": {"decision[]": {"source": "人答复来源（必填）", "at": "时间（必填）",
                                   "subject": "必须含任务 id 或对象摘要（必填）",
                                   "object_digest": "当前 PRD 的 sha256（必填；摘要不符时错误回显 expected_prd_digest，"
@@ -2220,19 +2335,20 @@ COMMAND_HELP = {
     },
     "task-start": {"purpose": "开工（需要已批准规划与写权）",
                    "args": {"--task": "任务 id（必填）",
-                            "--workspace-exclusion": "可选：人确认的外来改动排除声明（paths + by/at/quote/source）"},
+                            "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
                    "example": "wf.py task-start --task <id> --json"},
     "task-check": {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
-        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论（复杂任务必填）",
+        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；建议放在当前任务目录内，如 .wf/tasks/<id>/notes.json——放错目录会被当成其他任务改动）",
                  "--decision": "可选：人工验收决定",
-                 "--workspace-exclusion": "可选：外来改动排除声明（摘要变化即失效）"},
+                 "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
                                       "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}}},
         "example": "wf.py task-check --task <id> --review-notes notes.json --json",
     },
     "task-knowledge": {"purpose": "记录知识处置（可判无更新）",
                        "args": {"--task": "任务 id（必填）", "--decision": "no-update|updated",
+                                "--evidence": "updated：知识变更的证据",
                                 "--no-update": "简写：等价于 --decision no-update",
                                 "--changes": "updated 时的知识变更清单 JSON 数组"},
                        "inputs": {"--changes[]": {"action": "add|update|merge|rename|delete",
@@ -2242,8 +2358,9 @@ COMMAND_HELP = {
                        "changes_example": [{"action": "update", "path": ".wf/spec/guides/x.md",
                                             "reason": "补充本轮新契约", "summary": "新增骨架预填口径"}]},
     "stop": {"purpose": "收工：先 --preview 看逐路径归属，再按处置执行",
-             "args": {"--decision": "决定文件（正式执行必填；--preview 可不带——免决定只读预览）",
-                      "--preview": "只读预览（不写任何记录、不要求写权）"},
+             "args": {"--decision": "决定文件（正式执行必填；--preview/--draft 可不带）",
+                      "--preview": "只读预览（不写任何记录、不要求写权）",
+                      "--draft": "只读生成收工决定草稿（commit 条目预填待提交路径）"},
              "inputs": {"decision[]": {"choice": "commit|keep|reverse|transfer",
                                        "subject": "路径或承接对象", "reason": "理由",
                                        "object_digest": "可选"}},
@@ -2268,6 +2385,7 @@ COMMAND_HELP = {
                 "draft_example": "wf.py archive --task <id> --draft --json"},
     "baseline-apply": {"purpose": "把已批准提案成组应用到基线/配置/spec",
                        "args": {"--task": "任务 id（必填）",
+                                "--preview": "只读：按 --files 生成提案摘要供人批准，不落盘",
                                 "--files": "逗号分隔的路径（推荐：由入口读工作树生成提案）",
                                 "--decision": "人的批准决定文件（与 --files 一起用）",
                                 "--proposal": "既有格式的提案 JSON（可选，兼容）"},
@@ -2292,12 +2410,13 @@ COMMAND_HELP = {
                       "example": "wf.py review-launch --task <id> --implementation-cli codex --json"},
     "review-context": {"purpose": "reviewer 侧唯一入口：占位 + 物化材料 + 给出报告路径",
                        "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省＝当前轮）",
-                                "--reset": "清掉本 agent 本轮的占位/报告"},
-                       "args_extra": {"--as": "本次审查的 CLI（自动身份模式必填）"},
+                                "--reset": "清掉本 agent 本轮的占位/报告",
+                                "--as": "本次审查的 CLI（自动身份模式必填）"},
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
     "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）",
                       "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
                                "--report": "可选（显式路径，兼容旧槽位制）",
+                               "--as": "可选（显式声明报告署名）",
                                "--restore": "只在恢复**已存在的记录**时用（缺登记摘要的遗留记录重导）"},
                       "example": "wf.py review-import --task <id> --json"},
     "project": {"purpose": "可重建投影（K8）：open-items / attribution / audit / skeleton；--check 断言等值",
@@ -2306,7 +2425,9 @@ COMMAND_HELP = {
     "verify": {"purpose": "未核实项处置（S8/S5b）：resolve 收窄口径或记录人工核验",
                "args": {"resolve": "子命令", "--task": "任务 id", "--id": "验收项 id",
                         "--kind": "narrow|inspection", "--evidence": "证据",
-                        "--reason/--impact/--compensation": "收窄四项（narrow 必填）"},
+                        "--by": "人工核验的署名（human:<来源>）",
+                        "--reason": "收窄理由（narrow 必填）", "--impact": "影响面（narrow 必填）",
+                        "--compensation": "补偿措施（narrow 必填）"},
                "example": "wf.py verify resolve --task 2026-xxxx --id a5 --kind narrow --evidence ... --json"},
     "authorize": {"purpose": "K6 五类不可逆动作的确认入口：record 落盘（脱敏入库）/ show 查看已确认",
                   "args": {"record|show": "子命令", "--task": "任务 id（必填）",
@@ -2322,10 +2443,12 @@ COMMAND_HELP = {
                            "--task": "任务 id（必填）",
                            "--freeze": "pick：首次选样前冻结事件集与种子（写任务记录）",
                            "--file": "evaluate：评估 JSON（必填）",
-                           "--attestation": "evaluate：人确认凭证（可选）"},
+                           "--attestation": "evaluate：人确认凭证（可选）",
+                           "--quote": "reviewed：人的声明原文（遮罩摘要入库）"},
                   "example": "wf.py sampling pick --task 2026-xxxx --freeze --json"},
     "judgments": {"purpose": "判断清单：add 追加一条（append-only）/ show 渲染收工预览",
-                  "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）"},
+                  "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）",
+                           "--attestation": "add：豁免（waived_by=human:…）时的人确认文件"},
                   "example": "wf.py judgments show --task 2026-xxxx --json",
                   # v42 §4：判断指引写进 skill 与 help，不写进代码逻辑。
                   # 2026-11-12 人裁：**不单独成 skill**——十条散在"用得上它的那一步"的流程 skill 判据位上，
@@ -2357,6 +2480,111 @@ COMMAND_HELP = {
                                                    "（by/at/quote/source + round + axes）"},
                       "example": "wf.py review-decide --task <id> --main-review main-review.json "
                                  "--gap-acceptance gap.json --json"},
+    # ---- 2026-11-21（五轮审查 P0-1）：help 覆盖补全至全命令面（48/48）----
+    # 参数面以各 handler 实际消费为准；子命令以 dispatch 分支为准。
+    "enable": {"purpose": "启用本会话：身份确认 + 激活登记 + 回显绑定对象与代次",
+               "args": {"--identity": "可选，仅接受 host（显式确认以宿主标识为准）"},
+               "example": "wf.py enable --json"},
+    "status": {"purpose": "只读总览：绑定对象、阶段、门禁/步骤状态、待决与下一步",
+               "args": {"--short": "可选：只输出单行摘要"},
+               "example": "wf.py status --json"},
+    "gate": {"purpose": "按 due 时点只读核对 required 步骤（不写任何记录）",
+             "args": {"--due": "必填：before_execute | before_check | before_archive | after_archive"},
+             "example": "wf.py gate --due before_archive --json"},
+    "spec": {"purpose": "读取 spec 规则正文（不依赖 MCP 的本地主路径）",
+             "args": {"--file": "必填：spec 相对路径（如 .wf/spec/guides/x.md）"},
+             "example": "wf.py spec --file .wf/spec/guides/x.md"},
+    "bind": {"purpose": "把本会话绑定到既有对象（不新建）",
+             "args": {"--task": "二选一：任务 id", "--run": "二选一：实例 id"},
+             "example": "wf.py bind --task 2026-xxxx --json"},
+    "dep": {"purpose": "任务依赖边维护（建边/删边校验）",
+            "args": {"add|rm": "子命令（位置参数）", "--task": "必填：任务 id",
+                     "--prereq": "必填：前置任务 id",
+                     "--op": "等价于位置子命令（add|rm，兼容写法）"},
+            "example": "wf.py dep add --task 2026-xxxx --prereq 2026-yyyy --json"},
+    "inspect": {"purpose": "只读诊断：工作区候选分类、冲突与治理面核对明细",
+                "example": "wf.py inspect --json"},
+    "ready": {"purpose": "只读：每个活动/暂停任务的 eligible/ready/blockers 与建议（不写记录）",
+              "example": "wf.py ready --json"},
+    "help": {"purpose": "命令自述：purpose/args/inputs/example 与决定文件示例",
+             "args": {"<command>": "可选：命令名；缺省列出全部命令"},
+             "example": "wf.py help archive --json"},
+    "version": {"purpose": "只读：框架版本与运行环境",
+                "example": "wf.py version --json"},
+    "confirm-executor": {"purpose": "人显式确认执行器（写本机确认记录，模型不代填）",
+                         "args": {"--scope": "必填：system | global | project"},
+                         "example": "wf.py confirm-executor --scope project"},
+    "definition": {"purpose": "工作流实例定义：prepare 建准备代次 / validate 静态校验",
+                   "args": {"prepare|validate": "子命令", "--id": "必填：工作流定义 id"},
+                   "example": "wf.py definition validate --id <wf-id> --json"},
+    "run": {"purpose": "实例生命周期：create / advance / pause / resume / locate / finish / terminate",
+            "args": {"create": "子命令：建实例并首次绑定",
+                     "advance|pause|resume|finish": "子命令（pause 必填理由）",
+                     "locate": "子命令：只读回读",
+                     "terminate": "子命令：批量处置",
+                     "--run": "实例 id（子命令用）", "--creation": "create：创建输入 JSON",
+                     "--decision": "advance/resume/finish：人判决定（可选）",
+                     "--reason": "pause：暂停原因（必填）", "--plan": "terminate：处置计划 JSON",
+                     "--preview": "terminate：只读预览（不落盘）"},
+            "example": "wf.py run locate --run <run-id> --json"},
+    "writer": {"purpose": "项目写入权：acquire 获取 / release 释放（锁内核验）",
+               "args": {"acquire|release": "子命令"},
+               "example": "wf.py writer acquire --json"},
+    "writer-handover": {"purpose": "写权交接两段式：begin 出交按声明 / accept 接收方核验后授予",
+                        "args": {"begin|accept": "子命令",
+                                 "--to": "begin：接收会话标识（必填）",
+                                 "--decision": "accept：交接确认决定（必填）"},
+                        "example": "wf.py writer-handover accept --decision h.json --json"},
+    "upgrade": {"purpose": "第三轮能力桩（--apply 未交付）；调用返回 WF_CAPABILITY_UNAVAILABLE",
+                "args": {"--apply": "预览 + 令牌（未交付）"},
+                "example": "wf.py upgrade --apply --json"},
+    "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
+                   "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
+                   "example": "wf.py task-pause --task 2026-xxxx --reason '等人答复' --json"},
+    "task-resume": {"purpose": "解除任务暂停（恢复推进）",
+                    "args": {"--task": "必填：任务 id"},
+                    "example": "wf.py task-resume --task 2026-xxxx --json"},
+    "task-replan": {"purpose": "实质规划变更：回 Plan（只做状态迁移，不改写 PRD）",
+                    "args": {"--task": "必填：任务 id", "--decision": "必填：choice=replan/机械修订 的决定文件",
+                             "--draft": "只读生成 replan 与 机械修订 两条决定草稿"},
+                    "example": "wf.py task-replan --task 2026-xxxx --decision replan.json --json"},
+    "task-rework": {"purpose": "返工：新建返工任务并挂起原任务（继承前置与上下文）",
+                    "args": {"--task": "必填：原任务 id", "--decision": "必填：返工决定文件",
+                             "--draft": "只读生成返工决定草稿"},
+                    "example": "wf.py task-rework --task 2026-xxxx --decision rework.json --json"},
+    "task-replace": {"purpose": "替换：废弃原任务并由新任务承接（支持 --preview）",
+                     "args": {"--task": "必填：原任务 id", "--decision": "必填：替换决定文件",
+                              "--preview": "可选：只读预览，不写记录"},
+                     "example": "wf.py task-replace --task 2026-xxxx --decision r.json --preview --json"},
+    "task-reassess": {"purpose": "挂起任务复评（首轮无返工能力时挂起集合为空直接通过）",
+                      "args": {"--task": "必填：任务 id"},
+                      "example": "wf.py task-reassess --task 2026-xxxx --json"},
+    "task-attribute": {"purpose": "历史提交归属裁决（已提交改动归属本任务/他人）",
+                       "args": {"--task": "必填：任务 id", "--commit": "必填：提交 sha"},
+                       "example": "wf.py task-attribute --task 2026-xxxx --commit <sha> --json"},
+    "task-curate": {"purpose": "策展：选用/停用 spec 规则并记录目的与补偿",
+                    "args": {"--task": "必填：任务 id", "--spec": "必填：spec 相对路径",
+                             "--purpose": "必填：选用目的",
+                             "--kind": "可选：操作类型", "--reason": "可选：理由",
+                             "--compensation": "可选：补偿措施", "--evidence": "可选：证据",
+                             "--check": "可选：关联检查"},
+                    "example": "wf.py task-curate --task 2026-xxxx --spec .wf/spec/guides/x.md "
+                               "--purpose '本轮适用' --json"},
+    "task-abandon": {"purpose": "异常归档（放弃）：逐项去向 + 停止决定",
+                     "args": {"--task": "必填：任务 id", "--decision": "必填：停止决定",
+                              "--disposition": "可选：逐项去向计划"},
+                     "example": "wf.py task-abandon --task 2026-xxxx --decision stop.json "
+                                "--disposition disp.json --json"},
+    "task-retrospect": {"purpose": "复盘结论留痕（覆盖触发事实集合）",
+                        "args": {"--task": "必填：任务 id", "--decision": "必填：复盘结论",
+                                 "--evidence": "可选：证据", "--commit": "可选：关联提交"},
+                        "example": "wf.py task-retrospect --task 2026-xxxx --decision r.json --json"},
+    "review-accept-unknown": {"purpose": "审查环境不可用时的接受/撤销（人声明 + 码级留痕）",
+                              "args": {"--task": "必填：任务 id", "--file": "accept：不可用声明（必填）",
+                                       "--batch": "可选：批量接受", "--revoke": "可选：撤销已接受",
+                                       "--round": "可选：目标轮次", "--slot": "可选：目标槽位",
+                                       "--digest": "revoke：声明的原文摘要"},
+                              "example": "wf.py review-accept-unknown --task 2026-xxxx --file u.json --json"},
 }
 
 
@@ -2366,11 +2594,11 @@ def cmd_project(ctx, args):
 
     kind = args.value("--kind")
     if kind not in ("open-items", "attribution", "audit", "skeleton"):
-        raise CliError("WF_PATH_INVALID", {"reason": "unknown projection kind", "kind": kind,
+        raise CliError("WF_USAGE_INVALID", {"reason": "unknown projection kind", "kind": kind,
                                           "known": ["open-items", "attribution", "audit", "skeleton"]})
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "project requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "project requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2394,11 +2622,11 @@ def cmd_verify(ctx, args):
 
     sub = (args.positional() or [None])[0]
     if sub != "resolve":
-        raise CliError("WF_PATH_INVALID", {"reason": "verify requires resolve", "known": ["resolve"]})
+        raise CliError("WF_USAGE_INVALID", {"reason": "verify requires resolve", "known": ["resolve"]})
     task_id = args.value("--task")
     acceptance_id = args.value("--id")
     if not task_id or not acceptance_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "verify resolve requires --task <id> --id <acceptance-id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "verify resolve requires --task <id> --id <acceptance-id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2440,25 +2668,39 @@ def cmd_authorize(ctx, args):
     sub = (args.positional() or [None])[0]
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "authorize requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "authorize requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
     directory = tasks_mod.task_dir(ctx.root, task_id)
     if sub == "show":
-        found = {action: (authorize_mod.require(directory, action) or {}).get("original_digest")
-                 for action in authorize_mod.ACTIONS}
+        # record_log 消费点（十三→十五轮 P2-1/P2-2）：show 是机制稿登记的审计视图——
+        # 折叠计数必须在此可见（否则"计数可见"的声明边界不成立）；export 的当前生效范围
+        # 一并投影，审计不必打开 JSON 原件。键名按形状命名：records 为对象（digest+log+计数）。
+        def _projection(action):
+            stored = authorize_mod.require(directory, action) or {}
+            entry = {"original_digest": stored.get("original_digest"),
+                     "record_log": stored.get("record_log") or []}
+            if stored.get("record_log_truncated"):
+                entry["record_log_truncated"] = stored["record_log_truncated"]
+            if stored.get("materials") is not None:
+                entry["materials"] = stored["materials"]
+                entry["scope_digest"] = stored.get("scope_digest")
+            return entry
+
+        found = {action: _projection(action) for action in authorize_mod.ACTIONS
+                 if authorize_mod.require(directory, action) is not None}
         return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                             position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
                             next_="缺哪一类就用 authorize record 补哪一类",
                             facts={"recorded": {name: digest for name, digest in found.items() if digest},
                                    "actions": dict(authorize_mod.ACTIONS)})
     if sub != "record":
-        raise CliError("WF_PATH_INVALID", {"reason": "authorize requires record|show",
+        raise CliError("WF_USAGE_INVALID", {"reason": "authorize requires record|show",
                                           "known": ["record", "show"]})
     file_value = args.value("--file")
     if not file_value:
-        raise CliError("WF_PATH_INVALID", {"reason": "authorize record requires --file <决定.json>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "authorize record requires --file <决定.json>"})
     loaded = records.load_json(file_value if os.path.isabs(file_value) else join(ctx.root, file_value))
     entries = loaded if isinstance(loaded, list) else [loaded]
     recorded = []
@@ -2505,7 +2747,7 @@ def cmd_authorize(ctx, args):
                                               "由人重写该决定文件（AI 不得代写）"]})
             info = authorize_mod.record_authorization(
                 directory, action, entry,
-                raw_copy_dir=join(ctx.root, ".wf/.runtime/decisions"))
+                raw_copy_dir=join(ctx.root, ".wf/.runtime/decisions"), root=ctx.root)
             recorded.append({"action": action, "path": os.path.relpath(info["path"], str(ctx.root)),
                              "digest": info["digest"]})
         fresh, action_ref = tasks_mod._start_task_action(
@@ -2578,7 +2820,7 @@ def cmd_sampling(ctx, args):
         # 预览永远提示"首个任务收工须确认一次"却无从确认）。这里补上唯一的写入路径。
         task_id = args.value("--task")
         if not task_id:
-            raise CliError("WF_PATH_INVALID", {"reason": "sampling confirm requires --task <id>"})
+            raise CliError("WF_USAGE_INVALID", {"reason": "sampling confirm requires --task <id>"})
         task = tasks_mod.load_task(ctx.root, task_id)
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2604,7 +2846,7 @@ def cmd_sampling(ctx, args):
     if sub == "reviewed":
         task_id = args.value("--task")
         if not task_id:
-            raise CliError("WF_PATH_INVALID", {"reason": "sampling reviewed requires --task <id>"})
+            raise CliError("WF_USAGE_INVALID", {"reason": "sampling reviewed requires --task <id>"})
         task = tasks_mod.load_task(ctx.root, task_id)
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2635,11 +2877,11 @@ def cmd_sampling(ctx, args):
                             position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
                             next_="强化期由本次人声明结束", facts={"reviewed": declaration})
     if sub != "pick":
-        raise CliError("WF_PATH_INVALID", {"reason": "sampling requires pick|report|evaluate|reviewed|confirm",
+        raise CliError("WF_USAGE_INVALID", {"reason": "sampling requires pick|report|evaluate|reviewed|confirm",
                                           "known": ["pick", "report", "evaluate", "reviewed", "confirm"]})
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "sampling pick requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "sampling pick requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2706,11 +2948,11 @@ def cmd_prefs(ctx, args):
                             facts={"prefs": prefs, "kinds": list(judgments_mod.KINDS),
                                    "path": judgments_mod.prefs_path(ctx.root)})
     if sub != "set":
-        raise CliError("WF_PATH_INVALID", {"reason": "prefs requires set|show", "known": ["set", "show"]})
+        raise CliError("WF_USAGE_INVALID", {"reason": "prefs requires set|show", "known": ["set", "show"]})
     kind = args.value("--kind")
     value = args.value("--value")
     if not kind or not value:
-        raise CliError("WF_PATH_INVALID", {"reason": "prefs set requires --kind <类> --value <值>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "prefs set requires --kind <类> --value <值>"})
     try:
         prefs = judgments_mod.set_pref(ctx.root, kind, value)
     except ValueError as exc:
@@ -2728,7 +2970,7 @@ def cmd_judgments(ctx, args):
     sub = (args.positional() or [None])[0]
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "judgments requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "judgments requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2766,10 +3008,10 @@ def cmd_judgments(ctx, args):
                    "judgments": task.get("judgments") or [], "skeleton": facts},
         )
     if sub != "add":
-        raise CliError("WF_PATH_INVALID", {"reason": "judgments requires add|show", "known": ["add", "show"]})
+        raise CliError("WF_USAGE_INVALID", {"reason": "judgments requires add|show", "known": ["add", "show"]})
     path_value = args.value("--file")
     if not path_value:
-        raise CliError("WF_PATH_INVALID", {"reason": "judgments add requires --file <json>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "judgments add requires --file <json>"})
     entry = records.load_json(path_value if os.path.isabs(path_value) else join(ctx.root, path_value))
     if not isinstance(entry, dict):
         raise CliError("WF_PATH_INVALID", {"reason": "judgment file must be a JSON object", "path": path_value})
@@ -2818,10 +3060,10 @@ def cmd_lint(ctx, args):
 
     what = (args.positional() or [None])[0]
     if what != "report":
-        raise CliError("WF_PATH_INVALID", {"reason": "lint requires `report`", "known": ["report"]})
+        raise CliError("WF_USAGE_INVALID", {"reason": "lint requires `report`", "known": ["report"]})
     path = args.value("--file")
     if not path:
-        raise CliError("WF_PATH_INVALID", {"reason": "lint report requires --file <path>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "lint report requires --file <path>"})
     target = path if os.path.isabs(path) else join(ctx.root, path)
     try:
         with open(target, "r", encoding="utf-8") as handle:
@@ -2853,7 +3095,7 @@ def cmd_review_accept_unknown(ctx, args):
 
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "review-accept-unknown requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "review-accept-unknown requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2892,7 +3134,7 @@ def cmd_review_status(ctx, args):
 
     task_id = args.value("--task")
     if not task_id:
-        raise CliError("WF_PATH_INVALID", {"reason": "review-status requires --task <id>"})
+        raise CliError("WF_USAGE_INVALID", {"reason": "review-status requires --task <id>"})
     task = tasks_mod.load_task(ctx.root, task_id)
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
@@ -2956,7 +3198,7 @@ def cmd_help(ctx, args):
                   next_="按需要查看具体命令")
     entry = COMMAND_HELP.get(name)
     if entry is None:
-        raise CliError("WF_PATH_INVALID", {"reason": "unknown command for help", "command": name,
+        raise CliError("WF_USAGE_INVALID", {"reason": "unknown command for help", "command": name,
                                            "known": sorted(COMMAND_HELP)})
     facts = dict(entry)
     facts["command"] = name
@@ -3048,17 +3290,222 @@ def _needs_activation(command, argv):
     return False
 
 
+
+# ---- 命令用法注册表（2026-11-21 五轮审查 P0-2/P0-3）----
+# 唯一口径：flags 来自各 handler 实际消费（args.value/flag 静态提取），subs 来自 dispatch 分支。
+# dispatch() 据此拒绝未知参数与多余/未知位置参数（WF_USAGE_INVALID）——入口对"输入不成立"不再沉默。
+GLOBAL_FLAGS = ("--json", "--envelope", "--envelope-last", "--session")
+
+COMMAND_FLAGS = {
+    "archive": {"--task", "--decision", "--draft"},
+    "authorize": {"--task", "--file"},
+    "baseline-apply": {"--task", "--files", "--decision", "--proposal", "--preview"},
+    "bind": {"--task", "--run"},
+    "confirm-executor": {"--scope"},
+    "definition": {"--id"},
+    "dep": {"--task", "--op", "--prereq"},
+    "enable": {"--identity"},
+    "gate": {"--due"},
+    "inspect": set(),
+    "judgments": {"--task", "--file", "--attestation"},
+    "lint": {"--file", "--task"},
+    "prefs": {"--kind", "--value"},
+    "project": {"--kind", "--task", "--check"},
+    "ready": set(),
+    "review-accept-unknown": {"--task", "--file", "--batch", "--revoke", "--round", "--slot", "--digest"},
+    "review-context": {"--task", "--round", "--reset", "--as"},
+    "review-decide": {"--task", "--round", "--plan", "--unavailable", "--gap-acceptance",
+                      "--main-review", "--main-review-draft", "--register-only"},
+    "review-import": {"--task", "--round", "--slot", "--report", "--as", "--restore"},
+    "review-launch": {"--task", "--launch-request", "--implementation-cli"},
+    "review-status": {"--task", "--round"},
+    "run": {"--run", "--creation", "--decision", "--reason", "--plan", "--preview"},
+    "sampling": {"--task", "--freeze", "--file", "--attestation", "--quote"},
+    "spec": {"--file"},
+    "spec-update": {"--task", "--changes"},
+    "status": {"--short"},
+    "stop": {"--decision", "--preview", "--draft"},
+    "task-abandon": {"--task", "--decision", "--disposition"},
+    "task-approve": {"--task", "--decision", "--draft"},
+    "task-attribute": {"--task", "--commit"},
+    "task-check": {"--task", "--decision", "--review-notes", "--workspace-exclusion"},
+    "task-curate": {"--task", "--spec", "--purpose", "--kind", "--reason", "--compensation",
+                    "--evidence", "--check"},
+    "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--evidence"},
+    "task-new": {"--kind", "--template", "--title"},
+    "task-pause": {"--task", "--reason"},
+    "task-reassess": {"--task"},
+    "task-replace": {"--task", "--decision", "--preview"},
+    "task-replan": {"--task", "--decision", "--draft"},
+    "task-resume": {"--task"},
+    "task-retrospect": {"--task", "--decision", "--evidence", "--commit"},
+    "task-rework": {"--task", "--decision", "--draft"},
+    "task-start": {"--task", "--workspace-exclusion"},
+    "upgrade": {"--apply"},
+    "verify": {"--task", "--id", "--kind", "--reason", "--impact", "--compensation",
+               "--evidence", "--by"},
+    "help": set(),
+    "version": set(),
+    "writer": set(),
+    "writer-handover": {"--to", "--decision"},
+}
+
+# 子命令级参数集（九轮审查 b-2）：run 各子命令只认自己的参数——
+# 共用并集会放过"finish --preview"这类对当前子命令无效的参数（被静默忽略成真实动作）。
+COMMAND_SUB_FLAGS = {
+    "run": {
+        "create": {"--creation"},
+        "advance": {"--run", "--decision"},
+        "pause": {"--run", "--reason"},
+        "resume": {"--run", "--decision"},
+        "locate": {"--run"},
+        "finish": {"--run", "--decision"},
+        "terminate": {"--run", "--plan", "--preview"},
+    },
+}
+
+# 布尔旗标注册表（十一轮 a P1-1 重构）：**按命令**登记（--check 在 project 是布尔、
+# 在 task-curate 取值——全局名单无法表达）；未列出的该命令 flag 一律要求紧跟值。
+# 来源：各 handler 的 args.flag(...) 静态提取；upgrade 是能力桩不读 args，按 help 示例登记。
+GLOBAL_BOOL_FLAGS = frozenset({"--json", "--envelope-last"})
+COMMAND_BOOL_FLAGS = {
+    "project": {"--check"},
+    "review-accept-unknown": {"--revoke"},
+    "review-context": {"--reset"},
+    "review-decide": {"--register-only"},
+    "review-import": {"--restore"},
+    "sampling": {"--freeze"},
+    "status": {"--short"},
+    "stop": {"--preview", "--draft"},
+    "archive": {"--draft"},
+    "task-approve": {"--draft"},
+    "task-replan": {"--draft"},
+    "task-rework": {"--draft"},
+    "task-knowledge": {"--no-update"},
+    "task-replace": {"--preview"},
+    "baseline-apply": {"--preview"},
+    "run": {"--preview"},
+    "upgrade": {"--apply"},
+}
+
+COMMAND_SUBS = {
+    "definition": set(SUBACTIONS["definition"]),
+    "run": set(SUBACTIONS["run"]),
+    "writer": {"acquire", "release"},
+    "writer-handover": {"begin", "accept"},
+    "sampling": {"pick", "report", "evaluate", "reviewed", "confirm"},
+    "judgments": {"add", "show"},
+    "prefs": {"set", "show"},
+    "authorize": {"record", "show"},
+    "lint": {"report"},
+    "verify": {"resolve"},
+    "dep": {"add", "rm"},
+}
+
+
+def validate_usage(command, rest):
+    """dispatch 前的用法校验（唯一实现）：未知 flag / 多余或未知位置参数一律 WF_USAGE_INVALID。
+
+    值消费启发：flag 后紧跟的非 flag token 视为该 flag 的值——与所有现存调用一致
+    （子命令都是第一个位置参数，布尔 flag 不带值）。
+    """
+    subs = COMMAND_SUBS.get(command)
+    sub_flags_map = COMMAND_SUB_FLAGS.get(command)
+    # 子命令级收窄前置（九轮 b-2）：首位置参数是已知子命令时，参数面收窄到该子命令集合——
+    # 否则"finish --preview"会先按并集放行、被 handler 静默忽略成真实动作。
+    first_positional = next((tok for tok in rest if not tok.startswith("--")), None)
+    if sub_flags_map and first_positional in sub_flags_map:
+        allowed = GLOBAL_FLAGS + tuple(sub_flags_map[first_positional])
+    else:
+        allowed = GLOBAL_FLAGS + tuple(COMMAND_FLAGS.get(command, ()))
+    positionals = []
+    index = 0
+    while index < len(rest):
+        token = rest[index]
+        if token.startswith("--"):
+            # 值内联形态（Args.value 支持 --flag=value）：flag 名取 = 前缀（九轮审查 b-2）
+            flag_name = token.split("=", 1)[0]
+            if flag_name not in allowed:
+                import difflib
+
+                near = difflib.get_close_matches(flag_name, allowed, n=1, cutoff=0.6)
+                hint = f"；最接近的合法参数是 {near[0]}" if near else ""
+                raise CliError("WF_USAGE_INVALID", {
+                    "reason": f"unknown flag {flag_name} for `{command}`{hint}",
+                    "known_flags": sorted(allowed),
+                    "exits": ["按 wf help <命令> 修正参数拼写后重试",
+                              "不改触碰面、不绕过参数校验"]})
+            is_bool = (flag_name in GLOBAL_BOOL_FLAGS
+                       or flag_name in COMMAND_BOOL_FLAGS.get(command, ()))
+            if "=" in token:
+                # 十一轮 b-1：布尔旗标不接受赋值形态——Args.flag() 只认裸旗标，
+                # `--preview=true` 会绕过只读分支变成真实操作。
+                if is_bool:
+                    raise CliError("WF_USAGE_INVALID",
+                                   {"reason": f"boolean flag {flag_name} takes no value",
+                                    "known_flags": sorted(allowed),
+                                    "exits": [f"去掉 =…，写裸 {flag_name}"]})
+                index += 1
+                continue
+            if is_bool:
+                index += 1
+                continue
+            index += 1
+            if index >= len(rest):
+                raise CliError("WF_USAGE_INVALID",
+                               {"reason": f"flag {flag_name} requires a value (nothing follows)",
+                                "known_flags": sorted(allowed),
+                                "exits": ["补上该参数的值后重试"]})
+            nxt = rest[index]
+            if nxt.startswith("--"):
+                nxt_name = nxt.split("=", 1)[0]
+                if nxt_name in allowed:
+                    raise CliError("WF_USAGE_INVALID",
+                                   {"reason": f"flag {flag_name} requires a value, got flag {nxt_name}",
+                                    "known_flags": sorted(allowed),
+                                    "exits": [f"给 {flag_name} 补上值（它不吞下一个参数）"]})
+            index += 1     # flag 的值
+            continue
+        positionals.append(token)
+        index += 1
+    if positionals:
+        if subs is not None:
+            if positionals[0] not in subs:
+                raise CliError("WF_USAGE_INVALID", {
+                    "reason": f"`{command}` requires subcommand: {'|'.join(sorted(subs))}",
+                    "got": positionals[0], "known": sorted(subs),
+                    "exits": ["补合法子命令后重试"]})
+            if len(positionals) > 1:
+                raise CliError("WF_USAGE_INVALID", {
+                    "reason": f"`{command}` takes at most one subcommand", "got": positionals,
+                    "exits": ["去掉多余位置参数（路径等一律用 flag 传）"]})
+        elif command == "help":
+            if len(positionals) > 1:
+                raise CliError("WF_USAGE_INVALID", {"reason": "help takes at most one command",
+                                                    "got": positionals})
+        else:
+            raise CliError("WF_USAGE_INVALID", {
+                "reason": f"`{command}` takes no positional argument", "got": positionals,
+                "exits": ["路径与取值一律用 flag 传；子命令见 wf help <命令>"]})
+
+
 def dispatch(ctx, argv):
     if not argv:
-        raise CliError("WF_PATH_INVALID", {"reason": "missing subcommand", "commands": sorted(COMMANDS)})
+        raise CliError("WF_USAGE_INVALID", {"reason": "missing subcommand", "commands": sorted(COMMANDS)})
     command = argv[0]
     ctx.command = command
     handler = COMMANDS.get(command)
     if handler is None:
+        import difflib
+
+        near = difflib.get_close_matches(command, sorted(COMMANDS), n=1, cutoff=0.6)
         raise CliError(
-            "WF_PATH_INVALID",
-            {"reason": f"unknown subcommand: {command}", "commands": sorted(COMMANDS)},
+            "WF_USAGE_INVALID",
+            {"reason": f"unknown subcommand: {command}" + (f"；最接近的命令是 {near[0]}" if near else ""),
+             "commands": sorted(COMMANDS),
+             "exits": ["wf.py help（无参）列出全部命令"]},
         )
+    validate_usage(command, list(argv[1:]))
     if _needs_activation(command, argv):
         ctx.require_activation()
     ctx.args = Args(argv[1:])

@@ -98,7 +98,7 @@ rec("R39 keep 记录 resolved 为空", "resolved=None",
     (record.get("handoff") or {}).get("wip", {}).get("resolved"),
     (record.get("handoff") or {}).get("wip", {}).get("resolved") is None)
 state_now = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("state")
-rc, payload, _ = wf(["writer", "acquire", "--task", task1, "--json"], {"generation": writer_generation()}, "sess-Z1")
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": writer_generation()}, "sess-Z1")
 rec("R39 准备：恢复前取得写权", "WF_OK",
     f"{(payload or {}).get('code')} writer_state={state_now} facts={json.dumps((payload or {}).get('facts'), ensure_ascii=False)[:120]}", rc == 0)
 wf(["task-resume", "--task", task1, "--json"], {"generation": writer_generation()}, "sess-Z1")
