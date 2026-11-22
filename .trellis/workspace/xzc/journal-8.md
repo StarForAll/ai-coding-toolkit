@@ -1385,3 +1385,26 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Next Steps
 
 - 由人创建 wf-v0.1.3 tag 并推送；随后用新版跑一次真实 dogfood（含发现问题→修复→重查→收敛）
+
+
+## Session 418: wf dogfood 二轮修正：抽样降档/机械项入口化/纪律收敛（发行 0.1.4）
+<!-- trellis-session: v=2 fp=66f0d0742d1120e0 -->
+
+**Date**: 2026-11-22
+**Task**: wf dogfood 二轮修正：抽样降档/机械项入口化/纪律收敛（发行 0.1.4）
+**Branch**: `main`
+
+### Summary
+
+基于 dogfood 复审报告与 15 轮外部审查迭代，完成 wf 框架结构性修正并发行 0.1.4：task.sampled 归档硬门禁降档为试点期提示并登记（设计稿/机制稿/索引同批）；机械项入口化（DECISION_FIELDS、决定错误分档回显、报告骨架预填、archive/stop/approve/replan/rework --draft 草稿、WF_USAGE_INVALID 用法校验、help 48/48）；13 skill 纪律收敛到 session-flow 唯一定义位，四处'按事实推导'措辞收窄，repo_rules 改环境级规则变更语义并按内容摘要绑定；审查链补强（stop preview 免决定、enable 终态出口、vendor_dirty/preexisting 事实、不可逆确认投影与归档门禁同源）。验证：T0 1493 绿、T2 全量 GATE-OK（59+5+85）、发行字节复现+令牌校验、candidate-audit 对最终树重跑。第 15 次审查核验成立的 a-1~a-4（content_bound_patterns 合并、机械修订路由指错入口、日志物化字段名错误未生效、OSError≠删除）与待裁项登记 backlog，留待下一任务处置。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `94a4008c` | fix(wf): dogfood 二轮修正——抽样降档、机械项入口化、纪律收敛与审查出口补强 |
+| `d2b6894c` | chore(wf): 重建发行树（0.1.4） |
+
+### Status
+
+[OK] **Completed**
