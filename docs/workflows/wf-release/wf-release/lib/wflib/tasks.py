@@ -1220,9 +1220,9 @@ def cmd_task_new(ctx, args):
     if kind not in ("ordinary", "initialize", "bootstrap"):
         raise TaskError("WF_PATH_INVALID", {"reason": "--kind must be ordinary|initialize|bootstrap"})
     if not title:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-new requires --title"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-new requires --title"})
     if not template:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-new requires --template <tasks template dir>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-new requires --template <tasks template dir>"})
     session = ctx.session()
     key = ctx.key()
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
@@ -1638,12 +1638,27 @@ def _complexity_proposal(ctx, task, block, extra_conditions=None):
 
 
 def cmd_task_approve(ctx, args):
+    import json as _json
+
+    if args.flag("--draft"):
+        # 十六轮批V：批准决定草稿——object_digest 由入口按当前 PRD 算好，
+        # 人只填 source/quote/reason（TODO 占位，照抄会被预检拒）。
+        task_id = args.value("--task")
+        if not task_id:
+            raise TaskError("WF_USAGE_INVALID", {"reason": "task-approve requires --task <id>"})
+        entry = {"source": "TODO human:<来源>",
+                "at": records.now_str(),
+                "subject": f"approve {task_id}",
+                "object_digest": _prd_digest_for_task(ctx, task_id),
+                "choice": "approve",
+                "reason": "TODO（人填写：为什么批准本规划）"}
+        return _decision_draft_result(ctx, task_id, [entry], command="task-approve")
     from . import cli, lock
 
     task_id = args.value("--task")
     decision_path = args.value("--decision")
     if not task_id or not decision_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-approve requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-approve requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     task = _load_or_fail(ctx, task_id)
     _require_binding(ctx, task_id)
@@ -2079,7 +2094,7 @@ def cmd_task_start(ctx, args):
     task_id = args.value("--task")
     exclusion_file = args.value("--workspace-exclusion")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-start requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-start requires --task <id>"})
     exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
     if exclusion_problems:
         raise TaskError("WF_SEMANTIC_DECISION",
@@ -2191,6 +2206,10 @@ def cmd_task_start(ctx, args):
             "touch_paths": _dedupe_paths(_normalized_paths(_plan_block.get("touch_paths") or [])),
             "head_at_entry": head,
             "entered_at": records.now_str(),
+            # 预存脏文件清单（九轮审查 b-1）：触碰面说明"允许改哪里"，不证明"是谁改的"。
+            # 开工前已存在的未提交路径后续即使命中触碰面，也先按"待归属"处理（c 桶），
+            # 不从 glob 命中直接推出归属。
+            "preexisting_uncommitted": sorted(scope.uncommitted_paths(ctx.root)),
         }
         task["entry_snapshot"] = entry
         if task.get("status") == "not_started":
@@ -2261,11 +2280,27 @@ def _load_decision_list(path):
 
 
 def cmd_task_replan(ctx, args):
+    if args.flag("--draft"):
+        # 十六轮批V：规划变更决定草稿——replan 与 机械修订 两条骨架一次给全，
+        # 人按实际变更类型留一条、删另一条（object_digest 预填 PRD 摘要）。
+        task_id = args.value("--task")
+        if not task_id:
+            raise TaskError("WF_USAGE_INVALID", {"reason": "task-replan requires --task <id>"})
+        digest = _prd_digest_for_task(ctx, task_id)
+        entries = [
+            {"source": "TODO human:<来源>", "at": records.now_str(),
+             "subject": f"replan {task_id}", "object_digest": digest, "choice": "replan",
+             "reason": "TODO（人填写：实质规划变化是什么）"},
+            {"source": "TODO human:<来源>", "at": records.now_str(),
+             "subject": f"机械修订 {task_id}", "object_digest": digest, "choice": "机械修订",
+             "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"},
+        ]
+        return _decision_draft_result(ctx, task_id, entries, command="task-replan")
     from . import lock
 
     task_id = args.value("--task")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-replan requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-replan requires --task <id>"})
     # 打回 Plan 会让既有批准与 Check 失效，属"实质规划变更"：必须有人判证据
     # （机制稿 §2.2 的出口是"人澄清并重批"，第十五轮复审外部 P1）。
     decision_path = args.value("--decision")
@@ -2360,7 +2395,7 @@ def cmd_task_pause(ctx, args):
     task_id = args.value("--task")
     reason = args.value("--reason")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-pause requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-pause requires --task <id>"})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-pause"):
         _record, holder = ctx.require_held(task=task_id)
@@ -2388,7 +2423,7 @@ def cmd_task_resume(ctx, args):
 
     task_id = args.value("--task")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-resume requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-resume requires --task <id>"})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-resume"):
         _record, holder = ctx.require_held(task=task_id)
@@ -2583,7 +2618,7 @@ def cmd_task_curate(ctx, args):
     spec_path = args.value("--spec")
     purpose = args.value("--purpose")
     if not task_id or not spec_path or not purpose:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-curate requires --task --spec --purpose"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-curate requires --task --spec --purpose"})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-curate"):
         _record, holder = ctx.require_held(task=task_id)
@@ -2658,7 +2693,7 @@ def cmd_task_check(ctx, args):
     review_notes = args.value("--review-notes")
     exclusion_file = args.value("--workspace-exclusion")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-check requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-check requires --task <id>"})
     decisions = cli._load_decision(decision_path) if decision_path else []
     exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
     if exclusion_problems:
@@ -2740,7 +2775,12 @@ def cmd_task_check(ctx, args):
         next_=next_hint,
         facts={"check": check["id"], "anchor": check["anchor"], "object_paths": facts.get("object_paths"),
                "acceptance_results": check["acceptance_results"], "commands": check["commands"],
-               "control_assertion": assertion},
+               "control_assertion": assertion,
+               # vendor_dirty 消费点（2026-11-21 批C）：框架自有改动不入交付/审查，但必须可见——
+               # 非阻断；出现时由人确认归属（回源仓库立项），不能悄悄并入业务任务。
+               "vendor_dirty": facts.get("vendor_dirty") or [],
+               # b-1（九轮，事实不阻断）：开工前已存在的交付路径，Check facts 同步可见
+               "preexisting_in_scope": facts.get("preexisting_in_scope") or []},
     )
 
 
@@ -2765,7 +2805,7 @@ def cmd_task_knowledge(ctx, args):
     decision = "no-update" if args.flag("--no-update") else args.value("--decision")
     changes_path = args.value("--changes")
     if not task_id or decision not in ("no-update", "updated"):
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-knowledge requires --task <id> --decision no-update|updated"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-knowledge requires --task <id> --decision no-update|updated"})
     changes = []
     if changes_path:
         loaded = records.load_json(changes_path)
@@ -2803,7 +2843,7 @@ def cmd_task_retrospect(ctx, args):
     evidence_path = args.value("--evidence")
     decision_path = args.value("--decision")
     if not task_id or not evidence_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-retrospect requires --task <id> --evidence <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-retrospect requires --task <id> --evidence <path>"})
     evidence = records.load_json(evidence_path)
     if evidence is None:
         raise TaskError("WF_PATH_INVALID", {"reason": "evidence file missing", "path": evidence_path})
@@ -2846,7 +2886,7 @@ def cmd_task_attribute(ctx, args):
     task_id = args.value("--task")
     commit = args.value("--commit")
     if not task_id or not commit:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-attribute requires --task <id> --commit <oid>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-attribute requires --task <id> --commit <oid>"})
     _require_binding(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-attribute"):
         _record, holder = ctx.require_held(task=task_id)
@@ -2928,7 +2968,7 @@ def cmd_task_abandon(ctx, args):
     decision_path = args.value("--decision")
     disposition_path = args.value("--disposition")
     if not task_id or not decision_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-abandon requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-abandon requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     disposition = None
     if disposition_path:
@@ -3559,18 +3599,20 @@ def _archive_draft(ctx, task_id):
     granted = [str(item) for item in (commit_grant_paths(task) or [])]
 
     def _entry(choice, subject):
-        # 六键占位从 DECISION_FIELDS 生成，不手抄（唯一事实源）
+        # 六键占位从 DECISION_FIELDS 生成，不手抄（唯一事实源）。
+        # 十轮审查 P2-3：占位统一带 TODO 前缀——_load_decision 拒绝任何 TODO 占位值，
+        # "照抄草稿"在六个字段上同等被拒（不出现"半可过"）。
         return {
-            "source": "human:（人复核草稿后填写）",
-            "at": records.now_str() + "（提交时刻由人确认后写）",
+            "source": "TODO human:<来源>（人复核草稿后填）",
+            "at": records.now_str(),
             "subject": subject,
-            "object_digest": "（按决定语义填写：finish 条目可留空由字段校验放行）",
+            "object_digest": "",
             "choice": choice,
-            "reason": "（人填写：为什么这样处置）",
+            "reason": "TODO（人填写：为什么这样处置）",
         }
 
     entries = [
-        _entry("finish", "（人写：已了解结果与未核实项）"),
+        _entry("finish", "TODO（人写：已了解结果与未核实项）"),
     ]
     for path in sorted(set(pending) - set(granted)):
         entries.append(_entry("commit", [path]))
@@ -3592,7 +3634,7 @@ def cmd_archive(ctx, args):
     task_id = args.value("--task")
     decision_path = args.value("--decision")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
     if args.flag("--draft"):
         # 草稿模式（2026-11-21）：只读、免决定；在 _load_decision/action 启动/取锁之前返回，
         # 不要求写权与绑定。由 pending_delivery_paths/commit_grant_paths 生成决定文件草稿
@@ -3602,15 +3644,29 @@ def cmd_archive(ctx, args):
         if decision_path:
             raise TaskError("WF_PATH_INVALID", {"reason": "--draft 与 --decision 互斥：草稿模式不消费决定文件"})
         draft = _archive_draft(ctx, task_id)
+        from . import scope as _scope_mod
+
+        _draft_task = load_task(ctx.root, task_id) or {"id": task_id}
+        _classified = _scope_mod.classify_candidates(ctx.root, _draft_task)
+        from . import cli as _cli_mod
+
+        facts_payload = {"draft": draft["entries"], "pilot_sampling_pending": draft["pilot_sampling_pending"],
+                         "note": "草稿只读；本次未写入任何记录",
+                         # P1-1（九轮）：草稿同样给不可逆确认投影——缺 record 的在写决定前就要看到
+                         "irreversible": _cli_mod._irreversible_projection(ctx.root, _draft_task)}
+        missing = facts_payload["irreversible"]["missing_authorizations"]
+        next_ = "草稿只打印不落盘；人确认后把内容写成决定文件，再以 --decision 正式归档"
+        if missing:
+            next_ += "；注意：" + "；".join(item["action"] + " 缺确认（" +
+                    ",".join(item["paths"][:5]) + "）——" + item["exits"][0] for item in missing)
         return codes.result(
             "WF_OK",
             object={"id": task_id, "name": draft["title"]},
             position_=codes.position(scope="task", task_id=task_id),
-            next_="草稿只打印不落盘；人确认后把内容写成决定文件，再以 --decision 正式归档",
-            facts={"draft": draft["entries"], "pilot_sampling_pending": draft["pilot_sampling_pending"],
-                   "note": "草稿只读；本次未写入任何记录"})
+            next_=next_,
+            facts=facts_payload)
     if not decision_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "archive requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     finish = [item for item in decisions if decisions_mod.accepts("archive_finish", item.get("choice"))]
     grants = [item for item in decisions if decisions_mod.accepts("commit_grant", item.get("choice"))]
@@ -3690,6 +3746,9 @@ def cmd_archive(ctx, args):
                        else "按可达提交查证结果交人核对（不重复归档）"),
                 facts={"archive_persisted": persisted, "terminal": task.get("terminal"),
                        "write_release": write_release,
+                       # vendor_dirty 消费点（2026-11-21 批C）：归档收尾同样可见，人确认归属后不阻断
+                       "vendor_dirty": (scope.classify_candidates(ctx.root, task, receipts=task_receipts(ctx.root))
+                                        .get("buckets", {}).get("v", [])),
                        # ⑥：归档强制回显当前生效的放行清单（人裁接受的风险必须跟着终态可见）
                        "unknown_acceptances": review_acceptance_echo(task)},
             )
@@ -3749,7 +3808,7 @@ def cmd_archive(ctx, args):
                                  "repo_rule_paths": rule_hits,
                                  "uncovered": uncovered,
                                  "reason": "提交范围含环境级规则文件（K6 第 5 类：环境级规则变更确认），但确认未覆盖这些路径",
-                                 "exits": ["在本次决定文件里写一条 repo_rules 确认，paths 覆盖上面未覆盖的路径后重入",
+                                 "exits": ["把人的确认写成文件（choice=repo_rules + paths 覆盖上面未覆盖的路径 + quote/by/source），经 `wf authorize record --task <id> --file <文件>` 登记后重入——门禁消费的是 authorization-repo_rules.json，写进 archive 决定文件不会生效",
                                            "把这些路径移出本次提交范围"]})
         # K6 第 2 类：本次提交范围里的**删除**要有一次确认（删除是不可逆动作）
         deleted_in_grant = _deleted_paths(ctx.root, grant_paths)
@@ -3762,7 +3821,7 @@ def cmd_archive(ctx, args):
                 raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
                                 {"missing_action": "delete", "deleted_paths": uncovered,
                                  "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
-                                 "exits": ["在决定文件里为这些路径写一条 delete 确认后重入",
+                                 "exits": ["把人的确认写成文件（choice=delete + paths 覆盖这些路径 + quote/by/source），经 `wf authorize record --task <id> --file <文件>` 登记后重入——门禁消费的是 authorization-delete.json，写进 archive 决定文件不会生效",
                                            "把删除移出本次提交范围"]})
         # ⑥ D4：业务提交**之前**跑只读预检（否则"业务已提交、归档因 C3 被拒"无法避免）。
         # 消费钩子先跑：受控写点观察到"放行记录对应的报告已恢复可核实"即让该放行失效。
@@ -3988,7 +4047,7 @@ def cmd_baseline_apply(ctx, args):
     files_arg = args.value("--files")
     decision_path = args.value("--decision")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "baseline-apply requires --task <id>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "baseline-apply requires --task <id>"})
     if not proposal_path:
         # 2026-11-07：提案是机械结构（哪些文件、什么内容、前像是什么），不该由人/模型手写。
         # 给出 `--files <a,b,c> --decision <人的批准文件>` 即可，由入口读工作树生成提案。
@@ -4278,7 +4337,7 @@ def cmd_spec_update(ctx, args):
     task_id = args.value("--task")
     changes_path = args.value("--changes")
     if not task_id or not changes_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "spec-update requires --task <id> --changes <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "spec-update requires --task <id> --changes <path>"})
     changes = records.load_json(changes_path)
     if not isinstance(changes, list):
         raise TaskError("WF_PATH_INVALID", {"reason": "changes file must be a JSON array"})
@@ -4454,11 +4513,22 @@ def cmd_task_reassess(ctx, args):
 
     task_id = args.value("--task")
     if not task_id:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-reassess requires --task <id>"})
-    _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
-    # 机制稿 §6.2：未持写权**只报告待复评**（不是阻断）——它不影响任何已成立的归档，
-    # 原 T 会话取得写权后可补做。
-    mine, writer_facts = reassess_write_right(ctx)
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-reassess requires --task <id>"})
+    # 十六轮审查 a-4：先核绑定身份（绑定错仍拒绝），但**写权要求后移**——
+    # bind_task_for_write 内含 require_held，未持权调用者会在"待复评"分支之前被拒，
+    # 使机制稿 §6.2 承诺的只读报告不可达。未持权时按只读路径报告待复评；
+    # 实际写入前（锁内）才 require_held。
+    from . import session as session_mod
+
+    binding = session_mod.load_binding(ctx.root, ctx.key())
+    if not binding:
+        raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": ctx.key()},
+                        next_="由人先用 wf-start 选择对象")
+    _mine_early, writer_facts = reassess_write_right(ctx)
+    mine, holder = False, None
+    if _mine_early:
+        _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+        mine = True
     if not mine:
         current = records.load_json(os.path.join(_require_task_dir(ctx, task_id), "task.json"))
         return codes.result(
@@ -4582,7 +4652,7 @@ def cmd_task_replace(ctx, args):
     task_id = args.value("--task")
     decision_path = args.value("--decision")
     if not task_id or not decision_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-replace requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-replace requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     decision = decisions[0]
     if str(decision.get("choice") or "") not in REPLACE_CHOICES:
@@ -4710,7 +4780,35 @@ def cmd_task_replace(ctx, args):
 REWORK_CHOICES = ("rework", "返工")
 
 
+def _decision_draft_result(ctx, task_id, entries, *, command):
+    """决定文件草稿（十六轮批V）：只打印不落盘、不要求写权——结构与摘要由入口算好，
+    人把内容写成决定文件即授权。占位统一 TODO 前缀（_load_decision 会拒绝照抄）。"""
+    return codes.result(
+        "WF_OK",
+        object={"id": task_id},
+        position_=codes.position(scope="task", task_id=task_id),
+        next_=(f"草稿只打印不落盘；人把内容（去掉 TODO）写成决定文件后，"
+               f"以 `{command} --task {task_id} --decision <文件>` 正式执行"),
+        facts={"draft": entries, "note": "草稿只读；本次未写入任何记录"})
+
+
+def _prd_digest_for_task(ctx, task_id):
+    """当前任务 PRD 的内容摘要（task-approve 草稿的 object_digest 预填值）。"""
+    directory = _require_task_dir(ctx, task_id)
+    return records.file_digest(os.path.join(directory, "prd.md"))
+
+
 def cmd_task_rework(ctx, args):
+    if args.flag("--draft"):
+        # 十六轮批V：返工决定草稿——subject 指向本任务，reason 由人写返工原因。
+        task_id = args.value("--task")
+        if not task_id:
+            raise TaskError("WF_USAGE_INVALID", {"reason": "task-rework requires --task <id>"})
+        entry = {"source": "TODO human:<来源>", "at": records.now_str(),
+                 "subject": f"rework {task_id}", "object_digest": "",
+                 "choice": "rework",
+                 "reason": "TODO（人填写：为什么返工、返工范围）"}
+        return _decision_draft_result(ctx, task_id, [entry], command="task-rework")
     """返工（机制稿 §6.2）：建 R 并让 T 挂起，R 独立批准/开工，不消费 T 的批准。
 
     在 T 的动作里**一次固定完整候选**（R 继承 T 的原前置与 `rework_of=T`、T 的 `prerequisites`
@@ -4723,7 +4821,7 @@ def cmd_task_rework(ctx, args):
     task_id = args.value("--task")
     decision_path = args.value("--decision")
     if not task_id or not decision_path:
-        raise TaskError("WF_PATH_INVALID", {"reason": "task-rework requires --task <id> --decision <path>"})
+        raise TaskError("WF_USAGE_INVALID", {"reason": "task-rework requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     decision = decisions[0]
     if str(decision.get("choice") or "") not in REWORK_CHOICES:

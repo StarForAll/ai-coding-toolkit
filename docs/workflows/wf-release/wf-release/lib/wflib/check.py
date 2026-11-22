@@ -898,8 +898,9 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
     if buckets["c"]:
         raise CheckError("WF_WORKSPACE_UNRESOLVED",
                          dict(scope_facts, other_tasks=buckets["c"],
+                              vendor_dirty=buckets.get("v", []),
                               exits=["确认这些外来改动不属于本任务：写一条 choice=排除外来改动 的决定"
-                                     "（paths + by/at/quote/source）后用 --decision 重跑 task-check",
+                                     "（paths + by/at/quote/source）后用 --workspace-exclusion 重跑 task-check",
                                      "由人实际处置这些路径（提交 / 移走 / 具名承接）后重跑"]))
     pending_external = [item for item in (external_findings or [])
                         if _external_touches_task(item, task)
@@ -1085,6 +1086,12 @@ def run_check_finish(ctx, task, state, commands):
         "internal_review_axes": axes_failed,
         "tdd": tdd_problem,
         "object_paths": object_paths(ctx, task),
+        # vendor_dirty 消费点（2026-11-21 批C）：结束前重分类的 v 桶如实上抛——
+        # task-check facts 与归档收尾都能看到，人据此确认归属（回源仓库立项），不阻断。
+        "vendor_dirty": reclassified["buckets"]["v"],
+        # b-1（九轮→十轮 b-1）：开工前已存在的交付路径经 Check facts 正常回传——
+        # 否则 check→task-check facts 断链，AI 无法从正常 Check 结果获知需确认归属。
+        "preexisting_in_scope": reclassified.get("preexisting_in_scope") or [],
     }
     if passed:
         return check, None, facts

@@ -18,7 +18,7 @@
 - enforcement: `.wf/bin/repair.py`（自含单文件，不导入 `wflib`）
 - 动作：预览 → 令牌 → 同锁重核 → 恢复可证明的写权/绑定/锚点事实 → 回执。
 - 出口：记录不可解析 → `WF_RECORD_INVALID`；历史不明 → `WF_HISTORY_UNRESOLVED`。
-- 锁对象不可识别时的处置（机制稿 §4.1）：`.wf-lock` 不存在时以**排他创建**方式新建并写入标记；已存在时只有「普通文件、真实落点属于项目根、内容完整等于 `wf-lock-v1\n`」三条同时满足才复用；**空文件或部分标记一律交人核实**，普通入口不认领、不覆写，输出 `WF_CAPABILITY_UNAVAILABLE`（facts 记标记不完整与路径）。人工清理顺序为「确认无 wf 进程 → 删除 `.wf-lock` → 移除 `.gitignore` 中的 `/.wf-lock` 行 → 重新运行入口」，入口会重新排他创建。
+- 锁对象不可识别时的处置：`.wf-lock` 不存在时以**排他创建**方式新建并写入标记；已存在时只有「普通文件、真实落点属于项目根、内容完整等于 `wf-lock-v1\n`」三条同时满足才复用；**空文件或部分标记一律交人核实**，普通入口不认领、不覆写，输出 `WF_CAPABILITY_UNAVAILABLE`（facts 记标记不完整与路径）。人工清理顺序为「确认无 wf 进程 → 删除 `.wf-lock` → 移除 `.gitignore` 中的 `/.wf-lock` 行 → 重新运行入口」，入口会重新排他创建。
 
 ### control.uninstall.apply [required · repeatable]
 

@@ -672,7 +672,14 @@ def render_preview(task, facts=None, sampling_line=None, root=None):
     rule_files = [item for item in (facts.get("repo_rule_files") or []) if item]
     if rule_files:
         lines.append(f"[规则文件] {len(rule_files)} 项：{'、'.join(rule_files[:6])}"
-                     "——改变后续所有任务的环境" + ("  ← 需你复核" if not rule_files_approved else ""))
+                     "——改变后续所有任务的环境"
+                     + ("" if rule_files_approved else
+                        "  ← 需 authorize record（choice=repo_rules）落确认，否则归档被 WF_COMMIT_NOT_AUTHORIZED 拦"))
+    # P1-1（九轮）：删除有事实但此前无渲染行——人看不到"本次提交含删除、缺确认会拦"
+    deleted = [item for item in (facts.get("deleted_paths") or []) if item]
+    if deleted:
+        lines.append(f"[删除] {len(deleted)} 项：{'、'.join(deleted[:6])}"
+                     "  ← 删除须在删除前 authorize record（choice=delete，绑定被删内容）落确认")
     # [缺口]：审查缺口（uncovered 轴 / 未覆盖项）不是失败，但必须可见
     gaps = [item for item in (facts.get("requirement_gap_findings") or []) if item]
     if gaps:

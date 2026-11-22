@@ -90,6 +90,11 @@
    "prohibited_repairs": "不跳过非法 touch_paths；不自动扩 glob",
    "tier": "blocked"
   },
+  "WF_USAGE_INVALID": {
+   "exit": "按命令自述修正参数/子命令拼写后重试（wf help <命令> 列出合法参数）",
+   "prohibited_repairs": "不改触碰面、不重算 glob、不绕过参数校验直接调内部入口",
+   "tier": "blocked"
+  },
   "WF_PERSISTENCE_FAILED": {
    "exit": "报告命令、影响与读回/恢复出口",
    "prohibited_repairs": "不盲重试；不宣称成功",
@@ -121,12 +126,12 @@
    "tier": "blocked"
   },
   "WF_SCOPE_UNRESOLVED": {
-   "exit": "人核对归属/范围意图，或回 Plan 补声明并重新批准",
+   "exit": "归属/范围意图先核清；单点面外路径可走 authorize record choice=expand 轻量通道；其余人核对或回 Plan 补声明重新批准；不自动扩 glob",
    "prohibited_repairs": "不自动扩 glob；不以宽命中证明合规",
    "tier": "needs_decision"
   },
   "WF_SCOPE_VIOLATION": {
-   "exit": "回 Plan 扩范围或经人确认必要变更后重新批准",
+   "exit": "单点面外路径先取人确认：authorize record 一条 choice=expand + paths=该路径（delivery_set 纳入本次交付）；批量扩面/改验收口径才回 Plan 重新批准；不自动扩 glob、不追认越界提交",
    "prohibited_repairs": "不自动扩 glob；不追认越界提交",
    "tier": "blocked"
   },
@@ -171,7 +176,7 @@
    "tier": "blocked"
   },
   "WF_WORKSPACE_UNRESOLVED": {
-   "exit": "逐路径核实归属并落实实际处置",
+   "exit": "外来未提交改动先判归属：本任务交付按规则记录；人不认领的写排除声明（choice=排除外来改动 + paths + by/at/quote/source）后 --workspace-exclusion 重跑；面外路径不猜，回 Plan 或请人确认",
    "prohibited_repairs": "不 stash、不捎带、不丢弃他人改动",
    "tier": "needs_decision"
   },
