@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 418
+- **Total Sessions**: 419
 - **Last Active**: 2026-11-22
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1410 | Active |
+| `journal-8.md` | ~1450 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 419 | 2026-11-22 | wf dogfood 三轮修正：身份/升级/审查链路实测收口（0.1.5） | `3b133631`, `8c475199` | `main` |
 | 418 | 2026-11-22 | wf dogfood 二轮修正：抽样降档/机械项入口化/纪律收敛（发行 0.1.4） | `94a4008c`, `d2b6894c` | `main` |
 | 417 | 2026-11-20 | wf 审查链路证据与主会话复核语义修正（0.1.3） | `95bc4e80`, `7b53772e` | `main` |
 | 416 | 2026-11-19 | wf 候选发行证据与运行结果归因校准 | `830bd9fb` | `main` |

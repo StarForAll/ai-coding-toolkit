@@ -1425,3 +1425,26 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 - 验证：T0 1585 全绿；T2 run_all --full --repro green GATE-OK（59+5+85）；install repro 组绿；
   validate-wf-design/check-doc-refs/validate-skills/build --verify --verify-token-parity 全绿。
 - 手动项：真实 Codex 宿主 hook 实跑登记为 full README 手动项（d2_codex_hook）。
+
+
+## Session 419: wf dogfood 三轮修正：身份/升级/审查链路实测收口（0.1.5）
+<!-- trellis-session: v=2 fp=d4ee02741f0a3422 -->
+
+**Date**: 2026-11-22
+**Task**: wf dogfood 三轮修正：身份/升级/审查链路实测收口（0.1.5）
+**Branch**: `main`
+
+### Summary
+
+三阶段完成+W4 升级闭环+骨架尾项全交付：W1 四项 P0（patterns 合并/机械修订路由/started_at 物化+证据身份核对/covers 三态）；W2 全收口（K6 分码、control_plane_digest 进锚点+paths 伴随键、单 reviewer 留痕降级、框架改动 kind、正面授权+人签封闭清单）；W3 会话身份（enable --new-session、Codex host-hook 适配层 per-asset platform、四态解析、hooks.json 合并/卸载对称）；W4 upgrade 三方匹配+前置机器判据+三方令牌 parity+export-deviations+installation 写入侧字段；--plan-draft/judgments --draft 骨架补全。五轮外部审查逐条处置收敛，回退注入 20+ 次红→绿；0.1.4→0.1.5 自举升级实跑通过；T0 1585 全绿、T2 --full --repro green GATE-OK、candidate 审计对 0.1.5 重生成、文档闸门全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3b133631` | fix(wf): dogfood 三轮修正——身份/升级/审查链路实测收口（0.1.5 功能面） |
+| `8c475199` | chore(wf): 重建发行树（0.1.5） |
+
+### Status
+
+[OK] **Completed**
