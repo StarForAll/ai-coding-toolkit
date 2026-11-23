@@ -77,14 +77,23 @@ if proc.returncode != 0:
     print("   redeploy stdout:", (proc.stdout or proc.stderr)[-300:])
 after_assets = len(after.get("assets") or [])
 _writer_after = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
-rec("R93 重复部署幂等：平台与资产不变、不取写权",
-    "platforms 不变；assets 数量不变；writer 保持 idle",
-    f"platforms_same={sorted(after.get('platforms') or []) == sorted(installation.get('platforms') or [])} "
-    f"assets={before_assets}->{after_assets} state={_writer_after.get('state')}",
-    proc.returncode == 0
-    and sorted(after.get("platforms") or []) == sorted(installation.get("platforms") or [])
-    and after_assets == before_assets
-    and _writer_after.get("state") == "idle")
+# 重跑**按来源判定**：夹具由候选发行安装时（release_ref=refs/tags/…），开发态工具跨来源
+# 重跑必须被拒；由开发态部署时（ref=dev:…）则是只读核对/补齐。两种模式都要成立。
+_recorded_ref = str(installation.get("release_ref") or "")
+_cross_source = bool(_recorded_ref) and not _recorded_ref.startswith("dev:")
+_writer_same = _writer_after.get("state") == "idle"
+if _cross_source:
+    _ok = proc.returncode != 0 and "WF_ASSET_DECISION" in ((proc.stdout or "") + (proc.stderr or ""))
+    _expect = "跨来源重跑被拒（WF_ASSET_DECISION）且 writer 空闲、资产不变"
+else:
+    _ok = (proc.returncode == 0
+           and sorted(after.get("platforms") or []) == sorted(installation.get("platforms") or [])
+           and after_assets == before_assets)
+    _expect = "platforms 不变；assets 数量不变；writer 保持 idle"
+rec("R93 重复部署按来源判定", _expect,
+    f"cross_source={_cross_source} rc={proc.returncode} assets={before_assets}->{after_assets} "
+    f"state={_writer_after.get('state')}",
+    _ok and _writer_same and after_assets == before_assets)
 
 # ---- R4-1/R4-2（2026-11-05 第四/五轮复审）：来源一致性、零写入、代次类型 ----
 _writer_path = os.path.join(F, ".wf/writer.json")
