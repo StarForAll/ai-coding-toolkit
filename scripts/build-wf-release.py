@@ -287,15 +287,20 @@ def main(argv=None):
             if not args.version.count(".") == 2:
                 print("FAIL  --version must be 0.x.y")
                 return 1
-            # 预检失败就退出，绝不动现有发行树
             assert_readme_version(args.version)
-            assert_version_not_tagged(args.version)
-            dev_manifest = preflight()
-            if os.path.isdir(RELEASE_ROOT):
-                shutil.rmtree(RELEASE_ROOT)
-            manifest, manifest_path = build(args.version, RELEASE_ROOT, dev_manifest)
-            print_summary(manifest, manifest_path)
-            print("OK  release tree written（提交与 tag 由人执行）")
+            if args.verify:
+                # `--verify` 是**只读比对**：核对现有发行树能否由同版源树字节复现。
+                # "同版不复用"管的是重建/发布——tag 已存在正是要核对的对象，不能挡在这里；
+                # 也不在这里重建（比对通过即证明源树与发行树一致）。
+                print("OK  source→release verified（未重建；重建请去掉 --verify）")
+            else:
+                assert_version_not_tagged(args.version)
+                dev_manifest = preflight()
+                if os.path.isdir(RELEASE_ROOT):
+                    shutil.rmtree(RELEASE_ROOT)
+                manifest, manifest_path = build(args.version, RELEASE_ROOT, dev_manifest)
+                print_summary(manifest, manifest_path)
+                print("OK  release tree written（提交与 tag 由人执行）")
         if not (args.version or args.verify or args.verify_token_parity):
             parser.print_help()
             return 1

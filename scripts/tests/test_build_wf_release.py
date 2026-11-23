@@ -65,3 +65,23 @@ class BuildOrderingTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VerifyIsReadOnlyTest(unittest.TestCase):
+    """"同版不复用"只管重建；`--version X --verify` 必须能核对**已打 tag** 的发行。
+
+    背景（2026-11-23）：`verify-wf-release.py` 的 release_tree_matches_source 调的就是这条
+    命令；tag 存在时若被 guard 拒掉，发行核对永远 FAIL。
+    """
+
+    def test_verify_mode_skips_tag_guard_and_rebuild(self):
+        source = (REPO / "scripts" / "build-wf-release.py").read_text(encoding="utf-8")
+        marker = source.index("if args.verify:")
+        # --verify 分支内：不重建、不跑 tag guard
+        verify_block = source[marker:source.index("else:", marker)]
+        self.assertNotIn("shutil.rmtree(RELEASE_ROOT)", verify_block)
+        self.assertNotIn("assert_version_not_tagged(args.version)", verify_block)
+        # 非 --verify 分支内：两者都在
+        rebuild_block = source[source.index("else:", marker):]
+        self.assertIn("shutil.rmtree(RELEASE_ROOT)", rebuild_block)
+        self.assertIn("assert_version_not_tagged(args.version)", rebuild_block)
