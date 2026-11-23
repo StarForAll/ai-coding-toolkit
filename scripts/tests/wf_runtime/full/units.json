@@ -640,7 +640,7 @@
         "install"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "f1_ordinary",
@@ -662,7 +662,7 @@
         "install"
       ],
       "representative": false,
-      "candidate_clean": false
+      "candidate_clean": true
     },
     {
       "name": "r72_tests",

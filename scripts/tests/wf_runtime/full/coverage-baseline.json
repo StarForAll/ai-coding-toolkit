@@ -628,7 +628,7 @@
       "script": "p5_spec.py"
     },
     "p5_v1": {
-      "candidate_clean": false,
+      "candidate_clean": true,
       "kind": "suite",
       "script": "p5_v1.py"
     },
@@ -893,7 +893,7 @@
       "script": "r89_tests.py"
     },
     "r90_tests": {
-      "candidate_clean": false,
+      "candidate_clean": true,
       "kind": "suite",
       "script": "r90_tests.py"
     }

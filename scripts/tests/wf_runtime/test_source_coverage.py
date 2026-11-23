@@ -63,10 +63,10 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(counts["repro_ungrouped"], 31)
         self.assertEqual(counts["repro_with_metadata"], 7)
         self.assertEqual(counts["repro_candidate_clean"], 3)
-        self.assertEqual(counts["units_candidate_verified"], 54)
+        self.assertEqual(counts["units_candidate_verified"], 64)
         self.assertEqual(counts["units_kept_dev_only"], 1)
         self.assertEqual(counts["units_pending_promotion"], 0)
-        self.assertEqual(counts["units_not_tested"], 2)
+        self.assertEqual(counts["units_not_tested"], 0)
 
     def test_every_id_is_accounted_and_ungrouped_ids_are_exact(self):
         rows = self.result["rows"]["repro"]
@@ -113,11 +113,13 @@ class CoverageTest(unittest.TestCase):
                          {"f0", "p5_spec", "p5_v2v3", "p5_v5"})
         explicit_false = [row for row in self.result["rows"]["units"].values()
                           if row["candidate_clean"] == "false"]
-        # suite 2 + extra 1 + manual 2。
-        self.assertEqual(len(explicit_false), 5)
-        for name in ("r90_tests", "p5_v1", "r72_tests"):
+        # r72（dev-only）+ manual 2；r90/p5_v1 已按候选实跑提升（2026-11-23）
+        self.assertEqual(len(explicit_false), 3)
+        self.assertEqual(self.result["rows"]["units"]["r72_tests"]["migration_status"],
+                         "kept-dev-only")
+        for name in ("r90_tests", "p5_v1"):
             self.assertEqual(self.result["rows"]["units"][name]["migration_status"],
-                             "kept-dev-only")
+                             "candidate-verified")
         r72 = self.result["rows"]["units"]["r72_tests"]
         self.assertIn("candidate audit status=ok", r72["not_migratable_reason"],
                       "dev-only 的实际来源证据必须可追溯")
@@ -168,8 +170,14 @@ class CandidateAuditTest(unittest.TestCase):
                 self.assertTrue(row["installed_assertion"].startswith("none in candidate mode"))
 
     def test_failed_suites_have_concrete_assertion_evidence(self):
-        for name in ("r90_tests", "p5_v1"):
-            record = self.audit["units"][name]
+        """审计里状态为 bad 的单元，其失败断言必须被逐条登记且能在覆盖行里追溯。
+
+        r90/p5_v1 曾以具体失败断言留在 dev-only；2026-11-23 修掉来源判定后经候选实跑通过，
+        因此本断言改为**按实际状态**过滤（没有 bad 单元时自然成立，不写死名单）。
+        """
+        bad = {name: record for name, record in (self.audit.get("units") or {}).items()
+               if record.get("status") == "bad"}
+        for name, record in bad.items():
             self.assertTrue(record["failures"], f"{name} 的 audit 必须有具体失败断言")
             row = self.result["rows"]["units"][name]
             self.assertIn(record["failures"][0], row["not_migratable_reason"])
