@@ -1355,16 +1355,18 @@ def _pin_identity(ctx, session_key, facts):
 
 
 def _transfer_stub():
-    """W4-1：upgrade 经引导层转交，不经本层用法校验（help 一致性保留该注册条目）。"""
+    """W4-1/W4-2：upgrade 经引导层转交，不经本层用法校验（help 一致性保留该注册条目）。"""
     def _handler(ctx, args):
         raise CliError(
             "WF_CAPABILITY_UNAVAILABLE",
             {"reason": "upgrade 经引导层转交：本层不实现升级判定",
-             "transfer": ".wf/bin/wf.py upgrade --release <检出根> --release-ref <ref> [--apply]",
+             "transfer": ".wf/bin/wf.py upgrade --release <检出根> --release-ref <ref> "
+                         "[--apply | --export-deviations --out <目录>] [--keep <路径>] [--restore <路径>]",
              "direct": "<检出根>/install.py --upgrade --target <项目> "
-                      "--release-ref refs/tags/wf-vX.Y.Z --source <检出根> [--apply]"},
+                      "--release-ref refs/tags/wf-vX.Y.Z --source <检出根> [--apply | --export-deviations --out <目录>]"},
             next_="终端直接运行 wf.py upgrade（引导层转交）或 install.py --upgrade；"
-                  "升级须交互终端预览令牌，模型不代跑",
+                  "应用升级须交互终端预览令牌，模型不代跑；--export-deviations 是只读导出，不取令牌、"
+                  "不暂停任务、不改安装记录（未接受偏离也导出并标 pending）",
         )
     return _handler
 
@@ -2768,6 +2770,7 @@ COMMAND_HELP = {
     "task-check": {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
         "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）",
+                 "--review-notes-draft": "只读生成双轴审查结论骨架（打印目标路径与 TODO，不落盘、不要求写权）",
                  "--decision": "可选：人工验收决定",
                  "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
@@ -2778,7 +2781,8 @@ COMMAND_HELP = {
                        "args": {"--task": "任务 id（必填）", "--decision": "no-update|updated",
                                 "--evidence": "updated：知识变更的证据",
                                 "--no-update": "简写：等价于 --decision no-update",
-                                "--changes": "updated 时的知识变更清单 JSON 数组"},
+                                "--changes": "updated 时的知识变更清单 JSON 数组",
+                                "--changes-draft": "只读生成 changes 骨架（打印目标路径与 TODO，不落盘）"},
                        "inputs": {"--changes[]": {"action": "add|update|merge|rename|delete",
                                                   "path": "spec 相对路径", "reason": "变更理由",
                                                   "summary": "≤80 字摘要"}},
@@ -2821,7 +2825,8 @@ COMMAND_HELP = {
                                                  "approval": "{choice, subject} 人的批准引用"}},
                        "example": "wf.py baseline-apply --task <id> --proposal proposal.json --json"},
     "spec-update": {"purpose": "spec 增改删/合并/停用，并同步三段索引",
-                    "args": {"--task": "任务 id（必填）", "--changes": "变更数组（必填）"},
+                    "args": {"--task": "任务 id（必填）", "--changes": "变更数组（必填；--changes-draft 时除外）",
+                             "--changes-draft": "只读生成 changes 骨架（打印目标路径与 TODO，不落盘）"},
                     "inputs": {"--changes[]": {"operation": "add|update|merge|rename|delete|disable",
                                                "new_paths": "新路径（数组或逗号/分号/空白分隔的字符串，单条可直写字符串）",
                                                "old_paths": "旧路径（同上：数组或分隔字符串）",
@@ -2902,7 +2907,7 @@ COMMAND_HELP = {
     "review-status": {"purpose": "查看本轮审查到位状态（只读：已到 n/2、缺哪份、文件状态）",
                       "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省取最新已发起轮）"},
                       "example": "wf.py review-status --task 2026-xxxx --json"},
-    "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名，实施 CLI 取本会话）",
+    "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名；实施 CLI 取 launch 时人声明的值）",
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
                                "--main-review": "主会话五轴复核文件（产生 verdict 时必填；也可与 --register-only 登记 main findings）",
                                "--main-review-draft": "按本轮已导入报告生成主会话复核待填骨架后退出",
@@ -2975,11 +2980,16 @@ COMMAND_HELP = {
                                  "--to": "begin：接收会话标识（必填）",
                                  "--decision": "accept：交接确认决定（必填）"},
                         "example": "wf.py writer-handover accept --decision h.json --json"},
-    "upgrade": {"purpose": "三方升级（W4-1，经引导层转交 install.py --upgrade；本层不判定）",
+    "upgrade": {"purpose": "三方升级 / 只读导出本地偏离（经引导层转交 install.py --upgrade；本层不判定）",
                "args": {"--release": "发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/）",
                         "--release-ref": "发行引用 refs/tags/wf-vX.Y.Z",
-                        "--apply": "应用预览（交互终端输入预览指纹；同一进程完成）"},
-               "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.5 --apply"},
+                        "--apply": "应用预览（交互终端输入预览指纹；同一进程完成；与导出互斥）",
+                        "--export-deviations": "只读导出本地偏离补丁与清单（不取写权、不暂停任务、不应用升级）",
+                        "--out": "导出目录（必须在项目树外；不存在则创建，已存在必须为空）",
+                        "--keep": "升级冲突：保留本地（相对项目根，可重复；仅应用模式；仅可选资产，必需资产保留删除会被拒）",
+                        "--restore": "升级冲突：恢复发行内容（相对项目根，可重复；仅应用模式）"},
+               "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --apply",
+               "example_export": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --export-deviations --out /tmp/wf-deviations --json"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
                    "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
                    "example": "wf.py task-pause --task 2026-xxxx --reason '等人答复' --json"},
@@ -3809,16 +3819,16 @@ COMMAND_FLAGS = {
     "run": {"--run", "--creation", "--decision", "--reason", "--plan", "--preview"},
     "sampling": {"--task", "--freeze", "--file", "--attestation", "--quote"},
     "spec": {"--file"},
-    "spec-update": {"--task", "--changes"},
+    "spec-update": {"--task", "--changes", "--changes-draft"},
     "status": {"--short"},
     "stop": {"--decision", "--preview", "--draft"},
     "task-abandon": {"--task", "--decision", "--disposition"},
     "task-approve": {"--task", "--decision", "--draft"},
     "task-attribute": {"--task", "--commit"},
-    "task-check": {"--task", "--decision", "--review-notes", "--workspace-exclusion"},
+    "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft", "--workspace-exclusion"},
     "task-curate": {"--task", "--spec", "--purpose", "--kind", "--reason", "--compensation",
                     "--evidence", "--check"},
-    "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--evidence"},
+    "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--changes-draft", "--evidence"},
     "task-new": {"--kind", "--template", "--title"},
     "task-pause": {"--task", "--reason"},
     "task-reassess": {"--task"},
@@ -3828,8 +3838,9 @@ COMMAND_FLAGS = {
     "task-retrospect": {"--task", "--decision", "--evidence", "--commit"},
     "task-rework": {"--task", "--decision", "--draft"},
     "task-start": {"--task", "--workspace-exclusion"},
-    # W4-1：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
-    "upgrade": {"--apply", "--release", "--release-ref"},
+    # W4-1/W4-2：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
+    "upgrade": {"--apply", "--release", "--release-ref", "--export-deviations",
+                "--out", "--keep", "--restore"},
     "verify": {"--task", "--id", "--kind", "--reason", "--impact", "--compensation",
                "--evidence", "--by"},
     "help": set(),
@@ -3873,12 +3884,14 @@ COMMAND_BOOL_FLAGS = {
     "task-approve": {"--draft"},
     "task-replan": {"--draft"},
     "task-rework": {"--draft"},
-    "task-knowledge": {"--no-update"},
+    "task-knowledge": {"--no-update", "--changes-draft"},
+    "spec-update": {"--changes-draft"},
+    "task-check": {"--review-notes-draft"},
     "task-replace": {"--preview"},
     "baseline-apply": {"--preview"},
     "run": {"--preview"},
     # W4-1：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
-    "upgrade": {"--apply"},
+    "upgrade": {"--apply", "--export-deviations"},
 }
 
 COMMAND_SUBS = {

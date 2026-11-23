@@ -21,7 +21,14 @@ disable-model-invocation: false
 | 已批准，未开工 | `task-start --task <id>` |
 | in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先向人确认这些是本任务交付还是外来——外来走排除声明，是本任务交付就继续；不默认归属、也不阻断）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
-| in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]` |
+| in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘） |
+| 需要记录知识处置（Check/归档前） | `task-knowledge --task <id> --decision no-update|updated [--changes <文件>]`；spec 变更走 `wf-spec-update` skill（`spec-update --task <id> --changes <文件>`），先看后改 |
+| 复盘触发（入口 facts 的触发集合非空） | `task-retrospect --task <id> --decision <文件> --evidence <文件>`；触发项与证据缺口由入口 facts 给出，不自行缩减 |
+| 需要返工或替换 | `task-rework --task <id> --decision <文件>`（建 R、挂起 T、继承前置）；替换用 `task-replace --task <id> --decision <文件> [--preview]`；先读 `task-flow` 的返工/替换段 |
+| 任务挂起需要复评 | `task-reassess --task <id>`（挂起集合为空时入口直接通过，不写记录） |
+| 建/删依赖边 | `dep --task <id> --op add|rm --prereq <id>`；前置状态与顺序由入口校验，不手改记录 |
+| 基线/项目配置变更 | `baseline-apply --task <id> --preview --files a,b` → 人批 → `baseline-apply --task <id> --files … --decision <批准文件>`；只在已批准任务内，spec 变更走 `wf-spec-update` |
+| 用户工作流定义编辑/校验 | `definition validate --id <id>` → `definition prepare --id <id>`；创建实例回 `wf-start` 的「定义与实例」节，实例推进用 `run advance` |
 | 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute --task <id> --commit <sha>` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用 `--workspace-exclusion <文件>` 重跑当前入口。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止。决定文件结构拿不准时先跑 `archive --task <id> --draft`（只打印不落盘）。试点期可跑一次 `wf sampling pick --task <id> --freeze`（不跑不阻断，入口会在 Check next_ 里提示） |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan --decision <文件>` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
@@ -44,8 +51,8 @@ disable-model-invocation: false
 ```
 
 - `repair_scope` 的四组事实与 `exits` 怎么读：见 `wf-repair-loop`。
-- **不要用 `archive` 试归档探路**：归档会先做业务提交（现在有提交前只读预检，但它通过不代表
-  可以归档——步骤面、escalated、required、依赖、debug 各有自己的门禁）。
+- **不要用 `archive` 试归档探路**：为什么不行、还差什么该从哪里读，完整论述见
+  `wf-repair-loop`「不要试归档探路」，此处不重复。
 - 要人裁放行不可核实证据时，用 `wf-review-accept-unknown`（先按 `wf-review-accept-unknown`
   skill 呈现事实与采集 quote）。
 
@@ -70,8 +77,15 @@ disable-model-invocation: false
   会使当前 Check 失效（`WF_CHECK_STALE`——锚点的 `control_plane_digest` 随 vendor 内容
   变化），这是预期后果、不是误报；drift 的 `d:control_plane_paths` 会列出变化的框架
   文件清单。当前任务只记录“发现框架缺陷”的归属与边界。回源仓库立项的修复在源仓库
-  按补丁/记录立项——当前版本尚无机制导出通道，需人手工带 diff 回源（如
-  `git diff .wf/lib > patch`）；`--export-deviations` 只读出口与 upgrade 通道交付后按新口径操作。
+  按补丁/记录立项：在源仓库检出可用发行引用后，运行
+  `wf.py upgrade --release <检出根> --release-ref refs/tags/wf-vX.Y.Z --export-deviations --out <目录>`
+  （或直接 `<检出根>/install.py --upgrade ... --export-deviations --out <目录>`）只读导出
+  本地偏离补丁与 `manifest.json`；**不取写权、不暂停任务、不改安装记录**，未接受项标
+  `status=pending`。导出后仍由人把补丁带入源仓库、按作者仓库流程修复并发版；源仓库修复
+  发版后再 `wf.py upgrade ... --apply` 升级回目标项目并重跑 Check——现场改 `.wf` 的旧
+  Check 失效是预期。手工 `git diff` 只在源提交不可解析等导出不可用情形作兜底。
+  不要把导出当成“已接受偏离”或“已回源”。这不算违反：只读 `.wf` 状态、读取/导出安装记录；
+  改 `.wf/**` 才需要归属确认与回源。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；
   不自行取舍、不隐瞒、不改限制本身。冲突无法调和时停下报告是合法终态。
 
@@ -128,13 +142,14 @@ disable-model-invocation: false
 
 真实 dogfood 发现：把"入口该生成的结构"写成文件，会让任务目录膨胀、并迫使模型读源码猜字段。因此：
 
-- **可以人/模型写的只有五类**：决定文件（批准/收工/知识处置的选择）、`--review-notes`（双轴结论）、`--changes`（spec 变更）、基线提案（**推荐** `baseline-apply --files a,b,c --decision <批准文件>`，由入口生成提案）、主会话复核（**先用** `review-decide --main-review-draft <file>` 生成骨架，再填五轴/逐报告/逐 finding）。
+- **可以人/模型写的只有五类**：批准/收工等决定文件、`--review-notes`（双轴结论，先跑 `--review-notes-draft`）、`--changes`（spec/知识变更，先跑 `--changes-draft`）、基线提案（**推荐** `baseline-apply --files a,b,c --decision <批准文件>`，由入口生成提案）、主会话复核（**先用** `review-decide --main-review-draft <file>` 生成骨架，再填五轴/逐报告/逐 finding）。知识处置本身是 `task-knowledge --decision no-update|updated` + `--changes`（值，不是决定文件）。
 - **不要自建**：验证结果（`task-check` 会记）、门禁预览（`gate --due before_archive`）、提交清单与摘要（`archive` 记录）、`plan-approval`/`finish-commit-manifest` 之类"自述性"文件。
 - 需要知道某命令的输入结构：`<python> <项目根>/.wf/bin/wf.py help <命令>`（有最小示例，不必读源码）。
 
 ## 不做
 
 - 不调用 `wf-finish`、不归档、不提交（提交只在拿到精确路径授权时由归档动作执行）。
+  这不算违反：在批准触碰面内改业务文件；按精确路径授权由归档动作执行提交。
 - 不替人回答 `plan-q`、不伪造 review 结论。
 
 ## 工作习惯（2026-11-08 起；唯一完整定义位）

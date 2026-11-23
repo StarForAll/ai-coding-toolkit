@@ -574,7 +574,9 @@ class Round5ReviewFixesTest(unittest.TestCase):
         text = (REPO / "docs/workflows/wf/skills/wf-continue/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("WF_CHECK_STALE", text)
         self.assertIn("d:control_plane_paths", text)
-        self.assertIn("尚无机制导出通道", text)          # 回源降级动作如实
+        # 2026-11-23：导出通道已交付，vendor 段改指只读导出而不是手工 diff
+        self.assertIn("--export-deviations", text)
+        self.assertIn("不取写权", text)
 
     def test_mech_registers_preview_and_deep_merge(self):
         mech = (REPO / "docs/workflows/wf-framework-mechanism.md").read_text(encoding="utf-8")

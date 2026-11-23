@@ -8,7 +8,7 @@
 ### control.asset.apply [required · repeatable]
 
 - 时点：安装/升级应用结束
-- enforcement: `wflib/maintenance.py::apply`（第三轮；首轮由 `install.py` 与 `wf-dev-deploy.py` 承担投放）
+- enforcement: `<发行根>/install.py::run_upgrade`（经 `wf.py upgrade` 引导层转交；首次安装同一 `install.py`；`--export-deviations` 为只读子操作，不取写权、不应用升级）
 - 动作：按发行清单投放 `.wf/` 资产与 skill 根，逐路径登记 O/L/N 与决定，完成后自检。
 - 出口：偏离/未知文件 → `WF_ASSET_DECISION`；同版异内容 → `WF_RELEASE_CONFLICT`。
 

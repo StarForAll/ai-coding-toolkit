@@ -266,7 +266,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 发行打包（authoring）")
     parser.add_argument("--version", default=None, help="0.x.y；与 tag wf-vX.Y.Z 一致")
     parser.add_argument("--verify", action="store_true", help="重建并与现有发行树字节比对")
-    parser.add_argument("--verify-token-parity", action="store_true", help="比对 repair/uninstall 的令牌实现")
+    parser.add_argument("--verify-token-parity", action="store_true", help="比对 repair/uninstall/install 的令牌实现")
     args = parser.parse_args(argv)
 
     try:

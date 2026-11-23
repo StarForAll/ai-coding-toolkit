@@ -217,13 +217,16 @@ class HelpExampleUsableTest(unittest.TestCase):
     def test_every_example_passes_validate_usage(self):
         problems = []
         for name, entry in cli.COMMAND_HELP.items():
-            example = entry.get("example") or ""
-            parts = example.split()
-            if parts and parts[0] == "wf.py":
-                parts = parts[2:]      # 跳过 wf.py 与命令名：validate_usage 收 argv[1:]
-            tokens = parts
-            try:
-                cli.validate_usage(name, tokens)
-            except cli.CliError as exc:
-                problems.append(f"{name}: {exc.facts.get('reason')}")
+            for key, example in entry.items():
+                if not key.startswith("example") or key == "example_file":
+                    continue
+                if not isinstance(example, str) or not example.strip():
+                    continue
+                parts = example.split()
+                if parts and parts[0] == "wf.py":
+                    parts = parts[2:]      # 跳过 wf.py 与命令名：validate_usage 收 argv[1:]
+                try:
+                    cli.validate_usage(name, parts)
+                except cli.CliError as exc:
+                    problems.append(f"{name}.{key}: {exc.facts.get('reason')}")
         self.assertFalse(problems, f"help 示例被用法校验拒绝: {problems}")

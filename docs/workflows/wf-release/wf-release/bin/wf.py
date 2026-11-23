@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import datetime
+import difflib
 import json
 import os
 import re
@@ -519,28 +520,64 @@ def main(argv):
     if error:
         return fail(error[1], {"detail": error[0]}, "用 --project <绝对路径> 显式给目标，或按恢复说明重取入口", json_mode)
     if rest and rest[0] == "upgrade":
-        # W4-1：升级转交引导层——--release <发行检出根> --release-ref <ref> [--apply]
-        # 缺一即报三要素；只转交不判定（判定在 install.py）。
+        # W4-1/W4-2：升级转交引导层。这里只做**参数收集与拼写校验**，判定仍在 install.py：
+        # 已知参数原样转交（含 --json/--export-deviations/--out/--keep/--restore），
+        # 未知参数立即 WF_USAGE_INVALID——旧实现把未识别参数静默吞掉，AI 无法判断是否生效。
         opts = rest[1:]
-        release_root = None
-        release_ref = None
-        apply_flag = False
+        value_flags = {"--release", "--release-ref", "--out", "--keep", "--restore"}
+        flag_flags = {"--apply", "--export-deviations", "--json"}
+        values = {}
+        forwarded = []
+        unknown = None
         index = 0
         while index < len(opts):
-            if opts[index] == "--release" and index + 1 < len(opts):
-                release_root = opts[index + 1]; index += 2
-            elif opts[index] == "--release-ref" and index + 1 < len(opts):
-                release_ref = opts[index + 1]; index += 2
-            elif opts[index] == "--apply":
-                apply_flag = True; index += 1
-            else:
+            token = opts[index]
+            name, inline = token, None
+            if token.startswith("--") and "=" in token:
+                name, inline = token.split("=", 1)
+            if name in value_flags:
+                if inline is not None:
+                    value = inline
+                    index += 1
+                else:
+                    if index + 1 >= len(opts) or opts[index + 1].startswith("--"):
+                        return fail(
+                            "WF_USAGE_INVALID",
+                            {"missing_value": name, "known_flags": sorted(value_flags | flag_flags)},
+                            "按 wf help upgrade 修正参数；值参数缺值时不继续转交",
+                            json_mode,
+                        )
+                    value = opts[index + 1]
+                    index += 2
+                values[name] = value
+                if name not in ("--release", "--release-ref"):
+                    forwarded.extend([name, value])
+            elif name in flag_flags and inline is None:
+                forwarded.append(name)
                 index += 1
+            else:
+                unknown = token
+                break
+        if unknown is not None:
+            known = sorted(value_flags | flag_flags)
+            near = difflib.get_close_matches(unknown.split("=", 1)[0], known, n=1, cutoff=0.6)
+            return fail(
+                "WF_USAGE_INVALID",
+                {"unknown": unknown, "known_flags": known,
+                 "nearest": near[0] if near else None},
+                "wf upgrade 只接受 --release/--release-ref/--apply/--export-deviations/--out/"
+                "--keep/--restore/--json；按 wf help upgrade 修正拼写，不用未登记参数试探",
+                json_mode,
+            )
+        release_root = values.get("--release")
+        release_ref = values.get("--release-ref")
         if not release_root or not release_ref:
             return fail(
                 "WF_USAGE_INVALID",
                 {"missing": [name for name, value in (("--release", release_root),
                                                       ("--release-ref", release_ref)) if not value]},
-                "wf upgrade 需要三要素：--release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply]；"
+                "wf upgrade 需要三要素：--release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z"
+                " [--apply | --export-deviations --out <目录>]；"
                 "或直接运行 <检出根>/install.py --upgrade --target <项目> --release-ref <ref> --source <检出根>",
                 json_mode,
             )
@@ -556,9 +593,7 @@ def main(argv):
         env = dict(os.environ)
         env["WF_PROJECT_ROOT"] = root
         transfer = [sys.executable, installer, "--upgrade", "--target", root,
-                   "--release-ref", release_ref, "--source", release_root]
-        if apply_flag:
-            transfer.append("--apply")
+                   "--release-ref", release_ref, "--source", release_root] + forwarded
         os.execve(sys.executable, transfer, env)
     if rest and rest[0] in ("repair", "uninstall"):
         script = os.path.join(root, ".wf", "bin", f"{rest[0]}.py")

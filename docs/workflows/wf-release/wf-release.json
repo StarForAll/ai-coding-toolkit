@@ -21,7 +21,7 @@
       "target_relative": ".wf/bin/uninstall.py"
     },
     {
-      "digest": "sha256:51dbc8083c82de715676ab21b04a36cf4fcc7500924257dcefb93ac3ba283ec5",
+      "digest": "sha256:42d48c5ed04a811329dc696f03137131a8b06eaf6bfeb118c47aff76122b5325",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -42,7 +42,7 @@
       "target_relative": ".codex/hooks/wf-session-identity.py"
     },
     {
-      "digest": "sha256:ecd269c120308225adf86d632dc9dbb0c8ff3e7a01d08dc7e6b62290ed44f2df",
+      "digest": "sha256:9cd04191409ff238b5fb7263238c1a775925f435eb158a910ab85d91865a44ad",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:6c74b4d78af2b955f5b31822774dabc938fe52796d8f14eda92f3c1f9a015b26",
+      "digest": "sha256:e8b43b5541c408445523e3a0c40bffc6074a5b3fb54981df0c49e52027d25f16",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -342,7 +342,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:a7903fbe2eb4d634e68dd418bbbb417564336e4a1771da8e1c7d2db791cd4543",
+      "digest": "sha256:d8629ca5aacb3e66641834734abcffeb26954e1f2238527d905a26f0f5743a64",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -552,7 +552,7 @@
       "target_relative": ".wf/templates/user-workflow.md"
     },
     {
-      "digest": "sha256:26b224238391c55d5ba8ec53127dd2e3ab5059339236fc795b8e34faae94d711",
+      "digest": "sha256:86ba4f9e53d69b6461e1b24e57e8034f76cf9b31aecbf42344aa7d0a807cfe19",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -572,7 +572,7 @@
       "target_relative": ".wf/workflows/knowledge-flow.md"
     },
     {
-      "digest": "sha256:cbb706791d3b3d21e62b237c44bbe28f5dd2c10537cbd33e6b1be67c83d19788",
+      "digest": "sha256:0efadaa6472f3bf92257fe26a9480bdacab27e50b827a4230d795c6e7e4c3ae7",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -632,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:f6310293a6b8d5ccfcd09db3b8e21c6b028b1d3a6df8971ab8c01190164cd5bf",
+      "digest": "sha256:ad4aa7c145f473fad8b587857ee06bbb04132bf2297fd34da63d3b70c4596a8b",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -652,7 +652,7 @@
       "target_relative": "wf-diagnosing-bugs/SKILL.md"
     },
     {
-      "digest": "sha256:6e7921d4921560da03de4742141b6613fabeab296a366e334e9f7ef22d8f2321",
+      "digest": "sha256:b494a56cb4008ead5d056acf6ff9ec3eaa75773ba291ca95223290eeeb9b8820",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -692,7 +692,7 @@
       "target_relative": "wf-review-accept-unknown/SKILL.md"
     },
     {
-      "digest": "sha256:6992af20b17283dce5d2a59fbde8fa38b1e7d9fc9c02b688e03f2c2c83f8dfdc",
+      "digest": "sha256:36ad6dbd0b90620e46022b5b6edf0fc28d4d796cc6a30eb6a0360151e3cbf97d",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -702,7 +702,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:d46c27a761330205ba3ee9ae4eca91cd6e950c107a3e0c70d04cc4e3b301d73d",
+      "digest": "sha256:e8e05c0037edb6e74214f2a51f9987e5ac7e8154e7d5f8ece63313d65a235b59",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -712,7 +712,7 @@
       "target_relative": "wf-review/SKILL.md"
     },
     {
-      "digest": "sha256:596025d7534c1dab0ce8c8ed9e659e2bc4a8129c2ee234174c58ea2d9cb54334",
+      "digest": "sha256:d62a5da6fe569c3b061f4c345bcf792414d0e1aeafa1a5f2c290e8223e0605e5",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:f41034325ea68f076f2326a3a77229dbe1e0ac11e9b95d6cdb1033e2e280cefa",
+    "rules_digest": "sha256:09915fdfaa2355a5fdd11157a3fd088cfcb7542ec9616febcdf70db33a2295ec",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.1.5"
+  "version": "0.1.6"
 }

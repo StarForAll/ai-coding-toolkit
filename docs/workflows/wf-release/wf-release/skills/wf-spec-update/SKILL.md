@@ -13,7 +13,7 @@ disable-model-invocation: false
 1. 读现有索引、相关 spec 与本地证据（真实失败、已验证契约、人的长期约定、明确边界）。
 2. 判断准入：有可追溯依据、有消费者、与既有条目不冲突；给正反例，不写空泛建议。
 3. 起草变更数组（每项 `{operation, old_paths, new_paths, before_digests, after_digests, reference_dispositions}`，`add/update` 带 `content`）。
-4. `spec-update --task <id> --changes <path>` 成组应用；删除/停用前逐个解除活动任务依赖，未解除时按出口先解除/推迟/指定替代。
+4. `spec-update --task <id> --changes <path>` 成组应用（结构拿不准先跑 `--changes-draft`，只打印骨架与目标路径）；删除/停用前逐个解除活动任务依赖，未解除时按出口先解除/推迟/指定替代。
 5. 变更后重新 `task-check`（spec 属检查输入，旧 pass 失效）。
 
 ## 改的是"尺子"还是"判断"（标准变更）

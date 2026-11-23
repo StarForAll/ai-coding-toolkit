@@ -156,7 +156,7 @@ docs/workflows/wf/
     ├── lib/wflib/*.py
     ├── workflows/*.md
     ├── templates/**
-    └── skills/<11 个 skill>/SKILL.md
+    └── skills/<13 个 skill>/SKILL.md
 ```
 
 打包树是**生成产物**：由 `scripts/build-wf-release.py` 从源树确定性复制并按源文件字节计算哈希，人不手改；提交与 tag 由人执行（框架不做分支或提交自动化，charter T3 B1）。把生成树放在 `wf-release/` 而非仓库根，是为了避免与仓库根既有的 `skills/`（来源资产层）混淆；清单的 `source_path` 相对发行根写 `wf-release/...`，仍在发行根内（机制稿 §10.2 的越界校验按此解析）。
@@ -252,8 +252,8 @@ docs/workflows/wf/
 | `task-replan` | `--task <id> --decision <文件>` | `task.transition` | 实质规划变更（回 Plan；原批准/检查留历史但当前无效，`status` 不回未开工） | — | 1 |
 | `task-pause` / `task-resume` | `--task <id> [--reason]` | `task.pause` / `task.transition` | 暂停 / 恢复 | 机制稿 §4.4 | 1 |
 | `task-curate` | `--task <id> --spec <path> --purpose <text>` | `task.curate` | 策展写入 | 机制稿 §3.1 | 1 |
-| `task-check` | `--task <id> [--decision <path>] [--review-notes <path>] [--workspace-exclusion <path>]` | `task.check` | Check（固定五步，机制稿 §3.2）；并写 `task.work-satisfied` 的 completed 回执 | 机制稿 §3.5 范围核对 | 1 |
-| `task-knowledge` | `--task <id> --decision no-update\|updated`（`updated` 的具体操作由 `changes` 按机制稿 §8.4 的 `{operation, …}` 记录） | `task.knowledge-dispose` | 知识处置留痕 | 机制稿 §3.1 | 1 |
+| `task-check` | `--task <id> [--decision <path>] [--review-notes <path>] [--review-notes-draft] [--workspace-exclusion <path>]` | `task.check` | Check（固定五步，机制稿 §3.2）；并写 `task.work-satisfied` 的 completed 回执 | 机制稿 §3.5 范围核对 | 1 |
+| `task-knowledge` | `--task <id> --decision no-update\|updated`（可先 `--changes-draft`）；`updated` 的变更由 `--changes` 按 `{action, path, reason, summary}` 记录（`{operation, …}` 是 `spec-update` 的 schema，不混用） | `task.knowledge-dispose` | 知识处置留痕 | 机制稿 §3.1 | 1 |
 | `task-retrospect` | `--task <id> --evidence <path> [--decision <path>]` | `task.retrospect` | 复盘记录（人要求或触发后执行） | — | 1 |
 | `task-attribute` | `--task <id> --commit <oid>` | `task.attribute` | 归属裁决 | 机制稿 §3.3 | 1 |
 | `dep` | `add\|rm --task <id> --prereq <id>` | `dependency.change` | 建边/删边 | 机制稿 §6.1 图校验 | 2（2026-11-12 已交付） |
@@ -265,8 +265,8 @@ docs/workflows/wf/
 | `review-import` | `--task <id> [--round <n>] [--slot <agent>] [--report <绝对路径>]`（后三项可省：按文件名发现） | `review.import` | 导入与锚点核对（机制稿 §9.2） | 机制稿 §3.2 锚点 | 1 |
 | `review-decide` | `--task <id> [--round <n>] [--plan <path>] [--unavailable <path>] [--gap-acceptance <path>] [--main-review <path>] [--main-review-draft <path>]`（轮次缺省＝当前轮；`--gap-acceptance` 为覆盖缺口的人接受文件；`--main-review` 为主会话五轴复核，产生 verdict 时必填；`--main-review-draft` 只生成待填骨架）（`--plan` 为逐条 finding 处置，元素 `{finding, decision_ref, reason}`；`--unavailable` 为人声明的审查环境不足及证据） | `review.decide` | 审查判定（**由入口按机制稿 §9.2 的已落盘事实与 AI 声明推导；声明本身不被机制验证**，不是人选）与逐条处置 | — | 1 |
 | `archive` | `--task <id> --decision <path>`（人调用 finish 的证据 + 提交授权 `commit_grants`） | `task.archive` | 正常归档（由 `wf-finish` 调用） | 机制稿 §3.5、机制稿 §9.3 门禁 | 1 |
-| `baseline-apply` | `--task <id> --proposal <path>` | `baseline.apply` | 基线/配置成组应用 | 机制稿 §3.4 | 1 |
-| `spec-update` | `--task <id> --changes <path>` | `spec.update` | 知识变更成组应用 | 机制稿 §3.1、§8.4 | 1 |
+| `baseline-apply` | `--task <id> --files a,b,c --decision <path>`（或 `--proposal <path>`；`--preview` 只读） | `baseline.apply` | 基线/配置成组应用 | 机制稿 §3.4 | 1 |
+| `spec-update` | `--task <id> --changes <path>`（可先 `--changes-draft`） | `spec.update` | 知识变更成组应用 | 机制稿 §3.1、§8.4 | 1 |
 | `definition` | `prepare --id <workflow-id>`（建立准备代次） \| `validate --id <workflow-id>`（只读校验） | `definition.prepare` / `definition.validate` | 准备定义 / 静态校验 | 机制稿 §3.1、§7.2 | 2（2026-11-12 已交付） |
 | `run` | `create --creation <path>`（建立实例代次并首次绑定） \| `advance --run <id> [--decision <path>]` \| `pause --run <id> --reason <text>` \| `resume --run <id> [--decision <path>]`（解除**实例**暂停；`--decision` 可选） \| `locate --run <id>`（只读） \| `finish --run <id> [--decision <path>]`（正常结束；有覆盖实例记录的 `commit` 授权才提交，否则停在 `persist_pending`） \| `terminate --run <id> --plan <path>`（批量处置计划，元素 `{object, decision_ref, reason}`；`decision_ref` 为内联 `Decision`，其 `choice` 声明处置：`放弃`/`abandon` 或 `保留`/`keep`——**这两个取值由本文定义**） | `run.advance` / `run.terminate`（`create` 由 writer 主记录承载首次创建与首次绑定、`pause`/`resume` 是该动作的受控字段写入、`locate` 是只读断言） | 实例创建、推进、暂停/恢复与终态 | 机制稿 §2.2（实例暂停/恢复）、机制稿 §7.3、机制稿 §7.4 | 2（2026-11-12 **已交付**：`create`/`locate`/`advance`/`pause`/`resume`/`terminate`/`finish` 全部可用） |
 | `upgrade` | `--apply`（预览 + 令牌） | `asset.apply` | 维护（机制稿 §10.3） | 全路径 | 3 |
@@ -457,6 +457,8 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 2.3.11 已知边界与实现说明
 
+- **升级不重核/合并 `.codex/hooks.json`**：`merge_hooks_json` 只在首装与 add_platforms 调用；发行若改 hook 落点或命令串，升级不会修 hooks.json，需卸载重装或人工核对（自检只核 hook 文件字节，不核 hooks.json 条目）。
+
 「不存在的命令不得在文档与 skill 中宣称」同样适用于函数名与能力条目。本节登记**已实现但有边界**的项与**明确的实现纪律**；确属未实现的项会显式标注「未实现」，不混写。
 
 - **锁的存活探测**（已实现，含边界）（设计稿 §4.4 的三要素）：`lock.py` 在固定标记行之后追加 `holder pid=<pid> start=<进程启动时刻>`；`verify_holder(root)` 只读判定该进程是否仍在且启动时刻一致（pid 复用会被识破），不获取锁、不改文件。获取时刷新持锁者事实、释放时清除，避免陈旧 pid 被当成存活。**运行时与 `repair`/`uninstall` 都在锁内消费该判定**：登记的持有者仍存活即 `WF_WRITER_BUSY`，不因人在预览里点了确认就清空写权；人确认是补充出口而非替代。`repair`/`uninstall` 的锁与运行时同契约（见本文 §2.3.10）。
@@ -510,7 +512,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 - **`repair` 尚未交付 project_id 重建（2026-11-06 第二十四轮复审外部 2）**：设计稿 §5.5 要求 repair 重建标识并显式失效旧确认记录，`repair.py` 目前只有 writer 恢复与 `--dispose`。因此 `baseline-apply` 在「历史有身份、现场缺失」时的出口改为两条：① 从 Git 恢复配置（旧值仍在历史里时）；② 等 repair 重建能力交付（第三轮，与机制稿 D09 一致）。在此之前不得静默生成新 id。
 - **`uninstall` 不登记维护写者（外部 4）**：机制稿 §10.5 要求 writer 合法时正常 acquire maintenance；当前卸载只做「writer 空闲检查 + 锁互斥 + 令牌」，`writer.json` 无卸载痕迹。互斥可达、可恢复，但「卸载期间谁在维护」只存在于锁文件的 pid 事实中。承接：第二轮补登记与回执。
 - **`spec_output_codepoints` 当前无行为效果（外部 6）**：`load_one_with_budget` 恒 `complete=true`，该键不截断也不约束任何对象；设计稿 §6.2 的降级阶梯无运行点（与 D18 同一缺口）。已由人裁登记为延期（该轮交付·第三轮，见 `pending-decisions.md` §6），读到时不得认为预算已生效。
-- **skill 正文的否定式禁令与设计稿 §1.1 写作纪律（外部 7）**：设计稿要求禁用否定式禁令句，11 个 skill 普遍含「不做」段。两者当前互相矛盾，属需人裁的文档口径（改写 11 个 skill 或收窄机制稿纪律），本轮不擅改。
+- **skill 正文的否定式禁令与设计稿 §1.1 写作纪律（外部 7，2026-11-23 收口）**：设计稿现行规则是「精确权限边界的否定句须写明手段与对象并给一个正例；`不做` 段保持简短即可」；13 个 skill 中 9 个含「不做」段，按此口径保留；提交、项目树写入、`.wf/**` 等关键边界已补正例（`.wf/**` 见 `wf-continue` 的 vendor 段）。
 - **宿主会话标识适配层已交付（2026-11-22 三轮 W3-2，P0-1）**：部署表 `install.py PLATFORMS` 的 `session_identity` 声明获得真实消费者——codex 的 `host-hook:SessionStart` 落地为 `host_hook` 资产类 `payload/hooks/codex-session-identity.py`（发行落点 `.codex/hooks/wf-session-identity.py`，per-asset `platform: codex` 条件投放；hook 以 `/proc` 祖先链复用 `wflib.session` 单一实现取锚点键，写 `.wf/.runtime/host-session-map/<anchor-key>.json`；import 失败写 `import-error` 标记、成功写映射时自愈删除；安装器对 codex 平台保序合并 `.codex/hooks.json`——幂等、命令串引用本脚本文件名判所有权、同名冲突交人；卸载对称移除自己的条目）。入口侧四态解析/`enable --new-session`/`_identity_facts` 两字段（`host_identity_present`/`session_provider`）/`status` 的 `host_mapping` 投影按机制稿 §1.4（2026-11-22 三轮改写段）实现；真实 Codex 宿主核验按 d1 同型手动记录（full README 手动项，不进 run_all 分母）。**DSH 维持显式信封通道**：`env:DSH_SESSION_ID` 只有适配层（模型/脚本）可读，入口不读环境变量（d1 既有实跑覆盖显式信封路径）；不为 DSH 新增 hook/映射机制。zcode/pi 维持 unknown，由 `enable --new-session` 覆盖。
 - **无锚点出口的语气债已修（2026-11-12）**：机制稿 §1.4 规定显式 `provider=wf` 信封**一律** `WF_IDENTITY_UNRESOLVED`（无本地证据），自动模式下 `issued_id` 由入口在执行边界派生；唯一可用的显式通道是 `provider=host`（宿主给出稳定 `session_id`）。此前四处出口写「用显式信封（--envelope/stdin）」而未点明 provider，等于把一条会被拒的路写成出路（本任务 `prework.md` §1 登记的残余）。现在四处共用一个常量 `cli.EXPLICIT_ENVELOPE_EXIT`，文案本身说明「`provider=wf` 的显式信封会被拒」。用例：`scripts/tests/wf_runtime/test_identity_exit_text.py`（文本断言：四处不再出现裸「用显式信封」）。**这是文案订正，不改任何身份判定**。
 - **定义的准备与静态校验（2026-11-12 交付；实例创建/推进/终止仍未交付）**：`definition validate --id <id>` 只读跑机制稿 §7.2 的六阶段（格式/schema → 局部 id 与保留前缀 → 引用来源与顺序 → 路径 → required/skip 与替代映射 → 完成/验证/人判声明），问题清单按 `stage` 排序返回、`ok=false` 时给 `WF_DEFINITION_INVALID`；`definition prepare --id <id>` 落准备记录 `.wf/preparations/<id>.json`（`{session_key, scope_paths, authorization, definition_refs, validation, progress, wip, ended_at}`，该目录已在 `scope._is_control_record` 的固定职责控制记录里），**未通过的草稿照常保留**并在 `validation.ok=false` 中留痕；别的会话持写权时 `prepare` 报 `WF_WRITER_BUSY`（准备不例外于写权）。
@@ -685,11 +687,12 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/wf-vX.Y.Z> \
     --source <已检出的发行目录> --platform <平台> [--platform <另一个平台>] [--confirm]
 
-<python> <目标>/.wf/bin/wf.py upgrade --apply --release-ref <refs/tags/wf-vX.Y.Z> \
-    --source <已检出的发行目录> [--platform <平台>]
+<python> <目标>/.wf/bin/wf.py upgrade --release <发行检出根> \
+    --release-ref <refs/tags/wf-vX.Y.Z> [--apply | --export-deviations --out <目录>] \
+    [--keep <路径>] [--restore <路径>]
 ```
 
-`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；`--platform` 至少一项，三种写法等价：`--platform a --platform b`、`--platform a b`、`--platform a,b`（别名 `claude`/`gemini`/`ghcopilot`）；技能目录由平台表解析到目标项目内，未知名直接拒绝并列支持项；升级省略时用安装记录里已确认的平台；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认预览（缺省时入口先出预览并要求交互确认）。升级不需要信封（维护入口，见本文 §2.2）。
+`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；`--platform` 至少一项，三种写法等价：`--platform a --platform b`、`--platform a b`、`--platform a,b`（别名 `claude`/`gemini`/`ghcopilot`）；技能目录由平台表解析到目标项目内，未知名直接拒绝并列支持项；升级不接受 `--platform`，一律用 `installation.platforms`（显式传入按 `WF_USAGE_INVALID`）；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认首装预览（缺省时入口先出预览并要求交互确认）；升级不接受 `--confirm`（用 `--apply` + 预览令牌）。升级不需要信封（维护入口，见本文 §2.2）。
 
 ### 4.2 `wf-release.json` 键表
 
@@ -756,15 +759,15 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 - 自检：段内每条路径都用只读忽略判定确认实际生效；被后续否定规则遮住时报告命中的否定规则与位置并拒绝启用，不以标记存在代替（机制稿 §10.4）。
 - 段外内容属用户；框架不整文件重写、不复制覆盖。
 
-### 4.5.1 预览令牌的实现约定（repair / uninstall 自含）
+### 4.5.1 预览令牌的实现约定（repair / uninstall / install 自含）
 
-机制稿 §10.3 已定令牌语义；本文只定两个独立入口各自实现一份时的形状，避免两份实现漂移：
+机制稿 §10.3 已定令牌语义；本文只定独立入口各自实现一份时的形状，避免多份实现漂移：
 
 - nonce 取 128 位随机（`secrets.token_hex(16)`），显示为十六进制；校验对象是该次预览对象的规范 JSON 摘要（`sha256:` + 64 hex）。
 - 令牌只在同一交互进程内有效：重新预览即销毁旧 nonce，进程退出后必须重新预览；不写任何持久记录、不作跨会话凭据。
-- `repair.py` 与 `uninstall.py` 各实现一份（设计稿 §1.1 要求这两个入口单文件且不导入框架运行时，因此不能共享 `wflib` 模块）；两份的生成、比对、失效行为必须一致，由 **authoring 发布前检查** `scripts/build-wf-release.py --verify-token-parity` 比对（不属于安装期自检，也不是运行期能力）：脚本用显式注入的 `--nonce`（仅测试形态，运行路径不使用）对同一预览对象分别跑两份实现，比对「nonce → 预览摘要 → 校验结果 → 失效后再次校验」四步输出，不一致即拒绝打包。
+- `repair.py`、`uninstall.py` 与 `install.py` 各实现一份（设计稿 §1.1 要求 repair/uninstall 单文件且不导入框架运行时；install.py 是发行根入口，同样不导入 `.wf/lib`）；三份的生成、比对、失效行为必须一致，由 **authoring 发布前检查** `scripts/build-wf-release.py --verify-token-parity` 比对（不属于安装期自检，也不是运行期能力）：脚本用显式注入的 `--nonce`（仅测试形态，运行路径不使用）对同一预览对象分别跑三份实现，比对「nonce → 预览摘要 → 校验结果 → 失效后再次校验」四步输出，不一致即拒绝打包。
 - `repair.py --dispose`（维护组处置回写）与 `--apply` 走同一套预览与令牌：先只读预览目标回执、当前写权状态与将写入的 `disposition`，再由人在同一终端输入令牌；回写只改该回执的 `disposition` 字段，不动 `holder`/`generation`/资产，互斥由同一最小锁保证，因此不要求写权空闲（2026-11-03 人裁落地，实测见任务记录 `validation.md` §17）。
-- 第三轮的 `upgrade --apply` 用 `wflib/maintenance.py::preview/token_confirm` 实现同一规则，算法仍是这一份说明，不另立格式。
+- 第三轮已交付的 `upgrade --apply` 由发行根 `install.py` 实现同一规则（不导入 `.wf/lib`；`wf.py upgrade` 只转交），算法仍是这一份说明，不另立格式；`--export-deviations` 是只读子操作，不取令牌。
 
 ### 4.6 首轮开发态部署
 
@@ -810,7 +813,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 
 主会话交给 reviewer 的锚点：`check-anchor`（`check.id` + 机制稿 §3.2 定义的 `check_anchor`，含 Check 内容指纹、规划版本、相关 spec 与项目配置哈希、基线与定义快照哈希；逐键定义与计算只在该节，本文不重列）。导入前重算并与报告比对，不一致即该报告失效、按审查未通过处理（`WF_REVIEW_INVALID`），不导入为有效结论。
 
-`source-cli` 是自报字段，只与人工声明核对，不是身份认证（设计稿 §1.5）。人数与差异按机制稿 §9.2：两个 reviewer CLI 彼此不同、且不在本次实施 CLI 集合中；只能凑一个时用同一 `review-launch`（`slots` 只列一项）发起，入口在 `launches` 记 `degraded: single-provider`；`review-decide` 按机制稿 §9.2 默认**拒绝输入、不产生 verdict**（人数不合格属输入不成立），2026-11-22 三轮 W2-3 起有人签残余风险接受记录时可留痕降级产出 verdict（口径见机制稿 §9.2「有记录降级路径」）；无接受记录时复杂任务据此暂停或异常归档，不得据此判 pass。
+`source-cli` 是自报字段，只与人工声明核对，不是身份认证（设计稿 §1.5）。人数与差异按机制稿 §9.2：两个 reviewer CLI 彼此不同、且不等于本次 launch 声明的实施 CLI（单值）；只能凑一个时用同一 `review-launch`（`slots` 只列一项）发起，入口在 `launches` 记 `degraded: single-provider`；`review-decide` 按机制稿 §9.2 默认**拒绝输入、不产生 verdict**（人数不合格属输入不成立），2026-11-22 三轮 W2-3 起有人签残余风险接受记录时可留痕降级产出 verdict（口径见机制稿 §9.2「有记录降级路径」）；无接受记录时复杂任务据此暂停或异常归档，不得据此判 pass。
 
 ### 5.4 首轮为何必须就绪
 
@@ -884,7 +887,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 | 轮次 | 条目 | 未交付时的行为 |
 |---|---|---|
 | 第二轮 | 定义准备与静态校验（**2026-11-12 已交付**）、实例创建与推进（**2026-11-12 已交付**）/暂停/终止、步骤人判与略过、自动建任务与顺序边（**建删边 `dep` 2026-11-12 已交付**）、返工/替换/建删边、挂起复评、**巡检的「需人工比对」清单与 `author` 复核顺序（D24 的两个治理输出）——2026-11-12 已交付**、**`.wf/out-of-scope/` 知识拒绝项（D24 的另一延期子项，2026-11-12 人裁 A 由第三轮提前到本轮并已交付）**（~~wf 自签发身份路径~~ **已于 2026-11-08 随自动身份模式交付，不属本轮**，见本节后「身份路径」段与机制稿 §1.4） | `definition`/`run`/`dep`/`task-rework`/`task-replace`/`task-reassess` 返回 `WF_CAPABILITY_UNAVAILABLE`，facts 记「第二轮交付」，exit 记「等第二轮」；已可用的单任务放弃路径照常走 `task-abandon`。**身份路径已交付（2026-11-08）**：`provider=wf` 由入口在执行边界上派生并自动签发 `issued_id`（附件承载 activation），显式 wf 信封按设计拒绝（`WF_IDENTITY_UNRESOLVED` + 两条出口）；解析不出执行边界的形态（无锚点宿主、容器逐命令、leader 先死）按 `WF_CAPABILITY_UNAVAILABLE` 阻断，不得由模型自行签发 id 绕过 |
-| 第三轮 | 正式发行引用与清单解析（D22 的升级侧）、~~`.wf/out-of-scope/` 知识拒绝项~~（**2026-11-12 提前到第二轮并已交付**）、完整升级/卸载生命周期（D31，含三方升级矩阵与卸载覆盖验收）、`upgrade --apply` 与 `uninstall --purge` 的令牌路径（D28）、落点表全部适用分支验收（D33）、全部资产修复验收（D09） | `upgrade` 返回 `WF_CAPABILITY_UNAVAILABLE`；`repair` 只做写权/绑定/锚点最小恢复，资产缺失类修复杂交第三轮；`uninstall` 只做开发态退出（`--purge` 不可用）。**`install.py` 的首次安装不在此列**：它已在首轮交付并通过 `p5_f0` 实跑（2026-11-05 人裁） |
+| 第三轮 | 正式发行引用与清单解析（D22 的升级侧）、~~`.wf/out-of-scope/` 知识拒绝项~~（**2026-11-12 提前到第二轮并已交付**）、完整升级/卸载生命周期（D31，含三方升级矩阵与卸载覆盖验收）、`upgrade --apply` 与 `uninstall --purge` 的令牌路径（D28）、落点表全部适用分支验收（D33）、全部资产修复验收（D09） | **2026-11-22 随 0.1.5 交付**：`install.py --upgrade` 三方匹配、`--export-deviations` 只读导出、`uninstall --purge` 与 `upgrade --apply` 的令牌路径均已实现；未交付前的旧行为（`upgrade` 返回 `WF_CAPABILITY_UNAVAILABLE`、uninstall 只做开发态退出）仅作历史记录。**`install.py` 的首次安装不在此列**：它已在首轮交付并通过 `p5_f0` 实跑（2026-11-05 人裁） |
 
 **首轮与复评触发的关系**：机制稿 §5.3、§5.4 要求每次归档持久化核实成功、以及每次启动校验通过后触发挂起复评。首轮不会出现挂起任务（挂起源于返工，属第二轮），因此这两处触发在首轮按**空挂起集合**处理：直接通过、不写记录、不产生待决项，也不得返回 `WF_CAPABILITY_UNAVAILABLE`（否则每次归档/启动都会留下无法补做的待复评）。`task-reassess` 的完整路径与有挂起任务时的复评属第二轮。
 
@@ -960,7 +963,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 | 时刻 | 入口 | 人工动作/令牌 | 阻断出口（原因码 → 出口） |
 |---|---|---|---|
-| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--confirm]`（先出预览）；正式发行 `python3 install.py --target <abs> --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录> --platform <平台>`（首轮已交付；升级侧仍属第三轮） | 给目标绝对路径与发行引用；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核正确发行引用；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
+| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--confirm]`（先出预览）；正式发行 `python3 install.py --target <abs> --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录> --platform <平台>`（首轮已交付；升级/导出入口已随 0.1.5 交付） | 给目标绝对路径与发行引用；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核正确发行引用；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
 | 首次解释器确认 | `<python> .wf/bin/wf.py confirm-executor --scope system\|global\|project`（终端，人执行） | 人在终端执行，入口探测 `--version` | `WF_EXECUTOR_UNCONFIRMED` → 确认当前解释器 / 换已批准解释器 / 回到未设置 |
 | 开始会话 | 宿主 skill `wf-start`（唯一启用方式） | 人显式调用 | `WF_FLOW_CONFLICT` → 清理 Trellis 来源后换新会话；`WF_IDENTITY_UNRESOLVED` → 核实宿主身份或改用受支持宿主（wf 签发路径属第二轮，首轮不可选）；`WF_WRITER_BUSY` → 等待或已确认交接 |
 | 选择对象 | `wf-start` → `wf.py task-new`（普通任务）/ `run create`（第二轮） | 人选对象；实例另需确认版本/输入/展开规则 | `WF_BINDING_MISMATCH` → 原对象结束后新会话选择；`WF_DEPENDENCY_UNMET` → 等前置或人确认返工/重连；`WF_APPROVAL_MISSING` → 先批准规划 |
@@ -976,9 +979,10 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 | 完成门禁与归档 | 人调用 `wf-finish` → `wf.py archive --task <id> --decision <path>` | 人了解结果与未核实项后调用 finish；该 Decision 记调用证据与按精确路径的提交授权 | `WF_COMMIT_NOT_AUTHORIZED` → 等人处理；`WF_SEMANTIC_DECISION` → 裁定未决项；`WF_WORKSPACE_UNRESOLVED` → 处置工作区 |
 | 日常收工 | `wf-continue` → `wf.py stop --decision <path>` | 人给**一个**去向（提交 / 保留 WIP / 反向修正 / 具名承接），`subject` 列出覆盖路径或承接对象；提交与反向修正的授权写在同一 Decision 数组里 | `WF_WORKSPACE_UNRESOLVED` → 落实际处置后再释放；`WF_WIP_UNRESOLVED` → 同对象恢复或处置 |
 | 未完成收工就关闭 | 新会话先人直调 `.wf/bin/repair.py`（预览 + 令牌），再 `wf-start` | 人确认旧写者已停止、核对 Git/产物/WIP、输入令牌 | `WF_HISTORY_UNRESOLVED` → 只读核原文/Git 后 repair；`WF_GENERATION_STALE` → 停止写并重核 |
-| 升级（第三轮） | `wf.py upgrade --apply --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录> [--platform <平台>]` | 预览 + 终端令牌；另有提交授权 | `WF_PREVIEW_STALE` → 重新预览；`WF_ASSET_DECISION` → 逐项选保留/恢复/合并 |
+| 升级（0.1.6 已交付） | `wf.py upgrade --release <发行检出根> --release-ref <refs/tags/wf-vX.Y.Z> [--apply]`；冲突逐路径 `--keep/--restore <路径>`（`--keep` 仅可选资产） | 预览 + 终端令牌；另有提交授权 | `WF_PREVIEW_STALE` → 重新预览；`WF_ASSET_DECISION` → 逐项选保留/恢复/合并；`WF_SEMANTIC_DECISION` → 先暂停任务/处置 WIP/释放写权；必需资产保留删除 → 改 `--restore` 或改清单 |
+| 本地偏离回源（只读） | `wf.py upgrade --release <发行检出根> --release-ref <ref> --export-deviations --out <目录>`（或 `install.py --upgrade ... --export-deviations`） | **不需要**令牌/写权/暂停任务；人确认回源范围 | 非空 `--out`/符号链接/部分写失败 → `WF_ASSET_DECISION`/`WF_PATH_INVALID`/`WF_PERSISTENCE_FAILED`；`pending` 项不等于已接受偏离 |
 | 受控修复 | `.wf/bin/repair.py`（人直调；`--dispose <plan>` 处置维护组） | 预览 + 终端令牌；确认旧写者停止 | `WF_RECORD_INVALID` → 保留原文并按人指定事实重建；`WF_HISTORY_UNRESOLVED` → 只读核对 |
-| 卸载 | `.wf/bin/uninstall.py`（`--purge` 另确认，第三轮） | 预览 + 确认；确认无 wf 进程后手工清理 `.wf-lock` 与 `/.wf-lock` 忽略行 | `WF_ASSET_DECISION` → 逐项选保留/移走/删除；`WF_WRITER_BUSY` → 先核实旧写者 |
+| 卸载（0.1.6 已交付） | `.wf/bin/uninstall.py`（`--purge` 另确认） | 预览 + 确认；确认无 wf 进程后手工清理 `.wf-lock` 与 `/.wf-lock` 忽略行 | `WF_ASSET_DECISION` → 逐项选保留/移走/删除；`WF_WRITER_BUSY` → 先核实旧写者 |
 | 巡检 | `wf.py inspect`（人发起，或每 10 个正常归档的整数倍） | 无 | 只读报告三类结果；要修复则另取授权 |
 
 表中 `WF_ASSET_DECISION`、`WF_IDENTITY_UNRESOLVED`、`WF_SCOPE_UNRESOLVED`、`WF_WORKSPACE_UNRESOLVED`、`WF_HISTORY_UNRESOLVED`、`WF_SEMANTIC_DECISION` 属 `needs_decision` 档（列名沿用设计稿 §8.1 的「阻断出口」，档位以机制稿 §11.1 码表为准）；其余码为 `blocked` 档。速查不合并两档，只为省行。

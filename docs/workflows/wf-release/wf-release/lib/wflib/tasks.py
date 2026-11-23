@@ -2769,6 +2769,30 @@ def cmd_task_check(ctx, args):
     exclusion_file = args.value("--workspace-exclusion")
     if not task_id:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-check requires --task <id>"})
+    if args.flag("--review-notes-draft"):
+        # 2026-11-23：双轴内部审查结论是 AI 必须手写的结构化文件，补只读骨架入口
+        # （与 archive/stop/review-decide 的 --draft 同型：只打印不落盘，TODO 照抄会被
+        # _parse_review_notes 判为非法 conclusion）。
+        path = _require_task_dir(ctx, task_id)
+        task_record = records.load_json(os.path.join(path, "task.json")) or {}
+        skeleton = {
+            "standard": {
+                "conclusion": "TODO（pass|fail|undecided）",
+                "basis": "TODO（依据：规范/契约条款与核对结果）",
+            },
+            "requirement": {
+                "conclusion": "TODO（pass|fail|undecided）",
+                "basis": "TODO（依据：PRD/验收项与实际结果）",
+            },
+        }
+        return codes.result(
+            "WF_OK",
+            object={"id": task_id, "name": task_record.get("title")},
+            position_=codes.position(scope="task", phase=task_record.get("phase"), task_id=task_id),
+            next_="把两个轴的 TODO 换成结论与依据，写到 facts.path 后再去掉 --review-notes-draft 重跑 task-check",
+            facts={"draft": skeleton, "path": os.path.join(path, "review-notes.json"),
+                   "note": "草稿只读；TODO 原样提交会被判为非法 conclusion"},
+        )
     decisions = cli._load_decision(decision_path) if decision_path else []
     exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
     if exclusion_problems:
@@ -2881,6 +2905,24 @@ def cmd_task_knowledge(ctx, args):
     from . import lock
 
     task_id = args.value("--task")
+    if args.flag("--changes-draft"):
+        if not task_id:
+            raise TaskError("WF_USAGE_INVALID", {"reason": "--changes-draft requires --task <id>"})
+        path = task_dir(ctx.root, task_id)
+        if not path:
+            raise TaskError("WF_RECORD_INVALID", {"reason": "task record is missing", "task": task_id})
+        task_record = records.load_json(os.path.join(path, "task.json")) or {}
+        skeleton = [{"action": "TODO（add|update|merge|rename|delete）",
+                     "path": "TODO（spec 相对路径）",
+                     "reason": "TODO（变更理由）",
+                     "summary": "TODO（≤80 字摘要）"}]
+        return codes.result(
+            "WF_OK",
+            object={"id": task_id, "name": task_record.get("title")},
+            position_=codes.position(scope="task", phase=task_record.get("phase"), task_id=task_id),
+            next_="填好 changes 数组写到 facts.path，去掉 --changes-draft 后按 --decision updated 重跑",
+            facts={"draft": skeleton, "path": os.path.join(path, "knowledge-changes.json")},
+        )
     decision = "no-update" if args.flag("--no-update") else args.value("--decision")
     changes_path = args.value("--changes")
     if not task_id or decision not in ("no-update", "updated"):
@@ -4417,6 +4459,23 @@ def cmd_spec_update(ctx, args):
     from . import lock, spec as spec_mod
 
     task_id = args.value("--task")
+    if args.flag("--changes-draft"):
+        if not task_id:
+            raise TaskError("WF_USAGE_INVALID", {"reason": "--changes-draft requires --task <id>"})
+        path = task_dir(ctx.root, task_id)
+        if not path:
+            raise TaskError("WF_RECORD_INVALID", {"reason": "task record is missing", "task": task_id})
+        task_record = records.load_json(os.path.join(path, "task.json")) or {}
+        skeleton = [{"operation": "TODO（add|update|merge|rename|delete|disable）",
+                     "new_paths": [], "old_paths": [],
+                     "content": "TODO（add/update 的完整正文，含 frontmatter）"}]
+        return codes.result(
+            "WF_OK",
+            object={"id": task_id, "name": task_record.get("title")},
+            position_=codes.position(scope="task", phase=task_record.get("phase"), task_id=task_id),
+            next_="填好 changes 数组写到 facts.path；after_digests/reference_dispositions 由入口补算，before_digests 可选（提供则按前像核），去掉 --changes-draft 后重跑 spec-update",
+            facts={"draft": skeleton, "path": os.path.join(path, "spec-changes.json")},
+        )
     changes_path = args.value("--changes")
     if not task_id or not changes_path:
         raise TaskError("WF_USAGE_INVALID", {"reason": "spec-update requires --task <id> --changes <path>"})

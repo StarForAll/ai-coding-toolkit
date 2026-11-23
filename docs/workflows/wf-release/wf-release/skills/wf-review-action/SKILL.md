@@ -14,7 +14,8 @@ disable-model-invocation: false
 
 ```bash
 # 1) 导入：按文件名发现本轮已完成（status=done）的报告，重复调用幂等
-<python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --envelope <本会话信封> --json
+# 自动模式（默认）不传信封；只有本会话确实有显式信封文件时才追加 --envelope <本会话信封>
+<python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --json
 
 # 2) 生成主会话复核骨架（不产生结论；放 .wf/.runtime/，该目录不入库）
 <python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \

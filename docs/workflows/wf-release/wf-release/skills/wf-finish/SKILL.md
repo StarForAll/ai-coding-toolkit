@@ -32,7 +32,8 @@ user-invoked: true
    <python> <项目根>/.wf/bin/wf.py gate --due before_archive --json   # 步骤面缺口
    ```
    `repair_scope` 的读法见 `wf-repair-loop`；`unverifiable` 未放行时按 `wf-review-accept-unknown`
-   找人裁（先呈现事实、再由人写 quote）。预检通过不等于可以归档：本 skill 只呈现事实，不宣告结论。
+   找人裁（先呈现事实、再由人写 quote）。不要用 `archive` 试探（完整理由见 `wf-repair-loop`「不要试归档探路」）；
+   本 skill 只呈现事实，不宣告结论。
 1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论（含每轮 `launch_scope` 的
    `selected/total/narrowed` 与判定 `scope.unselected`；发起前的人外发确认——choice=export——见
    `wf-continue`「复杂任务审查」）、知识处置状态、待提交路径，以及当前生效的放行清单
