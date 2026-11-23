@@ -81,15 +81,17 @@ class CheckLogsMaterializationTest(unittest.TestCase):
         entry = tests["logs"][0]
         self.assertEqual(entry["file"], "check-logs/v1.log")
         self.assertTrue(entry["digest"].startswith("sha256:"))
-        self.assertIsNone(entry["unavailable_cause"])
         self.assertIs(entry["verified"], True)          # 与命令记录的 log_digest 一致
         self.assertEqual(entry["recorded_digest"], recorded_digest)
         # 真实日志内容确实被复制（reviewer 可复核具体输出）
         self.assertIn("passed output line",
                       (logs_dir / "v1.log").read_text(encoding="utf-8"))
 
-    def test_tampered_log_is_marked_not_verified(self):
-        # 日志被改写：复制的字节如实标 verified=false，不再冒充该 Check 的原始证据
+    def test_tampered_log_is_not_materialized_and_reported(self):
+        """日志被改写：**不进材料包**（外发面先核身份再物化），只在 status.json.problems 报告。
+
+        旧语义是"先复制、事后标 verified=false"——标注约束不了材料范围（十一轮 b-2）。
+        """
         import hashlib
         import json
 
@@ -104,8 +106,12 @@ class CheckLogsMaterializationTest(unittest.TestCase):
         materials = self.task_dir / "review" / "round-3" / "materials"
         review.write_materials(self._ctx(), self.task, 3, "anchor-3", str(materials), paths=[])
         tests = json.loads((materials / "tests.json").read_text(encoding="utf-8"))
-        self.assertIs(tests["logs"][0]["verified"], False)
-        self.assertNotEqual(tests["logs"][0]["digest"], original_digest)
+        self.assertFalse(tests.get("logs"), "被改写的日志不得进入材料包")
+        self.assertFalse((materials / "check-logs" / "v1.log").exists())
+        status = json.loads((materials / "status.json").read_text(encoding="utf-8"))
+        self.assertTrue(any("digest mismatch" in item.get("reason", "")
+                            for item in status.get("problems") or []),
+                        status.get("problems"))
 
     def test_referenced_but_missing_log_is_reported(self):
         # 命令引用的日志复制不到：进 status.json.problems，不静默省略

@@ -204,19 +204,20 @@ class FixtureDeployTest(unittest.TestCase):
     def test_candidate_full_applies_one_qualification_to_all_units(self):
         result = plan.plan(["--full"] + self.candidate_args(), make())
         suites = [unit for unit in result["units"] if unit["kind"] == "suite"]
-        self.assertEqual(len(suites), 57, "候选全量只跑经 candidate-audit 核实的 suite")
-        self.assertTrue(all(unit["name"] not in ("r90_tests", "p5_v1")
-                            for unit in suites))
+        # 2026-11-23：r90_tests/p5_v1 经候选实跑通过并提升，候选全量从 57 变 59，
+        # 它们不再是排除项；只剩 r72_tests（源码安装器/固定旧 ref）被排除。
+        self.assertEqual(len(suites), 59, "候选全量只跑经 candidate-audit 核实的 suite")
+        self.assertTrue(all(unit["name"] not in ("r72_tests",) for unit in suites))
         # flow/extra 与 suite 同一条资格：审计通过的 flow 保留，r72（源码安装器/固定旧 ref）排除。
         kinds = {unit["name"]: unit["kind"] for unit in result["units"]}
         for name in ("f0", "p5_spec", "p5_v2v3", "p5_v5"):
             self.assertEqual(kinds.get(name), "flow")
         self.assertNotIn("r72_tests", kinds)
         excluded = {item["name"]: item["reason"] for item in result["excluded_units"]}
-        self.assertEqual(set(excluded), {"r90_tests", "p5_v1", "r72_tests"})
+        self.assertEqual(set(excluded), {"r72_tests"})
         for name, reason in excluded.items():
             self.assertIn("candidate_clean=false", reason, name)
-        self.assertEqual(len(result["units"]), 61,
+        self.assertEqual(len(result["units"]), 63,
                          "候选全量分母 = 合格 suite + 合格 flow/extra（排除项被披露）")
 
     def test_candidate_subset_refuses_explicit_dev_only_units(self):

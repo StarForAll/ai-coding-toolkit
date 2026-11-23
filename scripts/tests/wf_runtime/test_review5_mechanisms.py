@@ -750,11 +750,12 @@ class ReleaseTagHintTest(unittest.TestCase):
                                             REPO / "scripts" / "verify-wf-release.py")
         module = _ilu.module_from_spec(spec)
         spec.loader.exec_module(module)
-        result = module.verify(str(REPO), "0.1.7", "refs/tags/wf-v0.1.7",
+        # 用**不存在**的版本/tag：tag 已建时入口返回"核对通过"、没有 exits，断言就没意义
+        result = module.verify(str(REPO), "0.9.9", "refs/tags/wf-v0.9.9",
                                source_check=lambda *a: {"name": "x", "ok": True, "facts": {}})
         exits = result["checks"][0].get("exits") or []
         joined = " ".join(exits)
-        self.assertIn("git tag wf-v0.1.7", joined)
+        self.assertIn("git tag wf-v0.9.9", joined)
         self.assertNotIn("git tag refs/tags/", joined)
 
 

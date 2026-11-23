@@ -376,15 +376,23 @@ class ContextScopeTest(unittest.TestCase):
         self.assertIn("pkg/b.py",
                       json.dumps(caught.exception.facts, ensure_ascii=False))
 
-    def test_context_rejects_a_new_check_id_even_with_same_anchor(self):
-        self.task["reviews"]["launches"][0]["anchor"]["check_id"] = "c2"
-        records.write_json(self.task_dir / "task.json", self.task)
-        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})):
-            with self.assertRaises(review.ReviewError) as caught:
-                review.context(SimpleNamespace(root=self.root), self.task, 1, as_value="pi")
-        self.assertEqual(caught.exception.code, "WF_CHECK_STALE")
-        self.assertIn("check_id", json.dumps(caught.exception.facts.get("identity"),
-                                             ensure_ascii=False))
+    def test_launch_identity_accepts_a_new_check_id_with_the_same_anchor(self):
+        """同内容重跑 Check 只换 id：轮次身份继续有效（2026-11-23 十三/十五轮复审后）。
+
+        这条契约在**身份判定**这一层验证（`anchor_identity_problems` 是唯一实现）；
+        `context()` 还会继续做批准/交付投影，夹具不为它另造一套。
+        """
+        record = {"check": {"id": "c2", "anchor": {"check_anchor": ANCHOR}}}
+        problems = review.anchor_identity_problems(
+            {"check_id": "c1", "check_anchor": ANCHOR}, record)
+        self.assertEqual(problems, [])
+
+    def test_launch_identity_rejects_a_different_anchor(self):
+        record = {"check": {"id": "c2", "anchor": {"check_anchor": ANCHOR}}}
+        problems = review.anchor_identity_problems(
+            {"check_id": "c1", "check_anchor": "sha256:" + "e" * 64}, record)
+        self.assertTrue(problems)
+        self.assertIn("check_id", json.dumps(problems, ensure_ascii=False))
 
     def test_context_rejects_a_drifted_launch_anchor(self):
         drifted = "sha256:" + "e" * 64

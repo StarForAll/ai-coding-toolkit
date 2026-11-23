@@ -193,10 +193,10 @@ class CandidateFilterTest(Base):
         result = select.select(["install"], fixture_deploy="candidate", mode="green")
         self.assertEqual(sorted(result["cases"]),
                          ["branch-source-preview", "reinstall-preserves-data", "release-identity-commit"])
+        # 2026-11-23：删除 5 条 add_platforms 专用 repro 后，install 组的 dev-only 只剩这三条
         self.assertEqual(sorted(result["skipped_non_candidate"]),
-                         ["install-generation-bumps", "install-lock-foreign-object",
-                          "install-lock-realpath", "install-receipt-metadata",
-                          "install-receipt-relative", "uninstall-records-maintenance"])
+                         ["install-lock-foreign-object", "install-lock-realpath",
+                          "uninstall-records-maintenance"])
 
     def test_candidate_group_without_clean_case_is_refused(self):
         self.context = context_for("candidate")

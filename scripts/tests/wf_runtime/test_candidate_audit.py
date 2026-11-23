@@ -85,15 +85,18 @@ class CandidateAuditTest(unittest.TestCase):
             self.assertIn(key, identity, key)
         self.assertTrue(identity["helpers"])
         self.assertNotIn("/tmp/", json.dumps(data), "审计证据不得固化临时 workdir")
-        for name in ("r90_tests", "p5_v1"):
-            record = data["units"][name]
-            self.assertTrue(record["failures"], name)
-            self.assertEqual(record["status"], "bad")
+        # r90/p5_v1 曾在候选实跑里以具体失败断言留作 dev-only；2026-11-23 修掉来源判定后
+        # 通过并提升，因此这里按**实际状态**核：失败的单元必须有失败证据，通过的单元
+        # 必须绑定本候选身份（不写死名单）。
+        for name, record in data["units"].items():
+            if record.get("status") == "bad":
+                self.assertTrue(record["failures"], name)
             self.assertEqual(record["installation"]["source_commit"],
                              identity["candidate_commit"],
                              f"{name}: 实际安装身份必须是本候选")
-        self.assertEqual(data["units"]["p5_v1"]["rc"], 1)
-        self.assertEqual(data["units"]["p5_v1"]["suite_rc"], 0)
+        for name in ("r90_tests", "p5_v1"):
+            self.assertEqual(data["units"][name]["status"], "ok", name)
+            self.assertEqual(data["units"][name]["suite_rc"], 0)
         for name, record in data["units"].items():
             for key in ("script_sha256", "kind", "expect", "fixture", "isolated_user",
                         "template", "installation", "input_identity", "input_digest"):

@@ -133,8 +133,7 @@ class MultiRootHarness(unittest.TestCase):
 
     def _plan(self, keep=(), restore=()):
         return install.three_way_plan(str(self.target), self._installation(), self.manifest,
-                                      str(self.source), ["claudecode", "dsh"],
-                                      list(keep), list(restore))
+                                      str(self.source), list(keep), list(restore))
 
     def _run(self, args, commit="deadbeef"):
         """跑 upgrade 入口并解析它写到 stdout 的 JSON（入口返回的是退出码）。"""
