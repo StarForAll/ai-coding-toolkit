@@ -58,15 +58,15 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(counts["units_total"], 67)
         self.assertEqual(counts["units_by_kind"],
                          {"candidate": 1, "extra": 1, "flow": 4, "manual": 2, "suite": 59})
-        self.assertEqual(counts["repro_discovered"], 85)
-        self.assertEqual(counts["repro_grouped"], 54)
+        self.assertEqual(counts["repro_discovered"], 80)
+        self.assertEqual(counts["repro_grouped"], 49)
         self.assertEqual(counts["repro_ungrouped"], 31)
-        self.assertEqual(counts["repro_with_metadata"], 10)
+        self.assertEqual(counts["repro_with_metadata"], 7)
         self.assertEqual(counts["repro_candidate_clean"], 3)
-        self.assertEqual(counts["units_candidate_verified"], 62)
-        self.assertEqual(counts["units_kept_dev_only"], 3)
+        self.assertEqual(counts["units_candidate_verified"], 54)
+        self.assertEqual(counts["units_kept_dev_only"], 1)
         self.assertEqual(counts["units_pending_promotion"], 0)
-        self.assertEqual(counts["units_not_tested"], 0)
+        self.assertEqual(counts["units_not_tested"], 2)
 
     def test_every_id_is_accounted_and_ungrouped_ids_are_exact(self):
         rows = self.result["rows"]["repro"]

@@ -30,14 +30,20 @@ rc_ro, ro_payload, _ = wf(["status", "--json"])
 rec("未安装平台时只读诊断仍可运行", "WF_OK", (ro_payload or {}).get("code"),
     (ro_payload or {}).get("code") == "WF_OK")
 
+# 已装项目重跑开发态部署：**按来源一致性判定**（安装面向全部平台后没有"追加平台"）。
+# 夹具可能由候选发行安装（release_ref=refs/tags/…），此时跨来源重跑必须被拒。
 proc = subprocess.run([wfdrive.TOOL_PYTHON,
                        wfdrive.REPO + "/scripts/wf-dev-deploy.py",
                        "--target", F, "--confirm"],
                       capture_output=True, text=True)
 installed["platforms"] = saved
 json.dump(installed, open(inst_path, "w", encoding="utf-8"), ensure_ascii=False)
-rec("追加平台（已装项目只加平台）", "WF_OK 且回显平台",
-    "WF_OK" in proc.stdout or rc == 0, proc.returncode == 0)
+_out = (proc.stdout or "") + (proc.stderr or "")
+_recorded_ref = str(json.load(open(inst_path, encoding="utf-8")).get("release_ref") or "")
+_cross_source = bool(_recorded_ref) and not _recorded_ref.startswith("dev:")
+_expected_ok = ("WF_ASSET_DECISION" in _out) if _cross_source else ("WF_OK" in _out)
+rec("已装项目重跑按来源判定", "跨来源 → WF_ASSET_DECISION / 同来源 → 幂等 WF_OK",
+    f"rc={proc.returncode} ref={_recorded_ref}", _expected_ok)
 
 rc, payload, _ = wf(["enable", "--json"])
 rec("平台在册后 enable", "pass WF_OK", (payload or {}).get("code"), rc == 0)

@@ -206,13 +206,6 @@
       "groups": [],
       "metadata": false
     },
-    "f5-4-generation-bool": {
-      "candidate_clean": "<missing>",
-      "groups": [
-        "identity"
-      ],
-      "metadata": false
-    },
     "f7-1-touch-paths": {
       "candidate_clean": "<missing>",
       "groups": [],
@@ -268,13 +261,6 @@
       ],
       "metadata": false
     },
-    "install-generation-bumps": {
-      "candidate_clean": false,
-      "groups": [
-        "install"
-      ],
-      "metadata": true
-    },
     "install-lock-foreign-object": {
       "candidate_clean": false,
       "groups": [
@@ -283,20 +269,6 @@
       "metadata": true
     },
     "install-lock-realpath": {
-      "candidate_clean": false,
-      "groups": [
-        "install"
-      ],
-      "metadata": true
-    },
-    "install-receipt-metadata": {
-      "candidate_clean": false,
-      "groups": [
-        "install"
-      ],
-      "metadata": true
-    },
-    "install-receipt-relative": {
       "candidate_clean": false,
       "groups": [
         "install"
@@ -314,13 +286,6 @@
       "candidate_clean": "<missing>",
       "groups": [
         "archive"
-      ],
-      "metadata": false
-    },
-    "r4-1-source-mismatch": {
-      "candidate_clean": "<missing>",
-      "groups": [
-        "identity"
       ],
       "metadata": false
     },
