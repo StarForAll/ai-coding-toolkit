@@ -527,8 +527,10 @@ class Round4ReviewFixesTest(unittest.TestCase):
         self.assertIn("file_digest_state", source)
 
     def test_three_way_matching_delivery_state_annotated(self):
+        """五轮：三方升级匹配已交付，§1.1 的"未交付期间…登记缺口"陈旧括注必须消失。"""
         design = (REPO / "docs/workflows/wf-framework-design.md").read_text(encoding="utf-8")
-        self.assertIn("未交付期间该条为登记缺口", design)
+        self.assertNotIn("未交付期间该条为登记缺口", design)
+        self.assertIn("三方升级匹配（已交付", design)
 
 
 import unittest.mock  # noqa: E402  （Round4 用例需要）

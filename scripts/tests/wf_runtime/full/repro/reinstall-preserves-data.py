@@ -18,8 +18,10 @@ import _review_flow as F
 import _snapshot as S
 
 SID = "sess-R630"
-FROM = '    if state != "idle":\n        return f"writer state is {state!r}; 追加平台需在空闲时进行"\n'
-TO = '    if False:  # 注入：写者持有时也允许重装\n        return f"writer state is {state!r}; 追加平台需在空闲时进行"\n'
+FROM = ('    if writer.get("state") != "idle":\n'
+        '        return None, blocked("WF_WRITER_BUSY",\n')
+TO = ('    if False:  # 注入：写者持有时也允许补齐\n'
+      '        return None, blocked("WF_WRITER_BUSY",\n')
 
 
 def check():
@@ -43,9 +45,19 @@ def check():
     task_id, task_dir = S.started_task(project, root, sid=SID)     # 写权被本会话持有
     problems = []
 
+    # 写权被持有时：无缺失 ⇒ 只读核对成功（不碰写权）；有缺失 ⇒ 拒绝补齐
     held = R.installer(source, project)
-    if held.returncode == 0:
-        problems.append("写权持有时重装未被拒")
+    held_text = (held.stdout or "") + (held.stderr or "")
+    if held.returncode == 0 and "自检" not in held_text and "WF_OK" not in held_text:
+        problems.append(f"写权持有时重装既未拒绝也未走只读核对：{held_text.strip()[:160]}")
+    victim = os.path.join(project, ".agents/skills/wf-start/SKILL.md")
+    if os.path.exists(victim):
+        os.remove(victim)
+    held_missing = R.installer(source, project)
+    text_missing = (held_missing.stdout or "") + (held_missing.stderr or "")
+    if held_missing.returncode == 0 or "WF_WRITER_BUSY" not in text_missing:
+        problems.append(f"写权持有时补齐缺失未被拒：rc={held_missing.returncode} "
+                        f"out={text_missing.strip()[:160]}")
     before_stop = open(os.path.join(task_dir, "task.json"), "rb").read()
 
     stop = os.path.join(root, "stop-630.json")
@@ -60,12 +72,20 @@ def check():
     if problems:
         raise H.TargetFailure("；".join(problems))
 
+    # 空闲后重跑两次：第一次补齐被删的落点（只补不改），第二次必须声明「无任何变化」
+    repair = R.installer(source, project)
+    repair_text = (repair.stdout or "") + (repair.stderr or "")
+    if repair.returncode != 0:
+        problems.append(f"空闲后补齐失败：{repair_text.strip()[-160:]}")
+    elif not os.path.exists(victim):
+        problems.append("补齐没有恢复被删的落点")
     again = R.installer(source, project)
+    again_text = (again.stdout or "") + (again.stderr or "")
     if again.returncode != 0:
-        problems.append(f"空闲后重装失败：{(again.stdout or again.stderr)[-160:]}")
+        problems.append(f"空闲后重装失败：{again_text.strip()[-160:]}")
     else:
-        if "无任何变化" not in (again.stdout or ""):
-            problems.append("空闲重装不是幂等（未声明「无任何变化」）")
+        if "无任何变化" not in again_text:
+            problems.append(f"空闲重装不是幂等（未声明「无任何变化」）：{again_text.strip()[:120]}")
         if open(os.path.join(task_dir, "task.json"), "rb").read() != after_stop:
             problems.append("重装改动了任务记录（应保留项目数据）")
     if problems:

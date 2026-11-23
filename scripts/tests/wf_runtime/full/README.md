@@ -70,8 +70,8 @@ scope 内 HOME 会让候选流程 f0 的 `task-check` 变成 `WF_CHECK_STALE`（
 | `d1_wf_tests.py` | D1 的 wf 签发路径（`provider=wf` 携带/恢复/复制到新会话/丢失）；**同上，手动执行、不计入分母** |
 | `r66_tests.py` | 第二十九轮 R66（实例标识、写者结构、终态、义务来源、重复记录） |
 | `r67_tests.py` | 第三十轮 R67（写权入口实例/能力、baseline 状态与提案、清单声明、聚合脚本退出码） |
-| `r90_tests.py` | 第五十八轮 R93（平台清单即身份事实：未装宿主只读放行/写阻断、多 agent 交替不覆盖、追加平台） |
-| `r89_tests.py` | 第五十七轮 R92（`--platform` 平台表、项目内技能目录、安装产物归入控制面） |
+| `r90_tests.py` | 第五十八轮 R93（平台清单即身份事实：未装宿主只读放行/写阻断、多 agent 交替不覆盖、重复部署幂等） |
+| `r89_tests.py` | 第五十七轮 R92 → 2026-11-23 改写（无平台参数即装齐全部平台、重复安装幂等/漂移不覆盖、安装产物归入控制面） |
 | `r88_tests.py` | 第五十五/五十六轮 R90–R91（第十一轮复审 D1–D4：早期中断可恢复、实例固定、伪造 done 被拒、旧动作出口） |
 | `r87_tests.py` | 第五十四轮 R89（裁决 A：writer 单一父动作、Finish→Check 受控迁移） |
 | `r86_tests.py` | 第五十一～五十三轮 R86–R88（第八至十轮复审：删除归属崩溃、证据引用分类、d 桶、异常归档、预览一致、复现校验、活冲突语义） |
@@ -337,7 +337,7 @@ after-material-cleanup-before-journal-remove`；重入真实入口（acquire / e
   是正式负断言，不再是 known-gap；
 - uninstall 的历史绝对 root_ref 若仍在项目内允许，项目外记录拒绝且不删除外部对象；确认后 apply
   在同一锁内重新解析根并整批复核选中集合；
-- dev-deploy 的首装、追加平台、预览与锁内重算共用 `plan_deployment` 的完整计划，`root_record`
+- dev-deploy 的首装/重复部署核对、预览与锁内重算共用 `plan_deployment` 的完整计划，`root_record`
   只序列化通过校验的项目内根。
 
 ## 证据相位、运行身份与成功出口

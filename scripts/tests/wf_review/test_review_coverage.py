@@ -495,10 +495,19 @@ class DecideMainReviewTest(DecideHarness):
         self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
         self.assertEqual(caught.exception.facts["fail_axes"], ["regression"])
 
-    def test_report_bound_to_a_previous_check_id_is_rejected(self):
+    def test_report_bound_to_a_same_anchor_check_id_is_accepted(self):
+        """同锚点换 Check id：结论仍有效（内容没变），不强制整轮重开。"""
         self.stage({**AXES})
         record = records.load_json(self.task_dir / "task.json")
         record["check"]["id"] = "c2"
+        records.write_json(self.task_dir / "task.json", record)
+        self.decide()
+
+    def test_report_bound_to_a_different_anchor_is_rejected(self):
+        self.stage({**AXES})
+        record = records.load_json(self.task_dir / "task.json")
+        record["check"]["id"] = "c2"
+        record["check"]["anchor"]["check_anchor"] = "sha256:" + "9" * 64
         records.write_json(self.task_dir / "task.json", record)
         with self.assertRaises(review.ReviewError) as caught:
             self.decide()

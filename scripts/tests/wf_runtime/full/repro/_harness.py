@@ -320,7 +320,7 @@ def deploy(root, platforms=("dsh",)):
     source = release_source(root)
     cmd = [sys.executable, os.path.join(source, "install.py"), "--target", project,
            "--release-ref", RELEASE_REF, "--source", source,
-           "--platform", ",".join(platforms), "--confirm"]
+           "--confirm"]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise SystemExit(f"deploy failed: {(proc.stdout or proc.stderr)[-400:]}")

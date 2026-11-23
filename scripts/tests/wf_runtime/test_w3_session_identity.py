@@ -8,7 +8,7 @@
   （replace_owner 接管、不撞 L1 单主）；④无映射锚点路径。
 - status facts 投影 host_mapping（hit/absent/import-error）。
 - hook 脚本实跑：写映射、无 .wf 退出、import 失败标记、成功自愈。
-- 资产链：--platform codex 投放 .codex/hooks/、dsh 不投放、hooks.json 合并/幂等/
+- 资产链：安装面向全部平台，.codex/hooks/ 恒投放；hooks.json 合并/幂等/
   只删自己条目、per-asset 平台条件非法组合拒绝。
 """
 
@@ -466,70 +466,70 @@ class HostHookAssetChainTest(Harness):
                   "executable": True, "digest": "sha256:" + "0" * 64,
                   "platform": "codex"}
 
-    def test_plan_deploys_hook_only_for_codex(self):
+    def test_plan_deploys_every_hook_asset(self):
+        """安装面向全部平台：清单里的 hook 资产一律投放（platform 键只表示归属，不是筛选）。"""
         manifest_payload = {"assets": [dict(self.HOOK_ASSET)]}
         skill_root = str(self.root / ".agents/skills")
-        writes, problems = install.plan_writes(str(self.root), [skill_root],
-                                               manifest_payload, platforms={"codex"})
+        writes, problems = install.plan_writes(str(self.root), [skill_root], manifest_payload)
         self.assertEqual(problems, [])
         self.assertEqual(len(writes), 1)
         self.assertEqual(writes[0][2], ".codex/hooks/wf-session-identity.py")
-        # dsh 安装：不投放（合法跳过）
-        writes, problems = install.plan_writes(str(self.root), [skill_root],
-                                               manifest_payload, platforms={"dsh"})
-        self.assertEqual(problems, [])
-        self.assertEqual(writes, [], "dsh 项目不得出现 .codex/hooks/")
 
     def test_illegal_platform_combinations_rejected(self):
         skill_root = str(self.root / ".agents/skills")
         # platform 出现在非 host_hook 资产 → 拒
         bad = {"assets": [dict(self.HOOK_ASSET, target_class="project_wf",
                                target_relative=".wf/x.py")]}
-        writes, problems = install.plan_writes(str(self.root), [skill_root], bad,
-                                               platforms={"codex"})
+        writes, problems = install.plan_writes(str(self.root), [skill_root], bad)
         self.assertEqual(writes, [])
         self.assertTrue(any("only allowed on host_hook" in json.dumps(p) for p in problems))
         # host_hook 缺 platform → 拒
         bad2 = {"assets": [dict(self.HOOK_ASSET)]}
         bad2["assets"][0].pop("platform")
-        writes, problems = install.plan_writes(str(self.root), [skill_root], bad2,
-                                               platforms={"codex"})
+        writes, problems = install.plan_writes(str(self.root), [skill_root], bad2)
         self.assertEqual(writes, [])
         self.assertTrue(any("requires a platform" in json.dumps(p) for p in problems))
         # host_hook 平台名不在 PLATFORMS → 拒
         bad3 = {"assets": [dict(self.HOOK_ASSET, platform="no-such-platform")]}
-        writes, problems = install.plan_writes(str(self.root), [skill_root], bad3,
-                                               platforms={"no-such-platform"})
+        writes, problems = install.plan_writes(str(self.root), [skill_root], bad3)
         self.assertEqual(writes, [])
         self.assertTrue(any("not a known platform" in json.dumps(p) for p in problems))
 
-    def test_hooks_json_merge_idempotent_and_conflict(self):
-        target = str(self.root)
-        state = install.merge_hooks_json(target)
-        self.assertTrue(state["created"])
-        state = install.merge_hooks_json(target)
-        self.assertFalse(state["created"] or state["appended"])    # 幂等
+    def _hook_plan(self, command=None):
+        return install.plan_hooks_json(str(self.root), install.HOOK_SCRIPT_RELATIVE,
+                                       command or install.host_hook_command(
+                                           install.HOOK_SCRIPT_RELATIVE))
+
+    def test_hooks_json_plan_apply_idempotent_and_conflict(self):
+        """2026-11-23 五轮：`merge_hooks_json` 已删除（升级/首装/追加平台共用
+        `plan_hooks_json` + `apply_hooks_json`），本断言随之锚到真实路径。"""
+        applied = install.apply_hooks_json(str(self.root), self._hook_plan())
+        self.assertEqual(applied, "created")
+        self.assertEqual(install.apply_hooks_json(str(self.root), self._hook_plan()), "unchanged")
         data = json.loads((self.root / ".codex/hooks.json").read_text(encoding="utf-8"))
         entries = data["hooks"]["SessionStart"]
         self.assertEqual(len(entries), 1)
         # 已有用户条目：保序追加，不动用户内容（重建为只含用户条目的文件）
         user_entry = {"hooks": [{"type": "command", "command": "python3 my.py"}]}
-        install._dump_json(install.hooks_json_path(target),
+        install._dump_json(install.hooks_json_path(str(self.root)),
                             {"hooks": {"SessionStart": [user_entry]}})
-        state = install.merge_hooks_json(target)
-        self.assertTrue(state["appended"])
+        self.assertEqual(install.apply_hooks_json(str(self.root), self._hook_plan()), "appended")
         data = json.loads((self.root / ".codex/hooks.json").read_text(encoding="utf-8"))
         self.assertEqual(len(data["hooks"]["SessionStart"]), 2)
         self.assertEqual(data["hooks"]["SessionStart"][0], user_entry)   # 用户条目原样
-        # 同名脚本被不同命令串占用 → 报人裁决
+        # 同名脚本被不同命令串占用 → 判定为 conflict（交人，不覆盖）
         data["hooks"]["SessionStart"][-1]["hooks"][0]["command"] = "sh other-runner wf-session-identity.py"
-        install._dump_json(install.hooks_json_path(target), data)
-        with self.assertRaises(ValueError):
-            install.merge_hooks_json(target)
+        install._dump_json(install.hooks_json_path(str(self.root)), data)
+        plan = self._hook_plan()
+        self.assertEqual(plan["action"], "conflict")
+        self.assertEqual(install.apply_hooks_json(str(self.root), plan), "conflict")
+        unchanged = json.loads((self.root / ".codex/hooks.json").read_text(encoding="utf-8"))
+        self.assertEqual(unchanged["hooks"]["SessionStart"][-1]["hooks"][0]["command"],
+                         "sh other-runner wf-session-identity.py")
 
     def test_uninstall_removes_only_own_hooks_json_entry(self):
         target = str(self.root)
-        install.merge_hooks_json(target)
+        install.apply_hooks_json(str(self.root), self._hook_plan())
         data = json.loads((self.root / ".codex/hooks.json").read_text(encoding="utf-8"))
         data["hooks"]["SessionStart"].insert(
             0, {"hooks": [{"type": "command", "command": "python3 user-own.py"}]})
@@ -552,16 +552,11 @@ class HostHookAssetChainTest(Harness):
         self.assertIn(".codex/hooks/wf-session-identity.py", project_targets)
         self.assertEqual(skill_targets, [])
 
-    def test_self_check_skips_hook_for_other_platforms(self):
+    def test_self_check_always_checks_hook_assets(self):
+        """全部平台安装：hook 未投放就是缺，不再按平台跳过。"""
         manifest_payload = {"assets": [dict(self.HOOK_ASSET)]}
         skill_root = str(self.root / ".agents/skills")
-        # dsh 安装：hook 未投放是预期，不核（否则误报 digest mismatch）
-        problems = install.self_check(str(self.root), manifest_payload, [skill_root],
-                                      platforms={"dsh"})
-        self.assertEqual([p for p in problems if "hooks" in json.dumps(p)], [])
-        # codex 安装但未投放 → 核出 mismatch
-        problems = install.self_check(str(self.root), manifest_payload, [skill_root],
-                                      platforms={"codex"})
+        problems = install.self_check(str(self.root), manifest_payload, [skill_root])
         self.assertTrue(any("digest mismatch" in json.dumps(p)
                             and "wf-session-identity" in json.dumps(p) for p in problems))
 

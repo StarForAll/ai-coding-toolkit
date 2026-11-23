@@ -26,25 +26,69 @@ fail() {
 }
 
 PLUGIN_ROOT="dsh-plugins"
+WF_RELEASE_ROOT="docs/workflows/wf-release"
 
 changed=""
-while read -r _local_ref local_sha _remote_ref remote_sha; do
+wf_tags=""
+release_changed=""
+while read -r local_ref local_sha remote_ref remote_sha; do
   [ -z "${local_sha:-}" ] && continue
   case "$local_sha" in
     0000000000000000000000000000000000000000) continue ;;
   esac
+  # wf 发行 tag：推送一个 tag 就等于宣称"这是一个可用发行"。README §3 的版本义务
+  # （源树/清单/发行树/tag 同批）过去只活在散文里，从不履行；这里用可执行核对兜住：
+  # 只对 `refs/tags/wf-v*` 的推送行生效，普通分支推送与"先提交后打 tag"的顺序不受影响。
+  case "$remote_ref" in
+    refs/tags/wf-v*) wf_tags="$wf_tags
+$remote_ref" ;;
+  esac
   if [ -z "${remote_sha:-}" ] || [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
     files=$(git log --format= --name-only "$local_sha" --not --remotes -- "$PLUGIN_ROOT" 2>/dev/null || true)
+    release_files=$(git log --format= --name-only "$local_sha" --not --remotes \
+      -- "$WF_RELEASE_ROOT" 2>/dev/null || true)
   else
     files=$(git diff --name-only "$remote_sha" "$local_sha" -- "$PLUGIN_ROOT" 2>/dev/null || true)
+    release_files=$(git diff --name-only "$remote_sha" "$local_sha" \
+      -- "$WF_RELEASE_ROOT" 2>/dev/null || true)
   fi
   changed="$changed
 $files"
+  release_changed="$release_changed
+$release_files"
 done
 
 is_touched() {
   printf '%s\n' "$changed" | grep -q "^$1/"
 }
+
+# 发行 tag 先核：verify-wf-release.py 只读核对 tag↔发行树↔清单↔README↔rules_digest。
+if [ -n "$wf_tags" ]; then
+  while IFS= read -r tag_ref; do
+    [ -z "$tag_ref" ] && continue
+    tag_version=${tag_ref#refs/tags/wf-v}
+    if ! python3 scripts/verify-wf-release.py --version "$tag_version" --ref "$tag_ref"; then
+      echo "ERROR: pre-push: $tag_ref 不是有效发行（见上面的失败项）。" >&2
+      echo "ERROR: pre-push: 发行 tag 必须与源码树、发行树与清单同批；修正后重新打 tag。" >&2
+      exit 1
+    fi
+  done <<EOF
+$wf_tags
+EOF
+fi
+
+# 发行树被推送、但清单声明的版本没有 tag ⇒ 只提示不阻断（先推分支再打 tag 是合法顺序；
+# 阻断会把"提交后由人建 tag"这条正常流程拦死）。事实仍由 verify-wf-release.py 判定。
+if printf '%s\n' "$release_changed" | grep -q "^$WF_RELEASE_ROOT/"; then
+  release_version=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' \
+    "$WF_RELEASE_ROOT/wf-release.json" 2>/dev/null || true)
+  if [ -n "${release_version:-}" ] && [ -z "$(git tag --list "wf-v$release_version")" ]; then
+    echo "WARN: pre-push: 本次推送改动了发行树，但版本 $release_version 没有对应的 wf-v* tag。" >&2
+    echo "WARN: pre-push: 发行身份不成立（README §3）；发布前请建 tag 并复核：" >&2
+    echo "WARN: pre-push:   git tag wf-v$release_version" >&2
+    echo "WARN: pre-push:   python3 scripts/verify-wf-release.py --version $release_version --ref refs/tags/wf-v$release_version" >&2
+  fi
+fi
 
 # Every plugin under dsh-plugins/ is discovered from its own manifest; no list to
 # maintain when a plugin is added.

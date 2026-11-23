@@ -206,7 +206,6 @@ _install = subprocess.run([wfdrive.TOOL_PYTHON,
                            os.path.join(_release, "install.py"),
                            "--target", UN, "--release-ref", _install_ref,
                            "--source", _release,
-                           "--platform", "dsh",
                            "--confirm", ],
                           capture_output=True, text=True)
 _identity_problems = wfdrive.install_identity_problems(UN)

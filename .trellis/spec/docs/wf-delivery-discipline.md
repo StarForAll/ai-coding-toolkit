@@ -731,3 +731,48 @@ verdict = "fail" if report_blocking else "pass"
 open_blocking = round_open_blocking(ctx, task, round_no, dispositions)
 verdict = "fail" if open_blocking else "pass"
 ```
+
+---
+
+## 8. 断言、部署面与"人面路径"的四个复发点（2026-11-23 dogfood 五轮）
+
+**Trigger**：为 `docs/workflows/wf/**` 或 `scripts/tests/wf_runtime/**` 增加/改动断言，
+或声明某个资产"已投放/已生效"。
+
+1. **断言必须能证明覆盖，而不只是"通过了"**。委托型命令（`_task_command` / `_runs_command`
+   这类闭包）让 `inspect.getsource` 拿不到真实实现，`if not flags: continue` 会把 20 余个命令
+   的检查静默跳过——红灯测试全绿而漂移照进发行。做法：给委托 handler 打
+   `__wf_target__` / `__wf_target_map__`，用同一个 `command_introspection` 解析真实函数
+   （含一层同模块助手与登记过的引导层来源），并**加覆盖下限**（`assertGreater(covered, 20)`），
+   让"解不开"变成红而不是沉默。
+   **反例**：`task-retrospect` 的帮助写 `--evidence` 可选、`--decision` 必填，handler 恰好相反；
+   `task-retrospect --commit`、`task-knowledge --evidence`、`task-curate --kind/...` 是从未被读取的
+   幽灵旗标——全部逃过"全绿"。
+
+2. **断言要点出的事实，不锚某一版措辞**。同一件事的文案会被下一次重构改掉，锚措辞的断言随后
+   变成"看起来在检查、其实早已失效"的存量红灯（`r89_tests` 找 argparse 的 `unrecognized`，
+   而入口后来改成了自有文案 + `WF_USAGE_INVALID`）。做法：断言退出码 + 原因码 + 被点名的对象。
+   **注意顺序**：改脚本字节会让 `full/candidate-audit.json` 里该单元的 `script_sha256` 失效，
+   而重生成审计需要"已提交候选 + 重跑 candidate 模式"——不要手改审计记录来迁就断言。
+
+3. **部署面 ≠ 文件字节**。资产类若把内容写进宿主的共享配置文件（如 `host_hook` → `.codex/hooks.json`），
+   自检只核文件 digest 会在"落点/命令串变了但脚本没变"时继续报绿，已升级项目带着失效条目运行。
+   做法：部署面有独立条目时，自检同时核**条目存在与关键字段值**；升级路径要有同一判定
+   （`plan_*` 只读判定 + `apply_*` 落地），并在**写入资产之前**把冲突整批拒掉；
+   区分"我们的旧值"与"用户改过的值"只靠**登记的上一次值**，不靠猜。
+
+4. **人面路径只用一个 token**。多根同名副本（`claudecode` 的 `.claude/skills` 与共享
+   `.agents/skills`）下，`target_relative` 单独不能标识一份资产。给人看的/由人回填的路径
+   （升级预览、`--keep/--restore`、导出清单、处置留痕）一律用**项目相对路径**；内部身份仍是
+   `(root_ref, target)`。帮助文案与真实匹配口径必须同源，否则 AI 会照着帮助写一个永远匹配不上的值。
+
+**回退注入**：以上四条各至少有一次"改回旧形态 ⇒ 断言变红"的记录，否则不算已收口。
+
+5. **触及安全路径的改动，同批必须带对抗性用例**（2026-11-23 第八份复审的批次纪律）。
+   脱敏/遮罩/摘要/身份这类"防御性"代码的失效方式是**静默漏一侧**，正向用例（"短值被遮住了"）
+   永远会绿。dogfood 五→七轮连着出了两次同型回归：接遮罩时用"先截断后遮罩"（长值前缀被切掉、
+   触发词消失，整段明文回显），修顺序时窗口半宽又把长值截尾（1100 字符值残留 579）。
+   最低用例集：**超长值**（> 窗口/截断阈）、**前缀切断**（断言顺序是先遮后截）、**引号/跨行**
+   （`"token": "…"`、多行日志）、**键名变体**（`access_token_value`）、**无关键词形态**
+   （URL userinfo）、**成本上界**（对抗输入不得让后处理退化成平方；曾有 100KB → 43s）。
+   判据不是"我加了一条断言"，而是"回退注入后这条断言必须变红"。

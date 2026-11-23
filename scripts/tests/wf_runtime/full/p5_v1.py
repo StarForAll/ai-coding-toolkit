@@ -32,7 +32,7 @@ rec("未安装平台时只读诊断仍可运行", "WF_OK", (ro_payload or {}).ge
 
 proc = subprocess.run([wfdrive.TOOL_PYTHON,
                        wfdrive.REPO + "/scripts/wf-dev-deploy.py",
-                       "--target", F, "--platform", "dsh", "--confirm"],
+                       "--target", F, "--confirm"],
                       capture_output=True, text=True)
 installed["platforms"] = saved
 json.dump(installed, open(inst_path, "w", encoding="utf-8"), ensure_ascii=False)

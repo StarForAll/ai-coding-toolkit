@@ -393,7 +393,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 ### 2.3.7 秘密边界与副本来源
 
 - **秘密边界**：检查命令的摘要与 `argv` 都过 `check.redact_secrets()`，日志文件与 `evidence` facts 写的都是脱敏结果（机制稿 §3.5）。形态覆盖 `key=value`/`token:`/`Bearer`、`sk-`、`gh*_`、`AKIA`；**形态优先，已知非凭据键（tokenizer/max_tokens 等）豁免**——认不出就原样保留（整段丢会毁掉排障价值）。
-- **身份来源**：由安装记录的 `platforms` 清单声明，安装/追加平台用 `--platform`（可重复）。R93（commit `20e3ae8`）已删除 `--provider`、`--verified-version`、`--capability-evidence` 与 `session_profile`：不再要求人逐次举证宿主能力，改为「平台清单即身份事实 + 真实异常由各自路径 fail-loud」（机制稿 §1.4）。因此**不得**再按「声明式 verified / 未核实能力」口径描述本框架；能力未被观察时如实报告该事实，但不据此阻断只在已声明平台上运行。
+- **身份来源**：由安装记录的 `platforms` 清单声明（2026-11-23 人裁：安装不再有 `--platform`，一次装齐全部支持平台；清单仍是唯一身份事实）。R93（commit `20e3ae8`）已删除 `--provider`、`--verified-version`、`--capability-evidence` 与 `session_profile`：不再要求人逐次举证宿主能力，改为「平台清单即身份事实 + 真实异常由各自路径 fail-loud」（机制稿 §1.4）。因此**不得**再按「声明式 verified / 未核实能力」口径描述本框架；能力未被观察时如实报告该事实，但不据此阻断只在已声明平台上运行。
 - **副本来源**：六个改编副本（grilling/tdd/diagnosing-bugs/code-review/review/review-action）各自 `SKILL.md` 末尾有「来源与差异」段，登记来源、许可、基线、差异与最近正反例（设计稿 §7.4）；模块 README §6 列明改编件与原创件，并注明审查两副本的适配源是一次性的、上游不自动流入（设计稿 §7.5）。
 
 ### 2.3.8 公共写入口的统一核验
@@ -429,7 +429,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 2.3.10.1 平台表与身份判定
 
-支持的 agent 由 `--platform` 声明，装完还可以再跑一次追加（同发行引用）。**平台清单就是本项目的身份事实**：不再有 `--host-id`、`--verify-capability`、`--capability-evidence`，安装记录里也不再有 `session_profile`。
+支持的全部 agent 在安装时一次装齐（`PLATFORMS` 唯一来源，2026-11-23 人裁后没有平台参数；重跑同一条命令只补缺失、内容差异转升级）。**平台清单就是本项目的身份事实**：不再有 `--host-id`、`--verify-capability`、`--capability-evidence`，安装记录里也不再有 `session_profile`。
 
 | 平台 | 自有目录 | 是否读共享层 | 落地 |
 |---|---|---|---|
@@ -441,7 +441,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 依据：[Cursor 技能目录](https://cursor.com/docs/skills)、[Gemini CLI 发现层级](https://geminicli.com/docs/cli/using-agent-skills)、[VS Code Copilot 技能位置](https://learn.microsoft.com/en-us/visualstudio/ide/copilot-agent-skills)、[Claude Code skills](https://code.claude.com/docs/en/skills)。
 
-**运行期判据**（`session.check_platforms`）：信封 `identity.host_id` 必须出现在 `installation.platforms` 里；未出现 → `WF_IDENTITY_UNRESOLVED`（`reason=host not installed for this project`，facts 带 `installed_platforms` 与 `next: install --platform <名字>`）。只读诊断（`status`/`inspect`/`gate`/`definition`）不受此限。
+**运行期判据**（`session.check_platforms`）：信封 `identity.host_id` 必须出现在 `installation.platforms` 里；未出现 → `WF_IDENTITY_UNRESOLVED`（`reason=host not installed for this project`，facts 带 `installed_platforms` 与 `next: install（已装齐全部平台）`）。只读诊断（`status`/`inspect`/`gate`/`definition`）不受此限。
 
 **为什么把能力证据去掉**：机制稿 §1.4 的判据原文是"证据是否**适用**当前宿主"，而实现此前做成了"宿主是否**等于**安装时那一个"，等于把项目判给了单个 agent。修订后：能力是宿主属性、由平台表静态声明；真实异常（实例丢失、绑定不符、代次过期、检查锚点失效）由各自路径即时报错，属于 **fail-loud 而非事前让人举证**。
 
@@ -457,7 +457,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 2.3.11 已知边界与实现说明
 
-- **升级不重核/合并 `.codex/hooks.json`**：`merge_hooks_json` 只在首装与 add_platforms 调用；发行若改 hook 落点或命令串，升级不会修 hooks.json，需卸载重装或人工核对（自检只核 hook 文件字节，不核 hooks.json 条目）。
+- **升级同批维护 `.codex/hooks.json`（2026-11-23 五轮收口，原登记的边界已关闭）**：首装、重复执行的补齐段（`verify_installed`）与**升级应用段**共用 `plan_hooks_json` / `apply_hooks_json`，判定顺序 absent / appended / unchanged / updated（等于安装记录 `host_hook_entries` 里登记的上一版命令串）/ conflict（用户改过）/ unreadable；`conflict` 与 `unreadable` 在**写入资产字节之前**整批拒绝（`WF_ASSET_DECISION`），`self_check` 对「条目缺失或命令串漂移」产出 problem——脚本字节等于发行字节不再足以判部署面生效。命令串由落点派生（`host_hook_command`），不写第二份常量。仍未做的边界：hook 落点改名（`target_relative` 变化）会被当作「新脚本」追加，旧条目按同名规则留在用户文件里，需人在升级预览看到 `appended` 后手工清理旧条目（自检只能核当前落点的条目）。
 
 「不存在的命令不得在文档与 skill 中宣称」同样适用于函数名与能力条目。本节登记**已实现但有边界**的项与**明确的实现纪律**；确属未实现的项会显式标注「未实现」，不混写。
 
@@ -481,7 +481,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
   - 未知不当零：无合法 `paths`、规格不可解析、仓库扫描不可用 → 进 `unverified` 且不据此给候选结论。
   - `governance_omitted` 同批**清空**（空列表本身是断言「没有隐瞒的类别」）；`governance` 现有七类。用例：`scripts/tests/wf_runtime/test_inspect_governance.py`（6 例）与 `repro/inspect-declares-omitted.py`（双模，注入=把已交付类别继续声明为未输出）。
 - **`assets.branch_source_check` 的消费点**（P2-5a，登记未实现）：函数已实现但**首轮无调用方**，第三轮 `upgrade` 才消费；文档若声称它在运行期生效即为不实。
-- **追加平台 = 重复安装语义（2026-11-05 第二轮复审后定稿）**：`install.py::add_platforms` 与 `wf-dev-deploy.py` 同名分支行为一致——①**锁内**重读安装记录与写权记录、重建计划并复算冲突（锁外读取可能已被并发追加改变）；②写权记录按运行期同一判据校验（schema/状态组合/holder/代次），不只看 `state == idle`；③新根技能副本登记进 `installation.assets`，否则它们会落未归属路径（c 桶）挡住开工；④目标已存在且内容不同 → 整批 `WF_ASSET_DECISION`、零写入（不覆盖本地偏离）；⑤安装记录等元数据变更计入回执 `changes`，路径一律**项目相对**；⑥授予与释放各递增一次代次；⑦无任何变化时幂等返回，不取写权、不产生空回执。
+- **重复执行同一条安装命令 = 补齐/核对语义（2026-11-23 人裁后取代「追加平台」）**：`install.py::verify_installed` 与 `wf-dev-deploy.py::verify_installed` 同形——①**锁内**重读安装记录并重算计划（锁外读取可能已被并发改变）；②hooks 冲突/不可解析先于任何写入 → `needs_decision`，写权保持空闲；③落点**缺失**（中断/被删）→ 补齐：写权须空闲（否则 `WF_WRITER_BUSY`，坏记录按 `WF_RECORD_INVALID`）、只创建不覆盖、补写项登记进 `installation.assets`、`roots`/`platforms` 提升为全部平台、产 `changes` 回执（`head_before` + 提交层账本，路径一律**项目相对**）、授予与释放各递增一次代次；④落点**内容差异**（本地改过）或记录版本与本发行不同 → 拒绝并指向 `--upgrade`（三方匹配保留/恢复）；⑤无任何变化时只读核对并报 `self_check` 结论，**不取写权、不产生空回执**。
 - **安装期的分支来源核对（2026-11-05 已交付）**：设计稿 §7.1／机制稿 §10.4 要求投放前核对「当前分支缺失、其他本地分支存在」的同名路径。`install.py` 自含 `branch_source_findings()`（与 `wflib/assets.py::branch_source_check` 同语义；安装时尚无 `.wf/lib`，故不导入运行时）：预览列出路径与分支并返回 `needs_decision`（`WF_ASSET_DECISION`，exit 2），不写任何文件；人在该分支执行、或重跑同一命令加 `--confirm` 表示在本分支按新安装继续，后者写入 `installation.decisions`（`kind=branch-source`）。只读核对，不保存 branch 字段、不切换分支；未取得的远端引用不假装已扫描。
 - **单 reviewer 的「参考性执行」（2026-11-05 人裁 B；2026-11-22 三轮 W2-3 修订）**：设计稿 §6.5 原允许「只能凑一个时执行单 reviewer 并标 `degraded: single-provider`」，其 2026-11-05 口径为「**发起与报告导入照常留档供参考，但不产生判定结论**」：`review-launch` 记 `degraded` 与槽位；`review-import` 照常导入报告；`review-decide` 以 `WF_REVIEW_INVALID` 拒绝。**2026-11-22 三轮 W2-3（裁决④）修订**：人签残余风险接受记录（`review-decide --single-reviewer-acceptance`，`by/at/quote/source` + `round` + `residual_risk`）时该轮**留痕降级允许产出 verdict**——接受只降级"人数"，主会话复核/未关闭 blocking 照旧，与 unavailable 互斥；完整口径与字段见机制稿 §9.2「有记录降级路径」。无接受记录仍按原口径拒绝；也不得把无接受记录的单 reviewer 报告当作审查 pass。
 
@@ -685,14 +685,14 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ```
 python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/wf-vX.Y.Z> \
-    --source <已检出的发行目录> --platform <平台> [--platform <另一个平台>] [--confirm]
+    --source <已检出的发行目录> [--confirm]
 
 <python> <目标>/.wf/bin/wf.py upgrade --release <发行检出根> \
     --release-ref <refs/tags/wf-vX.Y.Z> [--apply | --export-deviations --out <目录>] \
     [--keep <路径>] [--restore <路径>]
 ```
 
-`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；`--platform` 至少一项，三种写法等价：`--platform a --platform b`、`--platform a b`、`--platform a,b`（别名 `claude`/`gemini`/`ghcopilot`）；技能目录由平台表解析到目标项目内，未知名直接拒绝并列支持项；升级不接受 `--platform`，一律用 `installation.platforms`（显式传入按 `WF_USAGE_INVALID`）；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认首装预览（缺省时入口先出预览并要求交互确认）；升级不接受 `--confirm`（用 `--apply` + 预览令牌）。升级不需要信封（维护入口，见本文 §2.2）。
+`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；**没有平台参数**（2026-11-23 人裁）：`PLATFORMS` 是唯一来源，一次装齐全部平台根与全部 hook 资产，同时写进 `installation.platforms`（记录是事实，不是人选的子集）；登记里出现未知参数按 `WF_USAGE_INVALID`（`--platform`/`--skill-root` 都属此类）；重跑同一条安装命令只做补齐/核对（见本文 §2.3 的 `verify_installed`）；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认首装预览（缺省时入口先出预览并要求交互确认）；升级不接受 `--confirm`（用 `--apply` + 预览令牌）。升级不需要信封（维护入口，见本文 §2.2）。
 
 ### 4.2 `wf-release.json` 键表
 
@@ -773,7 +773,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 
 首轮同时存在两条安装路径：**开发态** `wf-dev-deploy.py`（authoring 工具，不进发行清单）与**发行入口** `install.py`（首轮已交付，按发行引用安装；运行期升级侧的 `assets.parse_release` 仍属第三轮）。按设计稿 §8.1 的「首轮所需最小安装与自检按开发态部署处理」，首轮的日常最小闭环用开发态部署；`install.py` 提供从发行树的真实首装，f0 夹具即经它构造：
 
-- 入口：`python3 scripts/wf-dev-deploy.py --target <目标项目绝对路径> --platform <平台> [--platform <另一个平台>] [--confirm]`（authoring 开发工具）；`--platform` 可重复、至少一项，解析出的项目内技能目录写入 `installation.json.roots`（一律相对路径）并把平台名写入 `installation.json.platforms`；不带 `--confirm` 时只打印预览（目标、文件清单、`.wf/`/`writer.json`/`.wf-lock`、托管段、skill 根、Trellis 资产风险提示）后退出，不做任何写入；带 `--confirm` 才按 `dev-manifest.json` 投放 `.wf/` 资产与 skill 根副本，写 `.wf/install/installation.json`（`release_ref` 记 `dev:<git describe>`，`version` 记 `0.0.0-dev`，`manifest_digest` 记部署清单摘要），并写入 `.gitignore` 托管段。`dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；`wf-dev-deploy.py` 按源树实际字节现算每个资产的 `digest`、模板标记与 `rules_digest`，生成部署副本 `.wf/install/release-manifest.json`（与正式清单同 schema，运行期唯一读取入口，见本文 §4.2.1）——算法与 `scripts/build-wf-release.py` 同一份（同名函数），首轮锚点因此可复现。
+- 入口：`python3 scripts/wf-dev-deploy.py --target <目标项目绝对路径> [--confirm]`（authoring 开发工具）；与发行安装同一张平台表、同一套根解析——装齐全部平台，项目内技能目录写入 `installation.json.roots`（一律相对路径）并把全部平台名写入 `installation.json.platforms`；已部署目标重跑只做只读核对（同一来源/提交，缺的补、不覆盖）；不带 `--confirm` 时只打印预览（目标、文件清单、`.wf/`/`writer.json`/`.wf-lock`、托管段、skill 根、Trellis 资产风险提示）后退出，不做任何写入；带 `--confirm` 才按 `dev-manifest.json` 投放 `.wf/` 资产与 skill 根副本，写 `.wf/install/installation.json`（`release_ref` 记 `dev:<git describe>`，`version` 记 `0.0.0-dev`，`manifest_digest` 记部署清单摘要），并写入 `.gitignore` 托管段。`dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；`wf-dev-deploy.py` 按源树实际字节现算每个资产的 `digest`、模板标记与 `rules_digest`，生成部署副本 `.wf/install/release-manifest.json`（与正式清单同 schema，运行期唯一读取入口，见本文 §4.2.1）——算法与 `scripts/build-wf-release.py` 同一份（同名函数），首轮锚点因此可复现。
 - **Trellis 互斥风险提示**：预览固定列出已发现的 Trellis 线索（`.trellis/` 数据、hook 配置、项目指令文件中的 Trellis 托管块），并说明「人确认后可继续安装，但本会话不得混跑两套流程」（设计稿 §3、§7.1）。
 - **维护组处置回写**：人确认维护组去向（独立提交 / 反向修正 / 具名承接 / 保留现状）后，由 `.wf/bin/repair.py --dispose <plan>` 写回原维护回执的 `disposition` 与真实路径状态。**解除条件只有上位规定的三条**：该组路径已被独立提交、已完成反向修正、或已由具名任务承接（承接任务已批准、路径归属明确）。**「保留现状」只留痕，不解禁**——回执仍按「已应用待提交」挡住重叠路径，直到其中一条实际落实。依据是设计稿 §5.5 的对象列举（「未收工关闭的写权、绑定/写权不明、**维护/交接残留**」）与机制稿 §4.5 的「入口将实际去向写回原回执」（该条未指定入口）；机制稿 §5.4 只有算法与边界句（repair 不代替日常删边、内容修改或范围批准），本条不越出该边界——处置回写只记录人已确认的去向，不改交付内容。三条之一落实并写回后，该回执在读取侧落「已处置」态：不再阻断重叠任务，但回执与处置证明保留，直到下一次维护预览按机制稿 §4.5 把它收敛出 `maintenance_results`；`disposition` 缺处置决定、缺核验事实或缺承接引用，或只记了「保留现状」时，仍按「已应用待提交 / 待核对」分别处理。**若人选择「按登记终态原样提交」则不需要这一步**：下一次启动按机制稿 §4.5 的可达提交查证直接派生 `persisted`，不改写回执。
   该查证由 `tasks.maintenance_persisted_probe()` 实现并**挂在唯一读取入口 `tasks.task_receipts()` 上**：以下界 `head_before` 找候选提交，要求该提交树里有 `.wf/writer.json`、其中同 `operation` 回执的 `changes` 路径集合与当前登记一致，**并按候选提交树逐项重建每个登记路径的完整指纹（存在/删除、类型、可执行位、内容摘要）与登记 `after` 比较**——看树终态，不要求与其他路径出现在同一次 diff；登记的 `after` 是历史纯摘要时只比摘要，是 `null` 时要求确实删除。回执登记侧由 `wf-dev-deploy.py` 写入完整指纹对象（机制稿 §1.4）。开工的重叠检查与 `inspect` 巡检都经这一入口，不再各自传 `probe=None`；读取本身不写 writer，回执 `result` 保持 `applied_pending_commit`。
@@ -938,7 +938,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 **夹具登记面**：逐场景的「场景行 → 夹具 → 初态 → 触发 → 预期输出 → 实跑证据」登记在 [`acceptance-fixtures.md`](./wf/acceptance-fixtures.md)；未覆盖项在该文件 §4 单列（F0 的"准备定义与自举/验证分时解析"属第二轮、真实压缩增量观察待触发）。该文件只抄实际断言，不按设计意图补写预期。
 
-2026-11-03 首轮实现已实跑本文 §7.1 的五条最小验证顺序与三夹具；2026-11-04/05 又完成 44 轮评审与十二轮独立复审（R79–R92）的复核修订与回归；2026-11-05 按人裁把安装入口改为 `--platform` 单一入口（技能装在目标项目内），并取消 `--host-id`/能力证据：平台清单即身份事实，并补跑 D1 的真实压缩观察（`validation.md` §21–§80），全量回归由 `run_all.sh` 一次跑完并按实际执行项计数：`SUITES` 59 个套件 + 5 个专项（`r72` 卸载边界、`f0` 发行安装自举、`p5_spec`、`p5_v2v3`、`p5_v5`）+ `repro/` 68 条修复用例（green/red 双模），当前 **132 项**；**默认每次都从源码重建发行仓库**（`WF_REBUILD_RELEASE=0` 可复用），失败即非零退出。2026-11-12 收口复跑：132 项 0 失败（必过门通过、豁免债 0）、`repro` 68/68、发行字节复现 74 assets、令牌一致、单测 457（`scripts/tests`）+ 154（`scripts/tests/wf_runtime`）全绿。实跑暴露的缺陷全部落在实现层并已修正，未回修机制稿。
+2026-11-03 首轮实现已实跑本文 §7.1 的五条最小验证顺序与三夹具；2026-11-04/05 又完成 44 轮评审与十二轮独立复审（R79–R92）的复核修订与回归；2026-11-05 按人裁把安装入口收为单一入口（技能装在目标项目内），并取消 `--host-id`/能力证据：平台清单即身份事实（2026-11-23 人裁：连平台参数也去掉，一次装齐全部支持平台），并补跑 D1 的真实压缩观察（`validation.md` §21–§80），全量回归由 `run_all.sh` 一次跑完并按实际执行项计数：`SUITES` 59 个套件 + 5 个专项（`r72` 卸载边界、`f0` 发行安装自举、`p5_spec`、`p5_v2v3`、`p5_v5`）+ `repro/` 80 条修复用例（green/red 双模），当前 **144 项**（2026-11-23：删掉 5 条 add_platforms 专用 repro，其不变量由 r83/r90 承接）；**默认每次都从源码重建发行仓库**（`WF_REBUILD_RELEASE=0` 可复用），失败即非零退出。2026-11-12 收口复跑：132 项 0 失败（必过门通过、豁免债 0）、`repro` 68/68、发行字节复现 74 assets、令牌一致、单测 457（`scripts/tests`）+ 154（`scripts/tests/wf_runtime`）全绿；2026-11-23 全量复跑：**144 项 0 失败**（`repro` 80/80）。实跑暴露的缺陷全部落在实现层并已修正，未回修机制稿。
 
 仍未运行的项与原因分类：①**真实压缩事件的绑定轴**——2026-11-04 已观察到两次真实压缩且 `$DSH_SESSION_ID` 未变、绑定键可由标识确定性重算（`validation.md` §71）；但「压缩后绑定仍可读」的观察性证据需下一次压缩，判据与快照写在任务记录 `d1-compaction-checkpoint.md` §1；②单 reviewer「人数不合格」派生分支——已用 `pi`/`glm-5.3-flash` 复验关闭（`validation.md` §19）。原先未运行的「归档提交后被强杀的真实进程中断」「`dedupe_refs` 双扣」「spec 拆分（原文件移除分支）」三项已在 2026-11-03 补跑并记录（`validation.md` §16）；拆分的「旧文件停用并保留」分支原为登记未断言项，2026-11-05 已补跑（`p5_spec` 的 6 条用例，含拆分前 active 正对照：停用后保留、`status: disabled`、索引同步、停用条目不再被 `match` 加载）。
 
@@ -963,7 +963,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 | 时刻 | 入口 | 人工动作/令牌 | 阻断出口（原因码 → 出口） |
 |---|---|---|---|
-| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--confirm]`（先出预览）；正式发行 `python3 install.py --target <abs> --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录> --platform <平台>`（首轮已交付；升级/导出入口已随 0.1.5 交付） | 给目标绝对路径与发行引用；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核正确发行引用；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
+| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> [--confirm]`（先出预览）；正式发行 `python3 install.py --target <abs> --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录>`（均无平台参数：一次装齐全部支持平台）（首轮已交付；升级/导出入口已随 0.1.5 交付） | 给目标绝对路径与发行引用；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核正确发行引用；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
 | 首次解释器确认 | `<python> .wf/bin/wf.py confirm-executor --scope system\|global\|project`（终端，人执行） | 人在终端执行，入口探测 `--version` | `WF_EXECUTOR_UNCONFIRMED` → 确认当前解释器 / 换已批准解释器 / 回到未设置 |
 | 开始会话 | 宿主 skill `wf-start`（唯一启用方式） | 人显式调用 | `WF_FLOW_CONFLICT` → 清理 Trellis 来源后换新会话；`WF_IDENTITY_UNRESOLVED` → 核实宿主身份或改用受支持宿主（wf 签发路径属第二轮，首轮不可选）；`WF_WRITER_BUSY` → 等待或已确认交接 |
 | 选择对象 | `wf-start` → `wf.py task-new`（普通任务）/ `run create`（第二轮） | 人选对象；实例另需确认版本/输入/展开规则 | `WF_BINDING_MISMATCH` → 原对象结束后新会话选择；`WF_DEPENDENCY_UNMET` → 等前置或人确认返工/重连；`WF_APPROVAL_MISSING` → 先批准规划 |
@@ -1013,7 +1013,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 | 项 | 原因 | 说明 |
 |---|---|---|
-| 框架代码、脚本、skill 副本、`.wf/` 实例 | 首轮已交付并实跑（`run_all.sh` 132 项；2026-11-12 收口复跑 0 失败） | 编码另立任务；本文给出的路径与函数名是其输入 |
+| 框架代码、脚本、skill 副本、`.wf/` 实例 | 首轮已交付并实跑（`run_all.sh` 144 项；2026-11-23 复跑 0 失败） | 编码另立任务；本文给出的路径与函数名是其输入 |
 | 机制稿 §0.2 四项机检扩展 | 未安排（已登记为后续项） | 见本文 §9.2 第 1 项 |
 | 三夹具 F0/F1/F2 与五条验证顺序 | 已实跑（2026-11-03） | 结果见任务记录 `validation.md` 与本文 §7.3；未运行项逐条记原因分类 |
 | reviewer CLI 可用性（`claude`/`codex`/`dsh`） | 环境未验证 | 命令存在不等于可作非交互 reviewer；须实测 |
@@ -1062,7 +1062,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 **2026-11-12 事实订正（D14 与执行项计数）**
 
 - **D14**：删除「wf 自签发身份路径」的第二轮归属。该能力已随 2026-11-08 的自动身份模式交付（执行边界派生 + 自动签发 `issued_id`，见机制稿 §1.4 与 §12 的 D14 行），显式 wf 信封按设计拒绝（无本地证据）。同批订正机制稿 §1.4 两句失实表述（原写「第二轮交付」「人显式选择并可携带」）。
-- **执行项计数**：本文 §7.3 与本文 §9.1 的「76 项 / 54 套件 / 17 条 repro」按 2026-11-12 实跑订正为「132 项 / 59 套件 + 5 专项 / 68 条 repro」。
+- **执行项计数**：本文 §7.3 与本文 §9.1 的「76 项 / 54 套件 / 17 条 repro」按 2026-11-12 实跑订正为「132 项 / 59 套件 + 5 专项 / 68 条 repro」，2026-11-23 再订正为「144 项 / 59 套件 + 5 专项 / 80 条 repro」。
 - 本批只改事实表述，不改任何判定、码表、门禁顺序或字段；机制稿的判定条款未动。
 
 **剩余待办**

@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.6`（dogfood 四轮修正：升级闭环实测缺陷收口——发行清单副本同步、已接受偏离自检、本地缺失人裁/必需资产禁止保留删除、缺 writer/journal/gitignore 冲突/落点边界/paused+suspended；`--export-deviations` 只读回源（全部本地偏离、pending/accepted、基线 N、项目树外）；`wf.py upgrade` 参数完整转交与未知参数拒绝；task-check/spec-update/task-knowledge 只读骨架；§1.1 指引与 skill 登记对齐。本轮重建后由人创建 `wf-v0.1.6`）。**0.1.5 → 0.1.6 可用 upgrade 升级**：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.6 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
+| 目标版本 | `0.1.7`（dogfood 五轮修正：人面路径身份统一为项目相对路径（多根副本可分别 `--keep/--restore`，导出清单与安装记录留痕同口径）；帮助声明与实现一致（task-retrospect 必填错标、两处幽灵旗标、委托型命令断言不再空跑）；升级同批维护宿主 `.codex/hooks.json` 条目（`previous_command` 登记 + 冲突交人 + 自检核条目）；新增 `scripts/verify-wf-release.py` 与 pre-push tag 守卫把「版本三者同批」变成机械核对；§1.1 三处陈述偏差收口。**0.1.6 → 0.1.7 升级通道（前提：人已按 §5 创建 `wf-v0.1.7` tag）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.7 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -26,12 +26,15 @@
 - `scripts/build-wf-release.py --version 0.x.y`：校验源树完整性 → 生成发行根与清单 → 打印哈希清单。
   `--verify` 重建到临时目录并与现有发行树逐字节比较；`--verify-token-parity` 用固定 `--nonce`
   比对 `repair.py` / `uninstall.py` / `install.py` 三份自含实现的令牌四步输出。
-- `scripts/wf-dev-deploy.py --target <abs> --platform <平台> [--platform <另一个平台>] [--confirm]`：首轮开发态部署（预览 →
-  首装契约 → 投放 → 自检 → 释放为空闲）。`--platform` 可重复、至少一项，解析出的**目标项目内**技能目录写入
+- `scripts/wf-dev-deploy.py --target <abs> [--confirm]`：首轮开发态部署（预览 →
+  首装契约 → 投放 → 自检 → 释放为空闲）。**安装面向全部支持平台**（`PLATFORMS` 是唯一来源，
+  2026-11-23 人裁：不再有 `--platform`），解析出的**目标项目内**技能目录写入
   `installation.json.roots`（相对路径），平台名写入 `installation.platforms`——**平台清单即身份事实**；R93（commit `20e3ae8`）
   已删除 `--host-id`、`--verify-capability` 与 `installation.json.session_profile`，不要按旧口径描述它们。
-  目标已安装时的处理：**同发行引用只允许追加平台**（`install.py` 亦然），资产与项目数据不动；不同发行引用属升级，
-  走 `wf.py upgrade --release <检出根> --release-ref refs/tags/wf-vX.Y.Z --apply`（已交付，
+  目标已安装时的处理（`install.py` 与开发态工具同形）：**重跑 = 补齐/核对**——缺的落点与
+  hook 条目只补不改（取写权、产回执）、内容被本地改过则拒绝并指向升级、全一致则只读核对；
+  **没有"追加平台"这一步**（安装已面向全部平台）。跨版本走
+  `wf.py upgrade --release <检出根> --release-ref refs/tags/wf-vX.Y.Z --apply`（已交付，
   经引导层转交 install.py --upgrade），开发态工具不按新装覆盖。
 - 两个工具：仅标准库、在作者机运行、**不进入发行清单**。发行根里的 `install.py` 才是安装入口，
   它按 `target_class=release_only` 计入 `rules_digest`。
@@ -53,6 +56,24 @@
 `refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
 tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 
+**义务的机械核对（2026-11-23 起，dogfood 五轮 b-P0）**：上面这条"三者同批"过去只写在本文里——
+实况是仓库长期只有 `wf-v0.1.0` 一个 tag，而本文却记载过 0.1.5→0.1.6 可用 upgrade 升级；安装器
+只认真实存在的 tag，于是**文档承诺的升级通道在字段上不可执行**。现在同一条义务有可执行核对：
+
+```bash
+python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y   # 六项只读核对
+```
+
+核对项：tag 存在且解析到提交；源码树重建 == 工作树发行树；tag 提交内的发行树与工作树逐字节相同
+（含"只在工作树多出来的发行文件"）；清单 `version`；本文「目标版本」行；重算 `rules_digest`。
+tracked pre-push 钩子对 `refs/tags/wf-v*` 的推送自动跑同一脚本，不通过即拒绝推送该 tag
+（普通分支推送与"先提交后打 tag"的顺序不受影响）。脚本只报事实与出口，不创建、不修改、不删除 tag。
+**"忘记打 tag"也有提醒**：推送的提交若改动发行树、且发行树清单声明的版本没有对应 `wf-v*` tag，
+pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合法顺序）。
+
+**现有发行 tag 的事实（勿据旧文推测）**：已发行 tag 仅 `wf-v0.1.0`；`0.1.1`–`0.1.6` 是未打 tag
+的开发版本，**既不是升级来源、也不能作为升级目标**——升级引用只认真实 tag。
+
 ## 4. 产物校验
 
 - 同一源树应**字节复现**发行根：`python3 scripts/build-wf-release.py --verify`。
@@ -65,9 +86,10 @@ tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 1. 同步版本（`dev-manifest.json` 与本文）；
 2. `python3 scripts/build-wf-release.py --version 0.x.y`，复核差异与哈希清单；
 3. 人按授权暂存精确路径并提交；
-4. 人创建 `refs/tags/wf-v0.x.y`；
-5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> --platform <平台> [--confirm]`；
-6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply | --export-deviations --out <dir>]`——预览含全部路径动作与偏离清单，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <路径>` / `--restore <路径>` 选择；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
+4. 人创建 `refs/tags/wf-v0.x.y`，随后跑 `python3 scripts/verify-wf-release.py --version 0.x.y
+   --ref refs/tags/wf-v0.x.y`：不通过则该 tag **不是**有效发行（pre-push 也会拒绝推送它）；
+5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> [--confirm]`（无平台参数：一次装齐全部支持平台）；
+6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply | --export-deviations --out <dir>]`——预览含全部路径动作、偏离清单与宿主 `hooks.json` 动作，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <项目相对路径>` / `--restore <项目相对路径>` 选择（路径与预览 `unresolved[].path` 逐字一致，同名技能副本因根不同而各自可处置）；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
    `--export-deviations --out <dir>` 是**只读回源**：导出全部本地偏离（含未接受项，清单标 `status=pending`；已接受项标 `accepted`）的补丁与 `manifest.json`，不取写权、不暂停任务、不应用升级；同版也允许导出。与 `--apply` 互斥。直接入口 `install.py` 同样适用这些组合校验。
 
 打包脚本不提交、不建 tag、不推送；安装器只在本地已检出的发行目录解析人给的引用。

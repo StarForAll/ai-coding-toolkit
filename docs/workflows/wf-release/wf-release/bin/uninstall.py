@@ -253,8 +253,25 @@ def remove_hooks_json_entry(project_root, script_name=HOOK_SCRIPT_RELATIVE):
     for event, entries in list(data["hooks"].items()):
         if not isinstance(entries, list):
             continue
-        kept = [item for item in entries if not _hooks_entry_matches(item, script_name)]
-        removed += len(entries) - len(kept)
+        kept = []
+        for entry in entries:
+            members = (entry.get("hooks") if isinstance(entry, dict) else None)
+            if not isinstance(members, list) or not any(
+                    isinstance(member, dict) and script_name in str(member.get("command") or "")
+                    for member in members):
+                kept.append(entry)
+                continue
+            # 所有权边界是**具体成员**，不是整个 entry：一个 entry 里可能同时放着用户自己的
+            # 命令（`{"hooks": [我们的, 用户的]}`），整组删除会把用户配置一起带走
+            # （2026-11-23 九轮复审 b-3）。只摘掉引用本脚本的成员；摘空才丢弃该 entry。
+            remaining = [member for member in members
+                         if not (isinstance(member, dict)
+                                 and script_name in str(member.get("command") or ""))]
+            removed += len(members) - len(remaining)
+            if remaining:
+                updated = dict(entry)
+                updated["hooks"] = remaining
+                kept.append(updated)
         data["hooks"][event] = kept          # 空列表保留结构：用户文件不删
     if removed:
         tmp = path + ".tmp"

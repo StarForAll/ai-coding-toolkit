@@ -23,7 +23,7 @@ TO = '    if False:  # 注入：不看平台清单\n'
 
 def check():
     root, _lib, _payload = H.stage()
-    project = H.deploy(root, platforms=("dsh",))
+    project = H.deploy(root)
     H.ensure_project_config(project)
     if os.environ.get("WF_REPRO_INJECT") == "1":
         H.patch(os.path.join(project, ".wf/lib/wflib/session.py"), FROM, TO)
@@ -31,11 +31,17 @@ def check():
     installation_path = os.path.join(project, ".wf/install/installation.json")
     with open(installation_path, encoding="utf-8") as handle:
         installation = json.load(handle)
-    if "codex" in installation.get("platforms") or "dsh" not in installation.get("platforms"):
-        raise H.Precondition(f"安装记录平台不是 [dsh]：{installation.get('platforms')}")
+    # 安装面向全部平台（2026-11-23 人裁）：记录里就是全部支持平台
+    expected_platforms = sorted(installation.get("platforms") or [])
+    if len(expected_platforms) < 2 or "dsh" not in expected_platforms:
+        raise H.Precondition(f"安装记录不是全部平台：{expected_platforms}")
     if "session_profile" in installation:
         raise H.Precondition("安装记录里仍有 session_profile（R93 已删除）")
 
+    # "未安装宿主"改成记录里去掉 codex：安装装齐 ≠ 身份清单不可变（清单仍是唯一事实）
+    installation["platforms"] = [name for name in expected_platforms if name != "codex"]
+    with open(installation_path, "w", encoding="utf-8") as handle:
+        json.dump(installation, handle, ensure_ascii=False, indent=2)
     problems = []
     # ① 未安装的宿主要求写操作 → 拒绝（本用例的目标断言）
     rc, payload = H.cli(project, ["enable", "--json"], sid=SID,
@@ -45,9 +51,9 @@ def check():
         problems.append(f"未安装宿主的写操作未被拒：rc={rc} code={code}")
     facts = (payload or {}).get("facts") or {}
     if code == "WF_IDENTITY_UNRESOLVED":
-        if facts.get("installed_platforms") != ["dsh"]:
+        if facts.get("installed_platforms") != installation["platforms"]:
             problems.append(f"facts 未列出已装平台：{facts.get('installed_platforms')}")
-        if "install --platform" not in str(facts.get("next") or ""):
+        if "install" not in str(facts.get("next") or ""):
             problems.append(f"facts 未给登记出口：{facts.get('next')}")
 
     # ② 同一会话的只读诊断不受影响

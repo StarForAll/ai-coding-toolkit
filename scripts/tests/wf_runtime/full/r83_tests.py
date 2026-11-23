@@ -218,14 +218,78 @@ rec("B2 任何分支都没有 → 不算发现", "空列表",
     wf_install.branch_source_findings(branch_repo, [".agents/skills/absent/SKILL.md"]) == [])
 shutil.rmtree(branch_repo, ignore_errors=True)
 
-# ---- A1/A2（2026-11-05 第二轮复审）：install.py::add_platforms 的行为 ----
+# ---- A1/A2（2026-11-05 第二轮复审 → 2026-11-23 改写）：重复安装的补齐/核对语义 ----
+# 旧的 `add_platforms`（已删）负责"追加平台"；安装改为面向全部平台后，同一条命令的
+# 重复执行落到 `verify_installed`：缺的补、改过的不覆盖、什么都没缺就只读核对。
 
-def _run_add_platforms(args, writes, roots):
-    """调用 add_platforms 并返回 (rc, 最后一行 JSON 载荷或 None)。"""
+import argparse as _argparse
+
+
+_RULES_DIGEST = "sha256:" + "a" * 64
+_MANIFEST = {"version": "0.1.7",
+             "compatibility": {"rules_digest": _RULES_DIGEST},
+             "gitignore_managed": {"begin_marker": "# wf-managed-v1",
+                                   "end_marker": "# wf-managed-end",
+                                   "lines": ["/.wf-lock"]},
+             "assets": [{"target_class": "skill_root",
+                         "target_relative": "wf-start/SKILL.md",
+                         "source_path": "wf-release/skills/wf-start/SKILL.md",
+                         "digest": "sha256:placeholder", "executable": False}]}
+
+
+def _mk_platform_env(name):
+    base = tempfile.mkdtemp(prefix=f"r83-{name}-")
+    target = os.path.join(base, "proj")
+    source = os.path.join(base, "rel")
+    root = os.path.join(target, ".agents/skills")
+    os.makedirs(os.path.join(source, "skills/wf-start"), exist_ok=True)
+    os.makedirs(os.path.join(target, ".wf/install"), exist_ok=True)
+    os.makedirs(os.path.join(source, "wf-release/skills/wf-start"), exist_ok=True)
+    open(os.path.join(source, "wf-release/skills/wf-start/SKILL.md"), "w").write("v1\n")
+    import hashlib
+    digest = "sha256:" + hashlib.sha256(b"v1\n").hexdigest()
+    manifest = json.loads(json.dumps(_MANIFEST))
+    manifest["assets"][0]["digest"] = digest
+    json.dump(manifest, open(os.path.join(source, "wf-release.json"), "w"), ensure_ascii=False)
+    installation = {"schema_version": 1, "release_ref": "refs/tags/wf-v0.1.7", "source_commit": "c0",
+                    "version": "0.1.7", "rules_digest": _RULES_DIGEST,
+                    "platforms": ["dsh"], "roots": [".agents/skills"], "assets": [],
+                    "decisions": [], "installed_at": "2026-11-05T00:00:00.000000Z", "tool": "install.py"}
+    json.dump(installation, open(os.path.join(target, ".wf/install/installation.json"), "w"),
+              ensure_ascii=False, indent=2)
+    writer = {"schema_version": 1, "id": "writer", "revision": 0, "created_at": "2026-11-05T00:00:00.000000Z",
+              "updated_at": "2026-11-05T00:00:00.000000Z", "write_mark": None, "action": None,
+              "state": "idle", "generation": 2, "holder": None, "handover": None,
+              "checkpoint": None, "maintenance_results": []}
+    json.dump(writer, open(os.path.join(target, ".wf/writer.json"), "w"), ensure_ascii=False, indent=2)
+    args = _argparse.Namespace(target=target, source=source, confirm=True, json=True)
+    return base, target, root, args
+
+
+def _run_verify(args):
+    """调用 verify_installed 并返回 (rc, JSON 载荷或 None)。
+
+    合成夹具：发行侧校验（tag/资产/工作树/分支/线索/自检）与本用例关注点无关，
+    只在这些调用期间按单测同口径屏蔽，不污染前面的 B2 分支来源用例。
+    """
     import install as _install
+    saved = {name: getattr(_install, name) for name in
+             ("verify_assets", "resolve_tag", "_worktree_clean", "branch_source_findings",
+              "trellis_clues", "self_check")}
+    _install.verify_assets = lambda *a, **k: []
+    _install.resolve_tag = lambda *a, **k: "c0"
+    _install._worktree_clean = lambda *a, **k: (True, [])
+    _install.branch_source_findings = lambda *a, **k: []
+    _install.trellis_clues = lambda *a, **k: []
+    _install.self_check = lambda *a, **k: []
     buffer = io.StringIO()
-    with contextlib.redirect_stdout(buffer):
-        rc = _install.add_platforms(args, "c0", _MANIFEST, writes, roots)
+    try:
+        with contextlib.redirect_stdout(buffer):
+            rc = _install.main(["--target", args.target, "--release-ref", "refs/tags/wf-v0.1.7",
+                                "--source", args.source, "--confirm", "--json"])
+    finally:
+        for name, value in saved.items():
+            setattr(_install, name, value)
     payload = None
     for line in reversed(buffer.getvalue().splitlines()):
         line = line.strip()
@@ -238,109 +302,70 @@ def _run_add_platforms(args, writes, roots):
     return rc, payload
 
 
-import argparse as _argparse
+import install as wf_install
 
-
-_RULES_DIGEST = "sha256:" + "a" * 64
-# add_platforms 在锁内按 manifest 重算完整计划（不信任调用方传入的 writes），
-# 因此合成 manifest 必须像真实发行清单一样登记该技能资产。
-_MANIFEST = {"compatibility": {"rules_digest": _RULES_DIGEST},
-             "assets": [{"target_class": "skill_root",
-                         "target_relative": "wf-start/SKILL.md",
-                         "source_path": "skills/wf-start/SKILL.md",
-                         "digest": "sha256:y", "executable": False}]}
-
-
-def _mk_platform_env(name):
-    base = tempfile.mkdtemp(prefix=f"r83-{name}-")
-    target = os.path.join(base, "proj")
-    source = os.path.join(base, "rel")
-    # 新平台根故意与已装的 .agents/skills 不同：追加平台只处理新根
-    root = os.path.join(target, ".cursor/skills")
-    os.makedirs(os.path.join(source, "skills/wf-start"), exist_ok=True)
-    os.makedirs(os.path.join(target, ".wf/install"), exist_ok=True)
-    open(os.path.join(source, "skills/wf-start/SKILL.md"), "w").write("v1\n")
-    installation = {"schema_version": 1, "release_ref": "refs/tags/wf-v0.1.0", "source_commit": "c0",
-                    "version": "0.1.0", "rules_digest": _RULES_DIGEST,
-                    "platforms": ["dsh"], "roots": [".agents/skills"],
-                    "assets": [{"target": ".wf/bin/wf.py", "root_ref": "project", "digest": "sha256:x",
-                                "source_path": "bin/wf.py"}],
-                    "decisions": [], "installed_at": "2026-11-05T00:00:00.000000Z", "tool": "install.py"}
-    json.dump(installation, open(os.path.join(target, ".wf/install/installation.json"), "w"),
-              ensure_ascii=False, indent=2)
-    writer = {"schema_version": 1, "id": "writer", "revision": 0, "created_at": "2026-11-05T00:00:00.000000Z",
-              "updated_at": "2026-11-05T00:00:00.000000Z", "write_mark": None, "action": None,
-              "state": "idle", "generation": 2, "holder": None, "handover": None,
-              "checkpoint": None, "maintenance_results": []}
-    json.dump(writer, open(os.path.join(target, ".wf/writer.json"), "w"), ensure_ascii=False, indent=2)
-    args = _argparse.Namespace(target=target, source=source, platform=["cursor"], confirm=True, json=True)
-    writes = [(root, {"target_class": "skill_root", "source_path": "skills/wf-start/SKILL.md",
-                      "digest": "sha256:y", "executable": False}, "wf-start/SKILL.md")]
-    return base, target, root, args, writes
-
-
-base, target, root, args, writes = _mk_platform_env("add")
-wf_install.add_platforms(args, "c0", _MANIFEST, writes, [root])
+base, target, root, args = _mk_platform_env("repair")
+_rc = [_run_verify(args)][0][0]
 inst = json.load(open(os.path.join(target, ".wf/install/installation.json"), encoding="utf-8"))
 wr = json.load(open(os.path.join(target, ".wf/writer.json"), encoding="utf-8"))
 receipt = (wr.get("maintenance_results") or [{}])[-1]
-paths = [item.get("path") for item in receipt.get("changes") or []]
-rec("A1 追加平台登记新根资产", "assets 增加且含新根技能",
+changes = receipt.get("changes") or []
+rec("A1 重复安装补齐缺失落点并登记资产", "assets 含两个平台根的同名技能",
     json.dumps(inst.get("assets"), ensure_ascii=False)[:160],
     len(inst.get("assets") or []) == 2
-    and any(a.get("root_ref") == root and a.get("target") == "wf-start/SKILL.md"
-            for a in inst.get("assets") or []))
-rec("A1 回执路径为项目相对且含安装记录",
-    "changes 含 .cursor/skills/wf-start/SKILL.md 与 .wf/install/installation.json",
-    paths, ".cursor/skills/wf-start/SKILL.md" in paths
-    and ".wf/install/installation.json" in paths)
+    and sorted(a.get("root_ref") for a in inst.get("assets") or []) ==
+    sorted([os.path.join(target, ".agents/skills"), os.path.join(target, ".claude/skills")]))
+rec("A1 回执路径为项目相对", "changes 含 .agents/skills/... 与 .claude/skills/...",
+    [item.get("path") for item in changes],
+    {item.get("path") for item in changes} >= {".agents/skills/wf-start/SKILL.md",
+                                               ".claude/skills/wf-start/SKILL.md"})
 rec("A1 授予与撤销各递增代次", "generation 2 → 4", wr.get("generation"), wr.get("generation") == 4)
 rec("A1 释放后空闲且无 holder", "state=idle holder=None",
     f"{wr.get('state')}/{wr.get('holder')}", wr.get("state") == "idle" and wr.get("holder") is None)
+rec("A1 安装记录提升为全部平台", "platforms = 全部支持平台",
+    f"{len(inst.get('platforms') or [])}", len(inst.get("platforms") or []) == 8)
 before = json.load(open(os.path.join(target, ".wf/writer.json"), encoding="utf-8"))
-idem_rc, idem_payload = _run_add_platforms(args, writes, [root])
+idem_rc, idem_payload = _run_verify(args)
 after_idem = json.load(open(os.path.join(target, ".wf/writer.json"), encoding="utf-8"))
-rec("A1 重复同平台幂等（不取写权、不产生空回执）", "writer 记录逐字段不变且回显 noop",
+rec("A1 重复同内容幂等（不取写权、不产生空回执）", "writer 记录逐字段不变且回显 noop",
     f"rc={idem_rc} same={before == after_idem} noop={(idem_payload or {}).get('facts', {}).get('noop')}",
     idem_rc == 0 and before == after_idem
     and (idem_payload or {}).get("facts", {}).get("noop") is True)
 shutil.rmtree(base, ignore_errors=True)
 
-base, target, root, args, writes = _mk_platform_env("conflict")
-# 两个目标：一个异内容、一个不存在；冲突时必须**整批**不写，连不存在的那份也不能落地
-os.makedirs(os.path.join(root, "wf-start"), exist_ok=True)
-open(os.path.join(root, "wf-start/SKILL.md"), "w").write("local-edit\n")
-writes.append((root, {"target_class": "skill_root", "source_path": "skills/wf-start/SKILL.md",
-                      "digest": "sha256:z", "executable": False}, "wf-init/SKILL.md"))
+base, target, root, args = _mk_platform_env("conflict")
+# 一个落点被本地改过，另一个缺失：冲突时必须**整批**不写，连缺失的那份也不能落地
+os.makedirs(os.path.join(target, ".agents/skills/wf-start"), exist_ok=True)
+open(os.path.join(target, ".agents/skills/wf-start/SKILL.md"), "w").write("local-edit\n")
 before_writer = json.load(open(os.path.join(target, ".wf/writer.json"), encoding="utf-8"))
 inst_path = os.path.join(target, ".wf/install/installation.json")
 before_inst = open(inst_path, encoding="utf-8").read()
-code, payload_c = _run_add_platforms(args, writes, [root])
+code, payload_c = _run_verify(args)
 after_writer = json.load(open(os.path.join(target, ".wf/writer.json"), encoding="utf-8"))
 rec("A1 内容冲突整批不写", "WF_ASSET_DECISION 且 writer/安装记录/两份目标都未变",
     f"rc={code} code={(payload_c or {}).get('code')} batch_written="
-    f"{os.path.exists(os.path.join(root, 'wf-init/SKILL.md'))}",
+    f"{os.path.exists(os.path.join(target, '.claude/skills/wf-start/SKILL.md'))}",
     code == 1 and (payload_c or {}).get("code") == "WF_ASSET_DECISION"
     and before_writer == after_writer and open(inst_path, encoding="utf-8").read() == before_inst
-    and open(os.path.join(root, "wf-start/SKILL.md")).read().strip() == "local-edit"
-    and not os.path.exists(os.path.join(root, "wf-init/SKILL.md")))
+    and open(os.path.join(target, ".agents/skills/wf-start/SKILL.md")).read().strip() == "local-edit"
+    and not os.path.exists(os.path.join(target, ".claude/skills/wf-start/SKILL.md")))
 shutil.rmtree(base, ignore_errors=True)
 
-base, target, root, args, writes = _mk_platform_env("badwriter")
+base, target, root, args = _mk_platform_env("badwriter")
 wp = os.path.join(target, ".wf/writer.json")
 bad = json.load(open(wp, encoding="utf-8"))
 bad["schema_version"] = 99
 json.dump(bad, open(wp, "w"), ensure_ascii=False, indent=2)
 wr_before = open(wp, encoding="utf-8").read()
 inst_before = open(os.path.join(target, ".wf/install/installation.json"), encoding="utf-8").read()
-code, payload_s = _run_add_platforms(args, writes, [root])
+code, payload_s = _run_verify(args)
 rec("A2 writer schema 非法即拒且零写入", "WF_RECORD_INVALID，记录与目标均未变",
     f"rc={code} code={(payload_s or {}).get('code')} "
-    f"file_exists={os.path.exists(os.path.join(root, 'wf-start/SKILL.md'))}",
+    f"file_exists={os.path.exists(os.path.join(target, '.agents/skills/wf-start/SKILL.md'))}",
     code == 1 and (payload_s or {}).get("code") == "WF_RECORD_INVALID"
     and open(wp, encoding="utf-8").read() == wr_before
     and open(os.path.join(target, ".wf/install/installation.json"), encoding="utf-8").read() == inst_before
-    and not os.path.exists(os.path.join(root, "wf-start/SKILL.md")))
+    and not os.path.exists(os.path.join(target, ".agents/skills/wf-start/SKILL.md")))
 shutil.rmtree(base, ignore_errors=True)
 
 json.dump(results, open(wfdrive.temp("r83_results.json"), "w"), ensure_ascii=False, indent=2)

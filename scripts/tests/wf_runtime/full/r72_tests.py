@@ -23,7 +23,6 @@ def make_project(name):
                     wfdrive.REPO + "/docs/workflows/wf/payload/install.py",
                     "--target", target, "--release-ref", install_ref,
                     "--source", wfdrive.release_root(),
-                    "--platform", "dsh",
                     "--confirm", ],
                    capture_output=True, text=True)
     return target

@@ -94,8 +94,20 @@ rc, payload, out = approve(task1, d1, gen1, "sess-P1")
 rec("A2 改错字后未接链即重批", "WF_APPROVAL_MISSING 或语义变化提示", (payload or {}).get("code"),
     (payload or {}).get("code") in ("WF_APPROVAL_MISSING", "WF_SEMANTIC_DECISION"))
 # 用机械修订衔接
+# 机械修订的决定必须绑定**人看过的当前 PRD**（十轮 b-1）：草稿预填的就是这个摘要，
+# 拿旧批准的摘要调用会被拒——那正是"把旧确认沿用到新内容"。
+current_prd_digest = "sha256:" + hashlib.sha256(
+    open(prd_path, "rb").read()).hexdigest()
+stale = decision_file(wfdrive.temp("cp2_mech_stale.json"), [dec(f"{old_version} -> 新版本（仅修错字）",
+                                                                "机械修订", d1,
+                                                                "只改正文错字，机读块未变")])
+rc, payload, out = wf(["task-approve", "--task", task1, "--decision", stale, "--json"],
+                      {"generation": gen1}, "sess-P1")
+rec("A2 旧摘要的机械修订被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
+    (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 mech = decision_file(wfdrive.temp("cp2_mech.json"), [dec(f"{old_version} -> 新版本（仅修错字）", "机械修订",
-                                                d1, "只改正文错字，机读块未变")])
+                                                current_prd_digest,
+                                                "只改正文错字，机读块未变")])
 rc, payload, out = wf(["task-approve", "--task", task1, "--decision", mech, "--json"],
                       {"generation": gen1}, "sess-P1")
 facts = (payload or {}).get("facts", {})

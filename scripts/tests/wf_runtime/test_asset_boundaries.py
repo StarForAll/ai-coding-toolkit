@@ -175,7 +175,7 @@ class DevDeployBoundaryTest(unittest.TestCase):
 
     def args(self, **overrides):
         import argparse
-        base = dict(target=str(self.project), platform=[["dsh"]], confirm=True, json=True)
+        base = dict(target=str(self.project), confirm=True, json=True)
         base.update(overrides)
         return argparse.Namespace(**base)
 
@@ -206,37 +206,34 @@ class DevDeployBoundaryTest(unittest.TestCase):
         self.assertIn("预览", output)
         self.assertEqual(sorted(os.listdir(self.project)), [])
 
-    def test_first_confirm_add_confirm_and_noop(self):
+    def test_first_confirm_and_noop(self):
+        """一次装齐全部平台；重跑同一条命令只读核对（幂等、不取写权）。"""
         rc, output = self.run_deploy()
         self.assertEqual(rc, 0, output)
         self.assertIn("WF_OK", output)
         self.assertTrue((self.project / ".wf" / "writer.json").is_file())
         installation = json.loads((self.project / ".wf" / "install" / "installation.json").read_text())
-        self.assertEqual(installation["roots"], [".agents/skills"])
+        self.assertEqual(sorted(installation["roots"]), [".agents/skills", ".claude/skills"])
         self.assertTrue(all(not os.path.isabs(root) for root in installation["roots"]))
-        # 追加平台（claudecode）：只投放新根，不重复首装内容。
-        rc, output = self.run_deploy(platform=[["claudecode"]])
-        self.assertEqual(rc, 0, output)
-        installation = json.loads((self.project / ".wf" / "install" / "installation.json").read_text())
-        self.assertIn(".claude/skills", installation["roots"])
-        # 重复同一平台：幂等，不取写权、不产生回执。
-        rc, output = self.run_deploy(platform=[["claudecode"]])
-        self.assertEqual(rc, 0, output)
-        self.assertIn("无任何变化", output)
-
-    def test_add_platform_rejects_root_drift_between_preview_and_confirm(self):
+        self.assertEqual(len(installation["platforms"]), 8)
+        writer_before = (self.project / ".wf" / "writer.json").read_text()
         rc, output = self.run_deploy()
         self.assertEqual(rc, 0, output)
-        rc, output = self.run_deploy(platform=[["claudecode"]], confirm=False)
+        self.assertIn("无任何变化", output)
+        self.assertEqual((self.project / ".wf" / "writer.json").read_text(), writer_before)
+
+    def test_redeploy_rejects_symlinked_root_instead_of_writing_through(self):
+        """自有根被换成指向项目外的符号链接时，重部署必须整批拒绝、不写穿。"""
+        rc, output = self.run_deploy()
         self.assertEqual(rc, 0, output)
+        import shutil as _shutil
+        _shutil.rmtree(self.project / ".claude")
         (self.project / ".claude").mkdir()
         (self.project / ".claude" / "skills").symlink_to(self.outside, target_is_directory=True)
-        rc, output = self.run_deploy(platform=[["claudecode"]])
+        rc, output = self.run_deploy()
         self.assertNotEqual(rc, 0, output)
         self.assertIn("WF_ASSET_DECISION", output)
-        self.assertEqual(os.listdir(self.outside), [], "追加平台不得写穿到项目外")
-        installation = json.loads((self.project / ".wf" / "install" / "installation.json").read_text())
-        self.assertNotIn(".claude/skills", installation["roots"])
+        self.assertEqual(os.listdir(self.outside), [], "重部署不得写穿到项目外")
 
     def test_apply_rejects_root_drift_between_preview_and_confirm(self):
         rc, output = self.run_deploy(confirm=False)

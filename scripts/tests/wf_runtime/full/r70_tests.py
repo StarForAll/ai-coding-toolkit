@@ -66,7 +66,6 @@ def make_project(name):
                            os.path.join(release, "install.py"),
                            "--target", target, "--release-ref", _install_ref(),
                            "--source", release,
-                           "--platform", "dsh",
                            "--confirm", ],
                           capture_output=True, text=True)
     if not os.path.exists(os.path.join(target, ".wf/bin/uninstall.py")):

@@ -23,7 +23,7 @@ disable-model-invocation: false
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘） |
 | 需要记录知识处置（Check/归档前） | `task-knowledge --task <id> --decision no-update|updated [--changes <文件>]`；spec 变更走 `wf-spec-update` skill（`spec-update --task <id> --changes <文件>`），先看后改 |
-| 复盘触发（入口 facts 的触发集合非空） | `task-retrospect --task <id> --decision <文件> --evidence <文件>`；触发项与证据缺口由入口 facts 给出，不自行缩减 |
+| 复盘触发（入口 facts 的触发集合非空） | `task-retrospect --task <id> --evidence <文件>`（结论写在 evidence 的 `conclusion`）；触发项与证据缺口由入口 facts 给出，不自行缩减 |
 | 需要返工或替换 | `task-rework --task <id> --decision <文件>`（建 R、挂起 T、继承前置）；替换用 `task-replace --task <id> --decision <文件> [--preview]`；先读 `task-flow` 的返工/替换段 |
 | 任务挂起需要复评 | `task-reassess --task <id>`（挂起集合为空时入口直接通过，不写记录） |
 | 建/删依赖边 | `dep --task <id> --op add|rm --prereq <id>`；前置状态与顺序由入口校验，不手改记录 |
@@ -138,13 +138,22 @@ disable-model-invocation: false
 单 reviewer 判定需人签残余风险接受（`review-decide --single-reviewer-acceptance`，留痕降级、不默认；
 骨架用 `--single-reviewer-acceptance-draft` 生成）；完整口径见 `wf-review` 适用面。
 
-## 证据文件纪律（2026-11-07 起）
+## 证据文件纪律（2026-11-07 起；2026-11-23 改按"谁生成"分类）
 
 真实 dogfood 发现：把"入口该生成的结构"写成文件，会让任务目录膨胀、并迫使模型读源码猜字段。因此：
 
-- **可以人/模型写的只有五类**：批准/收工等决定文件、`--review-notes`（双轴结论，先跑 `--review-notes-draft`）、`--changes`（spec/知识变更，先跑 `--changes-draft`）、基线提案（**推荐** `baseline-apply --files a,b,c --decision <批准文件>`，由入口生成提案）、主会话复核（**先用** `review-decide --main-review-draft <file>` 生成骨架，再填五轴/逐报告/逐 finding）。知识处置本身是 `task-knowledge --decision no-update|updated` + `--changes`（值，不是决定文件）。
-- **不要自建**：验证结果（`task-check` 会记）、门禁预览（`gate --due before_archive`）、提交清单与摘要（`archive` 记录）、`plan-approval`/`finish-commit-manifest` 之类"自述性"文件。
-- 需要知道某命令的输入结构：`<python> <项目根>/.wf/bin/wf.py help <命令>`（有最小示例，不必读源码）。
+- **入口生成、不要手写**：验证结果（`task-check` 记）、门禁预览（`gate --due before_archive`）、
+  提交清单与摘要（`archive` 记）、审查材料与轮次记录（`review-*` 记）、安装/维护回执。
+  这些一旦由模型自述，就会和真实事实分叉。
+- **人/模型按命令契约填写的输入**：决定文件（`--decision`/`--disposition`）、主会话复核
+  （`--main-review`）、双轴审查结论（`--review-notes`）、spec/知识变更（`--changes`）、
+  处置数组（`review-decide --plan`）、判断条目（`judgments add --file`）、复盘证据（`task-retrospect --evidence`）、
+  外来改动排除（`--workspace-exclusion`）。它们不是"五类白名单"能穷举的：**字段形状以
+  `wf help <命令>` 的 `inputs` 为准**，多数命令另有 `--draft` / `--*-draft` 只读骨架
+  （`task-approve --draft`、`task-check --review-notes-draft`、`review-decide --plan-draft`、
+  `judgments add --draft`、`--changes-draft` 等），先用骨架再填。
+- 决定内容必须是人已明确给出的选择，模型只负责按它转录（作决定与转录是两件事，见设计稿 §1.2）。
+- 需要知道输入结构：`<python> <项目根>/.wf/bin/wf.py help <命令>`（有最小示例，不必读源码）。
 
 ## 不做
 

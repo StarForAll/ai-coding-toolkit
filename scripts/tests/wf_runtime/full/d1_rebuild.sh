@@ -20,7 +20,7 @@ done
 "$PY" "$ROOT/scripts/tests/wf_runtime/full/fixture_scope.py" reset /tmp/wf-fixtures/skills-d1
 "$PY" "$ROOT/scripts/tests/wf_runtime/full/fixture_scope.py" reset /tmp/wf-fixtures/skills-d1w
 "$PY" "$ROOT/scripts/wf-dev-deploy.py" --target "$HOME/.cache/wf-fixtures/d1host" \
-  --platform dsh --confirm  --verified-version "dsh-session-2026-11-04" \
+  --confirm  --verified-version "dsh-session-2026-11-04" \
   >/dev/null
 "$PY" "$ROOT/scripts/wf-dev-deploy.py" --target "$HOME/.cache/wf-fixtures/d1wf" \
-  --provider wf --platform dsh --confirm  --verified-version "wf-issued-2026-11-04" >/dev/null
+  --provider wf --confirm  --verified-version "wf-issued-2026-11-04" >/dev/null

@@ -39,6 +39,12 @@ def dec(subject, choice, digest="sha256:" + "0" * 64, **extra):
     return base
 
 
+def content_digest(task_id, generation, sid):
+    """人判决定必须绑定"人看到的交付内容"（`content_digest`）。"""
+    rc, payload, _out = wf(["status", "--json"], {"generation": generation}, sid)
+    return ((payload or {}).get("facts") or {}).get("delivery", {}).get("content_digest")
+
+
 def dfile(path, items):
     json.dump(items, open(path, "w"), ensure_ascii=False, indent=2)
     return path
@@ -265,7 +271,11 @@ rc, payload, _ = wf(["task-check", "--task", task12, "--decision", zeros, "--rev
                     {"generation": gen12}, "sess-T12")
 rec("R12 未绑定批准对象的决定不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-right = dfile(wfdrive.temp("r12_right.json"), [dec("v1 a1", "passed", d12)])
+# 人判还要绑定"人看到的交付内容"（十轮 b-1）：这里取公开面 `status` 的当前值
+cd12 = content_digest(task12, gen12, "sess-T12")
+rec("R12 取到交付内容摘要", "sha256:...", (cd12 or "")[:16], bool(cd12))
+right = dfile(wfdrive.temp("r12_right.json"),
+              [dec("v1 a1", "passed", d12, content_digest=cd12)])
 rc, payload, _ = wf(["task-check", "--task", task12, "--decision", right, "--review-notes", NOTES, "--json"],
                     {"generation": gen12}, "sess-T12")
 rec("R12 绑定对象与版本的决定通过", "WF_OK", (payload or {}).get("code"), rc == 0)

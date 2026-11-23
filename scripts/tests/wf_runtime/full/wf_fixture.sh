@@ -76,7 +76,7 @@ case "$DEPLOY" in
       echo "wf_fixture: dev 模式不接受 --release-root/--release-ref/--release-version" >&2
       exit 2
     fi
-    "$PY" "$REPO/scripts/wf-dev-deploy.py" --target "$F" --platform dsh --confirm >"$DEPLOY_LOG" 2>&1
+    "$PY" "$REPO/scripts/wf-dev-deploy.py" --target "$F" --confirm >"$DEPLOY_LOG" 2>&1
     ;;
   candidate)
     if [ -z "$RELEASE_ROOT" ] || [ -z "$RELEASE_REF" ] || [ -z "$RELEASE_VERSION" ]; then
@@ -88,7 +88,7 @@ case "$DEPLOY" in
       exit 2
     fi
     "$PY" "$RELEASE_ROOT/install.py" --target "$F" --release-ref "$RELEASE_REF" \
-      --source "$RELEASE_ROOT" --platform dsh --confirm >"$DEPLOY_LOG" 2>&1 || {
+      --source "$RELEASE_ROOT" --confirm >"$DEPLOY_LOG" 2>&1 || {
       echo "wf_fixture: 候选安装失败（见 $DEPLOY_LOG）" >&2; tail -5 "$DEPLOY_LOG" >&2; exit 1; }
     "$PY" "$HERE/verify_install_identity.py" --target "$F" --release-root "$RELEASE_ROOT" \
       --ref "$RELEASE_REF" --version "$RELEASE_VERSION" || {

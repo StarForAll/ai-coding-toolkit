@@ -128,7 +128,7 @@ class ThreeWayPlanTest(Harness):
         self.manifest["assets"][0]["digest"] = self._local_digest(".wf/lib/wflib/session.py")
         plan, unresolved = install.three_way_plan(str(self.target), json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8")),
-            self.manifest, str(self.source), ["codex"], [], [])
+            self.manifest, str(self.source), [])
         kinds = {item["kind"] for item in plan["actions"]}
         self.assertIn("noop", kinds)
 
@@ -140,7 +140,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][1]["digest"] = self._local_digest(".wf/bin/repair.py")
         installation["assets"][1]["upstream_fingerprint"] = self._local_digest(".wf/bin/repair.py")
         plan, unresolved = install.three_way_plan(str(self.target), installation,
-                                                  self.manifest, str(self.source), ["codex"], [], [])
+                                                  self.manifest, str(self.source), [])
         update = [item for item in plan["actions"] if item["kind"] == "update"]
         self.assertEqual(len(update), 1)
         self.assertEqual(update[0]["relative"], ".wf/bin/repair.py")
@@ -158,7 +158,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][1]["upstream_fingerprint"] = self.new_repair_digest
         installation["assets"][1]["decision"] = "human (test)"
         plan, unresolved = install.three_way_plan(str(self.target), installation,
-                                                  self.manifest, str(self.source), ["codex"], [], [])
+                                                  self.manifest, str(self.source), [])
         kept = [item for item in plan["actions"] if item["kind"] == "deviation-kept"]
         self.assertEqual(len(kept), 1)
         self.assertEqual(kept[0]["decision"], "human (test)")
@@ -175,7 +175,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][1]["decision"] = "human (upgrade --keep)"
         self.manifest["assets"][1]["digest"] = "sha256:" + "e" * 64
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"], [], [])
+            str(self.target), installation, self.manifest, str(self.source), [])
         self.assertFalse([item for item in plan["actions"] if item["kind"] == "update"])
         self.assertTrue(any(item["kind"] == "local-deviates" for item in unresolved))
 
@@ -183,7 +183,7 @@ class ThreeWayPlanTest(Harness):
         self._write_local(".wf/bin/repair.py", "user edited, not release, not installed")
         plan, unresolved = install.three_way_plan(str(self.target), json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8")),
-            self.manifest, str(self.source), ["codex"], [], [])
+            self.manifest, str(self.source), [])
         self.assertTrue(any(item["kind"] == "local-deviates" for item in unresolved))
         exits = [item for item in unresolved if item["kind"] == "local-deviates"][0]["exits"]
         self.assertTrue(any("--keep" in e for e in exits))
@@ -197,7 +197,7 @@ class ThreeWayPlanTest(Harness):
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         installation["assets"][0]["digest"] = self._local_digest(".wf/lib/wflib/session.py")
         plan, unresolved = install.three_way_plan(str(self.target), installation,
-                                                  self.manifest, str(self.source), ["codex"], [], [])
+                                                  self.manifest, str(self.source), [])
         self.assertEqual(len(plan["deletes"]), 1)
         self.assertEqual(plan["deletes"][0]["relative"], ".wf/lib/wflib/session.py")
 
@@ -206,7 +206,7 @@ class ThreeWayPlanTest(Harness):
         installation = json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"], [], [])
+            str(self.target), installation, self.manifest, str(self.source), [])
         self.assertFalse([item for item in plan["actions"] if item["kind"] == "reinstall"])
         self.assertTrue(any(item["kind"] == "local-missing" for item in unresolved))
         exits = [item for item in unresolved if item["kind"] == "local-missing"][0]["exits"]
@@ -217,7 +217,7 @@ class ThreeWayPlanTest(Harness):
         installation = json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [".wf/lib/wflib/session.py", ".wf/bin/repair.py"], [])
         action = [item for item in plan["actions"] if item["relative"] == ".wf/lib/wflib/session.py"][0]
         self.assertEqual(action["kind"], "deleted-kept")
@@ -227,7 +227,7 @@ class ThreeWayPlanTest(Harness):
         installation = json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [], [".wf/lib/wflib/session.py"])
         action = [item for item in plan["actions"] if item["relative"] == ".wf/lib/wflib/session.py"][0]
         self.assertEqual(action["kind"], "reinstall")
@@ -240,7 +240,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][1]["decision"] = "human (upgrade --keep)"
         installation["assets"][1]["local_fingerprint"] = None
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [], [".wf/lib/wflib/session.py"])
         action = [item for item in plan["actions"] if item["relative"] == ".wf/lib/wflib/session.py"][0]
         self.assertEqual(action["kind"], "reinstall")
@@ -253,7 +253,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][1]["decision"] = "human (upgrade --keep)"
         installation["assets"][1]["local_fingerprint"] = None
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"], [], [])
+            str(self.target), installation, self.manifest, str(self.source), [])
         action = [item for item in plan["actions"] if item["relative"] == ".wf/lib/wflib/session.py"][0]
         self.assertEqual(action["kind"], "deleted-kept")
         self.assertEqual(unresolved, [])
@@ -267,7 +267,7 @@ class ThreeWayPlanTest(Harness):
         installation["assets"][0]["decision"] = "human (upgrade --keep)"
         installation["assets"][0]["local_fingerprint"] = None
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"], [], [])
+            str(self.target), installation, self.manifest, str(self.source), [])
         self.assertEqual(unresolved, [])
         self.assertFalse([item for item in plan["actions"]
                           if item["relative"] == ".wf/lib/wflib/session.py"])
@@ -280,16 +280,16 @@ class ThreeWayPlanTest(Harness):
         installation = json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         plan, unresolved = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"], [], [])
+            str(self.target), installation, self.manifest, str(self.source), [])
         item = [entry for entry in unresolved if entry["kind"] == "upstream-removed-local-changed"][0]
         self.assertTrue(any("--keep" in e for e in item["exits"]))
         self.assertTrue(any("--restore" in e for e in item["exits"]))
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [".wf/lib/wflib/session.py"], [])
         self.assertEqual(plan["unmanaged"][0]["kind"], "unmanaged-keep")
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [], [".wf/lib/wflib/session.py"])
         self.assertTrue(any(item.get("restore") for item in plan["deletes"]))
 
@@ -301,7 +301,7 @@ class ThreeWayPlanTest(Harness):
              "file_kind": "file", "executable": True, "digest": "sha256:" + "d" * 64})
         plan, unresolved = install.three_way_plan(str(self.target), json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8")),
-            self.manifest, str(self.source), ["codex"], [], [])
+            self.manifest, str(self.source), [])
         self.assertTrue(any(item["kind"] == "add-hits-user-file" for item in unresolved))
 
     def test_add_same_content_still_needs_decision(self):
@@ -314,7 +314,7 @@ class ThreeWayPlanTest(Harness):
         plan, unresolved = install.three_way_plan(
             str(self.target), json.loads(
                 (self.target / ".wf/install/installation.json").read_text(encoding="utf-8")),
-            self.manifest, str(self.source), ["codex"], [], [])
+            self.manifest, str(self.source), [])
         self.assertFalse([item for item in plan["actions"] if item["kind"] == "register"])
         item = [entry for entry in unresolved if entry["kind"] == "add-hits-user-file"][0]
         self.assertTrue(item["same_content"])
@@ -331,13 +331,13 @@ class ThreeWayPlanTest(Harness):
         installation = json.loads(
             (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [], [".wf/hooks/new.py"])
         action = [item for item in plan["actions"] if item["relative"] == ".wf/hooks/new.py"][0]
         self.assertEqual(action["kind"], "register")
         self.assertTrue(action["restore"])
         plan, _u = install.three_way_plan(
-            str(self.target), installation, self.manifest, str(self.source), ["codex"],
+            str(self.target), installation, self.manifest, str(self.source),
             [".wf/hooks/new.py"], [])
         self.assertEqual(plan["unmanaged"][0]["relative"], ".wf/hooks/new.py")
 
@@ -812,7 +812,7 @@ class ExportDeviationsTest(Harness):
         (self.target / ".wf/install/installation.json").write_text(
             json.dumps(installation, ensure_ascii=False, indent=2), encoding="utf-8")
         plan, _u = install.three_way_plan(str(self.target), installation, self.manifest,
-                                          str(self.source), ["codex"], [".wf/bin/repair.py"], [])
+                                          str(self.source), [".wf/bin/repair.py"], [])
         out = self.root / "export-out"
         args = _Args(target=str(self.target), source=str(self.source),
                      export_deviations=True, out=str(out))
@@ -891,7 +891,9 @@ class ExportSemanticsTest(Harness):
         self.assertEqual(before, (self.target / ".wf/install/installation.json").read_text(encoding="utf-8"))
         manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(manifest["deviations"][0]["status"], "pending")
-        self.assertEqual(manifest["deviations"][0]["path"], ".wf/bin/repair.py")
+        # 五轮 a-1：导出清单的人面路径是**项目相对路径**（与 --keep/--restore 同一 token）
+        self.assertEqual(manifest["deviations"][0]["target_path"], ".wf/bin/repair.py")
+        self.assertNotIn("path", manifest["deviations"][0])
 
     def test_export_allows_same_version(self):
         # 同版只读导出：补丁基线就是当前发行 N；不应被“同版非升级”拦住
@@ -938,7 +940,6 @@ class ExportSemanticsTest(Harness):
             (_Args(target="x", export_deviations=True, keep=["a"], out="o"), "--keep"),
             (_Args(target="x", out="o"), "--out"),
             (_Args(target="x", keep=["a"], restore=["a"]), "--keep/--restore"),
-            (_Args(target="x", platform=["dsh"]), "--platform"),
             (_Args(target="x", confirm=True), "--confirm"),
         ]
         for args, flag in cases:
@@ -962,6 +963,7 @@ class ExportPatchHeaderTest(unittest.TestCase):
             out = root / "out"
             plan = {"actions": [{
                 "base": str(target), "relative": ".wf/lib/wflib/scope.py",
+                "path": ".wf/lib/wflib/scope.py",
                 "kind": "deviation-kept", "local": "sha256:local", "upstream": "sha256:old",
                 "new": "sha256:new", "decision": "human (upgrade --keep)",
                 "asset": {"source_path": "wf-release/lib/wflib/scope.py"},

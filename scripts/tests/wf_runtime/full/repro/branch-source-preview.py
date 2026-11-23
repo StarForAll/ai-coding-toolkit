@@ -67,7 +67,7 @@ def check():
 
     result = subprocess.run([sys.executable, os.path.join(source, "install.py"), "--target", project,
                              "--release-ref", H.RELEASE_REF, "--source", source,
-                             "--platform", "dsh"], capture_output=True, text=True)
+                             ], capture_output=True, text=True)
     problems = []
     text = f"{result.stdout}\n{result.stderr}"
     if result.returncode == 0:

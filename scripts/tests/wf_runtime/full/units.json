@@ -15,7 +15,7 @@
     {
       "name": "cp2_tests",
       "kind": "suite",
-      "expect": 15,
+      "expect": 16,
       "tags": [
         "capability",
         "identity"
@@ -97,7 +97,7 @@
     {
       "name": "r7r15_tests",
       "kind": "suite",
-      "expect": 37,
+      "expect": 38,
       "tags": [
         "state-machine",
         "writer"
@@ -557,7 +557,7 @@
     {
       "name": "r83_tests",
       "kind": "suite",
-      "expect": 30,
+      "expect": 31,
       "tags": [
         "fixed-point",
         "gate"
@@ -623,7 +623,7 @@
     {
       "name": "r89_tests",
       "kind": "suite",
-      "expect": 13,
+      "expect": 12,
       "tags": [
         "install",
         "identity"

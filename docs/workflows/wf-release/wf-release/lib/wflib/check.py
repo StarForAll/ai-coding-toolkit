@@ -260,36 +260,34 @@ def resolve_verifications(ctx, task, point):
 # --------------------------------------------------------------------------
 
 
-# 键名的扫描长度必须**有界**：`[a-z0-9_.-]*` 无限长时，正则会在每一位置尝试扩张，
-# 对一整行无分隔字符（压缩后的 JSON、长 token 串）退化成 O(n²)——400KB 日志实测挂死。
-# 键名超过 64 字符的写法不在遮罩范围内（正常键名远短于此），这个界只限制"找键名"的扫描，
-# 不限制被遮罩的值（`\S+` 仍可长）。
+# 键名的扫描长度必须**有界**：无界的 `[a-z0-9_.-]*` 会在每一位置尝试扩张，对长行退化成
+# O(n²)（400KB 日志实测挂死）。这个界只限制"找键名"的扫描，不限制被遮罩的值长度。
 _KEY = r"[a-z0-9_.-]{0,64}"
-
-SECRET_PATTERNS = (
-    # Authorization: Bearer <值>（不设长度门槛，任意取值都遮罩）
-    re.compile(r"(?i)\bBearer\s+[^\s\"',;]+"),
-    # --token/--api-key/--access-token/--client-secret 等分离或等号/冒号写法（文本形态）
-    re.compile(r"(?i)(--?" + _KEY + r"(?:token|secret|password|passwd|api[_-]?key)" + _KEY + r")"
-               r"(\s*[=:]\s*|\s+)\S+"),
-    # key: value / key=value
-    re.compile(r"(?i)\b(" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
-               + r")\b\s*[:=]\s*\S+"),
-    # JSON/字典内嵌：键名可能带引号、值也可能带引号（{"token":"x"}、{'access_token': "y"}）
-    re.compile(r"(?i)([\"']?" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
-               + r"[\"']?\s*:\s*)([\"'])[^\"']*\2"),     # 带引号的值允许含空格/逗号
-    re.compile(r"(?i)([\"']?" + _KEY + r"(?:api[_-]?key|token|secret|password|passwd)" + _KEY
-               + r"[\"']?\s*:\s*)(?![\"'])[^\s,}]+"),     # 不带引号的单词值
-    # 中文键名：本框架文档与人写的 quote 以中文为主，`口令：xxx` / `口令 xxx` 同样是凭据
-    re.compile(r"(?:密码|口令|密钥|令牌|私钥|凭据)\s*[:：=]\s*\S+"),
-    re.compile(r"(?i)(?:密码|口令|密钥|令牌|私钥)\s+[A-Za-z0-9_.\-]{6,}\b"),
-    re.compile(r"\bsk-[A-Za-z0-9_\-]{12,}\b"),
-    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}\b"),
-    re.compile(r"\bAKIA[0-9A-Z]{12,}\b"),
-)
-
-SECRET_HEAD = re.compile(r"(?i)^(--?" + _KEY + r"(?:token|secret|password|passwd|api[_-]?key)"
-                         + _KEY + r")(\s*[=:]\s*|\s+)")
+_KEYWORD = (r"(?:api[_-]?key|access[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key"
+            r"|client[_-]?secret|secret|token|password|passwd|passphrase|credential)")
+# 值的三种形态：
+# - 单行引号值（允许内部空格与转义引号，`"FIRST SECOND THIRD"`、`"abc\\"def"`）；
+# - 不透明凭据串（JWT / opaque token / hex / base64，≥8 字符且不含分隔符）；
+# - 一般值（**不得以 `=`/`:` 起始**：那是分隔符，不是值——否则 `token = value` 会把 `=`
+#   当成值掩掉、留下真值，2026-11-23 十轮复审 a-P0 的回归就是这样来的）。
+# 注意必须整体分组：`head + _QUOTED` 拼接时，未分组的 `|` 会让右半支**脱离 head**，
+# 变成"任意位置的裸引号串都被遮"（十轮复审的矩阵用例当场抓到）。
+_QUOTED = r"(?:\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*')"
+_OPAQUE = r"[A-Za-z0-9_\-.+/=]{8,}"
+# 材料级的字面量值域：引号值，或"看起来是凭据"的不透明串——**排除调用/取值形态**
+# （后面紧跟 `(`、`.`、`[` 的是表达式，如 `read_from_store()`、`os.environ[...]`）。
+# 早前把非引号值整条标成 code_safe=False，结果 `.env` 里的 `API_KEY=abcdefgh123456`
+# 在材料里明文外发（2026-11-23 十一轮复审 a-P0/b-3）。
+# 判据是"这串东西本身像不像字面凭据"：不带 `.`/括号/下标的裸串按字面量处理
+# （`hunter2`、`abcdefgh123456`、`.env` 里的值），带 `.` 或调用/下标语法的按表达式留给
+# reviewer 看（`read_from_store()`、`os.environ['X']`、`self.secret`）。
+# 裸值判据（字面量）：不含调用/下标语法 `(`/`[`、**含至少一个数字**、长度 ≥4。
+# 含数字这一条把"常量引用/版本号"排除在材料遮罩外（`DEFAULT_PASSWORD`、`api_key_version = 2`），
+# 让 reviewer 仍能看出取值变化；真凭据几乎总含数字（`hunter2`、`sk-…`、`.env` 里的值）。
+_LITERAL = (r"(?:" + _QUOTED + r"|(?![^\s\"',;]*[(\[])(?=[^\s\"',;]*\d)"
+            r"[^\s\"',;]{4,})")
+_VALUE = r"(?:" + _QUOTED + r"|(?![=:])[^\s\"',;]+)"
+_CRED_VALUE = r"(?:" + _QUOTED + r"|" + _OPAQUE + r")"
 
 
 NON_SECRET_KEYS = frozenset({
@@ -313,60 +311,228 @@ def _non_secret_key(raw):
     return key.endswith(("_count", "_limit", "_budget", "_size", "_type"))
 
 
-# 触发词：只有出现这些片段的位置才可能构成敏感键名。用它先定位**窗口**，再在窗口内跑完整规则——
-# 全篇逐位置跑正则会在长行（压缩 JSON、长 token 串）上退化成二次方；400KB 日志实测挂死。
-TRIGGER = re.compile(r"(?i)(bearer|token|secret|password|passwd|api[_-]?key|sk-|gh[pousr]_|akia"
-                        r"|密码|口令|密钥|令牌|私钥|凭据)")
-# 窗口半宽：覆盖常见的 `key: value`、`--token value` 与 YAML 换行写法；超出此距离的
-# "键在这里、值在很远的地方"不属这些规则表达的形态。
-MASK_WINDOW = 512
-
-
-def _mask_match(match):
+def _mask_head(match):
+    """保留键/前缀，遮掉值。计数类键名原样返回。"""
     raw = match.group(0)
     if _non_secret_key(raw):
         return raw
-    head = SECRET_HEAD.match(raw)
-    if head:
-        return head.group(0) + "***"
-    head = re.match(r"""(?i)[\w\- "'{}\[\],:]*?[:=]\s*""", raw)
-    if head:
-        return head.group(0) + "***"
+    return (match.group("head") or "") + "***"
+
+
+def _mask_whole(_match):
     return "***"
 
 
-def _mask_window(window):
-    out = window
-    for pattern in SECRET_PATTERNS:
-        out = pattern.sub(_mask_match, out)
-    return out
+def _mask_url_password(match):
+    """URL userinfo 只遮 password 段，保留 user 与 host。"""
+    return match.group(1) + "***" + match.group(3)
+
+
+# 关键词字面预筛：命中才跑对应正则（无关键词的大文本因此只付一次 `lower()` 的代价）。
+_NEEDLES = ("token", "secret", "password", "passwd", "passphrase", "api_key", "api-key",
+            "apikey", "access_key", "access_token", "auth_token", "client_secret",
+            "private_key", "credential")
+
+# **形态清单按协议承诺一次性规格化**（`redaction.json` 的 `secret-mask`：密钥/令牌/私钥/
+# URL 内凭据/环境变量值）。每条规则：`(pattern, masker, needles, code_safe)`。
+# - `needles` 是廉价字面预筛，命中才跑该正则；**只用关键词本身**，不掺空白形态
+#   （此前 `"token "` 带一个空格，tab 形态靠巧合才被遮住）。
+# - `code_safe` 标出"遮住它不会毁掉代码可读性"的规则：材料（diff/PRD）是给人/异种 reviewer
+#   审代码的，`password = read_from_store()` 这种**调用**不是凭据，不该被掩成
+#   `password = ***`（十轮复审 b-3）；日志与错误回显走全量规则。
+# **顺序即语义**：具体形态（PEM/厂商令牌/URL/头/Bearer）先，键值与 flag 形态随后——
+# 裸前缀规则若排在键值规则之前，`token = value` 会先被它吃掉分隔符（十轮复审 a-P0）。
+RULES = (
+    (re.compile(r"-----BEGIN[^-\n]{0,64}PRIVATE KEY-----(?s:.*?)-----END[^-\n]{0,64}PRIVATE KEY-----"),
+     _mask_whole, ("private key",), True),
+    (re.compile(r"\bsk-[A-Za-z0-9_\-]{12,}\b"), _mask_whole, ("sk-",), True),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9]{16,}\b"), _mask_whole,
+     ("ghp_", "gho_", "ghu_", "ghs_", "ghr_"), True),
+    (re.compile(r"\bAKIA[0-9A-Z]{12,}\b"), _mask_whole, ("akia",), True),
+    (re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"), _mask_whole, ("xox",), True),
+    (re.compile(r"(://[^/\s:@]+:)([^/\s]+)(@)"), _mask_url_password, ("://",), True),
+    (re.compile(r"(?i)(?P<head>\bauthorization\s*[:=]\s*(?:[A-Za-z]+\s+)?)" + _CRED_VALUE),
+     _mask_head, ("authorization",), True),
+    # `Bearer = <值>`/`token: <值>` 与键值规则同一语义类：材料级遮**字面量**值（调用/常量引用保留）。
+    (re.compile(r"(?i)(?P<head>\b(?:bearer|basic|digest|token)\s*[:=]\s*)" + _LITERAL),
+     _mask_head, ("bearer", "basic", "digest", "token"), True),
+    (re.compile(r"(?i)(?P<head>\b(?:bearer|basic|digest|token)\s*[:=]\s*)" + _VALUE),
+     _mask_head, ("bearer", "basic", "digest", "token"), False),
+    (re.compile(r"(?i)(?P<head>\b(?:bearer|basic|digest|token)\s+)" + _CRED_VALUE),
+     _mask_head, ("bearer", "basic", "digest", "token"), True),
+    # 值**带引号**时是字面量（配置文件/JSON/env 里的真实凭据）⇒ 材料级也遮；
+    # 值不带引号时可能是标识符或调用（`password = read_from_store()`）⇒ 只有全量级遮。
+    (re.compile(r"(?i)(?P<head>--?[a-z0-9_.-]{0,64}" + _KEYWORD
+                + r"[a-z0-9_.-]{0,64}(?:\s*[=:]\s*|\s+))" + _LITERAL), _mask_head, _NEEDLES, True),
+    (re.compile(r"(?i)(?P<head>[\"']?[a-z0-9_.-]{0,64}" + _KEYWORD
+                + r"[a-z0-9_.-]{0,64}[\"']?\s*[:=]\s*)" + _LITERAL), _mask_head, _NEEDLES, True),
+    (re.compile(r"(?i)(?P<head>--?[a-z0-9_.-]{0,64}" + _KEYWORD
+                + r"[a-z0-9_.-]{0,64}(?:\s*[=:]\s*|\s+))" + _VALUE), _mask_head, _NEEDLES, False),
+    (re.compile(r"(?i)(?P<head>[\"']?[a-z0-9_.-]{0,64}" + _KEYWORD
+                + r"[a-z0-9_.-]{0,64}[\"']?\s*[:=]\s*)" + _VALUE), _mask_head, _NEEDLES, False),
+    # 中文键名出现在配置/文档里，从不构成"代码逻辑"——材料级同样遮字面量值。
+    (re.compile(r"(?P<head>(?:密码|口令|密钥|令牌|私钥|凭据)\s*(?:[:：=]\s*|\s+))" + _LITERAL),
+     _mask_head, ("密码", "口令", "密钥", "令牌", "私钥", "凭据"), True),
+    (re.compile(r"(?P<head>(?:密码|口令|密钥|令牌|私钥|凭据)\s*(?:[:：=]\s*|\s+))" + _VALUE),
+     _mask_head, ("密码", "口令", "密钥", "令牌", "私钥", "凭据"), False),
+)
+
 
 
 def redact_text(text):
-    """文本级遮罩：日志、facts 摘要、命令回显都走这一处，避免两套规则不一致。
+    """文本级遮罩（全量）：日志、facts 摘要、命令回显。
 
-    先按触发词定位窗口（合并重叠窗口），只在窗口内跑完整规则：语义与"全篇逐位置匹配"一致
-    到窗口边界，但对长行是线性开销。
+    规则按协议承诺的形态一次性列出（`RULES`），对全文逐条应用；每条带廉价字面预筛，
+    因此没有关键词的大文本只付一次 `lower()`。**没有窗口**：窗口曾经兼作"值的可见范围"，
+    于是超过窗口的值只遮前半段、窗口内的触发词又被误当成"已覆盖"。
+    """
+    return _apply_rules(text, code_safe_only=False)
+
+
+def redact_material(text):
+    """材料级遮罩（code_safe 规则）：审查材料是**给人审代码的**，只遮明显的字面凭据。
+
+    `password = read_from_store()` 这类调用不是凭据，不该被掩成 `password = ***`——那会让
+    reviewer 无法判断被遮的是字面值还是调用逻辑（十轮复审 b-3）。日志/错误回显仍走
+    `redact_text` 全量规则：那里宁过勿漏，且不是给人读逻辑的。
+    """
+    return _apply_rules(text, code_safe_only=True)
+
+
+def _structured_secret_key(key):
+    """结构化数据里的**字段名本身**就是信号：`{"password": "…"}` 的值不必自带引号/数字。"""
+    text = str(key).lower()
+    if text in NON_SECRET_KEYS:
+        return False
+    if text.endswith(("_count", "_limit", "_budget", "_size", "_type", "_version", "_name")):
+        return False
+    return any(word in text for word in ("token", "secret", "password", "passwd", "passphrase",
+                                         "api_key", "apikey", "api-key", "access_key",
+                                         "access_token", "auth_token", "client_secret",
+                                         "private_key", "credential", "密码", "口令", "密钥",
+                                         "令牌", "私钥", "凭据"))
+
+
+# 配置文件类型：这些文件里"裸值"就是凭据本体的写法（`.env`/yaml/ini/tfvars…），
+# 材料档对它们用**全量**规则；代码文件才用"只遮字面量"的判据保可读性
+# （2026-11-23 十四轮复审 a-1：`config.yaml` 里纯字母 API key 曾随材料外发）。
+CONFIG_SUFFIXES = (".env", ".yaml", ".yml", ".ini", ".cfg", ".conf", ".properties", ".toml",
+                   ".tfvars", ".json", ".jsonc", ".pem", ".key", ".crt", ".cer", ".p12", ".pfx")
+
+
+def is_config_path(path):
+    name = str(path or "").lower()
+    if name.endswith(tuple(suffix for suffix in CONFIG_SUFFIXES if suffix != ".env")):
+        return True
+    base = name.rsplit("/", 1)[-1]
+    return base == ".env" or base.startswith(".env.") or "/.env." in name
+
+
+def verification_timeout(root):
+    """项目配置里的验证超时（秒）；未配置或非法配置都返回 None（无界），非法值抛错。
+
+    **两个执行点（Check 与开工验证）必须共用这一处**：开工验证在项目锁内跑，
+    没有超时界时一条挂起的命令会卡住所有依赖同一把锁的操作（十四轮 a-3）。
+    """
+    cfg, problems = config_mod.load_project_config(root, allow_missing=True)
+    try:
+        value, problem = config_mod.value_of(cfg, problems, "verification_timeout_seconds")
+    except config_mod.ConfigError as exc:
+        raise CheckError("WF_RECORD_INVALID",
+                         {"reason": "invalid verification timeout config", "detail": str(exc)})
+    # `value_of` 对非法值返回 (None, problem)：**必须消费 problem**，否则非法配置会静默退成无界
+    # （第二十五轮复审 N25-2）。
+    if problem:
+        raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config",
+                                               "detail": problem})
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def redact_for_path(path, text):
+    """材料里的**按文件类型**遮罩：配置类全量、代码类只遮字面量。
+
+    `path` 为 None（路径解析不出，例如 Git 转义形态没认出来）时 **fail-closed**：按配置类
+    全量遮——宁可用全量档让代码少可读，也不让凭据出去（十六轮 b-1）。
     """
     if not isinstance(text, str) or not text:
         return text or ""
-    spans = [(match.start(), match.end()) for match in TRIGGER.finditer(text)]
-    if not spans:
-        return text
-    windows = []
-    for start, end in spans:
-        left, right = max(0, start - MASK_WINDOW), min(len(text), end + MASK_WINDOW)
-        if windows and left <= windows[-1][1]:
-            windows[-1] = (windows[-1][0], max(windows[-1][1], right))
-        else:
-            windows.append((left, right))
-    out, cursor = [], 0
-    for left, right in windows:
-        out.append(text[cursor:left])
-        out.append(_mask_window(text[left:right]))
-        cursor = right
-    out.append(text[cursor:])
-    return "".join(out)
+    if path is None or is_config_path(path):
+        return redact_text(text)
+    return redact_material(text)
+
+
+ARGV_KEYS = ("argv",)
+
+
+def redact_commands(commands):
+    """材料里的命令记录：**argv 用位置语义遮罩**（`--password <值>` 分离写法），其余字符串走全量档。
+
+    命令记录是"真实执行过的 argv"——与配置类同性质：裸值就是凭据本体，而材料的"保代码可读"
+    判据在这里只会漏（十五轮 b-P0：同一凭据在 Check 记录里被 `redact_argv` 遮成 `***`，
+    在随材料外发的 tests.json 里却是明文，材料比入库记录暴露更宽）。
+    """
+    def walk(value, key=None):
+        if isinstance(value, str):
+            return redact_text(value)
+        if isinstance(value, (list, tuple)):
+            if key in ARGV_KEYS:
+                return redact_argv([str(item) for item in value])
+            return [walk(item, key) for item in value]
+        if isinstance(value, dict):
+            redacted = {}
+            for name, item in value.items():
+                # 字段名本身是指标：`decision.password` 的值不必自带引号/数字（十六轮 b-2）
+                if _structured_secret_key(name) and isinstance(item, str):
+                    redacted[name] = "***"
+                elif _structured_secret_key(name) and isinstance(item, (int, float)) \
+                        and not isinstance(item, bool):
+                    redacted[name] = "***"
+                else:
+                    redacted[name] = walk(item, name)
+            return redacted
+        return value
+
+    return walk(commands)
+
+
+def redact_object(value, *, code_safe=True):
+    """结构化脱敏：递归处理 dict/list 里的字符串，**只走一次**、不经过 JSON 往返。
+
+    两个要点：① 材料入口不能"先写原文、最后读回 JSON 覆写"（脱敏一旦破坏结构就抛
+    JSONDecodeError，而原文已经落盘）；② 逐值脱敏会丢掉**字段名**提供的语义——
+    `{"password": "purelettershere"}` 的值本身不含引号/数字，纯文本规则认不出它，
+    所以这里按字段名直接判定（`_structured_secret_key`），值整体遮掉。
+    """
+    mask = redact_material if code_safe else redact_text
+    if isinstance(value, str):
+        return mask(value)
+    if isinstance(value, dict):
+        redacted = {}
+        for key, item in value.items():
+            if _structured_secret_key(key) and isinstance(item, str):
+                redacted[key] = "***"
+            elif _structured_secret_key(key) and isinstance(item, (int, float)) \
+                    and not isinstance(item, bool):
+                redacted[key] = "***"      # 数字型的口令同样不留在材料里
+            else:
+                redacted[key] = redact_object(item, code_safe=code_safe)
+        return redacted
+    if isinstance(value, (list, tuple)):
+        return [redact_object(item, code_safe=code_safe) for item in value]
+    return value
+
+
+def _apply_rules(text, *, code_safe_only):
+    if not isinstance(text, str) or not text:
+        return text or ""
+    lowered = text.lower()
+    for pattern, masker, needles, code_safe in RULES:
+        if code_safe_only and not code_safe:
+            continue
+        if needles and not any(needle in lowered for needle in needles):
+            continue
+        text = pattern.sub(masker, text)
+    return text
 
 
 # 兼容旧名：所有调用点都走同一实现
@@ -418,8 +584,22 @@ def validate_check_result(task, check):
         problems.append({"field": "anchor.rule_version", "reason": "missing"})
 
     commands = check.get("commands")
-    if not isinstance(commands, list) or not commands:
+    # "必须有命令"的判据与执行段同源：**required 或被验收项引用**的验证项才算必须执行。
+    # 只有可选、且未被引用的补充验证时，命令列表为空是合法形态（十二轮 b-4）；
+    # 判据用 `declared`（上面按 id 建的表）本身，不要新起同名列表变量——那样
+    # `vid not in declared` 会恒真，把每条命令判成 unknown（十一轮踩过）。
+    try:
+        referenced = set()
+        for item in plan.get("acceptance") or []:
+            referenced.update(item.get("verification_ids") or [])
+        must_run = [vid for vid, entry in declared.items()
+                    if entry.get("required") is not False or vid in referenced]
+    except Exception:      # noqa: BLE001 — 结构异常由后面的字段校验报告
+        must_run = list(declared)
+    if not isinstance(commands, list) or (not commands and must_run):
         problems.append({"field": "commands", "reason": "missing or empty"})
+        commands = []
+    elif not commands:
         commands = []
 
     seen = {}
@@ -559,17 +739,8 @@ def _run_argv(ctx, task, verification, log_dir):
     started = records.now_str()
     # 验证命令跑在 OS 锁内（机制稿 §4.1 的已知偏差，见实现稿 §2.3.11）：至少给出超时上界，
     # 避免挂起的命令无限期占锁（第二十三轮复审外部 P2-NEW 的部分缓解）。
-    cfg, problems = config_mod.load_project_config(ctx.root, allow_missing=True)
-    try:
-        value, problem = config_mod.value_of(cfg, problems, "verification_timeout_seconds")
-    except config_mod.ConfigError as exc:
-        raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config", "detail": str(exc)})
-    # `value_of` 对非法值返回 (None, problem)：**必须消费 problem**，否则非法配置会静默退成无界
-    # （第二十五轮复审 N25-2）。
-    if problem:
-        raise CheckError("WF_RECORD_INVALID", {"reason": "invalid verification timeout config",
-                                               "detail": problem})
-    timeout = value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+    # 开工验证与 Check 共用这一处（`verification_timeout`）：同一个配置键、同一套非法值归因。
+    timeout = verification_timeout(ctx.root)
     output = ""
     try:
         result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False,
@@ -615,11 +786,19 @@ def _run_argv(ctx, task, verification, log_dir):
     }
 
 
-def _manual_command(verification, decisions, anchor, plan, plan_version):
-    """manual 验证：只接受明确 choice=passed 的人判 Decision，并把本次锚点核绑到记录。"""
+def _manual_command(verification, decisions, anchor, plan, plan_version, content_digest=None):
+    """manual 验证：只接受明确 choice=passed 的人判 Decision，并把本次锚点核绑到记录。
+
+    决定还必须绑定**人当时看到的交付内容**（`content_digest` = `status` 的
+    `delivery.content_digest`；不用 `object_digest`——那是"已批准的规划对象摘要"，两者不能混用）：
+    只绑规划版本的话，代码改了、规划没变时旧的 `passed` 会被沿用到未确认的内容上，并被记进
+    新 Check 的锚点（2026-11-23 十轮复审 b-1）。
+    """
     verification_id = verification.get("id")
     matches = [decision for decision in decisions or []
-               if _decision_covers(decision, verification_id, plan, plan_version)]
+               if _decision_covers(decision, verification_id, plan, plan_version)
+               and (content_digest is None
+                    or decision.get("content_digest") == content_digest)]
     entry = {
         "verification_id": verification_id,
         "invocation": verification.get("invocation"),
@@ -635,6 +814,15 @@ def _manual_command(verification, decisions, anchor, plan, plan_version):
         "anchor": {"check_anchor": anchor, "plan_version": plan_version},
     }
     if not matches:
+        stale = [decision for decision in decisions or []
+                 if _decision_covers(decision, verification_id, plan, plan_version)]
+        if stale:
+            entry["summary"] = ("manual decision exists but is not bound to current content "
+                                "(object_digest mismatch)")
+            entry["stale_decision"] = {
+                "content_digest": (stale[-1] or {}).get("content_digest"),
+                "current_content_digest": content_digest,
+            }
         return entry
     decision = matches[-1]
     choice = decision.get("choice")
@@ -690,7 +878,7 @@ def _external_checked(item, decisions, task):
     return False
 
 
-def _acceptance_results(ctx, task, commands, decisions, anchor):
+def _acceptance_results(ctx, task, commands, decisions, anchor, content_digest=None):
     plan = task.get("plan") or {}
     plan_version = plan.get("version")
     acceptance = plan.get("acceptance") or []
@@ -716,11 +904,14 @@ def _acceptance_results(ctx, task, commands, decisions, anchor):
                 }
             )
             continue
+        # 直接人判（无 verification_ids 的验收项）同样要绑定交付内容：只比验收项 id + 规划版本
+        # 时，代码变了、规划没变也会沿用旧结论（2026-11-23 十一轮复审 b-1）。
         matches = [
             decision
             for decision in decisions or []
             if _decision_covers(decision, str(item.get("id")), plan, plan_version)
             and decisions_mod.accepts("acceptance_conclusion", decision.get("choice"))
+            and (content_digest is None or decision.get("content_digest") == content_digest)
         ]
         if matches:
             decision = matches[-1]
@@ -895,7 +1086,6 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
     这一段只读文件与记录，**不执行任何外部命令**——长操作留给 `run_check_execute()` 在锁外跑
     （机制稿 §4.1「长操作不长期持 OS 锁」）。返回的 state 是后面两段的唯一输入。
     """
-    task_dir = _task_dir(ctx, task)
     # ① 范围核对
     receipts = _receipts(ctx)
     classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
@@ -1043,7 +1233,9 @@ def run_check_execute(ctx, task, state):
         # consume_at 只决定「声明与就绪的核对时点」，不豁免必需业务验证在 Check 中执行（机制稿 §3.5）
         invocation = verification.get("invocation") or {}
         if invocation.get("kind") == "manual":
-            commands.append(_manual_command(verification, decisions, anchor, plan, plan.get("version")))
+            commands.append(_manual_command(verification, decisions, anchor, plan,
+                                            plan.get("version"),
+                                            (state.get("parts") or {}).get("content_digest")))
         else:
             commands.append(_run_argv(ctx, task, verification, log_dir))
 
@@ -1101,7 +1293,8 @@ def run_check_finish(ctx, task, state, commands):
                          {"reason": "检查期间对象发生变化（扫描前后不一致）", "changed": changed})
 
     # ⑤ 写结果与指纹（锚点在 ② 之前固定，扫描前后不一致即不判 pass）
-    acceptance_results = _acceptance_results(ctx, task, commands, decisions, anchor)
+    acceptance_results = _acceptance_results(ctx, task, commands, decisions, anchor,
+                                             (state.get("parts") or {}).get("content_digest"))
     failed_commands = [command for command in commands if command["status"] in ("failed", "not_run")]
     acceptance_failed = [item for item in acceptance_results if item["conclusion"] != "passed"]
     axes = {axis: ((internal_review or {}).get(axis) or {}).get("conclusion")

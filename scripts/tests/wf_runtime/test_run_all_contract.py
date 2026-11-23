@@ -1568,7 +1568,7 @@ class RunAllContractTest(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, os.path.join(release, "install.py"), "--target", str(project),
              "--source", release, "--release-ref", f"refs/tags/wf-v{version}",
-             "--platform", "claude", "--confirm", "--json"],
+             "--confirm", "--json"],
             capture_output=True, text=True, env={**os.environ, **env}, cwd=str(REPO),
             timeout=case.budget.timeout(CALL_TIMEOUT))
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -1604,7 +1604,7 @@ class RunAllContractTest(unittest.TestCase):
         gap = subprocess.run(
             [sys.executable, os.path.join(release, "install.py"), "--target", str(project),
              "--source", release, "--release-ref", f"refs/tags/wf-v{version}",
-             "--platform", "claude", "--confirm", "--json"],
+             "--confirm", "--json"],
             capture_output=True, text=True, env={**os.environ, **env}, cwd=str(REPO),
             timeout=case.budget.timeout(CALL_TIMEOUT))
         self.assertNotEqual(gap.returncode, 0, gap.stdout + gap.stderr)

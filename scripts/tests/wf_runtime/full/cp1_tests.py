@@ -29,9 +29,17 @@ def decision_file(path, items):
     return path
 
 
-def dec(subject, choice, digest="sha256:" + "0" * 64, source="human (test)"):
-    return {"source": source, "at": AT, "subject": subject, "object_digest": digest,
+def dec(subject, choice, digest="sha256:" + "0" * 64, source="human (test)", **extra):
+    base = {"source": source, "at": AT, "subject": subject, "object_digest": digest,
             "choice": choice, "reason": "CP1 用例"}
+    base.update(extra)
+    return base
+
+
+def content_digest(task_id, generation, sid):
+    """人判决定必须绑定"人看到的交付内容"（`content_digest`）；这里按公开面取当前值。"""
+    rc, payload, _out = wf(["status", "--json"], {"generation": generation}, sid)
+    return ((payload or {}).get("facts") or {}).get("delivery", {}).get("content_digest")
 
 
 def new_task(title, touch, verifications, acceptance, sid, prd_extra=""):
@@ -149,7 +157,10 @@ wrong = decision_file(wfdrive.temp("cp1_a10_wrong.json"), [dec("m1", "approve", 
 rc, payload, out = check(task3, gen3, sid, PASS_NOTES, wrong)
 rec("A10 choice 非枚举不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
-right = decision_file(wfdrive.temp("cp1_a10_right.json"), [dec("m1", "passed", d3), dec("a1", "passed", d3)])
+cd10 = content_digest(task3, gen3, sid)
+right = decision_file(wfdrive.temp("cp1_a10_right.json"),
+                      [dec("m1", "passed", d3, content_digest=cd10),
+                       dec("a1", "passed", d3, content_digest=cd10)])
 rc, payload, out = check(task3, gen3, sid, PASS_NOTES, right)
 ok = rc == 0
 record = json.load(open(os.path.join(dir3, "task.json")))

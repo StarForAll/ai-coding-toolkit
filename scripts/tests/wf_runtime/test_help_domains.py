@@ -11,6 +11,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from wflib import cli, decisions  # noqa: E402
 
@@ -137,49 +138,44 @@ class UsageValidationTest(unittest.TestCase):
 
 
 class RegistryCompletenessTest(unittest.TestCase):
-    """注册表完备性：每个 handler 实际消费的 flag 必须在注册表（防静默拒绝合法调用）。"""
+    """注册表完备性：每个 handler 实际消费的 flag 必须在注册表（防静默拒绝合法调用）。
+
+    2026-11-23（dogfood 五轮）：原实现用闭包 `cell_contents` 取源码，而 `_task_command`
+    的闭包只含字符串名 → 20 余个委托型命令的 `flags` 为空并被 `if not flags: continue`
+    跳过，断言对它们**空跑**。现在改用 `command_introspection`（与 `test_help_contract`
+    共用同一实现），委托型命令解到真实模块函数 + 一层同模块助手。
+    """
 
     def test_registry_covers_all_consumed_flags(self):
-        import inspect
-        import re
+        import command_introspection as ci
+        from wflib import cli
 
-        from wflib import cli, review, tasks
-
-        consumed = {}
-        for name, handler in cli.COMMANDS.items():
-            func = handler
-            # _task_command/_review_command/_runs_command 闭包 → 解开目标模块函数名
-            target = getattr(func, "__wrapped_target__", None)
-            srcs = []
-            closure = getattr(func, "__closure__", None) or ()
-            for cell in closure:
-                value = cell.cell_contents
-                if callable(value):
-                    srcs.append(inspect.getsource(value))
-            if not srcs and func.__name__ != "handler":
-                try:
-                    srcs.append(inspect.getsource(func))
-                except (OSError, TypeError):
-                    pass
-            flags = set()
-            for text in srcs:
-                flags |= set(re.findall(r'args\.(?:value|flag)\("(--[a-z-]+)"\)', text))
-            consumed[name] = flags
-        # 模块级命令直查源码
-        for name in ("stop", "help", "status", "writer", "writer-handover"):
-            func = getattr(cli, f"cmd_{name.replace('-', '_')}", None)
-            if func:
-                consumed[name] |= set(
-                    re.findall(r'args\.(?:value|flag)\("(--[a-z-]+)"\)', inspect.getsource(func)))
+        # 共享分派器（`_review_command(kind)` 生成的四个 review-* 用同一闭包）无法按命令
+        # 静态分离旗标：按 handler 对象分组，组内比并集，组外逐命令比。
+        groups = {}
+        for name in sorted(cli.COMMANDS):
+            sources = ci.handler_sources(cli, name, ci.example_argv(cli, name))
+            key = sources[0] if sources else f"none:{name}"
+            groups.setdefault(key, []).append(name)
         problems = []
-        for name, flags in consumed.items():
+        covered = 0
+        for members in groups.values():
+            flags = set()
+            for name in members:
+                consumed, _dynamic = ci.consumed_flags(cli, name, ci.example_argv(cli, name))
+                flags |= consumed
             if not flags:
                 continue
-            registered = set(cli.GLOBAL_FLAGS) | set(cli.COMMAND_FLAGS.get(name, ()))
+            covered += 1
+            registered = set(cli.GLOBAL_FLAGS)
+            for name in members:
+                registered |= set(cli.COMMAND_FLAGS.get(name, ()))
             missing = flags - registered
             if missing:
-                problems.append(f"{name}: {sorted(missing)}")
+                problems.append(f"{'/'.join(members)}: {sorted(missing)}")
         self.assertFalse(problems, f"handler 消费但注册表缺: {problems}")
+        # 覆盖下限：委托型命令解不开时这条断言会掉到个位数，静默盲区不能靠"总绿"掩盖
+        self.assertGreater(covered, 20, f"只有 {covered} 个命令的消费集合被静态核到")
 
 
 class SubcommandFlagNarrowingTest(unittest.TestCase):

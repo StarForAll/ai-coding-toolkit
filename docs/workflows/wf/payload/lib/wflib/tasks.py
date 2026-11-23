@@ -709,6 +709,24 @@ def _fp_matches(expected, actual):
     return True
 
 
+def _head_matches_changes(root, wanted):
+    """HEAD 树里这些路径的内容摘要是否等于登记的终态（无下界提交时的"已提交"判据）。"""
+    head = scope.head(root)
+    if not head:
+        return False
+    for path, after in wanted:
+        digest = after.get("digest") if isinstance(after, dict) else after
+        if not isinstance(digest, str) or not digest:
+            return False
+        proc = subprocess.run(["git", "-c", "safe.directory=*", "show", f"{head}:{path}"],
+                              cwd=root, capture_output=True)
+        if proc.returncode != 0:
+            return False
+        if "sha256:" + records.sha256_hex(proc.stdout) != digest:
+            return False
+    return True
+
+
 def _changes_by_path(changes):
     """按路径稳定排序的 [(path, after)]：字典列表不能直接比较（机制稿 §4.5）。"""
     pairs = []
@@ -724,8 +742,16 @@ def maintenance_persisted_probe(root):
         lower = entry.get("head_before")
         operation = entry.get("operation")
         wanted = _changes_by_path(entry.get("changes"))
-        if not lower or not wanted or not operation:
+        if not wanted or not operation:
             return False
+        if not lower:
+            # 部署发生在首个提交之前（新仓库）时没有"下界提交"可查：按 **HEAD 树内容**
+            # 逐路径核对登记终态——路径未被跟踪或内容不符即未持久化，仍不放行。
+            # 只在回执本身声明为 `applied_pending_commit` 时才这样核：状态不明的坏回执
+            # 一律留在 pending_check 交人（R60 的"不可核回执"判据）。
+            if entry.get("result") != "applied_pending_commit":
+                return False
+            return _head_matches_changes(root, wanted)
         if not scope.is_ancestor(root, lower):
             return False
         for sha in scope.commits_since(root, lower) or []:
@@ -1227,7 +1253,7 @@ def cmd_task_new(ctx, args):
     key = ctx.key()
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
-        raise cli.CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试")
+        raise cli.CliError(code, profile_facts, next_="install（已装齐全部平台）后重试")
     with lock.acquire(ctx.root, holder_hint="task-new"):
         record = ctx.writer()
         # 中断恢复优先：writer 上的父动作未结案就按原意图续做，不看当前参数
@@ -1927,6 +1953,14 @@ def _complexity_hints(root):
 
 
 def _run_start_verifications(ctx, task):
+    """开工时点的验证：`argv` 直接执行；`manual` 不执行，只登记"待人判"。
+
+    **此前 manual 也走命令通道**（`_argv_ready` 拿不到 argv → `WF_VERIFICATION_UNREADY`），
+    于是"规划校验接受 kind=manual + consume_at=start、开工必然报错"，AI 只能回 Plan 改
+    已批准的验证声明——把一个合法声明变成规划缺陷（2026-11-23 五轮复审 b-3）。
+    manual 的语义本来就是"人给结论"：开工只记一条 `human_required` 事实，真正的
+    人判证据在 Check 阶段按既有规则（`check.py` 的 manual 分支要求 decision）强制。
+    """
     from . import check as check_mod
 
     results = []
@@ -1934,19 +1968,48 @@ def _run_start_verifications(ctx, task):
         if verification.get("consume_at") != "start":
             continue
         invocation = verification.get("invocation") or {}
+        if invocation.get("kind") == "manual":
+            results.append({"verification_id": verification.get("id"), "kind": "manual",
+                            "status": "human_required",
+                            "criterion": invocation.get("criterion")})
+            continue
         ready, reason = check_mod._argv_ready(ctx.root, invocation)
         if not ready:
             raise TaskError("WF_VERIFICATION_UNREADY", {"verification_id": verification.get("id"), "reason": reason})
         cwd = verification.get("cwd") or "."
         workdir = ctx.root if cwd == "." else join(ctx.root, cwd)
         argv = list(invocation.get("argv") or [])
-        result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, check=False)
-        results.append({"verification_id": verification.get("id"), "exit_code": result.returncode})
+        # 开工验证在项目锁内执行：没有超时界的话，一条挂起的命令会把所有依赖同一把锁的
+        # 操作一起卡住（十四轮 a-3）。这里与 Check 用同一个配置键与同一套归因。
+        # 配置非法时**必须报错**：静默退成"无超时"等于把配置契约变成建议，而这条命令
+        # 就跑在项目锁内（十五轮 a-1）。只有"未配置"才是合法地无界。
+        from . import check as _check_timeout_mod
+
+        _timeout = _check_timeout_mod.verification_timeout(ctx.root)
+        try:
+            result = subprocess.run(argv, cwd=workdir, capture_output=True, text=True,
+                                    check=False, timeout=_timeout)
+        except subprocess.TimeoutExpired:
+            raise TaskError("WF_CHECK_FAILED",
+                            {"verification_id": verification.get("id"),
+                             "reason": f"timed out after {_timeout}s",
+                             "output": ""})
+        results.append({"verification_id": verification.get("id"), "kind": "argv",
+                        "exit_code": result.returncode})
         if result.returncode != 0:
+            # 与 Check 阶段同一份遮罩（`check.redact_text` 是唯一实现在 check.py）：
+            # 开工验证失败会把命令输出带进错误事实并原样回显给调用方/会话日志，
+            # 不遮罩就等于**同一命令在 Check 有保护、在开工没有**（2026-11-23 六轮复审 a-2）。
+            from . import check as _check_mod
+
+            # 顺序必须是**先遮罩、后截断**：先截断会把长凭据的前缀（`Bearer `、键名）切掉，
+            # 遮罩就找不到触发词，整段明文随错误回显（2026-11-23 七轮复审 a-1：
+            # 1100 字符的虚构凭据在开工错误里残留 799 字符）。
+            masked = _check_mod.redact_text((result.stdout or "") + (result.stderr or ""))
             raise TaskError(
                 "WF_CHECK_FAILED",
                 {"verification_id": verification.get("id"), "exit_code": result.returncode,
-                 "output": (result.stdout or "")[-800:] + (result.stderr or "")[-800:]},
+                 "output": masked[-800:]},
             )
     return results
 
@@ -2022,6 +2085,28 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
         raise TaskError("WF_BINDING_MISMATCH", {"reason": "已归档任务不接受机械修订"})
     if not plan.get("approval") or not plan.get("approved_version"):
         raise TaskError("WF_APPROVAL_MISSING", {"reason": "机械修订需先有已批准版本"})
+    # 人签必须绑定**人看过的那份 PRD**：`task-approve --draft` 会预填 object_digest，
+    # 入口此前不核对——拿旧摘要（草稿生成之后 PRD 又改过）调用仍返回 WF_OK，
+    # 等于把旧确认沿用到未确认的内容（2026-11-23 十轮复审 b-1）。
+    declared_digest = decision.get("object_digest")
+    _prd_path = os.path.join(task_dir(ctx.root, task.get("id")) or "", "prd.md")
+    current_digest = records.file_digest(_prd_path) if os.path.isfile(_prd_path) else None
+    if not declared_digest:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "机械修订的决定缺少 object_digest（需绑定人看过的 PRD 摘要）",
+                         "current_object_digest": current_digest,
+                         "exits": ["重新生成草稿（task-approve --draft）后请人确认并重跑"]})
+    if current_digest is None:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "无法核对 PRD 摘要（任务目录或 prd.md 不可读）",
+                         "exits": ["核对任务目录与 prd.md 后重跑；必要时回 Plan 重新批准"]})
+    if declared_digest != current_digest:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "决定的 object_digest 与当前 PRD 摘要不一致：人确认的不是这份内容",
+                         "declared_object_digest": declared_digest,
+                         "current_object_digest": current_digest,
+                         "exits": ["重新生成草稿、请人按当前内容确认后重跑",
+                                   "若内容实质变化，回 Plan 重新批准"]})
     prd_text = _prd_text(ctx.root, task)
     block, errors = parse_plan_block(prd_text)
     if errors:
@@ -2184,7 +2269,8 @@ def cmd_task_start(ctx, args):
         if not head:
             raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"reason": "no HEAD commit"})
         _block_overlapping_maintenance(ctx, task)
-        start_results = _run_start_verifications(ctx, task)
+        # 先核前置条件再跑验证命令：缺 spec 读取记录或工作区有外来改动时，命令跑过也白跑，
+        # AI 处理完前置还得再跑一次（十六轮 b-4）。
         findings = gates.evaluate(ctx, task, "before_execute")
         blocking = [item for item in findings if item["status"] == "missing"]
         if blocking:
@@ -2240,6 +2326,9 @@ def cmd_task_start(ctx, args):
             # 不从 glob 命中直接推出归属。
             "preexisting_uncommitted": sorted(scope.uncommitted_paths(ctx.root)),
         }
+        # 前置条件全部成立后才执行开工验证命令：失败/缺前置时命令没有白跑一次的机会
+        # （十六轮 b-4）。结果仍写进 action 输入与回执。
+        start_results = _run_start_verifications(ctx, task)
         task["entry_snapshot"] = entry
         if task.get("status") == "not_started":
             task["baseline_head"] = head
@@ -2733,8 +2822,46 @@ def check_next_hint(task, check, ctx=None):
                                        "（task + materials 三类，同任务同材料类集合持续有效）")
             except Exception:   # 投影失败不阻断下一跳本身
                 pass
-        hint = ("复杂任务：先 review-launch 发起一轮审查（wf-review），导入/判定通过后再请人调用 finish"
-                + export_note)
+        # 同锚点重跑 Check 时不该再要一轮审查（十二轮 b-3）：归档判据已按锚点复用，
+        # next 文案必须同口径，否则 AI 会照提示白开一轮。
+        _result = ((task.get("reviews") or {}).get("result") or {})
+        _bound = (_result.get("anchor") or {}).get("check_anchor")
+        _current = ((task.get("check") or {}).get("anchor") or {}).get("check_anchor")
+        # 只有**门禁也认为绑定**时才敢请人收工：报告摘要失配时 gates.review_binding 会拒，
+        # next_ 若仍说"直接 finish"就是把 AI 送进一次必然失败的归档（十三轮 a-3）。
+        # 原轮尚未判定、且锚点仍是当前锚点：继续那一轮（取材料/导入/判定），不要重新发起
+        _open_round = None
+        for _launch in ((task.get("reviews") or {}).get("launches") or []):
+            if not isinstance(_launch, dict):
+                continue
+            _round = int(_launch.get("round") or 0)
+            _decided = any(int(item.get("round") or 0) == _round
+                           for item in ((task.get("reviews") or {}).get("rounds") or [])
+                           if isinstance(item, dict))
+            _anchor = (_launch.get("anchor") or {}).get("check_anchor")
+            if not _decided and _anchor and _anchor == _current:
+                _open_round = _round
+        _binding = False
+        if _result.get("verdict") == "pass" and _bound and _bound == _current:
+            try:
+                from . import gates as _gates_mod
+
+                _binding = bool(_gates_mod.review_binding(ctx, task).get("binding"))
+            except Exception:      # noqa: BLE001 — 只读判定失败就退回保守提示
+                _binding = False
+        if _open_round is not None and not _result.get("verdict"):
+            hint = (f"第 {_open_round} 轮审查仍在进行且锚点未变（同内容重验）："
+                    "继续这一轮——review-context 取材料 → 人跑 reviewer → 导入 → 判定；"
+                    "不要重新 review-launch")
+        elif _binding:
+            hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
+                    "内容或规划再变才需要重新 review-launch")
+        elif _result.get("verdict") == "pass" and _bound and _bound == _current:
+            hint = ("已有审查结论，但引用报告已失效或不再绑定（摘要失配/文件被改）："
+                    "重新导入同一份报告，或 review-launch 换一轮后再 finish")
+        else:
+            hint = ("复杂任务：先 review-launch 发起一轮审查（wf-review），"
+                    "导入/判定通过后再请人调用 finish" + export_note)
     else:
         hint = "人了解结果后调用 finish（wf-finish）"
     hint += open_blocking_hint
@@ -2962,18 +3089,14 @@ def cmd_task_retrospect(ctx, args):
 
     task_id = args.value("--task")
     evidence_path = args.value("--evidence")
-    decision_path = args.value("--decision")
     if not task_id or not evidence_path:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-retrospect requires --task <id> --evidence <path>"})
+    # 复盘只收一份证据：结论在 `evidence.conclusion`，触发集合由入口重算。
+    # 此前还接受 `--decision`（决定文件）却从不消费——读入即丢弃，比拒绝更贵
+    # （AI 会以为"已经并进记录"）。2026-11-23 五轮复审 a-1 删除该旗标。
     evidence = records.load_json(evidence_path)
     if evidence is None:
         raise TaskError("WF_PATH_INVALID", {"reason": "evidence file missing", "path": evidence_path})
-    decision = None
-    if decision_path:
-        from . import cli
-
-        decisions = cli._load_decision(decision_path)
-        decision = decisions[0]
     _require_binding(ctx, task_id)
     required = bool(gates.retrospective_triggers(ctx.root, _load_or_fail(ctx, task_id), ctx.debug_threshold()))
     with lock.acquire(ctx.root, holder_hint="task-retrospect"):
@@ -4260,7 +4383,6 @@ def cmd_baseline_apply(ctx, args):
         if not approved_ok:
             raise TaskError(approved_code, approved_facts)
         touch_paths = approved_touch_paths(task)
-        root_real = os.path.realpath(str(ctx.root))
         # 提案须带针对本次变更的批准引用（机制稿 §3.4）：规划获批不足以证明任意版本提案已获批
         approval = proposal.get("approval") or proposal.get("decision")
         if not isinstance(approval, dict) or not approval.get("choice") or not approval.get("subject"):
@@ -4922,13 +5044,17 @@ REWORK_CHOICES = ("rework", "返工")
 
 
 def _decision_draft_result(ctx, task_id, entries, *, command):
-    """决定文件草稿（十六轮批V）：只打印不落盘、不要求写权——结构与摘要由入口算好，
-    人把内容写成决定文件即授权。占位统一 TODO 前缀（_load_decision 会拒绝照抄）。"""
+    """决定文件草稿（十六轮批V）：只打印不落盘、不要求写权——结构与摘要由入口算好。
+
+    **作决定 vs 转录（设计稿 §1.2）**：决定内容必须是人已明确给出的选择；本骨架只消除
+    "猜字段"的成本，模型可按人的明确答复填写并落盘，但不得推测、补造或替人选择。
+    占位统一 TODO 前缀（`_load_decision` 会拒绝照抄）。
+    """
     return codes.result(
         "WF_OK",
         object={"id": task_id},
         position_=codes.position(scope="task", task_id=task_id),
-        next_=(f"草稿只打印不落盘；人把内容（去掉 TODO）写成决定文件后，"
+        next_=(f"草稿只打印不落盘；按人的明确答复填写（去掉 TODO；不得推测或替人选择）并写成决定文件后，"
                f"以 `{command} --task {task_id} --decision <文件>` 正式执行"),
         facts={"draft": entries, "note": "草稿只读；本次未写入任何记录"})
 

@@ -30,7 +30,7 @@ deploy_log=$(mktemp "$F/.deploy.XXXXXX")
 trap 'rm -f "$deploy_log"' EXIT
 case "${WF_FIXTURE_DEPLOY:-dev}" in
   dev)
-    "$PY" scripts/wf-dev-deploy.py --target "$F" --platform dsh --confirm >"$deploy_log" 2>&1
+    "$PY" scripts/wf-dev-deploy.py --target "$F" --confirm >"$deploy_log" 2>&1
     ;;
   candidate)
     # 候选模式：用本次已核发行的安装器（缺失即失败，不回退 dev 部署器）。
@@ -40,7 +40,7 @@ case "${WF_FIXTURE_DEPLOY:-dev}" in
     [ -f "$WF_RELEASE_ROOT/install.py" ] || {
       echo "f2_setup: 候选根缺少 install.py：$WF_RELEASE_ROOT" >&2; exit 2; }
     "$PY" "$WF_RELEASE_ROOT/install.py" --target "$F" --release-ref "$WF_RELEASE_REF" \
-      --source "$WF_RELEASE_ROOT" --platform dsh --confirm >"$deploy_log" 2>&1 || {
+      --source "$WF_RELEASE_ROOT" --confirm >"$deploy_log" 2>&1 || {
       echo "f2_setup: 候选安装失败（见 $deploy_log）" >&2; tail -5 "$deploy_log" >&2; exit 1; }
     "$PY" "$HERE/verify_install_identity.py" --target "$F" --release-root "$WF_RELEASE_ROOT" \
       --ref "$WF_RELEASE_REF" --version "$WF_RELEASE_VERSION" || {

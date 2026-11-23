@@ -96,10 +96,23 @@ class ImportHarness(unittest.TestCase):
 class ImportIdentityTest(ImportHarness):
     """A4：已登记摘要就是证据身份，删档后换一份不能顶掉它。"""
 
-    def test_report_bound_to_a_previous_check_id_is_rejected(self):
+    def test_report_bound_to_a_same_anchor_check_id_is_accepted(self):
+        """同内容重跑 Check 只换 id：轮次身份继续有效（2026-11-23 十三/十五轮复审后收窄）。
+
+        审查结论绑的是**内容锚点**；`check_id` 变化本身不再是拒绝理由，锚点不同才是。
+        """
         self.write_report()
         task = records.load_json(self.task_dir / "task.json")
         task["check"]["id"] = "c2"
+        records.write_json(self.task_dir / "task.json", task)
+        self.import_report()
+        self.assertTrue(self.imported_copy.exists())
+
+    def test_report_bound_to_a_different_anchor_is_rejected(self):
+        self.write_report()
+        task = records.load_json(self.task_dir / "task.json")
+        task["check"]["id"] = "c2"
+        task["check"]["anchor"]["check_anchor"] = "sha256:" + "9" * 64
         records.write_json(self.task_dir / "task.json", task)
         with self.assertRaises(review.ReviewError) as caught:
             self.import_report()

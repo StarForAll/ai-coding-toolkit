@@ -66,29 +66,25 @@ rec("R93 A 用旧代次写被拒", "WF_GENERATION_STALE 或 WF_WRITER_BUSY",
     (payload_a2 or {}).get("code"),
     (payload_a2 or {}).get("code") in ("WF_GENERATION_STALE", "WF_WRITER_BUSY"))
 
-# 4) 装完再追加 agent：只加平台，不动既有资产（要求写权空闲）
+# 4) 重复部署：安装面向全部平台，"追加平台"这一步已不存在——重跑只做只读核对/补齐
 wf(["writer", "release", "--json"], {"generation": gen()}, sid="sess-R93-B")
-install_py = wfdrive.REPO + "/docs/workflows/wf/payload/install.py"
-before_assets = len(installation.get("assets") or [])
-# 夹具是 dev 部署（release_ref=dev:...）：追加平台用开发态部署工具，正式发行用 install.py
 dev_deploy = wfdrive.REPO + "/scripts/wf-dev-deploy.py"
+before_assets = len(installation.get("assets") or [])
 proc = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
-                       "--platform", "cursor", "--confirm"], capture_output=True, text=True)
+                       "--confirm", "--json"], capture_output=True, text=True)
 after = json.load(open(inst_path, encoding="utf-8"))
 if proc.returncode != 0:
-    print("   add-platform stdout:", (proc.stdout or proc.stderr)[-300:])
-# 2026-11-05 第二轮复审 R2：cursor 与 dsh 共用 `.agents/skills` 根，追加平台不改文件、
-# 也不应改 assets 数量；但安装记录本身发生变化，必须留非空维护回执（复审 #8）。
+    print("   redeploy stdout:", (proc.stdout or proc.stderr)[-300:])
 after_assets = len(after.get("assets") or [])
 _writer_after = json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8"))
-_receipt = (_writer_after.get("maintenance_results") or [{}])[-1]
-_receipt_paths = [item.get("path") for item in _receipt.get("changes") or []]
-_added_platforms = sorted(set(after.get('platforms') or []) - set(installation.get('platforms') or []))
-rec("R93 追加平台共享根：平台增加、资产不变、回执含安装记录",
-    "platforms 增加 cursor；assets 数量不变；changes 含 .wf/install/installation.json",
-    f"added={_added_platforms} assets={before_assets}->{after_assets} changes={_receipt_paths}",
-    _added_platforms == ["cursor"] and after_assets == before_assets
-    and ".wf/install/installation.json" in _receipt_paths)
+rec("R93 重复部署幂等：平台与资产不变、不取写权",
+    "platforms 不变；assets 数量不变；writer 保持 idle",
+    f"platforms_same={sorted(after.get('platforms') or []) == sorted(installation.get('platforms') or [])} "
+    f"assets={before_assets}->{after_assets} state={_writer_after.get('state')}",
+    proc.returncode == 0
+    and sorted(after.get("platforms") or []) == sorted(installation.get("platforms") or [])
+    and after_assets == before_assets
+    and _writer_after.get("state") == "idle")
 
 # ---- R4-1/R4-2（2026-11-05 第四/五轮复审）：来源一致性、零写入、代次类型 ----
 _writer_path = os.path.join(F, ".wf/writer.json")
@@ -127,7 +123,7 @@ _tampered_inst = open(inst_path, encoding="utf-8").read()
 _writer_before = open(_writer_path, encoding="utf-8").read()
 _dir_before = _tree_snapshot()
 proc_src = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
-                           "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
+                           "--confirm", "--json"], capture_output=True, text=True)
 _dir_after = _tree_snapshot()
 rec("R4-1 不同来源追加平台被拒且零写入",
     "WF_ASSET_DECISION；安装记录/writer 逐字节不变；目录树不变",
@@ -149,7 +145,7 @@ for label, value in (("broken", "broken"), ("true", True), ("false", False)):
     inst_before_gen = open(inst_path, encoding="utf-8").read()
     _dir_before = _tree_snapshot()
     proc_gen = subprocess.run([wfdrive.TOOL_PYTHON, dev_deploy, "--target", F,
-                               "--platform", "claudecode", "--confirm", "--json"], capture_output=True, text=True)
+                               "--confirm", "--json"], capture_output=True, text=True)
     _dir_after = _tree_snapshot()
     rec(f"R4-2 generation={label} 结构化拒绝且零写入",
         "WF_RECORD_INVALID；无 traceback；writer/安装记录/目录树不变",

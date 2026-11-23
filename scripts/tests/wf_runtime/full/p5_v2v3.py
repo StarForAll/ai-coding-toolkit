@@ -116,8 +116,11 @@ operation = writer["maintenance_results"][0]["operation"]
 # 2026-11-07：维护组提交只含"维护组登记的路径"——不能用 `git add .wf` 把 .wf/tasks/** 与
 # .wf/writer.json 一起扫进来（那会让本用例自己的提交被自己的断言判红；旧版靠中文路径被 git 引号化
 # 而"意外通过"，ASCII 化后暴露）。
-git("add", ".wf", ":!.wf/tasks",
-    ".gitignore", ".agents")   # 维护组提交：整组 .wf 但**排除**任务目录（任务目录只由任务动作提交）
+# 维护组提交：整组 .wf（排除任务目录）+ **回执登记的全部路径**。安装面向全部平台后，
+# 回执覆盖的根不止 `.agents/`（还有 `.claude/skills/`、`.codex/hooks.json`），硬编码会漏。
+_receipt_paths = sorted({item.get("path") for item in
+                         writer["maintenance_results"][0].get("changes") or [] if item.get("path")})
+git("add", ".wf", ":!.wf/tasks", *_receipt_paths)
 subprocess.run(["git", "commit", "-qm", "wf: maintenance install group"], cwd=F, capture_output=True)
 sha = git("rev-parse", "HEAD")
 decision = {"source": "human (terminal)", "at": "2026-11-03T04:20:00.000000Z",

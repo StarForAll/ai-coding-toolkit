@@ -340,6 +340,9 @@ GITIGNORE_BEGIN = "# wf-managed-v1"
 GITIGNORE_END = "# wf-managed-end"
 
 
+HOST_HOOK_SCRIPT = "wf-session-identity.py"
+
+
 def _gitignore_is_framework_only(root):
     """`.gitignore` 若只含安装器托管段（未被人改动），属框架控制面。
 
@@ -386,6 +389,8 @@ def _is_control_record(path, task_id, installed=None, root=None):
         return True
     if path == ".gitignore" and _gitignore_is_framework_only(root):
         return True
+    if path in (host_hook_shared_paths(root) if root else ()):
+        return _hooks_json_is_framework_only(root, path)
     return path in (installed or ())
 
 
@@ -412,6 +417,50 @@ def installed_asset_paths(root):
         if not relative.startswith(".."):
             found.add(relative)
     return found
+
+
+def host_hook_shared_paths(root):
+    """安装器**与他人共享**的文件（宿主 hook 配置）：只在"框架独占"时才归控制面。
+
+    安装器只管理自己的条目；用户在同一文件里加命令是**用户变更**，不能因为登记过就
+    整份隐藏（2026-11-23 十七轮复审 b-3）。判据放在 `_hooks_json_is_framework_only`。
+    """
+    from . import records as records_mod
+
+    installation = records_mod.load_json(os.path.join(str(root), ".wf/install/installation.json"), None)
+    if not isinstance(installation, dict):
+        return set()
+    found = set()
+    for entry in installation.get("host_hook_entries") or []:
+        relative = (entry or {}).get("hooks_json_path")
+        if isinstance(relative, str) and relative:
+            found.add(relative.replace(os.sep, "/"))
+    return found
+
+
+def _hooks_json_is_framework_only(root, relative):
+    """该 hooks 配置是否只含本框架条目（含用户条目 ⇒ 是共享文件，按普通路径归桶）。"""
+    if not root:
+        return False
+    path = os.path.join(str(root), *relative.split("/"))
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.loads(handle.read() or "{}")
+    except (OSError, ValueError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    commands = []
+    for entries in (data.get("hooks") or {}).values():
+        for entry in entries or []:
+            if not isinstance(entry, dict):
+                continue
+            for member in entry.get("hooks") or []:
+                if isinstance(member, dict) and member.get("command"):
+                    commands.append(str(member["command"]))
+    if not commands:
+        return True
+    return all(HOST_HOOK_SCRIPT in command for command in commands)
 
 
 # K5：框架自有资产（`vendor`）。它不进交付面、不进审查材料、不进业务提交；

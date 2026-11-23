@@ -965,6 +965,19 @@ def cmd_status(ctx, args):
                 # ⑥：修复态事实集（纯派生，不落盘）+ 当前生效的放行清单（强制回显）
                 from . import review as review_mod
 
+                # 手工验证/收尾确认要绑定"人看到的交付内容"：这里给出与 Check 同源的
+                # 内容摘要（`object_digest` 写它）。只读事实，不参与判定。
+                try:
+                    from . import check as check_mod, fingerprint as fingerprint_mod
+
+                    delivery = check_mod.object_paths(ctx, task)
+                    facts["delivery"] = {
+                        "paths": len(delivery),
+                        "content_digest": fingerprint_mod.content_digest(
+                            fingerprint_mod.items(ctx.root, delivery)),
+                    }
+                except Exception as exc:      # noqa: BLE001 — 只读投影失败不阻断状态页
+                    facts["delivery"] = {"error": str(exc)}
                 facts["repair_scope"] = review_mod.repair_scope(ctx, task)
                 facts["unknown_acceptances"] = review_mod.acceptance_echo(task)
                 facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, task)
@@ -1434,7 +1447,7 @@ def cmd_enable(ctx, args):
         )
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
-        raise CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试，或换用已安装的宿主")
+        raise CliError(code, profile_facts, next_="install（已装齐全部平台）后重试，或换用已安装的宿主")
     warnings = []
     if identity_facts["host_identity_absent"]:
         warnings.append({"reason": "host_identity_absent",
@@ -1901,7 +1914,7 @@ def _require_instance_match(ctx, binding):
                        next_="新会话请走受控恢复/交接，不改绑既有对象")
     code, platform_facts = session_mod.check_platforms(ctx.platforms(), ctx.session())
     if code:
-        raise CliError(code, platform_facts, next_="install --platform <当前宿主> 后重试")
+        raise CliError(code, platform_facts, next_="install（已装齐全部平台）后重试")
 
 
 def _writer_acquire(ctx):
@@ -2579,6 +2592,10 @@ def _runs_command(prefix):
                                       f"{'|'.join(SUBACTIONS[prefix])}", "got": sub})
         return getattr(runs_mod, sub)(ctx, args)
 
+    # 委托目标自省（2026-11-23）：子动作 → 真实实现。与 `_task_command` 的 `__wf_target__`
+    # 同一用途——帮助/注册表与"真实消费"的一致性断言必须能定位到真正读参数的函数，
+    # 否则断言对委托型命令只是空跑（dogfood 五轮发现的盲区）。
+    handler.__wf_target_map__ = {sub: f"runs:{sub}" for sub in SUBACTIONS[prefix]}
     return handler
 
 
@@ -2588,6 +2605,7 @@ def _task_command(name):
 
         return getattr(tasks_mod, name)(ctx, args)
 
+    handler.__wf_target__ = f"tasks:{name}"
     return handler
 
 
@@ -2779,9 +2797,11 @@ COMMAND_HELP = {
     },
     "task-knowledge": {"purpose": "记录知识处置（可判无更新）",
                        "args": {"--task": "任务 id（必填）", "--decision": "no-update|updated",
-                                "--evidence": "updated：知识变更的证据",
                                 "--no-update": "简写：等价于 --decision no-update",
-                                "--changes": "updated 时的知识变更清单 JSON 数组",
+                                "--changes": "updated 时的知识变更清单 JSON 数组"
+                                             "（字段是 action/path/reason/summary；与本框架 "
+                                             "`spec-update --changes` 的 operation/new_paths 形状**不同**，"
+                                             "两者不可互填）",
                                 "--changes-draft": "只读生成 changes 骨架（打印目标路径与 TODO，不落盘）"},
                        "inputs": {"--changes[]": {"action": "add|update|merge|rename|delete",
                                                   "path": "spec 相对路径", "reason": "变更理由",
@@ -2825,7 +2845,10 @@ COMMAND_HELP = {
                                                  "approval": "{choice, subject} 人的批准引用"}},
                        "example": "wf.py baseline-apply --task <id> --proposal proposal.json --json"},
     "spec-update": {"purpose": "spec 增改删/合并/停用，并同步三段索引",
-                    "args": {"--task": "任务 id（必填）", "--changes": "变更数组（必填；--changes-draft 时除外）",
+                    "args": {"--task": "任务 id（必填）",
+                             "--changes": "变更数组（必填；--changes-draft 时除外）"
+                                          "（字段是 operation/new_paths/old_paths/content；"
+                                          "与 `task-knowledge --changes` 形状不同，不可互填）",
                              "--changes-draft": "只读生成 changes 骨架（打印目标路径与 TODO，不落盘）"},
                     "inputs": {"--changes[]": {"operation": "add|update|merge|rename|delete|disable",
                                                "new_paths": "新路径（数组或逗号/分号/空白分隔的字符串，单条可直写字符串）",
@@ -2986,8 +3009,10 @@ COMMAND_HELP = {
                         "--apply": "应用预览（交互终端输入预览指纹；同一进程完成；与导出互斥）",
                         "--export-deviations": "只读导出本地偏离补丁与清单（不取写权、不暂停任务、不应用升级）",
                         "--out": "导出目录（必须在项目树外；不存在则创建，已存在必须为空）",
-                        "--keep": "升级冲突：保留本地（相对项目根，可重复；仅应用模式；仅可选资产，必需资产保留删除会被拒）",
-                        "--restore": "升级冲突：恢复发行内容（相对项目根，可重复；仅应用模式）"},
+                        "--keep": "升级冲突：保留本地（**项目相对路径**，与 preview 的 "
+                                  "unresolved[].path 逐字一致，可重复；仅应用模式；仅可选资产，"
+                                  "必需资产保留删除会被拒）",
+                        "--restore": "升级冲突：恢复发行内容（**项目相对路径**，同上；仅应用模式）"},
                "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --apply",
                "example_export": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --export-deviations --out /tmp/wf-deviations --json"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
@@ -3015,12 +3040,9 @@ COMMAND_HELP = {
     "task-attribute": {"purpose": "历史提交归属裁决（已提交改动归属本任务/他人）",
                        "args": {"--task": "必填：任务 id", "--commit": "必填：提交 sha"},
                        "example": "wf.py task-attribute --task 2026-xxxx --commit <sha> --json"},
-    "task-curate": {"purpose": "策展：选用/停用 spec 规则并记录目的与补偿",
+    "task-curate": {"purpose": "策展：选用 spec 规则并记录目的（停用/释放走 spec-update 的 disable）",
                     "args": {"--task": "必填：任务 id", "--spec": "必填：spec 相对路径",
-                             "--purpose": "必填：选用目的",
-                             "--kind": "可选：操作类型", "--reason": "可选：理由",
-                             "--compensation": "可选：补偿措施", "--evidence": "可选：证据",
-                             "--check": "可选：关联检查"},
+                             "--purpose": "必填：选用目的"},
                     "example": "wf.py task-curate --task 2026-xxxx --spec .wf/spec/guides/x.md "
                                "--purpose '本轮适用' --json"},
     "task-abandon": {"purpose": "异常归档（放弃）：逐项去向 + 停止决定",
@@ -3029,9 +3051,9 @@ COMMAND_HELP = {
                      "example": "wf.py task-abandon --task 2026-xxxx --decision stop.json "
                                 "--disposition disp.json --json"},
     "task-retrospect": {"purpose": "复盘结论留痕（覆盖触发事实集合）",
-                        "args": {"--task": "必填：任务 id", "--decision": "必填：复盘结论",
-                                 "--evidence": "可选：证据", "--commit": "可选：关联提交"},
-                        "example": "wf.py task-retrospect --task 2026-xxxx --decision r.json --json"},
+                        "args": {"--task": "必填：任务 id",
+                                 "--evidence": "必填：复盘证据文件（入口只读其 conclusion 字段并记入复盘）"},
+                        "example": "wf.py task-retrospect --task 2026-xxxx --evidence r.json --json"},
     "review-accept-unknown": {"purpose": "审查环境不可用时的接受/撤销（人声明 + 码级留痕）",
                               "args": {"--task": "必填：任务 id", "--file": "accept：不可用声明（必填）",
                                        "--batch": "可选：批量接受", "--revoke": "可选：撤销已接受",
@@ -3826,16 +3848,15 @@ COMMAND_FLAGS = {
     "task-approve": {"--task", "--decision", "--draft"},
     "task-attribute": {"--task", "--commit"},
     "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft", "--workspace-exclusion"},
-    "task-curate": {"--task", "--spec", "--purpose", "--kind", "--reason", "--compensation",
-                    "--evidence", "--check"},
-    "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--changes-draft", "--evidence"},
+    "task-curate": {"--task", "--spec", "--purpose"},
+    "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--changes-draft"},
     "task-new": {"--kind", "--template", "--title"},
     "task-pause": {"--task", "--reason"},
     "task-reassess": {"--task"},
     "task-replace": {"--task", "--decision", "--preview"},
     "task-replan": {"--task", "--decision", "--draft"},
     "task-resume": {"--task"},
-    "task-retrospect": {"--task", "--decision", "--evidence", "--commit"},
+    "task-retrospect": {"--task", "--evidence"},
     "task-rework": {"--task", "--decision", "--draft"},
     "task-start": {"--task", "--workspace-exclusion"},
     # W4-1/W4-2：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留

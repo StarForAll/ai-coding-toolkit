@@ -57,7 +57,7 @@ def check():
     os.makedirs(project, exist_ok=True)
     result = subprocess.run([sys.executable, os.path.join(source, "install.py"), "--target", project,
                              "--release-ref", f"refs/tags/{R.TAG}", "--source", source,
-                             "--platform", "dsh", "--confirm"], capture_output=True, text=True)
+                             "--confirm"], capture_output=True, text=True)
     if result.returncode == 0:
         raise H.TargetFailure("工作树被篡改且清单同步后仍被当作同一发行（未按 tag 提交核内容）")
     text = f"{result.stdout}\n{result.stderr}"

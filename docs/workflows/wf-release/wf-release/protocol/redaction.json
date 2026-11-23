@@ -3,45 +3,107 @@
  "source": "v42 §3.5 S7/S10 + K6 与 v36/v37（脱敏为单向不变量：只可加严、不可放松；放松须按「改不变量」走人审）",
  "direction": "strictly-tighten",
  "layers": {
-  "committed": ["task.json", "任务文档（PRD/design/implement）", "每轮审查报告", "K6 五类动作的确认原件（脱敏后）"],
-  "runtime": ["materials/*", "日志", "决定文件原件", "投影（open-items/attribution/skeleton 缓存）", "judgment_prefs"],
-  "record_digest": ["记录内保留 digest 与要点，不保留敏感原文"]
+  "committed": [
+   "task.json",
+   "任务文档（PRD/design/implement）",
+   "每轮审查报告",
+   "K6 五类动作的确认原件（脱敏后）"
+  ],
+  "runtime": [
+   "materials/*",
+   "日志",
+   "决定文件原件",
+   "投影（open-items/attribution/skeleton 缓存）",
+   "judgment_prefs"
+  ],
+  "record_digest": [
+   "记录内保留 digest 与要点，不保留敏感原文"
+  ]
  },
  "rules": [
   {
    "id": "authorization-keep-fields",
    "effect": "keep",
    "scope": "K6 五类动作（提交/推送、删除数据、外发内容、越界修改、仓库级规则文件）的确认原件",
-   "items": ["动作类型", "路径清单或变化摘要", "决策取值", "时间", "人", "quote 摘要"],
+   "items": [
+    "动作类型",
+    "路径清单或变化摘要",
+    "决策取值",
+    "时间",
+    "人",
+    "quote 摘要"
+   ],
    "why": "授权是可审计凭证，必须能复算；用 digest 对照而非原文比对"
   },
   {
    "id": "authorization-runtime-only",
    "effect": "runtime_only",
    "scope": "K6 五类动作的确认原件",
-   "items": ["外发内容全文", "删除清单明细", "凭据类上下文"],
+   "items": [
+    "外发内容全文",
+    "删除清单明细",
+    "凭据类上下文"
+   ],
    "why": "敏感原文留在 runtime，不进 committed；脱敏后仍须可复算"
   },
   {
    "id": "secret-mask",
    "effect": "mask",
    "scope": "所有入库内容（含报告、记录、证据引用）",
-   "items": ["密钥", "令牌", "私钥", "URL 内凭据", "环境变量值"],
+   "items": [
+    "密钥",
+    "令牌",
+    "私钥",
+    "URL 内凭据",
+    "环境变量值"
+   ],
    "why": "密钥类值不得出现在响应、日志、版本控制或任何未授权位置"
   },
   {
    "id": "log-budget",
    "effect": "mask",
    "scope": "日志与工具输出",
-   "items": ["超限截断并保留截断标记", "保留体积上限数值"],
+   "items": [
+    "超限截断并保留截断标记",
+    "保留体积上限数值"
+   ],
    "why": "截断必须可见（降级可见性），不得静默丢弃"
   },
   {
    "id": "record-digest-only",
    "effect": "runtime_only",
    "scope": "记录内对敏感原文的引用",
-   "items": ["以 digest 与要点替代原文"],
+   "items": [
+    "以 digest 与要点替代原文"
+   ],
    "why": "记录内保留 digest 与要点；原文只在 runtime"
+  },
+  {
+   "id": "material-literal-heuristic",
+   "effect": "mask",
+   "scope": "审查材料（diff.patch 按文件分片 / prd.md 全量 / tests.json 命令记录 argv 语义）",
+   "items": [
+    "diff.patch：配置类文件（.env*/yaml/ini/toml/properties/json/tfvars/pem…）走全量规则；代码文件只遮字面量",
+    "prd.md：全量规则",
+    "tests.json：argv 用位置语义（`--password <值>` 分离写法也遮），其余字段走全量规则",
+    "结构化值：字段名属凭据类时整体遮（不依赖值自身形态）"
+   ],
+   "why": "材料是给人审代码的：代码文件里的 `password = read_from_store()`、`DEFAULT_PASSWORD` 这类表达式/常量引用不遮，否则 reviewer 无法判断取值变化；其余三个外发面（配置类文件、PRD、命令记录）的值本身就是凭据本体，一律全量",
+   "residual_risk": "**仅代码类文件**里、含纯字母且无数字的裸值不遮（判据要求含至少一个数字）；配置类文件、PRD、命令记录（argv 位置语义）与日志/回显都不受影响。十四轮 a-1 后残余面已收窄到这一处；十五轮 b-P0 修掉命令记录的档位错配后本条同步改写",
+   "surfaces": {
+    "diff.patch": {
+     "level": "per-file",
+     "why": "配置类需全量，代码类需可读"
+    },
+    "prd.md": {
+     "level": "full",
+     "why": "任务文档，值是凭据本体"
+    },
+    "tests.json": {
+     "level": "argv-aware + full",
+     "why": "真实执行过的 argv，与记录同口径"
+    }
+   }
   }
  ]
 }

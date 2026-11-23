@@ -35,7 +35,7 @@ def installer(source, project):
     """用给定源仓库安装/重装到 project，返回 CompletedProcess。"""
     return subprocess.run([sys.executable, os.path.join(source, "install.py"),
                            "--target", project, "--release-ref", TAG_REF,
-                           "--source", source, "--platform", "dsh", "--confirm"],
+                           "--source", source, "--confirm"],
                           capture_output=True, text=True)
 
 

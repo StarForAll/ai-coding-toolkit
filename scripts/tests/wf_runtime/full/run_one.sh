@@ -89,7 +89,7 @@ case "$fixture" in
         --local-tmp-root "$TMP_PARENT" \
         --log "$RESULTS_DIR/$unit-install.log" -- \
         "$PY" "$SHARED_RELEASE/install.py" --target "$target" --release-ref "$WF_INSTALL_REF" \
-        --source "$SHARED_RELEASE" --platform dsh --confirm >>"$out" 2>&1; then
+        --source "$SHARED_RELEASE" --confirm >>"$out" 2>&1; then
       add_phase install "$result"
       fail_prep INSTALL-FAILED
     fi

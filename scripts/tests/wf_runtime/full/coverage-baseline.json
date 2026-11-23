@@ -23,20 +23,15 @@
       "executor-project-key-unusable",
       "executor-tuple-mismatch",
       "executor-version-change",
-      "f5-4-generation-bool",
       "git-readiness-no-head",
       "identity-platform-fact",
-      "r4-1-source-mismatch",
       "ready-view",
       "reason-code-table"
     ],
     "install": [
       "branch-source-preview",
-      "install-generation-bumps",
       "install-lock-foreign-object",
       "install-lock-realpath",
-      "install-receipt-metadata",
-      "install-receipt-relative",
       "reinstall-preserves-data",
       "release-identity-commit",
       "uninstall-records-maintenance"

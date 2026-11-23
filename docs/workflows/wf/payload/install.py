@@ -333,7 +333,7 @@ class LockBusy(Exception):
 
 
 class Lock:
-    """安装/追加平台的互斥。判据与 `wflib/lock.py` 同源，只是不导入运行时。
+    """安装/维护动作的互斥。判据与 `wflib/lock.py` 同源，只是不导入运行时。
 
     - 只复用「存在且内容以 `wf-lock-v1\n` 开头」的对象（允许标记后有崩溃残留的持锁者行）；
     - 空文件与不匹配内容属同名未知文件 → `LockRejected`，不认领、不覆写；
@@ -431,9 +431,16 @@ def managed_segment(manifest):
     return "\n".join(lines)
 
 
-def ensure_gitignore(target, manifest):
+def plan_gitignore(target, manifest):
+    """**只读**判定 `.gitignore` 托管段该做什么（2026-11-23 五轮复审 a-P2）。
+
+    与 hooks.json 同一处置形状：`.gitignore` 也是**用户文件**，写它之前必须能判、能预览、
+    能进回执。旧实现把"判定 + 写入"耦在一个函数里，于是首装既无法在 `--confirm` 前显示
+    托管段会怎么变，也无法在冲突时不写而先报——只能先写后由自检兜底。
+    """
     path = os.path.join(target, ".gitignore")
     segment = managed_segment(manifest)
+    before = file_digest(path)
     try:
         with open(path, "r", encoding="utf-8") as handle:
             text = handle.read()
@@ -444,13 +451,40 @@ def ensure_gitignore(target, manifest):
     end = (manifest.get("gitignore_managed") or {}).get("end_marker", "# wf-managed-end")
     if begin in lines and end in lines:
         current = "\n".join(lines[lines.index(begin):lines.index(end) + 1])
-        return {"action": "present" if current == segment else "conflict"}
+        return {"path": path, "action": "present" if current == segment else "conflict",
+                "before_digest": before, "segment": segment,
+                "current_segment": current if current != segment else None}
+    return {"path": path, "action": "appended", "before_digest": before, "segment": segment,
+            "current_segment": None}
+
+
+def apply_gitignore(target, manifest, plan=None):
+    """按 `plan_gitignore` 的动作落地（`appended` 才写；`present/conflict` 不动用户文件）。"""
+    plan = plan or plan_gitignore(target, manifest)
+    if plan["action"] != "appended":
+        return dict(plan, after_digest=file_digest(plan["path"]))
+    path = plan["path"]
+    text = ""
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except FileNotFoundError:
+        text = ""
     if text and not text.endswith("\n"):
         text += "\n"
-    text += segment + "\n"
+    text += plan["segment"] + "\n"
     with open(path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
-    return {"action": "appended"}
+    return dict(plan, after_digest=file_digest(path))
+
+
+def ensure_gitignore(target, manifest):
+    """判定 + 落地（升级路径沿用的既有入口；判据本身在 `plan_gitignore`）。"""
+    plan = plan_gitignore(target, manifest)
+    applied = apply_gitignore(target, manifest, plan)
+    applied.pop("segment", None)
+    applied.pop("current_segment", None)
+    return applied
 
 
 def stage_release_manifest(target, source):
@@ -581,20 +615,11 @@ def skill_frontmatter_problems(path):
     return problems
 
 
-def self_check(target, manifest, skill_roots, platforms=None, installation=None,
-               intentional_missing=None):
-    """安装/升级后自检（§10.4）。
+def accepted_local_digests(target, installation):
+    """人确认保留（`--keep`）的偏离：绝对路径 → 登记的本地指纹。
 
-    W3-2（三轮）：`platforms` 是本次安装平台集（安装记录 platforms）——
-    host_hook 只核声明平台一侧的落点（dsh 项目不核 .codex/hooks/，否则会把
-    未投放的 hook 误报 digest mismatch）；per-asset 平台条件合法性同 plan_writes。
-
-    2026-11-23：升级传入 `installation`——已接受偏离（deviation-kept/--keep）的
-    目标字节等于登记 `local_fingerprint` 时不算失配；`intentional_missing` 是
-    人确认保留删除/退出托管的路径（设计稿 §7.2 表首行与新增撞用户文件），
-    自检不把它当“升级已恢复/已管理”。
+    `self_check` 与重复安装核对共用这一处，避免"自检认、核对不认"的分叉。
     """
-    intentional_missing = set(intentional_missing or ())
     accepted = {}
     for entry in (installation or {}).get("assets") or []:
         if not isinstance(entry, dict) or not entry.get("decision"):
@@ -604,6 +629,22 @@ def self_check(target, manifest, skill_roots, platforms=None, installation=None,
             continue
         base = _abs_base(target, entry.get("root_ref"))
         accepted[os.path.normpath(os.path.join(base, *entry["target"].split("/")))] = local
+    return accepted
+
+
+def self_check(target, manifest, skill_roots, installation=None, intentional_missing=None):
+    """安装/升级后自检（§10.4）。
+
+    安装面向全部平台，自检因此**核全部平台根与全部 hook 资产**：没有"未声明的平台"
+    这一说，缺一份就是缺（2026-11-23 人裁）。
+
+    2026-11-23：升级传入 `installation`——已接受偏离（deviation-kept/--keep）的
+    目标字节等于登记 `local_fingerprint` 时不算失配；`intentional_missing` 是
+    人确认保留删除/退出托管的路径（设计稿 §7.2 表首行与新增撞用户文件），
+    自检不把它当“升级已恢复/已管理”。
+    """
+    intentional_missing = set(intentional_missing or ())
+    accepted = accepted_local_digests(target, installation)
     problems = list(_host_hook_plan_problems(manifest))
     for index, asset in enumerate(manifest.get("assets") or []):
         if not isinstance(asset, dict):
@@ -613,9 +654,6 @@ def self_check(target, manifest, skill_roots, platforms=None, installation=None,
             continue
         relative = asset.get("target_relative") or ""
         if asset.get("target_class") == "host_hook":
-            platform_set = platforms if platforms is not None else set()
-            if asset.get("platform") not in platform_set:
-                continue          # 非本次声明平台：未投放是预期，不核
             path = os.path.join(target, *relative.split("/"))
             if path in intentional_missing:
                 continue
@@ -623,6 +661,23 @@ def self_check(target, manifest, skill_roots, platforms=None, installation=None,
             accepted_ok = actual is not None and accepted.get(os.path.normpath(path)) == actual
             if actual != asset.get("digest") and not accepted_ok:
                 problems.append({"target": path, "reason": "digest mismatch after deploy"})
+            elif asset.get("platform") == "codex":
+                # W3（2026-11-23）：脚本字节对不等于部署面生效——宿主 `hooks.json` 的条目
+                # 才是会话标识真正被调用的地方。条目缺失/命令串漂移必须在此报出，
+                # 否则"改落点/命令串"的发行会让已升级项目带着失效条目运行且自检报绿。
+                expected = host_hook_command(relative)
+                hook_plan = plan_hooks_json(target, relative, expected)
+                if hook_plan["action"] == "unreadable":
+                    problems.append({"target": hook_plan["path"],
+                                     "reason": "hooks.json unreadable",
+                                     "detail": (hook_plan.get("problem") or {}).get("reason")})
+                elif hook_plan["action"] in ("absent", "appended", "conflict", "updated"):
+                    problems.append({"target": hook_plan["path"],
+                                     "reason": "host hook entry missing or drifted",
+                                     "action": hook_plan["action"],
+                                     "expected_command": expected,
+                                     "observed": hook_plan.get("observed"),
+                                     "previous_command": hook_plan.get("previous_command")})
             continue
         targets = []
         if asset.get("target_class") == "project_wf":
@@ -707,11 +762,17 @@ def self_check(target, manifest, skill_roots, platforms=None, installation=None,
 # `session_identity.source` 只取 official-docs / user-declared / unknown：
 #   - user-declared 需记明声明者与实测事实；unknown 表示"未核实"，适配层不得据此猜（走 WF_SEMANTIC_DECISION）
 #   - `clear_resets` 表示"宿主自带的 /clear（若存在）之后会话标识是否变化"；null = 未核实或该宿主无此命令
+#   - **`env:` 前缀 ≠ 已实现**（2026-11-23 五轮）：它只表示"该值在适配层/显式信封可见"。
+#     未交付适配层的宿主（今天除 codex 外全部）在运行期等同 `unknown`——入口不读环境变量，
+#     可区分性由 `enable --new-session` 覆盖；不得把该声明读成"宿主会话标识已可用"。
 PLATFORMS = {
     "dsh": {
         "dir": ".agents/skills",
         "reads_shared": True,
         # DSH 托管 shell 注入 DSH_SESSION_ID；DSH 无 /clear 命令（2026-11-09 用户实测）
+        # **`env:` 声明 ≠ 已交付适配层**：入口不读该环境变量，运行期等同 `unknown`，
+        # 可区分性由 `enable --new-session` 覆盖（2026-11-23 人裁后全平台一次装齐，
+        # 这条限定尤其要读清：装齐 ≠ 该宿主的会话标识已可用）
         "session_identity": {"value": "env:DSH_SESSION_ID", "source": "user-declared", "clear_resets": None},
     },
     "codex": {
@@ -741,40 +802,28 @@ PLATFORMS = {
     "claudecode": {"dir": ".claude/skills", "reads_shared": False,
                    "session_identity": {"value": None, "source": "unknown", "clear_resets": None}},
 }
-PLATFORM_ALIASES = {"claude": "claudecode", "gemini": "geminicli", "ghcopilot": "copilot"}
 SHARED_SKILL_DIR = ".agents/skills"
 
 
-def _flatten_platforms(platforms):
-    """`--platform a --platform b`、`--platform a b`、`--platform a,b` 三种写法都接受。"""
-    flat = []
-    for item in platforms or []:
-        values = item if isinstance(item, (list, tuple)) else [item]
-        for value in values:
-            for part in str(value).split(","):
-                part = part.strip()
-                if part:
-                    flat.append(part)
-    return flat
+def all_platforms():
+    """安装面向的**全部**平台：`PLATFORMS` 是唯一来源，新增平台即自动纳入。
 
-
-def resolve_skill_roots(target, platforms):
-    """把 --platform 解析成项目内技能目录（绝对路径，已去重）。
-
-    未知名不给猜测：直接拒绝并列出支持的平台。
+    2026-11-23 人裁：安装不再让人选平台（`--platform` 已移除）——目标项目一次装齐
+    当前支持的全部平台根与宿主 hook；将来扩平台只改这张表，重跑安装/升级即补齐。
     """
-    roots, unknown = [], []
-    for name in _flatten_platforms(platforms):
-        key = PLATFORM_ALIASES.get(name, name)
-        entry = PLATFORMS.get(key)
-        if entry is None:
-            unknown.append(name)
-            continue
+    return sorted(PLATFORMS)
+
+
+def resolve_skill_roots(target):
+    """项目内技能目录全集（绝对路径，已去重）：所有平台的有读根的并集。"""
+    roots = []
+    for name in all_platforms():
+        entry = PLATFORMS[name]
         relative = SHARED_SKILL_DIR if entry["reads_shared"] else entry["dir"]
         root = os.path.join(os.path.abspath(target), *relative.split("/"))
         if root not in roots:
             roots.append(root)
-    return roots, unknown
+    return roots
 
 
 def _dump_json(path, payload):
@@ -789,7 +838,16 @@ def _dump_json(path, payload):
 
 
 HOOK_SCRIPT_RELATIVE = ".codex/hooks/wf-session-identity.py"
-HOOK_COMMAND = "python3 -X utf8 .codex/hooks/wf-session-identity.py"
+
+
+def host_hook_command(script_relative):
+    """宿主 hook 的命令串：**只由落点派生**（唯一来源）。
+
+    升级要判断 hooks.json 里的条目"是不是本框架的旧串"，判据必须是可重算的同一形态；
+    把命令串写成第二份常量会让落点一改就与派生值分叉。
+    """
+    return f"python3 -X utf8 {script_relative}"
+
 
 
 def hooks_json_path(target):
@@ -808,41 +866,134 @@ def _hooks_entry_matches(entry, script_name):
     return False
 
 
-def merge_hooks_json(target, script_name=HOOK_SCRIPT_RELATIVE, command=HOOK_COMMAND):
-    """W3-2：codex 平台的 hooks.json 合并——无文件则创建（仅本条目），已有则保序追加。
-
-    幂等：已有条目引用本脚本文件名即视为已登记，不重复追加。dict 按插入序原样 dump，
-    不动用户其他条目。同名脚本被用户其他命令串占用 ⇒ 报人裁决（§7.1 同名未知文件口径）。
-    返回 {"created": bool, "appended": bool}。
-    """
+def read_hooks_json(target):
+    """读 `.codex/hooks.json`：`(data, problem)`；缺失返回 `(None, None)`（≠ 损坏）。"""
     path = hooks_json_path(target)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    data = None
-    if os.path.isfile(path):
-        try:
-            with open(path, "r", encoding="utf-8") as handle:
-                data = json.load(handle)
-        except (OSError, ValueError):
-            data = None
-        if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
-            raise ValueError(f"hooks.json 已存在但不可解析或形状不属 Codex：{path}")
-    entry = {"hooks": [{"type": "command", "command": command, "timeout": 15}]}
+    if not os.path.isfile(path):
+        return None, None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except (OSError, ValueError) as exc:
+        return None, {"path": path, "reason": f"hooks.json 不可解析: {exc}"}
+    if not isinstance(data, dict) or not isinstance(data.get("hooks"), dict):
+        return None, {"path": path, "reason": "hooks.json 形状不属 Codex（缺 hooks 对象）"}
+    return data, None
+
+
+def _hook_entries(data, script_name):
+    """所有事件下"命令串引用本脚本名"的条目（所有权判定的单一实现）。"""
+    found = []
+    for event, entries in ((data or {}).get("hooks") or {}).items():
+        if not isinstance(entries, list):
+            continue
+        for index, entry in enumerate(entries):
+            if _hooks_entry_matches(entry, script_name):
+                found.append((event, index, entry))
+    return found
+
+
+HOOK_EVENT = "SessionStart"
+
+
+def plan_hooks_json(target, script_relative, command, previous_command=None, event=HOOK_EVENT):
+    """**只读**判定 hooks.json 该做什么（升级预览与锁内重核共用，W3 2026-11-23）。
+
+    **事件也是部署面的一部分**（2026-11-23 五轮复审 b-4）：命令串挂在别的事件下，
+    会话启动时根本不会触发，"条目存在"不等于"适配面生效"——所以只在 `event`
+    （默认 `SessionStart`）里找本脚本；出现在其它事件里按 `conflict` 交人。
+
+    `host_hook` 是随发行投放的资产类，它的部署面包含宿主 `hooks.json` 条目——只替换脚本
+    字节而不维护条目，会让"改落点/命令串"的发行在已升级项目上留下失效条目，而自检只核
+    脚本 digest 仍报绿（dogfood 五轮 b-P1 的事实面）。
+
+    动作取值（判定顺序唯一）：
+    - `absent`：`.codex/hooks.json` 不存在 ⇒ 投放时会创建（首装语义）；
+    - `appended`：文件在、没有引用本脚本的条目 ⇒ 追加；
+    - `unchanged`：条目命令串已是当前值；
+    - `updated`：条目命令串等于**上一版登记**的命令串（本框架旧条目）⇒ 替换；
+    - `conflict`：条目引用本脚本但既非当前也非上一版（用户改过）⇒ 交人，不覆盖；
+    - `unreadable`：文件不可解析 ⇒ 交人（不自作主张重写用户文件）。
+    """
+    data, problem = read_hooks_json(target)
+    plan = {"path": hooks_json_path(target), "script_relative": script_relative,
+            "command": command, "previous_command": previous_command, "event": event}
+    if problem:
+        return dict(plan, action="unreadable", problem=problem)
     if data is None:
-        payload = {"hooks": {"SessionStart": [entry]}}
-        _dump_json(path, payload)
-        return {"created": True, "appended": False}
-    session_start = data["hooks"].get("SessionStart")
+        return dict(plan, action="absent")
+    found = _hook_entries(data, os.path.basename(script_relative))
+    misplaced = [(found_event, index, entry) for found_event, index, entry in found
+                 if found_event != event]
+    found = [(found_event, index, entry) for found_event, index, entry in found
+             if found_event == event]
+    # `matcher` 同样是触发条件的一部分：条目挂在 SessionStart 上、命令串也对，但 matcher
+    # 限定成 `compact`（或其它不匹配的表达式）时，会话启动根本不会调用它——"条目存在"
+    # 不等于"适配面生效"（2026-11-23 九轮复审 b-4）。我们的条目由本安装器写入、不带 matcher；
+    # 发现 matcher 即按偏离交人，不猜它的语义。
+    matcher_entry = None
+    for found_event, index, entry in found:
+        matcher = entry.get("matcher")
+        if matcher not in (None, "", {}):
+            matcher_entry = entry
+            break
+    if matcher_entry is not None:
+        return dict(plan, action="conflict", matcher=matcher_entry.get("matcher"),
+                    reason=f"本脚本条目带 matcher（限定触发条件，应在 {event} 无条件触发）：交人")
+    if not found and misplaced:
+        return dict(plan, action="conflict", observed_events=[item[0] for item in misplaced],
+                    reason=f"本脚本条目挂在其它事件下（应在 {event}）：交人，不自动搬动")
+    if not found:
+        return dict(plan, action="appended")
+    current = [(event, index, entry) for event, index, entry in found
+               if all(str(hook.get("command")) == command
+                      for hook in (entry.get("hooks") or []) if isinstance(hook, dict))]
+    if current:
+        return dict(plan, action="unchanged", event=current[0][0])
+    if previous_command and previous_command != command:
+        stale = [(event, index, entry) for event, index, entry in found
+                 if all(str(hook.get("command")) == previous_command
+                        for hook in (entry.get("hooks") or []) if isinstance(hook, dict))]
+        if stale:
+            return dict(plan, action="updated", event=stale[0][0],
+                        observed_command=previous_command)
+    observed = [str((entry.get("hooks") or [{}])[0].get("command")) for _e, _i, entry in found]
+    return dict(plan, action="conflict", observed=observed)
+
+
+def apply_hooks_json(target, plan):
+    """按 `plan_hooks_json` 的动作落地（升级应用段）。返回实际动作（幂等）。"""
+    action = plan["action"]
+    if action in ("unchanged", "conflict", "unreadable"):
+        return action
+    script_relative = plan["script_relative"]
+    command = plan["command"]
+    path = hooks_json_path(target)
+    event = plan.get("event") or HOOK_EVENT
+    if action == "absent":
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        _dump_json(path, {"hooks": {event: [
+            {"hooks": [{"type": "command", "command": command, "timeout": 15}]}]}})
+        return "created"
+    data, problem = read_hooks_json(target)
+    if problem:
+        raise ValueError(problem["reason"])
+    session_start = data["hooks"].get(event)
     if not isinstance(session_start, list):
         session_start = []
-        data["hooks"]["SessionStart"] = session_start
-    for existing in session_start:
-        if _hooks_entry_matches(existing, os.path.basename(script_name)):
-            if any(h.get("command") != command for h in existing.get("hooks") or []):
-                raise ValueError("同名 hook 脚本已被用户以不同命令串占用：交人裁决")
-            return {"created": False, "appended": False}
-    session_start.append(entry)
-    _dump_json(path, data)
-    return {"created": False, "appended": True}
+        data["hooks"][event] = session_start
+    if action == "appended":
+        session_start.append({"hooks": [{"type": "command", "command": command, "timeout": 15}]})
+        _dump_json(path, data)
+        return "appended"
+    if action == "updated":
+        for _event, _index, entry in _hook_entries(data, os.path.basename(script_relative)):
+            for hook in entry.get("hooks") or []:
+                if isinstance(hook, dict) and str(hook.get("command")) == plan["previous_command"]:
+                    hook["command"] = command
+        _dump_json(path, data)
+        return "updated"
+    raise ValueError(f"未知 hooks.json 动作：{action}")
 
 
 def remove_hooks_json_entry(target, script_name=HOOK_SCRIPT_RELATIVE):
@@ -876,8 +1027,123 @@ def remove_hooks_json_entry(target, script_name=HOOK_SCRIPT_RELATIVE):
     return removed
 
 
-def _platforms_of(args_platforms):
-    return {PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args_platforms)}
+def _first_install_takeover(writer_record):
+    """能否把既有 writer 记录当作"未完成首装"重入（返回 None=可接管，否则给原因）。
+
+    可接管只有两类（2026-11-23 六轮复审 a-1）：
+    - 无持有者（`holder is None`）：idle 或 recovering——没有活会话在等这份写权；
+    - 持有者是**本框架的维护动作**且检查点属于安装阶段：进程崩溃后留下的装维护记录。
+    会话持有（`holder.kind=session`）、交接中间态、未知检查点一律不可接管：那是在途的
+    合法权益，接管它等于越过 §4.4 的持有边界。
+    """
+    holder = (writer_record or {}).get("holder")
+    if holder is None:
+        return None
+    if not isinstance(holder, dict):
+        return "holder 字段形状不可识别"
+    if holder.get("kind") != "maintenance":
+        return f"写权由 {holder.get('kind')!r} 持有（非维护动作）"
+    phase = ((writer_record.get("checkpoint") or {}).get("phase") or "")
+    if phase.startswith("install") or phase in ("deploy-assets", "hooks-json-apply",
+                                                "self-check-failed"):
+        return None
+    return f"维护检查点不是安装阶段（phase={phase!r}）"
+
+
+def maintenance_abort(writer_path, writer, operation_id, phase, code, message, facts=None,
+                     json_mode=False):
+    """维护动作在**已开始写入**之后失败时的唯一出口（2026-11-23，五轮复审 P1）。
+
+    维护写者一旦置为 held，任何"直接 return"都会把项目留在两个坏状态之一：
+    写权 held 无人释放（后续入口全被 WF_WRITER_BUSY 挡住），或半套资产没有对应记录。
+    与"投放后自检失败"同一处置：写 recovering 检查点、递增代次、保留现场，并给出
+    「按 problems 修正后重跑 / repair 核对恢复后重跑」两个出口——不把 PID 消失当空闲，
+    也不假装成功。来源：安装自检失败分支的既有语义（`self-check-failed`）。
+    """
+    problems = list((facts or {}).get("problems") or [])
+    writer.update({
+        "state": "recovering",
+        "holder": None,
+        "generation": int(writer.get("generation") or 0) + 1,
+        "revision": int(writer.get("revision") or 0) + 1,
+        "updated_at": now_str(),
+        "checkpoint": {"operation": operation_id, "phase": phase, "problems": problems[:20]},
+    })
+    try:
+        _dump_json(writer_path, writer)
+    except OSError:
+        pass                      # 写权记录写不下去也不掩盖真正的失败原因
+    payload = dict(facts or {})
+    payload.setdefault("exits", [
+        "按 problems 修正后重跑同一条命令（已落盘事实按 §5.4 核对，不重复写入）",
+        "或运行 .wf/bin/repair.py 核对恢复后再重跑",
+    ])
+    payload.setdefault("writer", {"state": "recovering", "checkpoint": writer.get("checkpoint")})
+    return blocked(code, message, payload, json_mode)
+
+
+def deployed_host_hooks(manifest):
+    """本次投放会出现的 host_hook 条目：清单里声明的**全部** hook 资产。"""
+    out = []
+    for asset in manifest.get("assets") or []:
+        if not isinstance(asset, dict) or asset.get("target_class") != "host_hook":
+            continue
+        relative = asset.get("target_relative")
+        if not relative:
+            continue
+        out.append({"platform": asset["platform"], "script_relative": relative,
+                    "command": host_hook_command(relative)})
+    return out
+
+
+def recorded_host_hooks(installation):
+    """安装记录里的 `host_hook_entries`（上一版命令串的唯一来源，不靠猜）。"""
+    out = {}
+    for entry in (installation or {}).get("host_hook_entries") or []:
+        if isinstance(entry, dict) and entry.get("script_relative"):
+            out[str(entry["script_relative"])] = entry
+    return out
+
+
+def plan_host_hooks(target, manifest, installation):
+    """逐 host_hook 资产给出 hooks.json 动作；`problems` 为需人裁决项。
+
+    升级在**写入前**调用：`conflict`/`unreadable` 必须整批拒绝，不能先替换脚本字节再报错。
+    """
+    recorded = recorded_host_hooks(installation)
+    plans, problems = [], []
+    for item in deployed_host_hooks(manifest):
+        if item["platform"] != "codex":
+            # 只有 codex 声明了 hooks.json 部署面；其他平台的 host_hook 只投放脚本
+            continue
+        previous = (recorded.get(item["script_relative"]) or {}).get("command")
+        plan = plan_hooks_json(target, item["script_relative"], item["command"], previous)
+        plans.append(plan)
+        if plan["action"] == "conflict":
+            problems.append(dict(plan, reason="同名 hook 脚本的命令串既非当前也非上一版登记值："
+                                              "用户改过，交人裁决（不覆盖）"))
+        elif plan["action"] == "unreadable":
+            problems.append(dict(plan, reason="hooks.json 不可解析：交人处置，不重写用户文件"))
+    return plans, problems
+
+
+def record_host_hooks(installation, manifest, applied, target=None):
+    """把本次投放/应用的 host_hook 命令串写进安装记录（升级下次据此判"我们的旧串"）。"""
+    recorded = recorded_host_hooks(installation)
+    for item in deployed_host_hooks(manifest):
+        entry = dict(item)
+        entry["updated_at"] = now_str()
+        if target:
+            # 落点文件的项目相对路径：分类侧据此把"安装器投放/维护的配置文件"认作控制面，
+            # 不让它每次都以未提交改动出现在 c 档（全部平台安装后 hooks.json 恒存在）。
+            entry["hooks_json_path"] = os.path.relpath(hooks_json_path(target), target).replace(os.sep, "/")
+        if item["script_relative"] in {plan["script_relative"] for plan in applied}:
+            entry["hooks_json_action"] = next(
+                plan.get("applied") or plan["action"] for plan in applied
+                if plan["script_relative"] == item["script_relative"])
+        recorded[item["script_relative"]] = entry
+    installation["host_hook_entries"] = [recorded[key] for key in sorted(recorded)]
+    return installation
 
 
 def _host_hook_plan_problems(manifest):
@@ -903,21 +1169,20 @@ def _host_hook_plan_problems(manifest):
     return problems
 
 
-def add_platforms(args, commit, manifest, writes, skill_roots, branch_findings=None):
-    """已安装项目追加平台（重复安装语义）：只投放新平台的技能副本，不动 .wf 资产与项目数据。
+def verify_installed(args, manifest, skill_roots, branch_findings=None):
+    """目标已安装：重复执行同一条安装命令时的**补齐/核对**。
 
-    2026-11-05 第二轮修正（复审 #2/#3/#4/#7/#8、R1）：
-    - **全部读取与冲突复核都在锁内**：锁外读到的安装记录/目录状态可能已被并发追加改变；
-    - writer 记录按运行期同一判据校验（schema/状态组合/holder），不只看 `state == idle`；
-    - 新根技能副本登记进 `installation.assets`；`installation.json` 自身计入回执 `changes`；
-    - 回执 `changes[].path` 一律为**项目相对路径**（运行期按相对路径匹配与查 Git 树）；
-    - 释放写者时再次递增代次（授予、撤销各递增）；
-    - 无任何变化时返回幂等结果，不取写权、不产生空回执。
+    安装面向全部平台（`all_platforms()`），"追加平台"这一步不再存在（2026-11-23 人裁）。
+    三条边界：
+    - hooks.json 冲突/不可解析 ⇒ `needs_decision`（先于任何写入，写权保持空闲）；
+    - 落点**缺失**（上次中断/被删）⇒ 补写缺失文件与缺失的 hook 条目（只创建，不覆盖）；
+    - 落点**有内容差异**（本地改过）⇒ 拒绝并指向 `--upgrade`（三方匹配能保留/恢复）。
+    补写是维护动作：取写权、产回执、释放；无缺失时只读核对，不取写权、不产生空回执。
     """
     installation_path = os.path.join(args.target, ".wf/install/installation.json")
     writer_path = os.path.join(args.target, ".wf/writer.json")
     if not os.path.isfile(installation_path) or not os.path.isfile(writer_path):
-        return blocked("WF_RECORD_INVALID", "安装记录或写权记录缺失，不能追加平台",
+        return blocked("WF_RECORD_INVALID", "安装记录或写权记录缺失，无法核对已安装状态",
                        {"installation": os.path.isfile(installation_path),
                         "writer": os.path.isfile(writer_path)}, args.json)
     lock_path = os.path.join(args.target, ".wf-lock")
@@ -930,210 +1195,203 @@ def add_platforms(args, commit, manifest, writes, skill_roots, branch_findings=N
 
     try:
         with lock:
-            # —— 锁内重读与重建计划 ——
             with open(installation_path, "r", encoding="utf-8") as handle:
                 installation = json.load(handle)
-            with open(writer_path, "r", encoding="utf-8") as handle:
-                writer = json.load(handle)
-            # 项目→基址→资产的第一层/第二层边界必须在任何冲突读取与写入前复核：
-            # 历史域外 root_ref 明确拒绝（不序列化成合法绝对根，也不跟随它清理外部）。
-            root_problems = registered_root_problems(args.target, installation)
-            if root_problems:
-                return blocked("WF_ASSET_DECISION",
-                               "安装记录中的技能根域外/不可解析：整批拒绝，不改历史记录、不删除外部对象",
-                               {"problems": root_problems[:20]}, args.json)
-            # 锁内重算计划：锁外传入的 writes 只能作为输入，不能作为写入许可。
-            # 平台集 = 已装 ∪ 本次追加（host_hook 只在它声明平台被本次追加时投放）
-            _combined_platforms = ({item for item in installation.get("platforms") or [] if isinstance(item, str)}
-                                   | _platforms_of(args.platform))
-            writes, plan_problems = plan_writes(args.target, skill_roots, manifest,
-                                                 platforms=_combined_platforms)
+            if not isinstance(installation, dict):
+                return blocked("WF_RECORD_INVALID", "installation.json 不是对象", {}, args.json)
+            recorded_version = installation.get("version")
+            if recorded_version and str(recorded_version) != str(manifest.get("version")):
+                return blocked(
+                    "WF_ASSET_DECISION",
+                    "目标装的是另一个版本：重跑安装只补本发行的缺失，跨版本请走升级",
+                    {"installed_version": recorded_version,
+                     "release_version": manifest.get("version"),
+                     "exits": ["按升级流程处理：install.py --upgrade（先看预览，再 --apply）"]}, args.json)
+            writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
             if plan_problems:
                 return blocked("WF_ASSET_DECISION",
-                               "锁内复核发现资产越界：整批拒绝，不写任何文件",
+                               "发行资产越界或不可解释：整批拒绝（未写入任何文件）",
                                {"problems": plan_problems[:20]}, args.json)
-            if installation.get("source_commit") != commit:
-                return blocked("WF_ASSET_DECISION",
-                               "已安装的发行引用与本次不同：追加平台只允许同引用；升级走 wf.py upgrade（第三轮）",
-                               {"installed": installation.get("release_ref"), "requested": args.release_ref,
-                                "installed_commit": installation.get("source_commit"),
-                                "requested_commit": commit}, args.json)
-            # 同 commit 不等于同内容（2026-11-05 第八轮复审 F8-4）：重建发行会让 rules_digest 变化，
-            # 只比 commit 会把新技能混进旧运行时。追加前再比一次已装清单的内容摘要。
-            writer_problem = _writer_problem(writer)
-            if writer_problem:
-                return blocked("WF_RECORD_INVALID", "写权记录不可用于维护写入：" + writer_problem,
-                               {"writer": writer}, args.json)
-            current = [item for item in installation.get("platforms") or [] if isinstance(item, str)]
-            wanted = sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)})
-            added = [name for name in wanted if name not in current]
-            known_roots = set(installation.get("roots") or [])
-            new_roots = [root for root in skill_roots
-                         if os.path.relpath(root, args.target).replace(os.sep, "/") not in known_roots]
-            planned = []
+            hook_plans, hook_problems = plan_host_hooks(args.target, manifest, installation)
+            if hook_problems:
+                return needs_decision(
+                    "WF_ASSET_DECISION",
+                    "hooks.json 条目需人裁决：不覆盖用户改过的命令串（未写入任何文件、写权保持空闲）",
+                    {"problems": hook_problems,
+                     "exits": ["把 .codex/hooks.json 的该条目恢复成本框架条目后重跑",
+                               "或人工确认该条目归用户所有、由人移走后再重跑"]}, args.json)
+            accepted = accepted_local_digests(args.target, installation)
+            pending, drifted = [], []
             for base, asset, relative in writes:
-                if asset.get("target_class") == "host_hook":
-                    # W3-2（三轮）：追加平台时投放 hook 文件——只在声明平台本次新增时
-                    if asset.get("platform") not in added:
-                        continue
-                elif asset.get("target_class") != "skill_root" or base not in new_roots:
-                    continue
-                source_file = os.path.join(os.path.abspath(args.source),
-                                           *str(asset.get("source_path") or "").split("/"))
-                if not os.path.isfile(source_file):
-                    return blocked("WF_RELEASE_CONFLICT", "发行树缺该资产的源文件",
-                                   {"source_path": asset.get("source_path")}, args.json)
-                with open(source_file, "rb") as handle:
-                    data = handle.read()
-                planned.append({"base": base, "asset": asset, "relative": relative, "source": source_file,
-                                "destination": os.path.join(base, *relative.split("/")), "data": data})
-            conflicts = []
-            for entry in planned:
-                if not os.path.exists(entry["destination"]):
-                    continue
-                with open(entry["destination"], "rb") as handle:
-                    if handle.read() != entry["data"]:
-                        conflicts.append(entry["destination"])
-            if conflicts:
-                return blocked("WF_ASSET_DECISION",
-                               "目标已存在且内容不同：重复安装不覆盖本地偏离，整批不写；"
-                               "请人逐项决定保留/移走/删除后重试",
-                               {"paths": conflicts[:20]}, args.json)
-            pending = [entry for entry in planned if not os.path.exists(entry["destination"])]
-            registered = {(asset.get("root_ref"), asset.get("target"))
-                          for asset in installation.get("assets") or []}
-            missing_assets = [entry for entry in planned
-                              if ("project" if entry["base"] == args.target else entry["base"],
-                                  entry["relative"]) not in registered]
-            # 无任何变化时先走幂等：不得因"缺证据"把"什么都不做"拒掉（第十轮复审 N10-4）
-            if not added and not pending and not missing_assets:
-                return ok("\n".join([
-                    "OK  WF_OK",
-                    f"目标：{args.target}",
-                    "新增平台：（无新增）",
-                    f"现有平台：{json.dumps(current, ensure_ascii=False)}",
-                    "说明：无任何变化，未取写权、未产生回执。",
-                ]), {"platforms": current, "deployed": 0, "noop": True}, args.json)
+                path = os.path.join(base, *relative.split("/"))
+                actual = file_digest(path)
+                if actual is None:
+                    pending.append((base, asset, relative))
+                elif actual != asset.get("digest") and accepted.get(os.path.normpath(path)) != actual:
+                    # 人确认保留的偏离（--keep）不是"本地改过"：与自检同一判据
+                    drifted.append(os.path.relpath(path, args.target).replace(os.sep, "/"))
+            stale_metadata = (sorted(installation.get("platforms") or []) != all_platforms()
+                              or sorted(installation.get("roots") or [])
+                              != sorted(os.path.relpath(root, args.target).replace(os.sep, "/")
+                                        for root in skill_roots))
+            hook_repairs = [plan for plan in hook_plans if plan["action"] in ("absent", "appended")]
+            facts_base = {"platforms": all_platforms(),
+                          "roots": [os.path.relpath(root, args.target).replace(os.sep, "/")
+                                    for root in skill_roots]}
+            if drifted:
+                return blocked(
+                    "WF_ASSET_DECISION",
+                    "目标已安装，但落点内容与本发行不一致：这里不覆盖用户改动，改动请走升级（三方匹配）",
+                    dict(facts_base, drifted=drifted[:20],
+                         exits=["按升级流程处理：install.py --upgrade（先看预览，再 --apply）",
+                                "只想确认现场：运行 .wf/bin/repair.py 核对"]), args.json)
+            if pending or hook_repairs or stale_metadata:
+                repaired_facts, abort = _repair_missing(args, manifest, writes, pending,
+                                                        installation, hook_repairs)
+                if abort is not None:
+                    return abort
+                facts_base = repaired_facts
+    except (OSError, ValueError) as exc:
+        return blocked("WF_RECORD_INVALID", f"读取安装记录失败：{exc}", {}, args.json)
 
-            # 同 commit 不等于同内容：有实际写入前必须能确认两侧内容摘要（第九轮 N9-1）
-            installed_digest = (installation.get("rules_digest")
-                                or ((installation.get("manifest") or {}).get("compatibility") or {}).get("rules_digest"))
-            if not installed_digest:
-                installed_manifest_path = os.path.join(args.target, ".wf/install/release-manifest.json")
-                try:
-                    with open(installed_manifest_path, "r", encoding="utf-8") as handle:
-                        installed_manifest = json.load(handle)
-                    installed_digest = ((installed_manifest.get("compatibility") or {}).get("rules_digest"))
-                except (OSError, ValueError):
-                    installed_digest = None
-            requested_digest = ((manifest or {}).get("compatibility") or {}).get("rules_digest")
-            if not installed_digest or not requested_digest:
-                return blocked("WF_ASSET_DECISION",
-                               "无法确认已装内容摘要（缺 rules_digest 与可读的已装清单）：追加平台被拒，"
-                               "请按升级/重装流程处理",
-                               {"installed_rules_digest": installed_digest,
-                                "requested_rules_digest": requested_digest}, args.json)
-            if installed_digest != requested_digest:
-                return blocked("WF_ASSET_DECISION",
-                               "已安装内容摘要与本次发行不同：追加平台只允许同内容；请按升级/重装流程处理",
-                               {"installed_rules_digest": installed_digest,
-                                "requested_rules_digest": requested_digest}, args.json)
-
-            operation_id = f"install-{uuid.uuid4().hex}"
-            held_generation = int(writer.get("generation") or 0) + 1
-            writer.update({"state": "held", "generation": held_generation, "updated_at": now_str(),
-                           "holder": {"kind": "maintenance", "id": operation_id,
-                                      "scope": {"operation": operation_id}, "generation": held_generation},
-                           "checkpoint": {"operation": operation_id, "phase": "add-platforms"}})
-            _dump_json(writer_path, writer)
-
-            deployed = []
-            hook_platforms_deployed = set()
-            for entry in pending:
-                os.makedirs(os.path.dirname(entry["destination"]), exist_ok=True)
-                with open(entry["destination"], "wb") as handle:
-                    handle.write(entry["data"])
-                if entry["asset"].get("executable"):
-                    os.chmod(entry["destination"], os.stat(entry["source"]).st_mode | 0o755)
-                deployed.append(entry["destination"])
-                if entry["asset"].get("target_class") == "host_hook":
-                    hook_platforms_deployed.add(entry["asset"].get("platform"))
-            # W3-2：追加平台投放 hook 后合并 hooks.json（同首装：幂等/同名冲突交人）
-            for platform in sorted(hook_platforms_deployed):
-                if platform != "codex":
-                    continue
-                try:
-                    merge_hooks_json(args.target)
-                except ValueError as exc:
-                    return blocked("WF_ASSET_DECISION", str(exc),
-                                   {"hooks_json": hooks_json_path(args.target)}, args.json)
-
-            if branch_findings:
-                installation.setdefault("decisions", []).append({
-                    "kind": "branch-source", "findings": branch_findings,
-                    "decision": "human (--confirm)", "at": now_str(),
-                    "note": "人确认在本分支按新安装继续（设计稿 §7.1）",
-                })
-            installation["platforms"] = sorted(set(current) | set(wanted))
-            installation["roots"] = sorted(known_roots | {
-                os.path.relpath(root, args.target).replace(os.sep, "/") for root in skill_roots})
-            for entry in planned:
-                root_ref = "project" if entry["base"] == args.target else entry["base"]
-                key = (root_ref, entry["relative"])
-                if key in registered:
-                    continue
-                installation.setdefault("assets", []).append({
-                    "target": entry["relative"], "root_ref": root_ref,
-                    "digest": entry["asset"].get("digest"), "source_path": entry.get("asset", {}).get("source_path"),
-                    "upstream_version": manifest.get("version"),
-                    "upstream_fingerprint": entry["asset"].get("digest"),
-                })
-                registered.add(key)
-            _dump_json(installation_path, installation)
-
-            head_before = None
-            probe = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse", "HEAD"], cwd=args.target,
-                                   capture_output=True, text=True, check=False)
-            if probe.returncode == 0:
-                head_before = probe.stdout.strip() or None
-            changed = deployed + [installation_path]
-            changes = [{"path": os.path.relpath(path, args.target).replace(os.sep, "/"),
-                        "before": None, "after": file_digest(path)}
-                       for path in changed]
-            released_generation = held_generation + 1
-            writer.update({
-                "state": "idle",
-                "holder": None,
-                "generation": released_generation,
-                "revision": int(writer.get("revision") or 0) + 1,
-                "checkpoint": {"operation": operation_id, "phase": "platforms-added"},
-                "updated_at": now_str(),
-            })
-            writer["maintenance_results"] = list(writer.get("maintenance_results") or []) + [{
-                "operation": operation_id,
-                "preview_digest": plain_digest(installation),
-                "head_before": head_before,
-                "changes": changes,
-                "receipt_git_state": {"head": head_before, "tracked_paths": len(changes)},
-                "result": "applied_pending_commit",
-                "disposition": None,
-            }]
-            _dump_json(writer_path, writer)
-            append_maintenance_journal(args.target, writer["maintenance_results"][-1])
-    except LockRejected as exc:
-        return blocked("WF_ASSET_DECISION", f"锁对象冲突：{exc}", {"path": lock_path}, args.json)
-    except LockBusy as exc:
-        return blocked("WF_WRITER_BUSY", f"锁被占用：{exc}", {"path": lock_path}, args.json)
-
-    return ok("\n".join([
+    problems = self_check(args.target, manifest, skill_roots, installation=installation)
+    if problems:
+        return blocked(
+            "WF_CAPABILITY_UNAVAILABLE",
+            "落点与发行一致，但安装自检未通过：这次不是「什么都不用做」，而是安装仍未成立",
+            dict(facts_base, self_check="problems", problems=problems[:20],
+                 exits=["按 problems 修复（缺资产/落点/hook 条目）后重跑同一条命令",
+                        "或用 .wf/bin/repair.py 核对恢复后重跑"]), args.json)
+    lines = [
         "OK  WF_OK",
         f"目标：{args.target}",
-        f"新增平台：{json.dumps(added, ensure_ascii=False)}" + ("（无新增）" if not added else ""),
-        f"投放技能副本：{len(deployed)} 个（新根 {len(new_roots)} 个）",
-        f"现有平台：{json.dumps(installation['platforms'], ensure_ascii=False)}",
-        "说明：.wf 资产未改；安装记录与写权回执已更新（applied_pending_commit），写权已释放为空闲。",
-    ]), {"platforms": installation["platforms"], "deployed": len(deployed),
-         "assets_registered": len(planned)}, args.json)
+        f"平台：{json.dumps(all_platforms(), ensure_ascii=False)}（全部支持平台已装）",
+        f"说明：{facts_base.get('note', '无任何变化：落点与发行一致，未取写权、未产生回执')}；安装自检=clean。",
+    ]
+    if branch_findings:
+        lines.append(f"分支来源：{len(branch_findings)} 条路径在当前分支缺失（已装内容不受影响）")
+    payload = dict(facts_base, deployed=len(facts_base.get("restored") or []),
+                   noop=not facts_base.get("restored"), self_check="clean")
+    return ok("\n".join(lines), payload, args.json)
+
+
+def _repair_missing(args, manifest, writes, pending, installation, hook_repairs):
+    """补写缺失落点与缺失 hook 条目（只创建、不覆盖）。
+
+    返回 `(facts, None)` 或 `(None, blocked_payload)`——调用方据此区分"补齐完成"与"中断"。
+    """
+    writer_path = os.path.join(args.target, ".wf/writer.json")
+    with open(writer_path, "r", encoding="utf-8") as handle:
+        writer = json.load(handle)
+    if not isinstance(writer, dict):
+        return None, blocked("WF_RECORD_INVALID", "写权记录不是对象：先用 repair 核对",
+                             {"problems": ["record is not an object"]}, args.json)
+    if writer.get("state") != "idle":
+        # 合法的"忙"（held/recovering）不是坏记录：归因到写权边界，不误报记录非法
+        return None, blocked("WF_WRITER_BUSY",
+                       "补齐缺失落点需要空闲写权：当前写权不是空闲（先按 §4.4 释放/交接）",
+                       {"writer": writer.get("state"), "holder": writer.get("holder")}, args.json)
+    schema_problem = _writer_problem(writer)
+    if schema_problem:
+        return None, blocked("WF_RECORD_INVALID",
+                             "写权记录不合法：补齐前必须先修记录（repair）",
+                             {"problems": [schema_problem]}, args.json)
+    operation_id = f"install-repair-{uuid.uuid4().hex}"
+    import subprocess
+    _probe = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse", "HEAD"],
+                            cwd=args.target, capture_output=True, text=True, check=False)
+    head_before = _probe.stdout.strip() or None if _probe.returncode == 0 else None
+    generation = int(writer.get("generation") or 0) + 1
+    writer.update({
+        "updated_at": now_str(), "state": "held", "generation": generation,
+        "holder": {"kind": "maintenance", "id": operation_id,
+                   "scope": {"operation": operation_id}, "generation": generation},
+        "checkpoint": {"operation": operation_id, "phase": "install-repair"},
+    })
+    writer.setdefault("maintenance_results", [])
+    with open(writer_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(writer, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+    source = os.path.abspath(args.source)
+    restored, changes = [], []
+    for base, asset, relative in pending:
+        source_file = os.path.join(source, *asset["source_path"].split("/"))
+        with open(source_file, "rb") as handle:
+            content = handle.read()
+        destination = os.path.join(base, *relative.split("/"))
+        try:
+            write_bytes(destination, content)
+        except FileExistsError:
+            return None, maintenance_abort(
+                writer_path, writer, operation_id, "install-repair", "WF_ASSET_DECISION",
+                "补齐时目标路径已被创建且内容不同：未覆盖，写者转入待恢复",
+                {"path": destination,
+                 "problems": [{"path": destination,
+                               "reason": "target exists with different content"}]}, args.json)
+        if asset.get("executable"):
+            os.chmod(destination, os.stat(source_file).st_mode | 0o755)
+        restored.append(os.path.relpath(destination, args.target).replace(os.sep, "/"))
+        changes.append({"path": os.path.relpath(destination, args.target).replace(os.sep, "/"),
+                        "before": None, "after": file_digest(destination)})
+    hooks_path = hooks_json_path(args.target)
+    hooks_before = file_digest(hooks_path)
+    for plan in hook_repairs:
+        try:
+            plan["applied"] = apply_hooks_json(args.target, plan)
+        except (ValueError, OSError) as exc:
+            return None, maintenance_abort(
+                writer_path, writer, operation_id, "install-repair", "WF_ASSET_DECISION",
+                f"hooks.json 落地失败：{exc}",
+                {"hooks_json": hooks_json_path(args.target),
+                 "problems": [{"path": hooks_json_path(args.target), "reason": str(exc)}]}, args.json)
+        changes.append({"path": os.path.relpath(hooks_path, args.target).replace(os.sep, "/"),
+                        "before": hooks_before, "after": file_digest(hooks_path)})
+    record_host_hooks(installation, manifest, hook_repairs, args.target)
+    registered = {(str(entry.get("root_ref")), entry.get("target"))
+                  for entry in installation.get("assets") or [] if isinstance(entry, dict)}
+    assets = list(installation.get("assets") or [])
+    for base, asset, relative in writes:
+        key = ("project" if base == args.target else base, relative)
+        if key in registered:
+            continue
+        assets.append({"target": relative, "root_ref": key[0], "digest": asset.get("digest"),
+                       "source_path": asset.get("source_path"),
+                       "upstream_version": manifest.get("version"),
+                       "upstream_fingerprint": asset.get("digest")})
+        registered.add(key)
+    installation["assets"] = assets
+    installation["roots"] = [os.path.relpath(root, args.target).replace(os.sep, "/")
+                             for root in resolve_skill_roots(args.target)]
+    installation["platforms"] = all_platforms()
+    staged_manifest = os.path.join(args.target, ".wf/install/release-manifest.json")
+    if os.path.isfile(staged_manifest):
+        installation["manifest_digest"] = file_digest(staged_manifest)
+    installation_path = os.path.join(args.target, ".wf/install/installation.json")
+    changes.append({"path": ".wf/install/installation.json",
+                    "before": file_digest(installation_path), "after": None})
+    with open(installation_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(installation, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    changes[-1]["after"] = file_digest(installation_path)
+    # 回执与其它维护动作同一契约：head_before + 提交层账本登记，才算"可核的维护变更"
+    # （运行期 `maintenance_persisted_probe` 按账本 + 可达提交核验；缺一即永远 pending_check）
+    receipt = {"operation": operation_id, "kind": "install-repair",
+               "at": now_str(), "generation": generation,
+               "preview_digest": plain_digest(installation),
+               "head_before": head_before,
+               "changes": changes,
+               "receipt_git_state": {"head": head_before, "tracked_paths": len(changes)},
+               "result": "applied_pending_commit", "disposition": None,
+               "hooks_json": [plan.get("applied") for plan in hook_repairs]}
+    append_maintenance_journal(args.target, receipt)
+    writer["maintenance_results"].append(receipt)
+    writer.update({"state": "idle", "holder": None, "checkpoint": None,
+                   "generation": generation + 1, "updated_at": now_str()})
+    with open(writer_path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(writer, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    return ({"platforms": all_platforms(), "restored": sorted(restored),
+             "receipt": receipt, "note": f"补齐 {len(restored)} 个缺失落点"
+                                        + (f"、{len(hook_repairs)} 个 hooks 条目" if hook_repairs else "")},
+            None)
 
 
 def _writer_problem(writer, allow_recovering=False):
@@ -1153,9 +1411,9 @@ def _writer_problem(writer, allow_recovering=False):
     if state == "idle" and holder:
         return "idle writer must not keep a holder"
     if state == "recovering":
-        return None if allow_recovering else "writer is recovering; 先按 repair 核对旧写者再追加平台"
+        return None if allow_recovering else "writer is recovering; 先按 repair 核对旧写者"
     if state != "idle":
-        return f"writer state is {state!r}; 追加平台需在空闲时进行"
+        return f"writer state is {state!r}; 维护动作需在空闲时进行"
     generation = writer.get("generation")
     if not isinstance(generation, int) or isinstance(generation, bool):
         return "generation missing or not an integer (JSON boolean is not a generation)"
@@ -1235,6 +1493,28 @@ def _abs_base(target, root_ref):
     if root_ref == "project" or not root_ref:
         return os.path.abspath(target)
     return root_ref if os.path.isabs(root_ref) else os.path.join(os.path.abspath(target), root_ref)
+
+
+def _asset_token(target, base, rel):
+    """人面路径 token：**项目相对路径**（POSIX），W1（2026-11-23）。
+
+    三方匹配的内部身份是 `(base, rel)`——`skill_root` 资产会在安装记录的每个根下各有一份
+    同名副本，所以 `rel` 单独不能标识一份资产。所有给人看的/由人回填的路径（升级预览、
+    `--keep/--restore`、导出清单、安装记录的处置留痕）统一用本函数产出的 token。
+
+    `base` 落在目标项目之外（本框架不允许的新根）时退回绝对路径：它不可被 token 匹配，
+    升级前置的 `registered_root_problems` 会整批拒绝这种记录。
+    """
+    base = os.path.abspath(base)
+    target = os.path.abspath(target)
+    if base == target:
+        prefix = ""
+    else:
+        relative_base = os.path.relpath(base, target)
+        if relative_base == os.pardir or relative_base.startswith(os.pardir + os.sep):
+            return os.path.join(base, *rel.split("/")).replace(os.sep, "/")
+        prefix = relative_base.replace(os.sep, "/") + "/"
+    return prefix + rel
 
 
 def _load_task_record_safe(path):
@@ -1321,7 +1601,7 @@ def upgrade_prerequisites(target):
     return problems, wip_facts, writer
 
 
-def three_way_plan(target, installation, manifest, source, args_platforms, keep, restore):
+def three_way_plan(target, installation, manifest, source, keep=None, restore=None):
     """三方逐路径匹配（O=安装记录 / L=本地 / N=新发行），按机制稿 §10.4 顺序表。
 
     返回 (plan, unresolved)；plan.actions 为逐路径动作，unresolved 为需人裁决项
@@ -1338,85 +1618,89 @@ def three_way_plan(target, installation, manifest, source, args_platforms, keep,
         if not rel:
             continue
         installed[(base, rel)] = dict(entry)
-    # N：新发行清单（host_hook 只含声明平台）
-    platforms = set(args_platforms or [])
+    # N：新发行清单（host_hook 全部纳入：安装面向全部平台，没有"未声明平台"）
     incoming = {}
     for asset in manifest.get("assets") or []:
         if not isinstance(asset, dict) or asset.get("target_class") == "release_only":
-            continue
-        if asset.get("target_class") == "host_hook" and asset.get("platform") not in platforms:
             continue
         rel = asset.get("target_relative")
         if not rel:
             continue
         if asset.get("target_class") == "skill_root":
-            bases = [_abs_base(target, root) for root in installation.get("roots") or []]
+            # 全部平台的根（含老装只装了子集时新增的根）：升级负责补齐，不沿用记录里的子集
+            bases = list(resolve_skill_roots(target))
         else:
             bases = [os.path.abspath(target)]
         for base in bases:
             incoming[(base, rel)] = dict(asset)
-    keep_rels = set(keep or [])
-    restore_rels = set(restore or [])
+    keep_tokens = set(keep or [])
+    restore_tokens = set(restore or [])
     unmanaged = []
     # ① 上游删除
     for key, o_entry in sorted(installed.items()):
         if key in incoming:
             continue
         base, rel = key
+        token = _asset_token(target, base, rel)
         local = file_digest(os.path.join(base, *rel.split("/")))
         if local is None:
             # 本地已无内容、上游也删除：没有可冲突的对象，直接退出托管记录。
             continue
         if local == o_entry.get("digest"):
-            deletes.append({"base": base, "relative": rel, "kind": "delete-candidate",
+            deletes.append({"base": base, "relative": rel, "path": token, "kind": "delete-candidate",
                            "local": local, "upstream": o_entry.get("digest")})
-        elif rel in keep_rels:
-            unmanaged.append({"base": base, "relative": rel, "kind": "unmanaged-keep",
+        elif token in keep_tokens:
+            unmanaged.append({"base": base, "relative": rel, "path": token, "kind": "unmanaged-keep",
                               "asset": o_entry, "local": local, "upstream": o_entry.get("digest"),
                               "decision": "human (upgrade --keep)"})
-        elif rel in restore_rels:
-            deletes.append({"base": base, "relative": rel, "kind": "delete-candidate",
+        elif token in restore_tokens:
+            deletes.append({"base": base, "relative": rel, "path": token, "kind": "delete-candidate",
                             "local": local, "upstream": o_entry.get("digest"),
                             "restore": True, "decision": "human (upgrade --restore)"})
         else:
-            unresolved.append({"base": base, "relative": rel, "kind": "upstream-removed-local-changed",
+            unresolved.append({"base": base, "relative": rel, "path": token,
+                               "kind": "upstream-removed-local-changed",
                                "asset": o_entry, "local": local, "upstream": o_entry.get("digest"),
-                               "exits": [f"保留本地并退出托管：重跑加 --keep {rel}",
-                                         f"删除本地以跟随上游删除：重跑加 --restore {rel}",
+                               "exits": [f"保留本地并退出托管：重跑加 --keep {token}",
+                                         f"删除本地以跟随上游删除：重跑加 --restore {token}",
                                          "或人工合并/重新立项后重跑"]})
     # ②③④⑤⑥⑦⑧：共同键与新增
     for key, n_asset in sorted(incoming.items()):
         base, rel = key
+        token = _asset_token(target, base, rel)
         local = file_digest(os.path.join(base, *rel.split("/")))
         o_entry = installed.get(key)
         n_digest = n_asset.get("digest")
         if o_entry is None:
             if local is None:
-                actions.append({"base": base, "relative": rel, "kind": "add", "asset": n_asset,
+                actions.append({"base": base, "relative": rel, "path": token, "kind": "add",
+                               "asset": n_asset,
                                "local": None, "upstream": None, "new": n_digest})
             else:
                 # 设计稿 §7.2：新版新增路径在本地已存在、未属旧托管清单时，即使
                 # 内容等于 N 也须人确认，不自动认领用户文件。--restore 才是认领/
                 # 恢复，--keep 是保留为我的文件（退出托管）。
                 same = local == n_digest
-                if rel in keep_rels:
-                    unmanaged.append({"base": base, "relative": rel, "kind": "unmanaged-keep",
+                if token in keep_tokens:
+                    unmanaged.append({"base": base, "relative": rel, "path": token,
+                                      "kind": "unmanaged-keep",
                                       "asset": n_asset, "local": local, "new": n_digest,
                                       "decision": "human (upgrade --keep)"})
-                elif rel in restore_rels:
-                    actions.append({"base": base, "relative": rel,
+                elif token in restore_tokens:
+                    actions.append({"base": base, "relative": rel, "path": token,
                                     "kind": "register" if same else "add",
                                     "asset": n_asset, "local": local, "upstream": None,
                                     "new": n_digest, "restore": True,
                                     "decision": "human (upgrade --restore)"})
                 else:
-                    unresolved.append({"base": base, "relative": rel, "kind": "add-hits-user-file",
+                    unresolved.append({"base": base, "relative": rel, "path": token,
+                                       "kind": "add-hits-user-file",
                                        "local": local, "new": n_digest,
                                        "same_content": same,
-                                       "exits": [f"保留为我的文件（不纳入托管）：重跑加 --keep {rel}",
-                                                 (f"认领为框架资产（内容已相同）：重跑加 --restore {rel}"
+                                       "exits": [f"保留为我的文件（不纳入托管）：重跑加 --keep {token}",
+                                                 (f"认领为框架资产（内容已相同）：重跑加 --restore {token}"
                                                   if same else
-                                                  f"恢复发行内容：重跑加 --restore {rel}"),
+                                                  f"恢复发行内容：重跑加 --restore {token}"),
                                                  "或移走/改名该文件后重跑"]})
             continue
         if local is None:
@@ -1424,31 +1708,33 @@ def three_way_plan(target, installation, manifest, source, args_platforms, keep,
             # 删除、不恢复，后续同态不重复。旧实现直接 reinstall 会把人有意的删除
             # 静默复活，且与"不恢复"的契约相反。
             branch_sources = branch_source_findings(target, [rel])
-            kept = (rel in keep_rels
+            kept = (token in keep_tokens
                     or o_entry.get("decision") in ("human (upgrade --keep)", "human (deleted)"))
-            if rel in restore_rels:
+            if token in restore_tokens:
                 # 人显式 restore 优先于既有删除决定：否则“保留删除”会变成不可撤销。
-                actions.append({"base": base, "relative": rel, "kind": "reinstall",
+                actions.append({"base": base, "relative": rel, "path": token, "kind": "reinstall",
                                "asset": n_asset, "local": None, "upstream": o_entry.get("digest"),
                                "new": n_digest, "decision": "human (upgrade --restore)",
                                "restore": True, "branch_sources": branch_sources})
             elif kept:
-                actions.append({"base": base, "relative": rel, "kind": "deleted-kept",
+                actions.append({"base": base, "relative": rel, "path": token, "kind": "deleted-kept",
                                "asset": n_asset, "local": None, "upstream": o_entry.get("digest"),
                                "new": n_digest,
                                "decision": o_entry.get("decision") or "human (upgrade --keep)",
                                "branch_sources": branch_sources})
             else:
-                unresolved.append({"base": base, "relative": rel, "kind": "local-missing",
+                unresolved.append({"base": base, "relative": rel, "path": token,
+                                   "kind": "local-missing",
                                    "asset": n_asset, "local": None,
                                    "upstream": o_entry.get("digest"), "new": n_digest,
                                    "branch_sources": branch_sources,
-                                   "exits": [f"确认是用户删除后尊重删除：重跑加 --keep {rel}",
-                                             f"恢复发行内容：重跑加 --restore {rel}",
+                                   "exits": [f"确认是用户删除后尊重删除：重跑加 --keep {token}",
+                                             f"恢复发行内容：重跑加 --restore {token}",
                                              "分支来源核对发现其他分支存在该路径时，先确认是不是切分支造成的缺失"]})
             continue
         if local == n_digest:
-            actions.append({"base": base, "relative": rel, "kind": "noop", "asset": n_asset,
+            actions.append({"base": base, "relative": rel, "path": token, "kind": "noop",
+                           "asset": n_asset,
                            "local": local, "upstream": o_entry.get("digest"), "new": n_digest})
             continue
         # 同一已接受偏离（两边指纹均同）免重复询问——判在 L==O **之前**：
@@ -1456,34 +1742,50 @@ def three_way_plan(target, installation, manifest, source, args_platforms, keep,
         if (o_entry.get("upstream_fingerprint") == n_digest
                 and o_entry.get("local_fingerprint") == local
                 and o_entry.get("decision")):
-            actions.append({"base": base, "relative": rel, "kind": "deviation-kept", "asset": n_asset,
+            actions.append({"base": base, "relative": rel, "path": token, "kind": "deviation-kept",
+                           "asset": n_asset,
                            "local": local, "upstream": o_entry.get("digest"), "new": n_digest,
                            "decision": o_entry.get("decision")})
             continue
         if local == o_entry.get("digest"):
-            actions.append({"base": base, "relative": rel, "kind": "update", "asset": n_asset,
+            actions.append({"base": base, "relative": rel, "path": token, "kind": "update",
+                           "asset": n_asset,
                            "local": local, "upstream": o_entry.get("digest"), "new": n_digest})
             continue
         # 其他冲突：人选保留/恢复；人合并后重跑按表重判
         decision = None
-        if rel in keep_rels:
+        if token in keep_tokens:
             decision = "human (upgrade --keep)"
-        elif rel in restore_rels:
+        elif token in restore_tokens:
             decision = "human (upgrade --restore)"
         if decision:
-            actions.append({"base": base, "relative": rel, "kind": "deviation", "asset": n_asset,
+            actions.append({"base": base, "relative": rel, "path": token, "kind": "deviation",
+                           "asset": n_asset,
                            "local": local, "upstream": o_entry.get("digest"), "new": n_digest,
                            "decision": decision,
                            "restore": decision.endswith("--restore)")})
         else:
-            unresolved.append({"base": base, "relative": rel, "kind": "local-deviates",
+            unresolved.append({"base": base, "relative": rel, "path": token, "kind": "local-deviates",
                                "asset": n_asset, "local": local,
                                "upstream": o_entry.get("digest"), "new": n_digest,
-                               "exits": [f"保留本地：重跑加 --keep {rel}",
-                                         f"恢复发行内容：重跑加 --restore {rel}",
+                               "exits": [f"保留本地：重跑加 --keep {token}",
+                                         f"恢复发行内容：重跑加 --restore {token}",
                                          "或人工合并后重跑（按表重判）"]})
     return {"actions": actions, "deletes": deletes, "unresolved": unresolved,
             "unmanaged": unmanaged}, unresolved
+
+
+def _plan_fingerprint(plan):
+    """三方匹配计划的可比较指纹：`(kind, path, local, upstream, new)` 逐项。
+
+    只比路径集合会漏掉"同一路径内容变了"——那正是 `--restore` 覆盖新修改的入口。
+    """
+    items = []
+    for item in (plan.get("actions") or []) + (plan.get("deletes") or []) \
+            + (plan.get("unmanaged") or []):
+        items.append((item.get("kind"), item.get("path"), item.get("local"),
+                      item.get("upstream"), item.get("new")))
+    return sorted(items, key=lambda entry: (str(entry[1]), str(entry[0])))
 
 
 def export_deviations(args, installation, manifest, plan, source, commit):
@@ -1526,10 +1828,10 @@ def export_deviations(args, installation, manifest, plan, source, commit):
     not_exported = []
     for item in plan["actions"]:
         if item.get("kind") == "deleted-kept":
-            not_exported.append({"path": item.get("relative"), "kind": "deleted-kept",
+            not_exported.append({"target_path": item.get("path"), "kind": "deleted-kept",
                                  "reason": "人确认保留删除，无本地内容可导出"})
     for item in plan.get("unmanaged") or []:
-        not_exported.append({"path": item.get("relative"), "kind": "unmanaged-keep",
+        not_exported.append({"target_path": item.get("path"), "kind": "unmanaged-keep",
                              "reason": "已退出托管，不是框架偏离；无补丁基线"})
     for item in plan.get("unresolved") or []:
         if item.get("kind") == "local-deviates":
@@ -1539,7 +1841,8 @@ def export_deviations(args, installation, manifest, plan, source, commit):
             "add-hits-user-file": "本地文件不是已托管的框架资产（新增路径撞用户文件），不按偏离导出",
             "local-missing": "本地缺失，无本地内容可导出（先决定保留删除或恢复）",
         }.get(item.get("kind"), "该冲突项没有可导出的上游基线")
-        not_exported.append({"path": item.get("relative"), "kind": item.get("kind"), "reason": reason})
+        not_exported.append({"target_path": item.get("path"), "kind": item.get("kind"),
+                             "reason": reason})
     if not candidates:
         return ok("无本地偏离可导出", {
             "out": out, "deviations": 0, "not_exported": not_exported,
@@ -1549,7 +1852,7 @@ def export_deviations(args, installation, manifest, plan, source, commit):
     exported, failures = [], []
     dev_dir = os.path.join(out, "deviations")
     os.makedirs(dev_dir, exist_ok=True)
-    for index, (item, status) in enumerate(sorted(candidates, key=lambda pair: pair[0]["relative"]), start=1):
+    for index, (item, status) in enumerate(sorted(candidates, key=lambda pair: pair[0]["path"]), start=1):
         base, rel = item["base"], item["relative"]
         local_path = os.path.join(base, *rel.split("/"))
         source_path = (item.get("asset") or {}).get("source_path") or rel
@@ -1559,7 +1862,7 @@ def export_deviations(args, installation, manifest, plan, source, commit):
             with open(local_path, "rb") as handle:
                 l_bytes = handle.read()
         except OSError as exc:
-            failures.append({"path": rel, "reason": f"local unreadable: {exc}"})
+            failures.append({"target_path": item["path"], "reason": f"local unreadable: {exc}"})
             continue
         name = f"{index}-{os.path.basename(rel)}.patch"
         try:
@@ -1580,7 +1883,7 @@ def export_deviations(args, installation, manifest, plan, source, commit):
             with open(tmp, "wb") as handle:
                 handle.write(data)
             os.replace(tmp, os.path.join(dev_dir, name))
-            exported.append({"path": rel, "source_path": source_path,
+            exported.append({"target_path": item["path"], "source_path": source_path,
                              "patch": f"deviations/{name}",
                              "status": status,
                              "target_version": installation.get("version"),
@@ -1590,7 +1893,7 @@ def export_deviations(args, installation, manifest, plan, source, commit):
                              "local_fingerprint": item.get("local"),
                              "decision": item.get("decision")})
         except OSError as exc:
-            failures.append({"path": rel, "reason": f"write failed: {exc}"})
+            failures.append({"target_path": item["path"], "reason": f"write failed: {exc}"})
             break                     # 停止：如实报告已写清单，不自动删已写内容
     if failures:
         return blocked("WF_PERSISTENCE_FAILED",
@@ -1629,8 +1932,6 @@ def upgrade_flag_problems(args):
             if present:
                 problems.append({"flag": flag, "reason": "requires --upgrade"})
         return problems
-    if args.platform:
-        problems.append({"flag": "--platform", "reason": "upgrade uses installation.platforms; --platform is install/add-platform only"})
     if args.confirm:
         problems.append({"flag": "--confirm", "reason": "upgrade uses --apply + preview token, not --confirm"})
     if args.export_deviations:
@@ -1677,9 +1978,10 @@ def run_upgrade(args, manifest, commit):
                             "exit": "三步处置：task-pause → writer release → 重跑 upgrade 预览"
                                     "（writer release 自身在保留 WIP 未处置时被 WF_WORKSPACE_UNRESOLVED 拦——"
                                     "先处置 WIP：提交/反向修正/承接）"}, args.json)
-    platforms = installation.get("platforms") or []
+    # 技能根以**安装记录**为准（老装可能是子集）：升级负责补齐到全部平台
+    skill_roots = resolve_skill_roots(target)
     plan, unresolved = three_way_plan(target, installation, manifest, source,
-                                      platforms, getattr(args, "keep", None),
+                                      getattr(args, "keep", None),
                                       getattr(args, "restore", None))
     # 导出先返回；必需资产保留删除在下面写前拦截，其余缺失由自检/动作覆盖。
     if args.export_deviations:
@@ -1693,26 +1995,29 @@ def run_upgrade(args, manifest, commit):
     # 不能静默无匹配后仍按旧计划继续（否则人以为按自己的选择执行了）。
     keep_requested = set(getattr(args, "keep", None) or [])
     restore_requested = set(getattr(args, "restore", None) or [])
-    keep_used = {item["relative"] for item in plan["actions"]
+    keep_used = {item["path"] for item in plan["actions"]
                  if item["kind"] in ("deviation", "deviation-kept", "deleted-kept")}
-    keep_used |= {item["relative"] for item in plan.get("unmanaged") or []}
-    restore_used = {item["relative"] for item in plan["actions"]
+    keep_used |= {item["path"] for item in plan.get("unmanaged") or []}
+    restore_used = {item["path"] for item in plan["actions"]
                     if item["kind"] in ("reinstall", "deviation", "register", "add")
                     and item.get("restore")}
-    restore_used |= {item["relative"] for item in plan["deletes"] if item.get("restore")}
+    restore_used |= {item["path"] for item in plan["deletes"] if item.get("restore")}
     unknown_keep = sorted(keep_requested - keep_used)
     unknown_restore = sorted(restore_requested - restore_used)
     if unknown_keep or unknown_restore:
         return blocked("WF_USAGE_INVALID", "keep/restore 指定的路径没有对应的待决冲突", {
             "unknown_keep": unknown_keep, "unknown_restore": unknown_restore,
-            "exits": ["按 preview 的 unresolved 路径逐字重传", "拼写/路径错误不按旧计划继续",
+            "known_tokens": sorted(set(keep_used) | set(restore_used)
+                                   | {item["path"] for item in unresolved}),
+            "exits": ["按 preview 的 unresolved[].path（项目相对路径）逐字重传",
+                      "拼写/路径错误不按旧计划继续",
                       "已不再冲突的路径无需 keep/restore"],
         }, args.json)
     # 必需资产不能靠“保留删除”把运行集打残：这在写入前就能判定，必须交人改决定/清单。
-    required_kept = [item["relative"] for item in plan["actions"]
+    required_kept = [item["path"] for item in plan["actions"]
                      if item["kind"] == "deleted-kept"
                      and (item.get("asset") or {}).get("required")]
-    required_kept += [item["relative"] for item in plan.get("unmanaged") or []
+    required_kept += [item["path"] for item in plan.get("unmanaged") or []
                       if (item.get("asset") or {}).get("required")]
     if required_kept:
         return needs_decision(
@@ -1737,12 +2042,27 @@ def run_upgrade(args, manifest, commit):
         }, args.json)
     # .gitignore 托管段冲突在应用前的锁内重核处拦截（预览不写、不要求清单段）。
     operation_id = f"upgrade-{uuid.uuid4().hex}"
-    selected = sorted({item["relative"] for item in plan["actions"]}
-                       | {item["relative"] for item in plan["deletes"]}
-                       | {item["relative"] for item in plan.get("unmanaged") or []})
-    before_states = [{"relative": item["relative"], "kind": item["kind"],
-                     "local": item.get("local"), "upstream": item.get("upstream"),
-                     "new": item.get("new")}
+    # W3：host_hook 的部署面包含宿主 hooks.json 条目——只换脚本字节会让"改落点/命令串"的
+    # 发行在已升级项目留下失效条目（自检只核脚本 digest 仍绿）。写入前判定、写入后落地。
+    hooks_plans, hooks_problems = plan_host_hooks(target, manifest, installation)
+    if hooks_problems:
+        return needs_decision(
+            "WF_ASSET_DECISION",
+            "hooks.json 条目需人裁决：升级不会覆盖用户改过的命令串，也不会重写不可解析文件",
+            {"problems": hooks_problems,
+             "exits": ["把 .codex/hooks.json 的该条目恢复成本框架条目（命令串为 problems 的 command）后重跑",
+                       "或人工确认该条目归用户所有、由人移走后再重跑",
+                       "不改写用户文件继续升级"]}, args.json)
+    selected = sorted({item["path"] for item in plan["actions"]}
+                       | {item["path"] for item in plan["deletes"]}
+                       | {item["path"] for item in plan.get("unmanaged") or []})
+    # 预览→确认之间可能有人改动工作区：**只有路径集合相等不算没变**。
+    # 同一路径的本地摘要从 L1 变成 L2 时，`--restore` 会静默覆盖确认后新增的修改——
+    # 违反 §4.4「预览后状态变更不得带旧许可径直写入」。这里固定逐路径动作+三端摘要。
+    preview_fingerprint = _plan_fingerprint(plan)
+    before_states = [{"path": item["path"], "kind": item["kind"],
+                      "local": item.get("local"), "upstream": item.get("upstream"),
+                      "new": item.get("new")}
                      for item in plan["actions"] + plan["deletes"] + (plan.get("unmanaged") or [])]
     preview = {
         "operation": f"upgrade:{manifest.get('version')}",
@@ -1758,10 +2078,11 @@ def run_upgrade(args, manifest, commit):
         "writer_observation": {"state": (writer or {}).get("state"),
                                "problem": _writer_problem(writer) if writer else "missing"},
         "wip_observation": {"unresolved_wip": wip_facts},
-        "risks": [f"{item['kind']}: {item['relative']}" for item in plan["deletes"]]
-                + [f"deviation kept: {item['relative']}" for item in plan["actions"]
+        "risks": [f"{item['kind']}: {item['path']}" for item in plan["deletes"]]
+                + [f"deviation kept: {item['path']}" for item in plan["actions"]
                    if item["kind"] in ("deviation", "deviation-kept")]
-                + [f"unmanaged keep: {item['relative']}" for item in plan.get("unmanaged") or []],
+                + [f"unmanaged keep: {item['path']}" for item in plan.get("unmanaged") or []],
+        "hooks_json": hooks_plans,
         "backup_ref": installation.get("source_commit"),
     }
     token = PreviewToken()
@@ -1776,6 +2097,9 @@ def run_upgrade(args, manifest, commit):
                  f"动作：update/add/reinstall/register {len(plan['actions'])}，"
                  f"delete-candidate {len(plan['deletes'])}",
                  f"偏离保持：{sum(1 for a in plan['actions'] if a['kind'] in ('deviation', 'deviation-kept'))} 项",
+                 ("宿主 hooks.json：" + "；".join(
+                     f"{os.path.relpath(p['path'], target)} {p['action']}" for p in hooks_plans))
+                 if hooks_plans else "宿主 hooks.json：无需维护（未声明 codex host_hook）",
                  f"预览摘要：{token.digest()}",
                  f"预览指纹：{issued}",
                  "确认后在同一个终端加 --apply 重跑并输入预览指纹。"]
@@ -1807,17 +2131,32 @@ def run_upgrade(args, manifest, commit):
                                {"problems": fresh_problems[:20]}, args.json)
             fresh_plan, fresh_unresolved = three_way_plan(
                 target, installation, manifest, os.path.abspath(args.source),
-                platforms, getattr(args, "keep", None), getattr(args, "restore", None))
-            fresh_selected = sorted({i["relative"] for i in fresh_plan["actions"]}
-                                    | {i["relative"] for i in fresh_plan["deletes"]}
-                                    | {i["relative"] for i in fresh_plan.get("unmanaged") or []})
-            if fresh_selected != selected:
-                return blocked("WF_PREVIEW_STALE",
-                               "预览已失效：锁内重核与预览不一致（重新预览）",
-                               {"preview": selected, "current": fresh_selected}, args.json)
+                getattr(args, "keep", None), getattr(args, "restore", None))
+            fresh_fingerprint = _plan_fingerprint(fresh_plan)
+            if fresh_fingerprint != preview_fingerprint:
+                changed = sorted(
+                    f"{item[1]}:{item[0]}" for item in fresh_fingerprint
+                    if item not in preview_fingerprint)
+                return blocked(
+                    "WF_PREVIEW_STALE",
+                    "预览已失效：锁内重核的三方匹配与预览不一致（逐路径动作或本地/上游/新版摘要变了）",
+                    {"changed": changed[:20],
+                     "explanations": ["确认期间工作区被改动（含 AI/人在另处编辑）",
+                                      "安装记录/发行清单在等待期间变化"],
+                     "exits": ["重新预览并复核后再确认", "不在旧预览上继续写入"]}, args.json)
             if fresh_unresolved:
                 return blocked("WF_ASSET_DECISION", "锁内重核出现新的需人裁决路径",
                                {"unresolved": fresh_unresolved[:20]}, args.json)
+            fresh_hooks, fresh_hook_problems = plan_host_hooks(target, manifest,
+                                                               installation)
+            if fresh_hook_problems:
+                return needs_decision("WF_ASSET_DECISION", "锁内重核：hooks.json 需人裁决",
+                                      {"problems": fresh_hook_problems}, args.json)
+            if [(p["script_relative"], p["action"]) for p in fresh_hooks] != \
+                    [(p["script_relative"], p["action"]) for p in hooks_plans]:
+                return blocked("WF_PREVIEW_STALE",
+                               "预览已失效：锁内重核的 hooks.json 动作与预览不一致（重新预览）",
+                               {"preview": hooks_plans, "current": fresh_hooks}, args.json)
             lock_boundary = []
             for item in fresh_plan["actions"] + fresh_plan["deletes"]:
                 destination = os.path.join(item["base"], *item["relative"].split("/"))
@@ -1886,6 +2225,16 @@ def run_upgrade(args, manifest, commit):
                 changes.append({"path": os.path.relpath(path, target).replace(os.sep, "/")
                                 if path.startswith(target) else path,
                                 "before": before, "after": None})
+            # W3：资产字节已就位 ⇒ 落地已判定（且锁内已重核）的 hooks.json 动作。
+            # 它属维护变更：逐路径进 changes，人与后续写者据此审计（不是发行托管路径）。
+            for hook_plan in fresh_hooks:
+                before_digest = file_digest(hook_plan["path"])
+                applied = apply_hooks_json(target, hook_plan)
+                hook_plan["applied"] = applied
+                if applied in ("created", "appended", "updated"):
+                    changes.append({"path": os.path.relpath(hook_plan["path"], target).replace(os.sep, "/"),
+                                    "before": before_digest,
+                                    "after": file_digest(hook_plan["path"])})
             # 安装记录：身份 + assets（偏离登记按机制稿 §10.4 字段名）。
             # 先构造候选记录、跑自检，通过后才落盘——自检失败时安装版本不递增，
             # 重跑不会被“同版非升级”挡住（旧实现先写 version 再自检，失败即死路）。
@@ -1894,7 +2243,9 @@ def run_upgrade(args, manifest, commit):
             # 否则路径直接从记录里消失、只剩预览 risks，无法审计。
             for item in fresh_plan.get("unmanaged") or []:
                 candidate.setdefault("decisions", []).append({
-                    "kind": "unmanaged-keep", "path": item["relative"],
+                    "kind": "unmanaged-keep", "path": item["path"],
+                    "root_ref": "project" if item["base"] == target else item["base"],
+                    "target": item["relative"],
                     "local_fingerprint": item.get("local"),
                     "decision": item.get("decision"), "at": now_str(),
                 })
@@ -1939,13 +2290,18 @@ def run_upgrade(args, manifest, commit):
                     entry["decision"] = item.get("decision")
                 _assets.append(entry)
             candidate["assets"] = _assets
+            record_host_hooks(candidate, manifest, fresh_hooks, target)
             candidate["upgraded_at"] = now_str()
             kept_deleted = [os.path.join(item["base"], *item["relative"].split("/"))
                             for item in fresh_plan["actions"] if item["kind"] == "deleted-kept"]
             unmanaged_paths = [os.path.join(item["base"], *item["relative"].split("/"))
                                for item in fresh_plan.get("unmanaged") or []]
-            skill_roots = [(_abs_base(target, root)) for root in candidate.get("roots") or []]
-            problems = self_check(target, manifest, skill_roots, platforms=set(platforms),
+            all_roots = resolve_skill_roots(target)
+            candidate["roots"] = [os.path.relpath(root, target).replace(os.sep, "/")
+                                  for root in all_roots]
+            candidate["platforms"] = all_platforms()
+            skill_roots = all_roots
+            problems = self_check(target, manifest, skill_roots,
                                   installation=candidate,
                                   intentional_missing=kept_deleted + unmanaged_paths)
             if problems:
@@ -2009,6 +2365,10 @@ def run_upgrade(args, manifest, commit):
                        {"detail": str(exc), "exits": ["运行 .wf/bin/repair.py 核对写权/安装记录",
                                                       "确认现场后重跑同一 upgrade（同版重跑仍可用）"]}, args.json)
 
+class _InstalledMeanwhile(Exception):
+    """锁内发现目标已安装：释放锁后改走 `verify_installed`（只读核对，不取写权）。"""
+
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -2027,8 +2387,7 @@ def main(argv=None):
     parser.add_argument("--release-ref", required=True)
     parser.add_argument("--source", required=True,
                         help="发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/ 子树）")
-    parser.add_argument("--platform", action="append", nargs="+", default=[],
-                        help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
+
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--strict-source", dest="strict_source", action="store_true",
                         help="发行子树必须与提交一致（脏检出即拒绝）；发行作者仓库通常不带此参数")
@@ -2040,15 +2399,16 @@ def main(argv=None):
                         help="升级：只读导出本地偏离的补丁与清单（不取写权、不暂停任务、不应用升级）")
     parser.add_argument("--out", default=None, help="偏离导出目录（不存在则创建；已存在必须为空）")
     parser.add_argument("--keep", action="append", default=[],
-                        help="人选择保留本地的冲突路径（相对项目根；记录偏离登记）")
+                        help="人选择保留本地的冲突路径（**项目相对路径**，与预览 "
+                             "unresolved[].path 逐字一致；记录偏离登记）")
     parser.add_argument("--restore", action="append", default=[],
-                        help="人选择恢复发行内容的冲突路径（相对项目根）")
+                        help="人选择恢复发行内容的冲突路径（**项目相对路径**，同上）")
     parser.add_argument("--json", action="store_true")
     args, unknown = parser.parse_known_args(argv)
     if unknown:
         return blocked("WF_USAGE_INVALID", "未知参数", {
             "unknown": unknown,
-            "known": ["--target", "--release-ref", "--source", "--platform", "--confirm",
+            "known": ["--target", "--release-ref", "--source", "--confirm",
                       "--strict-source", "--upgrade", "--apply", "--export-deviations",
                       "--out", "--keep", "--restore", "--json"],
             "exits": ["按 wf help upgrade / install.py --help 修正参数后重试",
@@ -2106,13 +2466,11 @@ def main(argv=None):
         # （load_manifest 要求 wf-release.json 直在 source 下，写成 <检出>/wf-release 即 WF_PATH_INVALID）。
         return run_upgrade(args, manifest, commit)
 
-    skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
-    if unknown_platforms:
-        return blocked("WF_PATH_INVALID", "未知平台，无法确定其 skill 发现层",
-                       {"unknown": unknown_platforms, "supported": sorted(PLATFORMS)}, args.json)
+    # 安装面向**全部支持平台**（`PLATFORMS` 是唯一来源；新增平台重跑即补齐）。
+    skill_roots = resolve_skill_roots(args.target)
+    install_platforms = all_platforms()
     # 写入计划先整批核验：路径合法性、真实落点、类别白名单；任一越界即拒绝写入任何文件
-    writes, plan_problems = plan_writes(args.target, skill_roots, manifest,
-                                         platforms=_platforms_of(args.platform))
+    writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
     if plan_problems:
         return blocked("WF_ASSET_DECISION", "清单登记的资产越界或不可解释：整批拒绝，不写任何文件",
                        {"problems": plan_problems[:20]}, args.json)
@@ -2122,6 +2480,30 @@ def main(argv=None):
         absolute = os.path.join(base, *relative.split("/"))
         project_paths.append(os.path.relpath(absolute, args.target).replace(os.sep, "/"))
     branch_findings = branch_source_findings(args.target, project_paths)
+
+    # 宿主 hook 配置是**用户共享文件**上的变更（`.codex/hooks.json`），必须在人确认前可见；
+    # 冲突也要在确认前给出，而不是等人 --confirm 之后才被拒（五轮复审 a-P2）。
+    previous_record = None
+    if os.path.isfile(os.path.join(args.target, ".wf/install/installation.json")):
+        previous_record, _problem = _load_task_record_safe(
+            os.path.join(args.target, ".wf/install/installation.json"))
+    hook_preview, hook_preview_problems = plan_host_hooks(
+        args.target, manifest, previous_record)
+    gitignore_preview = plan_gitignore(args.target, manifest)
+    if gitignore_preview["action"] == "conflict":
+        return needs_decision(
+            "WF_ASSET_DECISION",
+            ".gitignore 托管段与发行登记不符：不覆盖用户段外内容（未确认、未写入任何文件）",
+            {"gitignore": gitignore_preview,
+             "exits": ["人核对托管段后手工修正为本次发行内容，或移走该文件后重跑",
+                       "不覆盖用户段外内容"]}, args.json)
+    if hook_preview_problems:
+        return needs_decision(
+            "WF_ASSET_DECISION",
+            "hooks.json 条目需人裁决：不覆盖用户改过的命令串（未确认、未写入任何文件）",
+            {"problems": hook_preview_problems,
+             "exits": ["把 .codex/hooks.json 的该条目恢复成本框架条目后重跑",
+                       "或人工确认该条目归用户所有、由人移走后再重跑"]}, args.json)
 
     clues = trellis_clues(args.target)
     if not args.confirm:
@@ -2136,8 +2518,15 @@ def main(argv=None):
         for base, asset, relative in writes:
             lines.append(f"  - {os.path.join(base, *relative.split('/'))}")
         lines += ["另将创建：.wf-lock、.wf/、.wf/writer.json（初始维护持有）、.wf/install/*",
-                  "托管段（.gitignore）：", "  " + managed_segment(manifest).replace("\n", "\n  "),
-                  f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)}), ensure_ascii=False)}",
+                  "宿主 hook 配置（用户共享文件 .codex/hooks.json）："]
+        if hook_preview:
+            lines += [f"  - {os.path.relpath(item['path'], args.target)} {item['action']}"
+                      for item in hook_preview]
+        else:
+            lines.append("  无需修改（本发行没有声明了宿主 hook 的资产）")
+        lines += [f"托管段（.gitignore）：{gitignore_preview['action']}",
+                  "  " + managed_segment(manifest).replace("\n", "\n  "),
+                  f"平台：{json.dumps(install_platforms, ensure_ascii=False)}（全部支持平台，一次装齐）",
                   f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, args.target) for root in skill_roots], ensure_ascii=False)}"]
         if clues:
             lines.append("Trellis 线索（人确认后可继续，但本会话不得混跑两套流程）：")
@@ -2150,16 +2539,17 @@ def main(argv=None):
                                   {"branch_source": branch_findings, "preview": True}, args.json)
         lines.append("确认后重跑并加 --confirm。")
         return ok("\n".join(lines),
-                  {"preview": True, "clues": clues,
-                   "platforms": sorted({PLATFORM_ALIASES.get(name, name)
-                                        for name in _flatten_platforms(args.platform)})}, args.json)
+                  {"preview": True, "clues": clues, "platforms": install_platforms}, args.json)
 
-    if not skill_roots:
-        return blocked("WF_PATH_INVALID", "至少需要一个 --platform（技能装在目标项目内）",
-                       {"supported": sorted(PLATFORMS)}, args.json)
-    if os.path.exists(os.path.join(args.target, ".wf/writer.json")):
-        # 已安装：同发行引用只允许"追加平台"；不同引用属升级（第三轮），不按新装覆盖
-        return add_platforms(args, commit, manifest, writes, skill_roots, branch_findings)
+
+    installation_path = os.path.join(args.target, ".wf/install/installation.json")
+    if os.path.exists(installation_path):
+        # 已安装：重跑只做补齐/核对（内容差异或版本不同转升级），不按新装覆盖
+        return verify_installed(args, manifest, skill_roots, branch_findings)
+    # 没有安装记录但 `.wf/` 里已有 writer.json ⇒ 上一次首装中断（写权 recovering/held、
+    # 资产可能已部分落盘）。按**首装重入**处理：写权被上次持有不是"已安装"的证据。
+    # 重入的写入本身是安全的（`write_bytes` 只创建、内容不同即 FileExistsError 中止），
+    # 但必须沿用既有 writer 记录（保住代次与维护回执），不能当成全新首装覆盖它。
     lock_path = os.path.join(args.target, ".wf-lock")
     try:
         lock = Lock(lock_path, root=args.target)
@@ -2170,25 +2560,81 @@ def main(argv=None):
 
     try:
         with lock:
+            # 锁内重判"是否已安装"（2026-11-23 七轮复审 a-2）：锁外判断可能已过期——
+            # 两个进程都看到"未安装"时，后拿到锁的那个会把前者刚写完的安装记录当首装重试，
+            # 重新生成安装身份并用自己的平台/技能根覆盖原记录（已有副本随即脱离升级/卸载管理）。
+            # 这里**在锁内**再判一次；已装则先释放锁、改走 `verify_installed` 只读核对。
+            if os.path.isfile(os.path.join(args.target, ".wf/install/installation.json")):
+                raise _InstalledMeanwhile()
             # 锁内全批复核（首装）：路径/落点/类别必须在 mkdir .wf 与任何写入之前重新成立。
-            writes, plan_problems = plan_writes(args.target, skill_roots, manifest,
-                                                 platforms=_platforms_of(args.platform))
+            writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
             if plan_problems:
                 return blocked("WF_ASSET_DECISION",
                                "锁内复核发现资产越界：整批拒绝，不写任何文件",
                                {"problems": plan_problems[:20]}, args.json)
+            # W3 复核（2026-11-23 五轮复审 P1）：hooks.json 判定必须先于任何写入。
+            # 旧顺序在写完全部资产之后才判——冲突时直接 return 会留下
+            # 「.wf/ 已创建 + 资产已投放 + 无安装记录 + 写权 held」的半安装态。
+            hook_plans, hook_problems = plan_host_hooks(args.target, manifest, None)
+            if hook_problems:
+                return needs_decision(
+                    "WF_ASSET_DECISION",
+                    "hooks.json 条目需人裁决：不覆盖用户改过的命令串（本次未写入任何文件）",
+                    {"problems": hook_problems,
+                     "exits": ["把 .codex/hooks.json 的该条目恢复成本框架条目后重跑安装",
+                               "或人工确认该条目归用户所有、由人移走后再重跑"]}, args.json)
+
+            fresh_gitignore = plan_gitignore(args.target, manifest)
+            if fresh_gitignore["action"] == "conflict":
+                return needs_decision(
+                    "WF_ASSET_DECISION",
+                    "锁内重核：.gitignore 托管段与发行登记不符（尚未写入任何文件）",
+                    {"gitignore": fresh_gitignore}, args.json)
+
             operation_id = f"install-{uuid.uuid4().hex}"
             os.makedirs(os.path.join(args.target, ".wf"), exist_ok=True)
-            writer = {
+            writer_path = os.path.join(args.target, ".wf/writer.json")
+            existing_writer = None
+            if os.path.isfile(writer_path):
+                try:
+                    with open(writer_path, "r", encoding="utf-8") as handle:
+                        existing_writer = json.load(handle)
+                except (OSError, ValueError):
+                    existing_writer = None
+                if not isinstance(existing_writer, dict):
+                    return blocked("WF_RECORD_INVALID",
+                                   "首装重入：既有 .wf/writer.json 不可解析，先 repair 核对",
+                                   {"writer": writer_path,
+                                    "exits": ["运行 .wf/bin/repair.py 核对恢复后重跑安装"]}, args.json)
+                takeover = _first_install_takeover(existing_writer)
+                if takeover is not None:
+                    # "没有安装记录"不等于"没人持有"：写权被会话持有时接管，等于绕过 §4.4 的
+                    # 持有边界（六轮复审 a-1 的纯内存复现已证）。只有**无持有者**或**本框架安装
+                    # 维护**留下的检查点才可按首装重试。
+                    return blocked(
+                        "WF_WRITER_BUSY",
+                        "首装重入被拒：既有写权记录看起来不是未完成的首装",
+                        {"writer": writer_path, "state": existing_writer.get("state"),
+                         "holder": existing_writer.get("holder"),
+                         "checkpoint": existing_writer.get("checkpoint"),
+                         "problem": takeover,
+                         "exits": ["让该持有者按 §4.4 正常释放或交接后重跑安装",
+                                   "或运行 .wf/bin/repair.py 核对写权记录与现场后再重跑"]}, args.json)
+            retry_generation = int((existing_writer or {}).get("generation") or 0) + 1
+            writer = dict(existing_writer or {}) if existing_writer else {
                 "schema_version": 1, "id": "writer", "revision": 0, "created_at": now_str(),
-                "updated_at": now_str(), "write_mark": None, "action": None, "state": "held",
-                "generation": 1,
-                "holder": {"kind": "maintenance", "id": operation_id,
-                           "scope": {"operation": operation_id}, "generation": 1},
-                "handover": None,
-                "checkpoint": {"operation": operation_id, "phase": "installing"},
+                "write_mark": None, "action": None, "handover": None,
                 "maintenance_results": [],
             }
+            writer.update({
+                "updated_at": now_str(), "state": "held",
+                "generation": retry_generation,
+                "holder": {"kind": "maintenance", "id": operation_id,
+                           "scope": {"operation": operation_id}, "generation": retry_generation},
+                "checkpoint": {"operation": operation_id,
+                               "phase": "installing-retry" if existing_writer else "installing"},
+            })
+            writer.setdefault("maintenance_results", [])
             with open(os.path.join(args.target, ".wf/writer.json"), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(writer, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
@@ -2201,23 +2647,30 @@ def main(argv=None):
                 try:
                     created = write_bytes(destination, content)
                 except FileExistsError:
-                    return blocked("WF_ASSET_DECISION", "目标路径已存在且内容不同，未覆盖",
-                                   {"path": destination}, args.json)
+                    return maintenance_abort(
+                        os.path.join(args.target, ".wf/writer.json"), writer, operation_id,
+                        "deploy-assets", "WF_ASSET_DECISION",
+                        "目标路径已存在且内容不同：未覆盖，维护写者转入待恢复",
+                        {"path": destination,
+                         "problems": [{"path": destination,
+                                       "reason": "target exists with different content"}]},
+                        args.json)
                 if asset.get("executable"):
                     os.chmod(destination, os.stat(source_file).st_mode | 0o755)  # 清单声明 executable:true，须与事实一致
                 deployed.append({"target": destination, "created": created})
-            # W3-2：host_hook 部署后合并 hooks.json（保序追加/幂等/同名冲突交人；
-            # 现清单唯一 host_hook 平台是 codex——其他平台的 hook 落点随部署表扩展）
-            for base, asset, relative in writes:
-                if asset.get("target_class") != "host_hook":
-                    continue
-                if asset.get("platform") != "codex":
-                    continue
+            # W3-2：资产已落盘 ⇒ 落地前面已判定（且冲突已在写入前拦住）的 hooks.json 动作；
+            # 动作与"上一版命令串"同批登记进安装记录（升级判定靠它区分"我们的旧串"与"用户改过的串"）。
+            for plan in hook_plans:
                 try:
-                    merge_hooks_json(args.target)
-                except ValueError as exc:
-                    return blocked("WF_ASSET_DECISION", str(exc),
-                                   {"hooks_json": hooks_json_path(args.target)}, args.json)
+                    plan["applied"] = apply_hooks_json(args.target, plan)
+                except (ValueError, OSError) as exc:
+                    return maintenance_abort(
+                        os.path.join(args.target, ".wf/writer.json"), writer, operation_id,
+                        "hooks-json-apply", "WF_ASSET_DECISION",
+                        f"hooks.json 落地失败：{exc}",
+                        {"hooks_json": hooks_json_path(args.target),
+                         "problems": [{"path": hooks_json_path(args.target), "reason": str(exc)}]},
+                        args.json)
 
             install_dir = os.path.join(args.target, ".wf/install")
             os.makedirs(install_dir, exist_ok=True)
@@ -2230,10 +2683,11 @@ def main(argv=None):
                 "release_ref": args.release_ref,
                 "source_commit": commit,
                 "version": manifest.get("version"),
-                # 内容级来源身份：同 commit 重建发行会让摘要变化，追加平台据此判同源（F8-4）
+                # 内容级来源身份：同 commit 重建发行会让摘要变化（F8-4）
                 "rules_digest": (manifest.get("compatibility") or {}).get("rules_digest"),
                 "manifest_digest": manifest_digest,
-                "platforms": sorted({PLATFORM_ALIASES.get(name, name) for name in _flatten_platforms(args.platform)}),
+                # 记录为**事实**：本次装齐的全部支持平台（不再是人选的子集）
+                "platforms": install_platforms,
                 "roots": [os.path.relpath(root, args.target).replace(os.sep, "/") for root in skill_roots],
                 # W4-1 写入侧：O 哈希=digest + 可重取来源引用（upstream_version/指纹）——
                 # 升级的"偏离保持/同一已接受偏离"行依赖这些字段，此前从未落盘
@@ -2246,16 +2700,17 @@ def main(argv=None):
                                 "decision": "human (--confirm)", "at": now_str(),
                                 "note": "人确认在本分支按新安装继续（设计稿 §7.1）"}]
                               if branch_findings else []),
+                "host_hook_entries": [],
                 "installed_at": now_str(),
                 "tool": "install.py",
             }
+            record_host_hooks(installation, manifest, hook_plans, args.target)
             with open(os.path.join(install_dir, "installation.json"), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(installation, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
             with open(os.path.join(install_dir, "recovery.md"), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(recovery_text(args.target, installation))
-            gitignore = ensure_gitignore(args.target, manifest)
-            problems = self_check(args.target, manifest, skill_roots,
-                                 platforms=_platforms_of(args.platform))
+            gitignore = apply_gitignore(args.target, manifest, fresh_gitignore)
+            problems = self_check(args.target, manifest, skill_roots)
             if problems:
                 writer["state"] = "recovering"
                 writer["checkpoint"] = {"operation": operation_id, "phase": "self-check-failed",
@@ -2276,7 +2731,19 @@ def main(argv=None):
             changes = [{"path": os.path.relpath(entry["target"], args.target).replace(os.sep, "/"),
                         "before": None, "after": file_digest(entry["target"])}
                        for entry in deployed if entry["created"]]
-            writer["maintenance_results"] = [{
+            # 本次操作改到的**用户共享文件**也必须进回执（设计稿 §4.4 维护变更持久化：
+            # 逐路径记前后状态），否则人无从核对"安装到底动了哪些不属于 .wf 的文件"。
+            for plan in hook_plans:
+                if plan.get("applied") in ("created", "appended", "updated"):
+                    changes.append({
+                        "path": os.path.relpath(plan["path"], args.target).replace(os.sep, "/"),
+                        "before": plan.get("before_digest"),
+                        "after": file_digest(plan["path"])})
+            if gitignore.get("action") == "appended":
+                changes.append({"path": ".gitignore",
+                                "before": gitignore.get("before_digest"),
+                                "after": gitignore.get("after_digest")})
+            writer["maintenance_results"] = list(writer.get("maintenance_results") or []) + [{
                 "operation": operation_id,
                 "preview_digest": plain_digest(installation),
                 "head_before": head_before,
@@ -2285,11 +2752,13 @@ def main(argv=None):
                 "result": "applied_pending_commit",
                 "disposition": None,
             }]
+            # 代次与修订号按既有记录递增：首装重入不能把上一次中断的代次"归零"，
+            # 否则旧代次持有者会与新代次同时有效（§4.4 的旧代次失效语义被绕过）。
             writer["state"] = "idle"
             writer["holder"] = None
-            writer["generation"] = 2
+            writer["generation"] = int(writer.get("generation") or 0) + 1
             writer["checkpoint"] = {"operation": operation_id, "phase": "installed"}
-            writer["revision"] = 1
+            writer["revision"] = int(writer.get("revision") or 0) + 1
             with open(os.path.join(args.target, ".wf/writer.json"), "w", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps(writer, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
             append_maintenance_journal(args.target, writer["maintenance_results"][-1])
@@ -2298,6 +2767,10 @@ def main(argv=None):
         return blocked("WF_ASSET_DECISION", f"锁对象冲突：{exc}", {"path": lock_path}, args.json)
     except LockBusy as exc:
         return blocked("WF_WRITER_BUSY", f"锁被占用：{exc}", {"path": lock_path}, args.json)
+    except _InstalledMeanwhile:
+        # 锁内已确认存在安装记录（并发安装刚完成）：交回补齐/核对分支，
+        # 不改既有安装身份、不覆盖记录（2026-11-23 七轮复审 a-2）。
+        return verify_installed(args, manifest, skill_roots, branch_findings)
     message = "\n".join([
         "OK  WF_OK",
         f"目标：{args.target}",
@@ -2404,14 +2877,12 @@ def registered_root_problems(target, installation):
     return problems
 
 
-def plan_writes(target, skill_roots, manifest, platforms=None):
+def plan_writes(target, skill_roots, manifest):
     """把清单展开成写入计划；任一条目不合规即**整批拒绝**（不写入任何文件）。
 
     与 `uninstall.py` 同判据：安全相对路径 + 真实落点包含 + 目标类别白名单。
-    W3-2（三轮）：host_hook 按声明平台投放（per-asset 平台条件）——`platforms` 是本次
-    安装的 --platform 集（已按别名归一）；host_hook 不在声明平台的安装中被跳过（dsh
-    项目不出现 .codex/hooks/），platforms 为 None 时按不投放处理（不猜）。
-    per-asset 平台条件合法性三处拒之一在此（与 self_check/verify_assets 同判据）。
+    安装面向全部平台：清单里的每个 host_hook 资产都投放（platform 键只表示"它属于哪个
+    宿主"，不再是筛选条件）；per-asset 平台条件合法性仍在此核（与 self_check/verify_assets 同判据）。
     """
     problems = list(_host_hook_plan_problems(manifest))
     writes = []
@@ -2429,9 +2900,6 @@ def plan_writes(target, skill_roots, manifest, platforms=None):
                              "target_class": target_class, "path": relative})
             continue
         if target_class == "host_hook":
-            platform_set = platforms if platforms is not None else set()
-            if asset.get("platform") not in platform_set:
-                continue          # 不在本次安装的声明平台：不投放（合法跳过，不是问题）
             bases = [target_of(target)]
         else:
             bases = [target_of(target)] if target_class == "project_wf" else list(skill_roots)

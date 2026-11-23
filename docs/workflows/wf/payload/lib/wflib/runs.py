@@ -1063,7 +1063,7 @@ def create(ctx, args):
     key = ctx.key()
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
-        raise cli.CliError(code, profile_facts, next_="install --platform <当前宿主> 后重试")
+        raise cli.CliError(code, profile_facts, next_="install（已装齐全部平台）后重试")
     if not isinstance(creation, dict):
         raise DefinitionError("WF_SEMANTIC_DECISION",
                               {"problems": creation_problems(creation)})
@@ -1118,7 +1118,6 @@ def create(ctx, args):
 
         run_id = uuid.uuid4().hex
         record_rel = f"{RUNS_REL}/{run_id}.json"
-        snapshot_rel = f"{RUNS_REL}/{run_id}/definition.md"
         for candidate in (join(ctx.root, record_rel), join(ctx.root, f"{RUNS_REL}/{run_id}")):
             if os.path.exists(candidate):
                 raise cli.CliError("WF_TARGET_COLLISION", {"path": _rel(ctx.root, candidate)})

@@ -74,36 +74,10 @@ def _load_install_table():
 
 _INSTALL = _load_install_table()
 PLATFORMS = _INSTALL.PLATFORMS
-PLATFORM_ALIASES = _INSTALL.PLATFORM_ALIASES
 SHARED_SKILL_DIR = _INSTALL.SHARED_SKILL_DIR
-
-
-def _flatten_platforms(platforms):
-    """`--platform a --platform b`、`--platform a b`、`--platform a,b` 三种写法都接受。"""
-    flat = []
-    for item in platforms or []:
-        values = item if isinstance(item, (list, tuple)) else [item]
-        for value in values:
-            for part in str(value).split(","):
-                part = part.strip()
-                if part:
-                    flat.append(part)
-    return flat
-
-
-def resolve_skill_roots(target, platforms):
-    roots, unknown = [], []
-    for name in _flatten_platforms(platforms):
-        key = PLATFORM_ALIASES.get(name, name)
-        entry = PLATFORMS.get(key)
-        if entry is None:
-            unknown.append(name)
-            continue
-        relative = SHARED_SKILL_DIR if entry["reads_shared"] else entry["dir"]
-        root = os.path.join(os.path.abspath(target), *relative.split("/"))
-        if root not in roots:
-            roots.append(root)
-    return roots, unknown
+# 平台表与"装哪些平台"都只有发行侧一份：开发态部署同样装齐全部平台（2026-11-23 人裁）。
+all_platforms = _INSTALL.all_platforms
+resolve_skill_roots = _INSTALL.resolve_skill_roots
 
 def _resolve_location(path):
     """规范落点：解析现有祖先符号链接与 `..`，尚不存在的末段按组件拼接。"""
@@ -172,22 +146,31 @@ def validate_registered_roots(target, installation):
 
 
 def plan_deployment(target, skill_roots, manifest):
-    """展开完整部署计划并整批复核边界；返回 (writes, problems)。"""
+    """展开完整部署计划并整批复核边界；返回 (writes, problems)。
+
+    **与发行安装同一套类别覆盖**：`project_wf`、`skill_root`、`host_hook` 三类都要展开——
+    开发态部署此前漏了 `host_hook`，于是"平台已装齐"的项目里 `.codex/hooks*` 根本不存在
+    （2026-11-23 十七轮复审 b-1）。
+    """
     writes, problems = [], []
     for root in skill_roots:
         problem = boundary_problem(target, root, root)
         if problem:
             problems.append(dict(problem, reason="skill root " + problem["reason"]))
     for asset in manifest["assets"]:
-        if asset["target_class"] == "project_wf":
+        target_class = asset["target_class"]
+        if target_class == "release_only":
+            continue
+        if target_class == "project_wf" or target_class == "host_hook":
             destination = os.path.join(os.path.abspath(target), *asset["target_relative"].split("/"))
             problem = boundary_problem(target, os.path.abspath(target), destination)
             if problem:
                 problems.append(problem)
                 continue
-            writes.append({"target_relative": asset["target_relative"], "source_path": asset["source_path"],
-                           "root": "project", "digest": asset["digest"]})
-        elif asset["target_class"] == "skill_root":
+            writes.append({"target_relative": asset["target_relative"],
+                           "source_path": asset["source_path"], "root": "project",
+                           "digest": asset["digest"], "target_class": target_class})
+        elif target_class == "skill_root":
             for root in skill_roots:
                 destination = os.path.join(root, *asset["target_relative"].split("/"))
                 problem = boundary_problem(target, root, destination)
@@ -196,7 +179,11 @@ def plan_deployment(target, skill_roots, manifest):
                     continue
                 writes.append({"target_relative": asset["target_relative"],
                                "source_path": asset["source_path"],
-                               "root": root, "digest": asset["digest"]})
+                               "root": root, "digest": asset["digest"],
+                               "target_class": target_class})
+        else:
+            problems.append({"reason": "unknown target_class", "target_class": target_class,
+                             "path": asset.get("target_relative")})
     if problems:
         return [], problems
     return writes, problems
@@ -336,10 +323,7 @@ DEV_OBSERVATION_KINDS = ("compaction", "reentry", "new-session", "transport")
 
 def deploy(args):
     target = os.path.abspath(args.target)
-    skill_roots, unknown_platforms = resolve_skill_roots(args.target, args.platform)
-    if unknown_platforms:
-        return fail("WF_PATH_INVALID",
-                    f"未知平台：{unknown_platforms}；支持 {sorted(PLATFORMS)}", args.json)
+    skill_roots = resolve_skill_roots(target)
     dev_manifest = common.load_dev_manifest()
     manifest = common.build_manifest(DEV_VERSION, dev_manifest)
     writes, plan_problems = plan_deployment(target, skill_roots, manifest)
@@ -361,7 +345,7 @@ def deploy(args):
         lines.append("托管段（.gitignore）：")
         for line in managed_segment().splitlines():
             lines.append(f"  {line}")
-        lines.append(f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}), ensure_ascii=False)}")
+        lines.append(f"平台：{json.dumps(all_platforms(), ensure_ascii=False)}（全部支持平台，一次装齐）")
         lines.append(f"技能目录（目标项目内）：{json.dumps([os.path.relpath(root, target) for root in skill_roots], ensure_ascii=False)}")
         if clues:
             lines.append("Trellis 线索（人确认后可继续安装，但本会话不得混跑两套流程）：")
@@ -370,22 +354,19 @@ def deploy(args):
         lines.append("确认后重跑并加 --confirm。")
         return emit({"ok": True, "message": "\n".join(lines),
                      "preview": {"target": target, "files": writes, "clues": clues,
-                                 "platforms": sorted({PLATFORM_ALIASES.get(n, n)
-                                                      for n in _flatten_platforms(args.platform)})}})
+                                 "platforms": all_platforms()}})
 
     if not os.path.isdir(target):
         return fail("WF_PATH_INVALID", f"目标目录不存在：{target}", args.json)
-    if not skill_roots:
-        return fail("WF_PATH_INVALID",
-                    f"至少需要一个 --platform（技能装在目标项目内）；支持 {sorted(PLATFORMS)}", args.json)
+
     # F5-2：不在这里建目录——拒绝路径（来源不符、代次非法等）也必须保持目录树不变。
     # 需要时在通过核验后的写入阶段按 root 创建。
 
     writer_path = join(target, ".wf/writer.json")
-    existing = wf_records.load_json(writer_path)
-    if existing is not None:
-        # 已安装：只允许"追加平台"（同发行引用）；资产与项目数据不动
-        return add_platforms(target, args, manifest)
+    if os.path.exists(join(target, ".wf/install/installation.json")):
+        # 已安装：开发态部署没有"追加平台"这一步（安装面向全部平台），只做补齐/核对：
+        # 落点与本次源一致 ⇒ 幂等成功；有差异 ⇒ 提示走升级（不覆盖本地改动）。
+        return verify_installed(target, args, manifest, skill_roots)
 
     try:
         handle = wf_lock.acquire(target, holder_hint="dev-deploy")
@@ -397,6 +378,11 @@ def deploy(args):
     from wflib import scope as wf_scope
 
     head_before = wf_scope.head(target)
+    hook_plans, hook_problems = _INSTALL.plan_host_hooks(target, manifest, None)
+    if hook_problems:
+        return fail("WF_ASSET_DECISION",
+                    "hooks.json 条目需人裁决：不覆盖用户改过的命令串（未写入任何文件）",
+                    args.json, {"problems": hook_problems})
     try:
         # 锁内重算完整计划：mkdir .wf / writer 初始记录 / 技能根 mkdir / 资产写入之前复核。
         writes, plan_problems = plan_deployment(target, skill_roots, manifest)
@@ -434,6 +420,9 @@ def deploy(args):
             os.chmod(destination, mode | 0o755)  # 清单声明 executable:true，须与事实一致
             deployed.append({"target": destination, "digest": wf_records.file_digest(destination)})
 
+        for plan in hook_plans:
+            plan["applied"] = _INSTALL.apply_hooks_json(target, plan)
+
         manifest_path = join(target, ".wf/install/release-manifest.json")
         manifest_digest = common.write_manifest(manifest_path, manifest)
         installation = {
@@ -442,16 +431,17 @@ def deploy(args):
             "release_ref": f"dev:{common.git_describe()}",
             "source_commit": common.git_head(),
             # 内容级来源身份（F5-1）：describe --dirty + HEAD 无法区分同一 HEAD 下的两次 dirty 内容，
-            # 因此把发行规则摘要一并登记，追加平台按它判同源。
+            # 因此把发行规则摘要一并登记，重跑核对按它判同源。
             "rules_digest": manifest["compatibility"]["rules_digest"],
             "version": DEV_VERSION,
             "manifest_digest": manifest_digest,
-            "platforms": sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}),
+            "platforms": all_platforms(),
             "roots": [root_record(target, root) for root in skill_roots],
+            # `target` 一律是**资产相对路径**，根由 `root_ref` 表达——此前非项目根把根拼进
+            # target，升级再拼一次 root_ref，26 份技能副本被认成"新增撞用户文件"
+            # （2026-11-23 十七轮复审 b-2）。
             "assets": [
-                {"target": (entry["target_relative"] if entry["root"] == "project"
-                            else os.path.join(root_record(target, entry["root"]),
-                                              *entry["target_relative"].split("/"))),
+                {"target": entry["target_relative"],
                  "root_ref": "project" if entry["root"] == "project" else root_record(target, entry["root"]),
                  "digest": entry["digest"], "source_path": entry["source_path"]}
                 for entry in writes
@@ -472,11 +462,10 @@ def deploy(args):
             receipt_changes.append({
                 "path": os.path.relpath(absolute, os.path.abspath(target)).replace(os.sep, "/"),
                 "before": None,
-                "after": wf_fingerprint.item(target, os.path.relpath(absolute, os.path.abspath(target))
-                                             .replace(os.sep, "/")),
+                "after": wf_records.file_digest(absolute),
             })
         receipt_changes.append({"path": ".gitignore", "before": None,
-                                "after": wf_fingerprint.item(target, ".gitignore")})
+                                "after": wf_records.file_digest(os.path.join(target, ".gitignore"))})
         writer_record = wf_writer.load(target)
         receipts = list(writer_record.get("maintenance_results") or [])
         receipts.append({
@@ -489,6 +478,8 @@ def deploy(args):
             "disposition": None,
         })
         writer_record = wf_writer.bump(writer_record, maintenance_results=receipts)
+        _INSTALL.record_host_hooks(installation, manifest, hook_plans, target)
+        wf_records.write_json(join(target, ".wf/install/installation.json"), installation)
         wf_writer.save(target, writer_record)
         # 回执账本写进**提交层**（`.wf/install/maintenance.jsonl`）：writer.json 是运行态，
         # 拿它当持久化证据会让探针永远 pending（实测 r59–r61）
@@ -512,7 +503,7 @@ def deploy(args):
         f"清单摘要：{manifest_digest}",
         f"规则摘要：{manifest['compatibility']['rules_digest']}",
         f"托管段：{gitignore.get('action')}",
-        f"平台：{json.dumps(sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)}), ensure_ascii=False)}",
+        f"平台：{json.dumps(all_platforms(), ensure_ascii=False)}（全部支持平台已装）",
         "下一步：人执行 wf.py confirm-executor --scope system，然后 /wf-start",
     ])
     return emit({"ok": True, "message": message, "installation": installation,
@@ -521,184 +512,47 @@ def deploy(args):
                               "manifest_digest": manifest_digest}})
 
 
-def skill_roots_for(target, platforms):
-    roots, _unknown = resolve_skill_roots(target, platforms)
-    return roots
+def verify_installed(target, args, manifest, skill_roots):
+    """已部署项目重跑：**委托发行侧实现**（同一份补齐/核对语义，不在这里再写一套）。
 
-
-def add_platforms(target, args, manifest):
-    """已安装项目追加平台（与发行入口 install.py::add_platforms 同语义）。
-
-    2026-11-05 第二轮修正（复审 R1，与 install.py A1 同源）：
-    - 新根技能副本登记进 `installation.assets`，否则会落未归属路径挡住开工/Check；
-    - 登记维护持有/新代次/回执（写入 `writer.json`），释放时再次递增代次；
-    - 目标已存在且内容不同 → 整批报冲突、不写任何文件（不覆盖本地偏离）；
-    - 无变化时幂等返回，不取写权、不产生空回执。
+    开发态部署与发行安装的差异只在"来源身份"（`dev:<describe>` + 提交）；来源一致时把
+    记录/落点/回执的判定整个交给 `install.py::verify_installed`——否则两套实现必然分叉
+    （十七轮 b-4 的"平台清单不刷新"就是分叉的结果）。
     """
-    try:
-        handle = wf_lock.acquire(target, holder_hint="dev-deploy-platform")
-    except wf_lock.LockBusy as exc:
-        return fail("WF_WRITER_BUSY", f"锁被占用：{exc}", args.json)
-    except wf_lock.LockUnavailable as exc:
-        return fail("WF_ASSET_DECISION", f"锁对象不可用：{exc}", args.json)
-    try:
-        writer_record = wf_writer.load(target)
-        try:
-            wf_writer.require_supported(writer_record, wf_writer.WriterError)
-        except wf_writer.WriterError as exc:
-            code = getattr(exc, "code", None) or "WF_RECORD_INVALID"
-            detail = getattr(exc, "facts", None) or {"reason": str(exc)}
-            return fail(code, f"写权记录不可用于维护写入：{str(exc)}", args.json, detail)
-        if writer_record.get("state") != "idle":
-            return fail("WF_WRITER_BUSY", "写权非空闲，不能追加平台", args.json,
-                        {"holder": writer_record.get("holder")})
-        _gen = writer_record.get("generation")
-        if not isinstance(_gen, int) or isinstance(_gen, bool):
-            return fail("WF_RECORD_INVALID", "写权代次缺失或非整数，不能安全递增", args.json,
-                        {"generation": writer_record.get("generation")})
-        path = join(target, ".wf/install/installation.json")
-        installation = wf_records.load_json(path)
-        if installation is None:
-            return fail("WF_ASSET_DECISION", "安装记录缺失，不能追加平台", args.json)
-        # 2026-11-05 第四轮复审 R4-1：追加平台只允许同一来源。
-        # 开发态来源由 git describe + HEAD 固定；源码已变（提交或脏改）即属"不同引用"，
-        # 按升级/重装处理，不能把新来源的技能副本混进旧运行时。
-        # 同源判据 = 提交身份 + 投放内容摘要；`dev:<describe>[-dirty]` 只是描述性标记，
-        # 不参与判定（否则同一 HEAD 下无关文件变脏也会阻断追加平台，F6-2）。
-        current_ref = f"dev:{common.git_describe()}"
-        current_commit = common.git_head()
-        current_rules = manifest["compatibility"]["rules_digest"]
-        if (installation.get("source_commit") != current_commit
-                or installation.get("rules_digest") != current_rules):
-            return fail("WF_ASSET_DECISION",
-                        "已安装的开发态来源与当前源码不同：追加平台只允许同来源，请按升级/重装流程处理",
-                        args.json,
-                        {"installed_ref": installation.get("release_ref"),
-                         "installed_commit": installation.get("source_commit"),
-                         "installed_rules_digest": installation.get("rules_digest"),
-                         "requested_ref": current_ref, "requested_commit": current_commit,
-                         "requested_rules_digest": current_rules,
-                         "note": "规则摘要按已投放资产的内容计算；同一 HEAD 下的 dirty 内容变化也会体现"})
-        # —— 锁内的完整计划：历史根校验 → 重算根/落点 → 再读内容与冲突 ——
-        root_problems = validate_registered_roots(target, installation)
-        if root_problems:
-            return fail("WF_ASSET_DECISION",
-                        "安装记录中的技能根域外/不可解析：整批拒绝，不改历史记录、不清理外部对象",
-                        args.json, {"problems": root_problems[:20]})
-        current = [item for item in installation.get("platforms") or [] if isinstance(item, str)]
-        wanted = sorted({PLATFORM_ALIASES.get(n, n) for n in _flatten_platforms(args.platform)})
-        added = [name for name in wanted if name not in current]
-        roots = list(installation.get("roots") or [])
-        rollout_roots = skill_roots_for(target, wanted)
-        planned_writes, plan_problems = plan_deployment(target, rollout_roots, manifest)
-        if plan_problems:
-            return fail("WF_ASSET_DECISION",
-                        "追加平台的技能根/资产落点越界或不可解析：整批拒绝，不写任何文件",
-                        args.json, {"problems": plan_problems[:20]})
-        try:
-            new_roots = [root for root in rollout_roots
-                         if root_record(target, root) not in roots]
-        except ValueError as exc:
-            return fail("WF_ASSET_DECISION", str(exc), args.json)
-        planned = []
-        for entry in planned_writes:
-            if entry["root"] == "project":
-                continue  # .wf 资产不动
-            if entry["root"] not in new_roots:
-                continue
-            destination = os.path.join(entry["root"], *entry["target_relative"].split("/"))
-            source_file = os.path.join(common.SOURCE_ROOT, *entry["source_path"].split("/"))
-            with open(source_file, "rb") as src:
-                data = src.read()
-            planned.append({"root": entry["root"], "entry": entry, "destination": destination,
-                            "target_relative": entry["target_relative"], "data": data,
-                            "digest": entry.get("digest")})
-        conflicts = []
-        for item in planned:
-            if not os.path.exists(item["destination"]):
-                continue
-            with open(item["destination"], "rb") as existing_handle:
-                if existing_handle.read() != item["data"]:
-                    conflicts.append(item["destination"])
-        if conflicts:
-            return fail("WF_ASSET_DECISION",
-                        "目标已存在且内容不同：重复安装不覆盖本地偏离，整批不写；请人逐项决定后重试",
-                        args.json, {"paths": conflicts[:20]})
-        pending = [item for item in planned if not os.path.exists(item["destination"])]
-        registered = {(asset.get("root_ref"), asset.get("target"))
-                      for asset in installation.get("assets") or []}
-        missing_assets = [item for item in planned
-                          if (item["root"], item["target_relative"]) not in registered]
-        if not added and not pending and not missing_assets:
-            return emit({"ok": True, "message": "\n".join([
-                "OK  WF_OK", f"目标：{target}", "新增平台：（无新增）",
-                f"现有平台：{json.dumps(current, ensure_ascii=False)}",
-                "说明：无任何变化，未取写权、未产生回执。",
-            ]), "installation": installation, "noop": True})
+    import argparse
 
-        operation_id = f"dev-deploy-platform-{uuid.uuid4().hex}"
-        held = wf_writer.acquire(writer_record, kind="maintenance", ident=operation_id,
-                                 scope={"operation": operation_id},
-                                 checkpoint={"operation": operation_id, "phase": "add-platforms"})
-        wf_writer.save(target, held)
-        deployed = []
-        try:
-            for item in pending:
-                os.makedirs(os.path.dirname(item["destination"]), exist_ok=True)
-                with open(item["destination"], "wb") as out:
-                    out.write(item["data"])
-                deployed.append(item["destination"])
-            installation["platforms"] = sorted(set(current) | set(wanted))
-            installation["roots"] = sorted(set(roots) | {
-                root_record(target, root) for root in new_roots})
-            for item in planned:
-                key = (item["root"], item["target_relative"])
-                if key in registered:
-                    continue
-                installation.setdefault("assets", []).append({
-                    "target": item["target_relative"], "root_ref": item["root"],
-                    "digest": item["digest"], "source_path": item["entry"].get("source_path"),
-                })
-                registered.add(key)
-            wf_records.write_json(path, installation)
-        except OSError as exc:
-            wf_writer.save(target, wf_writer.release(held))
-            raise SystemExit(f"追加平台写入失败：{exc}")
-        changed = deployed + [path]
-        head_probe = subprocess.run(["git", "rev-parse", "HEAD"], cwd=target,
-                                    capture_output=True, text=True, check=False)
-        head_before = head_probe.stdout.strip() or None if head_probe.returncode == 0 else None
-        receipt = {
-            "operation": operation_id,
-            "preview_digest": wf_records.plain_digest(installation),
-            "head_before": head_before,
-            "changes": [{"path": os.path.relpath(item, target).replace(os.sep, "/"),
-                         "before": None, "after": wf_records.file_digest(item)} for item in changed],
-            "receipt_git_state": {"head": head_before, "tracked_paths": len(changed)},
-            "result": "applied_pending_commit",
-            "disposition": None,
-        }
-        updated = wf_writer.release(held)
-        updated.setdefault("maintenance_results", []).append(receipt)
-        wf_writer.save(target, updated)
-    finally:
-        handle.release()
-    return emit({"ok": True, "message": "\n".join([
-        "OK  WF_OK",
-        f"目标：{target}",
-        f"新增平台：{json.dumps(added, ensure_ascii=False)}"
-        + ("（无新增：已安装过这些平台）" if not added else ""),
-        f"投放技能副本：{len(deployed)} 个（新根 {len(new_roots)} 个）",
-        f"现有平台：{json.dumps(installation['platforms'], ensure_ascii=False)}",
-        "说明：.wf 资产未改动；写权回执已登记（applied_pending_commit）。",
-    ]), "installation": installation, "receipt": receipt})
+    installation_path = join(target, ".wf/install/installation.json")
+    installation = wf_records.load_json(installation_path) if os.path.exists(installation_path) else None
+    if not isinstance(installation, dict):
+        return fail("WF_RECORD_INVALID",
+                    "已部署（存在写权记录）但没有可读安装记录：请用 repair 核对，或删除现场重新部署",
+                    args.json, {"installation": installation_path})
+    writer_record = wf_records.load_json(join(target, ".wf/writer.json"))
+    writer_problem = _INSTALL._writer_problem(writer_record)
+    if writer_problem:
+        return fail("WF_RECORD_INVALID", "写权记录不合法：先修复记录再部署",
+                    args.json, {"problems": [writer_problem]})
+    current_ref = f"dev:{common.git_describe()}"
+    recorded_ref = str(installation.get("release_ref") or "")
+    current_commit = common.git_head()
+    recorded_commit = installation.get("source_commit")
+    if recorded_ref and recorded_ref != current_ref:
+        return fail("WF_ASSET_DECISION",
+                    "目标由另一个来源部署：不同来源不混装（重跑只核对同一来源）",
+                    args.json, {"installed_ref": recorded_ref, "current_ref": current_ref})
+    if recorded_commit and current_commit and recorded_commit != current_commit:
+        return fail("WF_ASSET_DECISION",
+                    "目标部署自另一个提交：重跑只核对同一提交（换内容请按升级/重新部署处理）",
+                    args.json, {"installed_commit": recorded_commit,
+                                "current_commit": current_commit})
+    shim = argparse.Namespace(target=target, source=common.SOURCE_ROOT,
+                              json=bool(args.json), confirm=True)
+    return _INSTALL.verify_installed(shim, manifest, skill_roots)
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="wf 开发态部署（authoring 工具）")
     parser.add_argument("--target", required=True, help="目标项目绝对路径")
-    parser.add_argument("--platform", action="append", nargs="+", default=[],
-                        help="目标项目实际使用的 agent（可重复）：dsh|codex|cursor|geminicli|copilot|claudecode")
     parser.add_argument("--confirm", action="store_true", help="确认预览后执行投放")
     parser.add_argument("--json", action="store_true", help="以 JSON 输出结果")
     args = parser.parse_args(argv)

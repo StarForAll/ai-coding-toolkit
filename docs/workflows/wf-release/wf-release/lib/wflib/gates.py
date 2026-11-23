@@ -619,7 +619,7 @@ def check_validity(ctx, task, *, rule_version=None):
 def review_binding(ctx, task, *, result=None):
     """审查结论是否仍绑定当前 Check（自 review-passed 原样提取 + ⑥ 新增 CLI 校验）。
 
-    `binding` = `result.check_id == check.id`
+    `binding` = （`result.check_id == check.id` ∨ `result.anchor.check_anchor == check.check_anchor`）
                  ∧ 结论至少引用一份已导入报告
                  ∧ 引用报告 `result_digest == recorded == 文件当前摘要`
                  ∧ 结论所在轮的 `implementation_cli` == 最新 launch 的 `implementation_cli`
@@ -632,9 +632,23 @@ def review_binding(ctx, task, *, result=None):
     result = result if result is not None else (reviews.get("result") or {})
     check = task.get("check") or {}
     if result.get("check_id") != check.get("id"):
-        return _judgment(False, "WF_REVIEW_INVALID",
-                         {"reason": "review result is not bound to current check"}, "check_id_changed",
-                         binding=False)
+        # 重跑 Check 只是**同内容重验**时不强制重审（2026-11-23 十轮复审 b-5）：每次 Check 都会
+        # 生成新 id，但锚点（内容/规划/断言/控制面）一致就说明被审的还是同一份东西。
+        # 锚点不同才是真变化——那时仍按 check_id_changed 拒绝。
+        bound_anchor = (result.get("anchor") or {}).get("check_anchor")
+        # Check 记录把锚点写在 `check.anchor.check_anchor`（顶层没有该键）；只读顶层会让这条
+        # 复用分支永远不生效（十一轮 b-4 用真实记录形状复现）。
+        current_anchor = ((check.get("anchor") or {}).get("check_anchor")
+                          or check.get("check_anchor"))
+        same_content = bool(bound_anchor) and bound_anchor == current_anchor
+        if not same_content:
+            return _judgment(False, "WF_REVIEW_INVALID",
+                             {"reason": "review result is not bound to current check",
+                              "bound_check_id": result.get("check_id"),
+                              "current_check_id": check.get("id"),
+                              "bound_check_anchor": bound_anchor,
+                              "current_check_anchor": current_anchor},
+                             "check_id_changed", binding=False)
     # 结论引用的报告必须仍是该轮/该槽位的有效导入：换了报告，旧 pass 不再有效（机制稿 §9.2）
     imported = {(int(entry.get("round") or 0), entry.get("slot")): entry.get("report_digest")
                 for entry in reviews.get("imported") or []}

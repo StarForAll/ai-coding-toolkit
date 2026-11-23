@@ -395,7 +395,9 @@ def report_input_problems(payload, *, task=None, text=None, launch=None, require
                 "reason": (f"report status header missing from the first "
                            f"{STATUS_HEAD_CHARS} characters"),
                 "status": status,
-                "exits": ["把 `<!-- wf-review-agent:v1 status=in-progress -->` 放在报告第一行"],
+                "exits": ["把 `<!-- wf-review-agent:v1 status=in-progress -->` 放在报告开头"
+                             "（骨架写在第一行；判定只读开头前 "
+                             f"{STATUS_HEAD_CHARS} 字符）"],
             }])
         elif status == "done":
             add("status-head", [])
@@ -407,7 +409,9 @@ def report_input_problems(payload, *, task=None, text=None, launch=None, require
             add("status-head", [{
                 "reason": "report status is not done",
                 "status": status,
-                "exits": ["把 `<!-- wf-review-agent:v1 status=done -->` 放在报告第一行后重新导入"],
+                "exits": ["把 `<!-- wf-review-agent:v1 status=done -->` 放在报告开头后重新导入"
+                             "（骨架写在第一行；判定只读开头前 "
+                             f"{STATUS_HEAD_CHARS} 字符）"],
             }])
 
     add("protocol", [] if payload.get("protocol") == PROTOCOL else [{
@@ -2232,9 +2236,16 @@ def scope_binding_problems(ctx, task, launch, delivery):
     tests = submitted.get("test_results")
     if isinstance(tests, dict):
         check_id = tests.get("check")
-        if check_id and check_id != (task.get("check") or {}).get("id"):
-            problems.append({"reason": "submitted_scope.test_results.check is not the current Check",
-                             "declared": check_id, "current": (task.get("check") or {}).get("id")})
+        current_check = task.get("check") or {}
+        if check_id and check_id != current_check.get("id"):
+            # 同锚点重跑 Check 只是同内容重验：材料范围不该因此被拒（十三轮 a-3）。
+            declared_anchor = tests.get("check_anchor")
+            current_anchor = (current_check.get("anchor") or {}).get("check_anchor")
+            if not (declared_anchor and declared_anchor == current_anchor):
+                problems.append({"reason": "submitted_scope.test_results.check is not the current Check",
+                                 "declared": check_id, "current": current_check.get("id"),
+                                 "declared_anchor": declared_anchor,
+                                 "current_anchor": current_anchor})
     return problems
 
 
@@ -2335,7 +2346,10 @@ def default_launch_request(ctx, task, implementation_cli=None):
             "diff": {"source": "delivery_set", "diff_base": task.get("baseline_head"),
                      "paths": sorted(diff_paths)},
             "requirement": prd_path,
-            "test_results": {"check": check.get("id"), "commands": commands},
+            # `check_anchor` 必须一起给：同内容重跑时范围校验按它复用（十四轮 a-2）
+            "test_results": {"check": check.get("id"),
+                             "check_anchor": (check.get("anchor") or {}).get("check_anchor"),
+                             "commands": commands},
         },
         # 设计稿 §6.5：允许自主读取的是业务代码、spec 与 PRD；触碰面只是审查重点，不是读取上限。
         "readable_scope": {"business_code": ["**"], "focus_paths": business,
@@ -2801,6 +2815,90 @@ def _resolve_diff_base(root, base):
 
 
 
+_PATCH_HEADER = "diff --git "
+
+
+def _patch_path(rest):
+    """从 `diff --git a/<p> b/<p>` 里取出 b 侧路径；取不出返回 None（= 按配置类处理）。
+
+    Git 对非 ASCII/含空格的路径写成 `"a/\\350\\256...""`（八进制转义）形态，只认裸 `a/`
+    会让 `设置.yaml` 落到"代码文件"档，同一份凭据因文件名而泄漏（十六轮 b-1）。
+    解析不确定时**fail-closed**：宁可用全量档让代码少可读，也不让凭据出去。
+    """
+    rest = rest.strip()
+    for item in reversed(_split_quoted(rest)):
+        body = item[1:-1] if item.startswith('"') and item.endswith('"') else item
+        if body.startswith(("a/", "b/")):
+            return _unquote_git(body[2:])
+    parts = rest.split(" b/")
+    if len(parts) == 2 and parts[0].startswith("a/"):
+        return parts[1]
+    return None
+
+
+def _split_quoted(text):
+    """切出带引号的分段（Git 的路径转义形态）。"""
+    pieces, index = [], 0
+    while index < len(text):
+        if text[index] == '"':
+            end = index + 1
+            while end < len(text) and text[end] != '"':
+                end += 2 if text[end] == "\\" else 1
+            pieces.append(text[index:end + 1])
+            index = end + 1
+        else:
+            index += 1
+    return pieces
+
+
+def _unquote_git(path):
+    """还原 Git 的八进制转义路径（`\\350\\256\\276` → 字节 → UTF-8）。"""
+    body = path[1:-1] if path.startswith('"') and path.endswith('"') else path
+    out = bytearray()
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char == "\\" and body[index + 1:index + 4].isdigit():
+            out.append(int(body[index + 1:index + 4], 8))
+            index += 4
+            continue
+        if char == "\\" and index + 1 < len(body):
+            mapping = {"n": 10, "t": 9, "\\": 92, '"': 34}
+            out.extend(bytes([mapping.get(body[index + 1], ord(body[index + 1]))]))
+            index += 2
+            continue
+        out.extend(char.encode("utf-8"))
+        index += 1
+    return out.decode("utf-8", "replace")
+
+
+def redact_patch(text):
+    """按 `diff --git` 分片决定遮罩级别：配置类文件用全量、代码文件只遮字面量。
+
+    整份 diff 用同一档时只能二选一：全量档会让 `password = read_from_store()` 不可审，
+    材料档会让 `config.yaml` 的裸凭据外发。按文件分片是唯一同时满足两边的做法。
+    """
+    from . import check as check_mod
+
+    if not isinstance(text, str) or not text:
+        return text or ""
+    pieces, current, current_path = [], [], None
+
+    def flush():
+        if current:
+            body = "".join(current)
+            pieces.append(check_mod.redact_for_path(current_path, body))
+
+    for line in text.splitlines(keepends=True):
+        if line.startswith(_PATCH_HEADER):
+            flush()
+            current, current_path = [line], _patch_path(line[len(_PATCH_HEADER):])
+            continue
+        current.append(line)
+    flush()
+    return "".join(pieces)
+
+
 def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, delivery=None):
     """把本轮审查材料落盘（唯一实现）：diff.patch + status.json + prd/check/tests。
 
@@ -2821,11 +2919,23 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
     else:
         diff_text = (f"# 交付面有 {len(paths)} 条路径，但未生成任何内容片段；"
                      "见同目录 status.json 的 problems")
+    # 材料是**外发物**：随 `review-launch` 交给异种 reviewer CLI。脱敏协议 `secret-mask` 的
+    # 范围是"所有入库内容"，这里此前直接写原始 diff/PRD——日志已脱敏不能推出材料已脱敏
+    # （2026-11-23 九轮复审 b-2：虚构 api_key/password 原样进入 diff.patch 与 prd.md）。
+    from . import check as check_mod
+
+    diff_text = redact_patch(diff_text)
     records.atomic_write(os.path.join(materials_dir, "diff.patch"), diff_text + chr(10))
     selected = set(paths)
     records.write_json(os.path.join(materials_dir, "status.json"),
                        {"paths": paths, "files": material["files"],
                         "problems": material["problems"], "empty": material["empty"],
+                        # 材料是脱敏副本：reviewer 看到的是 `***`，不宣称与工作树逐字相同。
+                        # `redaction` 写明**按文件类型的策略**，材料里不会再有"标了 redacted
+                        # 却没说哪部分是原文"的盲区（十四轮 a-1）。
+                        "redacted": True,
+                        "redaction": {"diff": "per-file（配置类全量 / 代码类仅字面量）",
+                                      "prd": "full", "commands": "field-aware"},
                         "diff_base": material.get("diff_base"),
                         "diff_base_problem": material.get("diff_base_problem"),
                         # 索引只列本轮实际物化的路径；整份交付集合是判定侧事实，不该从材料泄漏。
@@ -2833,14 +2943,17 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
                                           if path in selected]
                                     for key in ("e", "f", "covered_f", "uncovered_f")}})
     prd_text = tasks_mod.read_prd(ctx.root, task) if hasattr(tasks_mod, "read_prd") else ""
-    records.atomic_write(os.path.join(materials_dir, "prd.md"), prd_text or "# PRD 不可读" + chr(10))
+    records.atomic_write(os.path.join(materials_dir, "prd.md"),
+                         # PRD 是任务文档（散文 + 片段）：按全量规则处置，漏遮面更大
+                         check_mod.redact_text(prd_text) or "# PRD 不可读" + chr(10))
     # 审查材料只放 Check 的公共身份/结论/锚点；`internal_review` 等实施侧自评不进材料。
     check = task.get("check") or {}
     check_public = {key: check.get(key) for key in ("id", "result", "anchor") if key in check}
     records.write_json(os.path.join(materials_dir, "check.json"),
                        {"check": check_public, "anchor": {"check_anchor": anchor}})
     commands = (task.get("check") or {}).get("commands") or []
-    records.write_json(os.path.join(materials_dir, "tests.json"), {"commands": commands})
+    # 注意：**不要**在这里先写一份 `{"commands": commands}`——那是原文，材料是外发物，
+    # 两次写之间审查会话能读到原文、中途失败也留下它。tests.json 只在末尾写一次（脱敏后）。
     # 十六轮 a-3：当前 Check 的完整脱敏验证日志物化进材料包——
     # 日志本体在任务目录 check-logs/ 下（reviewer 必排面），此前 reviewer 只能看到
     # commands 摘要、无法复核具体输出。按当前 Check 引用把已脱敏日志复制到
@@ -2857,28 +2970,47 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
                       for cmd in commands
                       if isinstance(cmd, dict) and cmd.get("evidence_ref") and cmd.get("log_digest")}
     _log_problems = []
+    # 上一次物化的日志副本一律先清空：源目录这次不存在/不可达时也要清——否则旧字节
+    # 留在包里而新清单不再列它，reviewer 会读到过期证据（十五轮 a-3）。
+    _materials_logs = os.path.join(materials_dir, "check-logs")
+    if os.path.isdir(_materials_logs):
+        for _stale in sorted(os.listdir(_materials_logs)):
+            _stale_path = os.path.join(_materials_logs, _stale)
+            if os.path.isfile(_stale_path):
+                os.remove(_stale_path)
     if _check_started:
         _log_root = os.path.join(_task_dir(ctx, task), "check-logs", _check_started)
         if os.path.isdir(_log_root):
-            _dest = os.path.join(materials_dir, "check-logs")
+            _dest = _materials_logs
             os.makedirs(_dest, exist_ok=True)
             for _name in sorted(os.listdir(_log_root)):
                 _src = os.path.join(_log_root, _name)
                 if not os.path.isfile(_src):
                     continue
+                # **先核身份、再决定要不要进材料包**（2026-11-23 十轮复审 b-2）：材料是外发物，
+                # 此前先 copyfile 再核摘要，被改写的日志和从未被任何命令引用的文件都进了包，
+                # verified=false / null 只是事后标注——标注不能约束材料范围。
+                _fd, _cause, _why = records.file_digest_state(_src)
+                _recorded = _expected_logs.get(_name)
+                if _recorded is None:
+                    _log_problems.append({"reason": "check log not referenced by any command "
+                                                    "(not materialized)",
+                                          "file": _name})
+                    continue
+                if not _fd or _fd != _recorded:
+                    _log_problems.append({"reason": "check log digest mismatch "
+                                                    "(not materialized)",
+                                          "file": _name, "recorded_digest": _recorded,
+                                          "digest": _fd,
+                                          "unavailable_cause": _cause if not _fd else None})
+                    continue
                 import shutil as _shutil
 
                 _shutil.copyfile(_src, os.path.join(_dest, _name))
-                _fd, _cause, _why = records.file_digest_state(_src)
-                _entry = {"file": f"check-logs/{_name}",
-                          "digest": _fd,
-                          "unavailable_cause": _cause if not _fd else None}
-                if _name in _expected_logs:
-                    _entry["recorded_digest"] = _expected_logs[_name]
-                    _entry["verified"] = bool(_fd) and _fd == _expected_logs[_name]
-                else:
-                    _entry["verified"] = None      # 非命令引用的日志：无身份可核，如实标注
-                logs_manifest.append(_entry)
+                logs_manifest.append({"file": f"check-logs/{_name}",
+                                      "digest": _fd,
+                                      "recorded_digest": _recorded,
+                                      "verified": True})
     for _name in sorted(set(_expected_logs) - {os.path.basename(item["file"])
                                                 for item in logs_manifest}):
         _log_problems.append({"reason": "check log referenced by a command was not materialized",
@@ -2893,7 +3025,9 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
                             "buckets": {key: [path for path in delivery["buckets"][key]
                                               if path in selected]
                                         for key in ("e", "f", "covered_f", "uncovered_f")}})
-    tests_payload = {"commands": commands}
+    # 命令记录里含人工验证的原始 decision（理由/引文），材料是外发物 ⇒ 先脱敏再落盘，
+    # **只写一次**：此前的"先写原文、最后覆写"一旦脱敏破坏结构就把原文留在材料目录里。
+    tests_payload = {"commands": check_mod.redact_commands(commands)}
     if logs_manifest:
         tests_payload["logs"] = logs_manifest
     records.write_json(os.path.join(materials_dir, "tests.json"), tests_payload)
@@ -3264,7 +3398,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                           {"reason": "report input does not satisfy the protocol",
                            "problems": input_problems,
                            "exits": ["按问题清单修正报告后重新导入（lint report 与导入共用同一校验）",
-                                     "状态行必须在报告首行且为 status=done"]})
+                                     f"状态行必须在报告开头前 {STATUS_HEAD_CHARS} 字符内且为 status=done"]})
     if str(payload.get("task-id")) != str(task.get("id")):
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "task-id mismatch", "report": payload.get("task-id")})
     try:
@@ -3586,11 +3720,18 @@ def anchor_identity_problems(anchor, task=None):
     if not str(anchor.get("check_anchor") or "").strip():
         problems.append({"reason": "check-anchor.check_anchor missing"})
     if task is not None:
-        current = (task.get("check") or {}).get("id")
+        check = task.get("check") or {}
+        current = check.get("id")
+        current_anchor = (check.get("anchor") or {}).get("check_anchor")
         declared = anchor.get("check_id")
         if declared and current and declared != current:
-            problems.append({"reason": "check-anchor.check_id is not the current Check",
-                             "declared": declared, "current": current})
+            # 同锚点重跑 Check 只是**同内容重验**：轮次身份继续有效，不必整轮重开
+            # （十二轮 b-3）。锚点不同才是真变化，仍按身份不符拒绝。
+            if not (current_anchor and anchor.get("check_anchor") == current_anchor):
+                problems.append({"reason": "check-anchor.check_id is not the current Check",
+                                 "declared": declared, "current": current,
+                                 "declared_anchor": anchor.get("check_anchor"),
+                                 "current_anchor": current_anchor})
     return problems
 
 
@@ -4447,7 +4588,6 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         # 在第 2 轮被同一份报告复核关闭而查不出来（隔一轮自证 = K4b 可绕过）。
         # A7：提出者从**全部历史报告重解析**取（导入记录不存 findings），跨轮有效
         proposers = proposers_from_history(ctx, task)   # (round, slot, finding_id) → 提出者
-        gaps_out = []       # uncovered 轴形成的缺口（按缺口处置，不进 failures）
         main_record = None  # 只有产生 verdict 的路径才写主会话复核
         single_reviewer_facts = None   # W2-3：单 reviewer 留痕降级的事实（有接受记录时非 None）
         if unavailable:
@@ -4541,7 +4681,6 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                                  imported=imported, anchor=anchor)
             problems = report_facts["problems"]
             failures = report_facts["failures"]
-            gaps_out = report_facts["gaps_out"]
             source_clis = report_facts["source_clis"]
             if problems:
                 # 拒绝必须同时给出口（机制稿 §11.1 三档：拒绝不是死路）

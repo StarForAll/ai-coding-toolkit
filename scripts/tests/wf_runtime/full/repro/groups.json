@@ -1,7 +1,15 @@
 {
   "schema_version": 1,
-  "representative": ["review", "archive", "identity", "writer", "install"],
-  "candidate_representative": ["install"],
+  "representative": [
+    "review",
+    "archive",
+    "identity",
+    "writer",
+    "install"
+  ],
+  "candidate_representative": [
+    "install"
+  ],
   "groups": {
     "review": [
       "review-copies-installed",
@@ -40,10 +48,8 @@
       "executor-project-key-unusable",
       "executor-tuple-mismatch",
       "executor-version-change",
-      "f5-4-generation-bool",
       "git-readiness-no-head",
       "identity-platform-fact",
-      "r4-1-source-mismatch",
       "ready-view",
       "reason-code-table"
     ],
@@ -58,11 +64,8 @@
     ],
     "install": [
       "branch-source-preview",
-      "install-generation-bumps",
       "install-lock-foreign-object",
       "install-lock-realpath",
-      "install-receipt-metadata",
-      "install-receipt-relative",
       "reinstall-preserves-data",
       "release-identity-commit",
       "uninstall-records-maintenance"
@@ -74,7 +77,9 @@
       "assertion_target": "installed",
       "stage_role": "scaffold",
       "module": "install.py",
-      "targets": ["payload/install.py"],
+      "targets": [
+        "payload/install.py"
+      ],
       "candidate_clean": true
     },
     "release-identity-commit": {
@@ -82,7 +87,9 @@
       "assertion_target": "installed",
       "stage_role": "scaffold",
       "module": "install.py",
-      "targets": ["payload/install.py"],
+      "targets": [
+        "payload/install.py"
+      ],
       "candidate_clean": true
     },
     "branch-source-preview": {
@@ -90,23 +97,19 @@
       "assertion_target": "installed",
       "stage_role": "scaffold",
       "module": "install.py",
-      "targets": ["payload/install.py"],
+      "targets": [
+        "payload/install.py"
+      ],
       "candidate_clean": true
-    },
-    "install-generation-bumps": {
-      "group": "install",
-      "assertion_target": "source",
-      "stage_role": "target",
-      "module": "install.py",
-      "targets": ["payload/install.py"],
-      "candidate_clean": false
     },
     "install-lock-foreign-object": {
       "group": "install",
       "assertion_target": "source",
       "stage_role": "target",
       "module": "install.py",
-      "targets": ["payload/install.py"],
+      "targets": [
+        "payload/install.py"
+      ],
       "candidate_clean": false
     },
     "install-lock-realpath": {
@@ -114,23 +117,9 @@
       "assertion_target": "source",
       "stage_role": "target",
       "module": "install.py",
-      "targets": ["payload/install.py"],
-      "candidate_clean": false
-    },
-    "install-receipt-metadata": {
-      "group": "install",
-      "assertion_target": "source",
-      "stage_role": "target",
-      "module": "install.py",
-      "targets": ["payload/install.py"],
-      "candidate_clean": false
-    },
-    "install-receipt-relative": {
-      "group": "install",
-      "assertion_target": "source",
-      "stage_role": "target",
-      "module": "install.py",
-      "targets": ["payload/install.py"],
+      "targets": [
+        "payload/install.py"
+      ],
       "candidate_clean": false
     },
     "uninstall-records-maintenance": {
@@ -138,7 +127,9 @@
       "assertion_target": "both",
       "stage_role": "target",
       "module": "install.py",
-      "targets": ["payload/lib/wflib/tasks.py"],
+      "targets": [
+        "payload/lib/wflib/tasks.py"
+      ],
       "candidate_clean": false
     },
     "review-count-reject": {
@@ -146,7 +137,9 @@
       "assertion_target": "source",
       "stage_role": "target",
       "module": "review.py",
-      "targets": ["payload/lib/wflib/review.py"],
+      "targets": [
+        "payload/lib/wflib/review.py"
+      ],
       "candidate_clean": false
     }
   }

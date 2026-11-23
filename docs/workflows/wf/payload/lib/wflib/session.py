@@ -145,11 +145,11 @@ def check_platforms(platforms, session: dict):
         return "WF_IDENTITY_UNRESOLVED", facts
     if not installed:
         facts["reason"] = "installation declares no platforms"
-        facts["next"] = "install --platform <agent>"
+        facts["next"] = "install（已装齐全部平台）"
         return "WF_IDENTITY_UNRESOLVED", facts
     if host not in installed:
         facts["reason"] = "host not installed for this project"
-        facts["next"] = f"install --platform {host}"
+        facts["next"] = "install（已装齐全部平台）"
         return "WF_IDENTITY_UNRESOLVED", facts
     return None, facts
 
