@@ -1475,3 +1475,26 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 421: wf dogfood 残缺口修正（材料身份/启用前置/批准绑定）
+<!-- trellis-session: v=2 fp=7126cf32d6bcd15e -->
+
+**Date**: 2026-11-24
+**Task**: wf dogfood 残缺口修正（材料身份/启用前置/批准绑定）
+**Branch**: `main`
+
+### Summary
+
+按四轮 dogfood 会话与三组外部审查修正 wf：材料原子发布与身份绑定（含 restore 豁免、混合基线阻断）、启用前置唯一实现且写盘前跑、批准绑定摘要/产物/任务 id、调试裁定覆盖语义；版本号回退 0.0.1 并写入'只由人推进'规则。T0 1887、全量 144 单元与 repro 80 全过，发行树按 0.0.1 重建。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cf09db12` | fix(wf): dogfood 残缺口修正（材料身份/启用前置/批准绑定） |
+| `ef6b8a4f` | chore(wf): 重建发行树（0.0.1） |
+
+### Status
+
+[OK] **Completed**

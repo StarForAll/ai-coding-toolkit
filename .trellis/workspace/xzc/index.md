@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 420
+- **Total Sessions**: 421
 - **Last Active**: 2026-11-24
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1477 | Active |
+| `journal-8.md` | ~1500 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 421 | 2026-11-24 | wf dogfood 残缺口修正（材料身份/启用前置/批准绑定） | `cf09db12`, `ef6b8a4f` | `main` |
 | 420 | 2026-11-24 | wf 十六轮 dogfood 修正收口＋安装面向全部平台 | `697db100`, `585bea20`, `e4bfde70`, `1fdb315e`, `3ad03aa0`, `976e9d4c` | `main` |
 | 419 | 2026-11-22 | wf dogfood 三轮修正：身份/升级/审查链路实测收口（0.1.5） | `3b133631`, `8c475199` | `main` |
 | 418 | 2026-11-22 | wf dogfood 二轮修正：抽样降档/机械项入口化/纪律收敛（发行 0.1.4） | `94a4008c`, `d2b6894c` | `main` |
