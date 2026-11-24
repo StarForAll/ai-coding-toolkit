@@ -1127,11 +1127,15 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
         return False, "WF_DEPENDENCY_UNMET", {"unmet": blockers}
     debug = debug_pending(task, ctx.debug_threshold())
     if debug["pending"]:
-        # 把判定所用的阈值一并给出：AI 才知道"到第几次算重复"，否则只看到 pending 列表
+        # 把判定所用的阈值一并给出：AI 才知道"到第几次算重复"，否则只看到 pending 列表。
+        # 裁定由主会话在授权内按根因给出（诊断语义属指引判断，机制稿 §1.3/§11.2），
+        # 不把每个倍数都变成一次人签往返；无法消解时按 §1.5 交人。
         return False, "WF_SEMANTIC_DECISION", {"unruled_debug_multiples": debug["pending"],
                                                "merged": debug["merged"],
                                                "threshold": ctx.debug_threshold(),
-                                               "next": "对每个倍数裁定「同一问题/不同问题」"}
+                                               "next": "主会话按根因对每个倍数裁定「同一问题/不同问题」"
+                                                       "（依据与证据入裁定 reason，经 task-check --decision 落账；"
+                                                       "无法消解再交人）"}
     pending = actions.pending(task)
     if pending and pending.get("id") == ignore_action_id:
         pending = None

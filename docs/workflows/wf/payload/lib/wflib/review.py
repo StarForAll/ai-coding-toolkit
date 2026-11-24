@@ -2927,21 +2927,6 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
     diff_text = redact_patch(diff_text)
     records.atomic_write(os.path.join(materials_dir, "diff.patch"), diff_text + chr(10))
     selected = set(paths)
-    records.write_json(os.path.join(materials_dir, "status.json"),
-                       {"paths": paths, "files": material["files"],
-                        "problems": material["problems"], "empty": material["empty"],
-                        # 材料是脱敏副本：reviewer 看到的是 `***`，不宣称与工作树逐字相同。
-                        # `redaction` 写明**按文件类型的策略**，材料里不会再有"标了 redacted
-                        # 却没说哪部分是原文"的盲区（十四轮 a-1）。
-                        "redacted": True,
-                        "redaction": {"diff": "per-file（配置类全量 / 代码类仅字面量）",
-                                      "prd": "full", "commands": "field-aware"},
-                        "diff_base": material.get("diff_base"),
-                        "diff_base_problem": material.get("diff_base_problem"),
-                        # 索引只列本轮实际物化的路径；整份交付集合是判定侧事实，不该从材料泄漏。
-                        "buckets": {key: [path for path in delivery["buckets"][key]
-                                          if path in selected]
-                                    for key in ("e", "f", "covered_f", "uncovered_f")}})
     prd_text = tasks_mod.read_prd(ctx.root, task) if hasattr(tasks_mod, "read_prd") else ""
     records.atomic_write(os.path.join(materials_dir, "prd.md"),
                          # PRD 是任务文档（散文 + 片段）：按全量规则处置，漏遮面更大
@@ -2964,8 +2949,8 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
     _check_started = ((task.get("check") or {}).get("started_at") or "").replace(":", "").replace(".", "")
     # a-3（三轮外部审查 a4）：日志必须按命令记录的证据身份核对——
     # commands[].evidence_ref + log_digest 是执行时已保存的身份；复制时逐文件比对，
-    # 被改写的日志如实标 verified=false（不再把新字节冒充该 Check 的原始证据），
-    # 引用了却复制不到的日志进 status.json.problems（不静默省略）。
+    # 字节不符或读不到的日志**不进材料包**（身份核对先于物化），改记入
+    # status.json.problems（不静默省略，也不把新字节冒充该 Check 的原始证据）。
     _expected_logs = {os.path.basename(str(cmd.get("evidence_ref"))): cmd.get("log_digest")
                       for cmd in commands
                       if isinstance(cmd, dict) and cmd.get("evidence_ref") and cmd.get("log_digest")}
@@ -3016,15 +3001,24 @@ def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, deli
         _log_problems.append({"reason": "check log referenced by a command was not materialized",
                               "file": _name})
     if _log_problems:
+        # 日志短缺与脱敏范围是 reviewer 同时需要的事实：先汇总再**一次**写出 status.json，
+        # 不做第二遍覆盖写（此前覆盖写丢掉 redacted/redaction，十四轮 b-3）。
         material["problems"] = list(material["problems"]) + _log_problems
-        records.write_json(os.path.join(materials_dir, "status.json"),
-                           {"paths": paths, "files": material["files"],
-                            "problems": material["problems"], "empty": material["empty"],
-                            "diff_base": material.get("diff_base"),
-                            "diff_base_problem": material.get("diff_base_problem"),
-                            "buckets": {key: [path for path in delivery["buckets"][key]
-                                              if path in selected]
-                                        for key in ("e", "f", "covered_f", "uncovered_f")}})
+    records.write_json(os.path.join(materials_dir, "status.json"),
+                       {"paths": paths, "files": material["files"],
+                        "problems": material["problems"], "empty": material["empty"],
+                        # 材料是脱敏副本：reviewer 看到的是 `***`，不宣称与工作树逐字相同。
+                        # `redaction` 写明**按文件类型的策略**，材料里不会再有"标了 redacted
+                        # 却没说哪部分是原文"的盲区（十四轮 a-1）。
+                        "redacted": True,
+                        "redaction": {"diff": "per-file（配置类全量 / 代码类仅字面量）",
+                                      "prd": "full", "commands": "field-aware"},
+                        "diff_base": material.get("diff_base"),
+                        "diff_base_problem": material.get("diff_base_problem"),
+                        # 索引只列本轮实际物化的路径；整份交付集合是判定侧事实，不该从材料泄漏。
+                        "buckets": {key: [path for path in delivery["buckets"][key]
+                                          if path in selected]
+                                    for key in ("e", "f", "covered_f", "uncovered_f")}})
     # 命令记录里含人工验证的原始 decision（理由/引文），材料是外发物 ⇒ 先脱敏再落盘，
     # **只写一次**：此前的"先写原文、最后覆写"一旦脱敏破坏结构就把原文留在材料目录里。
     tests_payload = {"commands": check_mod.redact_commands(commands)}

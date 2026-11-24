@@ -33,7 +33,7 @@ user-invoked: true
 ## 步骤
 
 1. 运行上面的 `review-context`，拿到 `report_path` 与 `materials`。
-2. 只读 `materials` 里的材料（`diff.patch` 是相对**任务基线**的差异；`prd.md` 是本次批准的需求；`check.json` 是 Check 锚点；`tests.json` 是已执行的验证命令，其 `logs[]` 是脱敏验证日志清单——`verified=false` 表示日志字节与 Check 记录的证据摘要不一致（这份测试证据不是当时那份），**必须作为 finding 报出**；`unavailable_cause` 非空表示日志读不到，按"证据不可核实"处理；`recorded_digest` 有值而文件缺失时 `status.json.problems` 会列出）。材料包不足时，可只在 `readable_scope` 内只读仓库补充（业务代码、spec、PRD），把实际读取面写进 `read-scope`；不得越过 `exclusions`。只读材料包、未做仓库补读时 `read-scope` 写 `materials`；本轮 `readable_scope` 显式为空时，空数组表示未补读，不要写仓库路径。**`read-scope` 不得与 `excluded-scope` 或本次 `exclusions` 交叠**：如果某路径已声明排除，就不要把它写进读取面；确实读过就如实写，导入/判定会按越界处理。`.wf/` 运行态与 `.git/` 私有配置不是业务代码，未在 spec/PRD 显式放行时不要申报。
+2. 只读 `materials` 里的材料（`diff.patch` 是相对**任务基线**的差异；`prd.md` 是本次批准的需求；`check.json` 是 Check 锚点；`tests.json` 是已执行的验证命令，其 `logs[]` 只含**通过证据身份核对**的脱敏验证日志（每条带 `verified: true` 与 `recorded_digest`）；Check 引用了但字节不符或读不到的日志**不进包**，改在 `status.json.problems` 列出原因——按"证据不可核实"处理，**必须作为 finding 报出**）。材料包不足时，可只在 `readable_scope` 内只读仓库补充（业务代码、spec、PRD），把实际读取面写进 `read-scope`；不得越过 `exclusions`。只读材料包、未做仓库补读时 `read-scope` 写 `materials`；本轮 `readable_scope` 显式为空时，空数组表示未补读，不要写仓库路径。**`read-scope` 不得与 `excluded-scope` 或本次 `exclusions` 交叠**：如果某路径已声明排除，就不要把它写进读取面；确实读过就如实写，导入/判定会按越界处理。`.wf/` 运行态与 `.git/` 私有配置不是业务代码，未在 spec/PRD 显式放行时不要申报。
 3. 报告写到 `report_path`（文件名 `review-<agent>.md` **就是身份**，正文不必再写 `reviewer-id`/`source-cli`）。写完后把文件头部的 `status=in-progress` 改成 `status=done`——`review-import` 只认 `done`。**状态行的唯一位置约定**：骨架写在第一行，判定只读报告**开头前 400 字符**；把标题/长前言写在状态行之前并超过这个窗口，等价于没有状态行。
    **报告已存在时先看状态行**：`status=in-progress` 是你自己这次的占位（`review-context` 写的骨架），正常续写；**已是 `status=done`** 说明该槽位本轮已完成一份报告、只是还没导入——**停止并回报给人，不要覆盖**。
 4. 按固定检查轴逐项检查：范围、验收、契约/spec、跨层回归、可测性。

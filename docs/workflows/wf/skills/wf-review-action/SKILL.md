@@ -85,7 +85,7 @@ disable-model-invocation: false
 
 1. 在**当前批准触碰面内**修（要碰面外路径：单点且人同意直接改时走轻量通道——`authorize record` 一条 `choice=expand` 后按 `wf-continue` 扩面段处理；批量扩面/改验收口径才回 Plan 扩范围）；
 2. 重跑 `task-check`（旧 Check 与旧锚点一律失效，不能沿用旧 pass）；
-3. 发下一轮前先取人外发范围确认（choice=export，见 `wf-continue`「复杂任务审查」），再用 `review-launch` 在新锚点上重新判。
+3. 外发确认**同任务、同材料类集合持续有效**（见 `wf-continue`「复杂任务审查」——仅换任务或新增材料类才需人重签，不逐轮重取），新锚点上直接 `review-launch` 重新判。
 
 - 轮次不设上限；"这轮算过"的唯一依据是 `review-decide` 的 pass 加上既有 disposition 关闭事实，
   不是"报告读完了"或"建议都登记了"。

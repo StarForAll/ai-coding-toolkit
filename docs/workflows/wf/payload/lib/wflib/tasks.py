@@ -2636,7 +2636,7 @@ def _debug_idempotency_key(entry):
     """声明/裁定的幂等键（实现稿 §2.3.11 ④）。
 
     同一决定文件重入不得重复累计：键取**结构化字段**，不比原文措辞，
-    因此"把同一事实写成另一句话"仍是两条（那是第二次声明，须由人的 dedupe/裁定处置）。
+    因此"把同一事实写成另一句话"仍是两条（那是第二次声明，须由主会话授权内的 dedupe/裁定处置）。
     """
     import json as _json
 
@@ -2849,10 +2849,15 @@ def check_next_hint(task, check, ctx=None):
                 _binding = bool(_gates_mod.review_binding(ctx, task).get("binding"))
             except Exception:      # noqa: BLE001 — 只读判定失败就退回保守提示
                 _binding = False
-        if _open_round is not None and not _result.get("verdict"):
+        # 在途轮是否可继续由「轮次 + 锚点」决定（十四轮 b-1）：launch 不改写 result.verdict
+        # （v66），旧轮的 fail/pass 只是历史，不得把在途轮挤成"重新发起"——那会沿 dogfood
+        # 的失败路径再造人工提醒与重复轮次。
+        if _open_round is not None:
             hint = (f"第 {_open_round} 轮审查仍在进行且锚点未变（同内容重验）："
                     "继续这一轮——review-context 取材料 → 人跑 reviewer → 导入 → 判定；"
                     "不要重新 review-launch")
+            if _binding:
+                hint += "；已有绑定当前锚点的 pass 结论，该轮判定后即可请人 finish"
         elif _binding:
             hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
                     "内容或规划再变才需要重新 review-launch")
@@ -3864,10 +3869,20 @@ def _archive_draft(ctx, task_id):
         entries.append(_entry("commit", [path]))
     from . import sampling as sampling_mod
 
+    # 十六轮后 d-1（盲审）：「不同问题」裁定不产生触发事实（复盘只在「同一问题」方向
+    # 转正），finish 人签前必须有它的可见投影——否则误裁方向无人可见。数据源是
+    # debug_pending 的 rulings_raw（与门禁同一重建口径，不落第二份账本）。
+    from . import gates as gates_mod
+
+    _debug_rulings = (gates_mod.debug_pending(task, ctx.debug_threshold()).get("rulings_raw") or {})
+    ruled_different = [{"subject": subject, "choice": choice}
+                       for subject, choice in sorted(_debug_rulings.items())
+                       if choice == "不同问题"]
     return {
         "title": task.get("title"),
         "entries": entries,
         "pilot_sampling_pending": not sampling_mod.selection(task)["picks"],
+        "debug_ruled_different": ruled_different,
     }
 
 
@@ -3895,9 +3910,13 @@ def cmd_archive(ctx, args):
         from . import cli as _cli_mod
 
         facts_payload = {"draft": draft["entries"], "pilot_sampling_pending": draft["pilot_sampling_pending"],
+                         "debug_ruled_different": draft.get("debug_ruled_different") or [],
                          "note": "草稿只读；本次未写入任何记录",
                          # P1-1（九轮）：草稿同样给不可逆确认投影——缺 record 的在写决定前就要看到
                          "irreversible": _cli_mod._irreversible_projection(ctx.root, _draft_task)}
+        if facts_payload["debug_ruled_different"]:
+            facts_payload["note"] += ("；已裁「不同问题」的重复调试倍数见 debug_ruled_different"
+                                      "（该方向不产生复盘触发事实，收工前可复核）")
         missing = facts_payload["irreversible"]["missing_authorizations"]
         next_ = "草稿只打印不落盘；人确认后把内容写成决定文件，再以 --decision 正式归档"
         if missing:

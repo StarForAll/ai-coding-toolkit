@@ -569,8 +569,12 @@ class Round5ReviewFixesTest(unittest.TestCase):
 
     def test_wf_review_teaches_log_verification(self):
         text = (REPO / "docs/workflows/wf/skills/wf-review/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("verified=false", text)
+        # 2026-11-24 口径：不符/缺失日志不进材料包，改在 status.json.problems 报告
+        # （旧口径"如实标 verified=false"已被先核身份再物化取代）。
+        self.assertIn("不进包", text)
+        self.assertIn("status.json.problems", text)
         self.assertIn("必须作为 finding 报出", text)
+        self.assertNotIn("verified=false", text)
 
     def test_vendor_section_carries_stale_and_fallback(self):
         text = (REPO / "docs/workflows/wf/skills/wf-continue/SKILL.md").read_text(encoding="utf-8")

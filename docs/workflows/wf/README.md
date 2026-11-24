@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.7`（dogfood 五轮修正：人面路径身份统一为项目相对路径（多根副本可分别 `--keep/--restore`，导出清单与安装记录留痕同口径）；帮助声明与实现一致（task-retrospect 必填错标、两处幽灵旗标、委托型命令断言不再空跑）；升级同批维护宿主 `.codex/hooks.json` 条目（`previous_command` 登记 + 冲突交人 + 自检核条目）；新增 `scripts/verify-wf-release.py` 与 pre-push tag 守卫把「版本三者同批」变成机械核对；§1.1 三处陈述偏差收口。**0.1.6 → 0.1.7 升级通道（前提：人已按 §5 创建 `wf-v0.1.7` tag）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.7 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
+| 目标版本 | `0.1.8`（dogfood 六轮修正：在途审查轮不再被旧结论挤掉——`check_next_hint` 按「轮次＋锚点」判在途，旧 fail/pass 留作历史，不再误导重新 `review-launch`；审查材料 `status.json` 汇总后一次写出，日志问题并入后不再丢 `redacted`/`redaction` 脱敏说明；wf-review 材料指引与实现对齐（`logs[]` 只含通过证据身份核对的日志，不符/缺失改在 `status.json.problems`）；升级帮助示例只引用已打 tag 的发行版本并加机械护栏测试；会话轮换出口修正（暂停不解除在途绑定，移除"暂停后重试"无效出口）；重复调试裁定（debug-ruling）归还主会话授权内——机制保留计数、证据、留痕与归档门禁，诊断语义不再逐倍数人签（机制稿 §1.3/§8.1/§11.2 同步；finish 草稿投影已裁「不同问题」倍数，复核面闭合）；wf-review-action 外发确认口径与 wf-continue 对齐（同任务同材料类持续有效）。**0.1.7 → 0.1.8 升级通道（前提：人已按 §5 创建 `wf-v0.1.8` tag）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.8 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -71,8 +71,9 @@ tracked pre-push 钩子对 `refs/tags/wf-v*` 的推送自动跑同一脚本，�
 **"忘记打 tag"也有提醒**：推送的提交若改动发行树、且发行树清单声明的版本没有对应 `wf-v*` tag，
 pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合法顺序）。
 
-**现有发行 tag 的事实（勿据旧文推测）**：已发行 tag 仅 `wf-v0.1.0`；`0.1.1`–`0.1.6` 是未打 tag
-的开发版本，**既不是升级来源、也不能作为升级目标**——升级引用只认真实 tag。
+**现有发行 tag 的事实（勿据旧文推测）**：已发行 tag 以 `git tag --list 'wf-v*'` 实况为准；
+`0.1.1`–`0.1.6` 是未打 tag 的开发版本，**既不是升级来源、也不能作为升级目标**——升级引用只认
+真实 tag。
 
 ## 4. 产物校验
 

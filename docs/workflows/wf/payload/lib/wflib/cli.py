@@ -240,7 +240,7 @@ class Context:
                                          host_session_id=payload.get("session_id"),
                                          note="宿主会话标识已变化；当前边界按既有在途会话续用",
                                          exits=["继续当前对象",
-                                                "完成/暂停/放弃对象后 `wf enable --new-session` 换新会话"]),
+                                                "完成/放弃对象后 `wf enable --new-session` 换新会话（暂停不解除在途绑定）"]),
                         "host_identity_present": True}
             if inflight["state"] == "unresolved":
                 return {"state": "unresolved", "key": None, "attachment": None,
@@ -1218,7 +1218,7 @@ def _rotate_session(ctx):
     """W3-1：`enable --new-session` —— 同边界显式换新会话身份（宿主无关）。
 
     前置：本边界已有可续用会话；其绑定对象已终态（或绑定为空）——在途时
-    `WF_BINDING_MISMATCH`（完成/暂停/放弃对象后重试，不给 bind 之类不成立指引）。
+    `WF_BINDING_MISMATCH`（完成/放弃对象后重试；暂停不解除在途绑定，不给 bind 之类不成立指引）。
     写权语义：轮换不触碰写权——对象终态但写权未释放 ⇒ 拒绝并给 release 出口
     （防把在途写权带进新会话）。
     动作：签发新 `issued_id`，`replace_owner(old, new)` 组更新（既有"轮换=组更新"），
@@ -1272,11 +1272,11 @@ def _rotate_session(ctx):
             raise CliError("WF_BINDING_MISMATCH",
                            {"reason": "绑定对象仍在途，不得轮换会话身份",
                             "object": obj, "session_key": old_key,
+                            # 暂停不解除在途绑定（门禁同口径）：不给"暂停后重试"的无效出口
                             "exits": ["继续当前对象直至完成/归档后重试",
-                                      "task-pause 暂停对象后重试（paused 仍在途，须先完成/放弃）",
                                       "task-abandon 放弃对象后重试",
                                       "新开终端/新执行边界（换边界即换会话）"]},
-                           next_="完成/暂停/放弃当前对象后重试 enable --new-session")
+                           next_="完成/放弃当前对象后重试 enable --new-session（暂停不解除在途绑定）")
     # 写权语义：轮换不触碰写权；对象终态但写权未释放 ⇒ 拒绝并给 release 出口。
     writer_record = writer_mod.load(ctx.root) or {}
     if writer_record.get("state") != "idle":
@@ -2789,7 +2789,10 @@ COMMAND_HELP = {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
         "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）",
                  "--review-notes-draft": "只读生成双轴审查结论骨架（打印目标路径与 TODO，不落盘、不要求写权）",
-                 "--decision": "可选：人工验收决定",
+                 "--decision": "可选：决定文件（数组，每条仍须满足 Decision 六字段）。除人工验收决定外还承载重复调试两处落账——"
+                               "声明 subject `debug-declaration:<verification_id>:count=<n>[:dedupe=<check_id>/<vid>,…][:evidence=<ref>,…]`、"
+                               "裁定 subject `debug-ruling-<verification_id>-<multiple>`（choice=同一问题/不同问题，主会话按根因裁定，依据与证据入 reason；"
+                               "未跨阈值倍数前无需裁定）",
                  "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
                                       "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}}},
@@ -3013,8 +3016,8 @@ COMMAND_HELP = {
                                   "unresolved[].path 逐字一致，可重复；仅应用模式；仅可选资产，"
                                   "必需资产保留删除会被拒）",
                         "--restore": "升级冲突：恢复发行内容（**项目相对路径**，同上；仅应用模式）"},
-               "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --apply",
-               "example_export": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.6 --export-deviations --out /tmp/wf-deviations --json"},
+               "example": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.7 --apply",
+               "example_export": "wf.py upgrade --release /path/to/wf-checkout --release-ref refs/tags/wf-v0.1.7 --export-deviations --out /tmp/wf-deviations --json"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
                    "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
                    "example": "wf.py task-pause --task 2026-xxxx --reason '等人答复' --json"},

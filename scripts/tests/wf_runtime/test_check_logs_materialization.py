@@ -128,6 +128,10 @@ class CheckLogsMaterializationTest(unittest.TestCase):
         status = json.loads((materials / "status.json").read_text(encoding="utf-8"))
         self.assertTrue(any("not materialized" in str(p.get("reason"))
                             for p in status.get("problems") or []))
+        # 十四轮 b-3：日志问题并入后仍是一次写出——脱敏说明不得被第二次覆盖写丢掉
+        self.assertIs(status.get("redacted"), True)
+        self.assertEqual((status.get("redaction") or {}).get("diff"),
+                         "per-file（配置类全量 / 代码类仅字面量）")
 
     def test_legacy_started_field_alone_does_not_materialize(self):
         # 旧字段名（started）不再被读——它不是真实 Check 记录字段；

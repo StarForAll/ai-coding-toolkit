@@ -299,7 +299,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 | `argv` 验证结果 | 入口按批准声明执行并自行取证；无输入参数 | `check.commands` |
 | `manual` 验证与 `verification_ids` 为空的验收 | `--decision <path>`：每条 Decision 的 `subject` 记 `verification_id` 或 `acceptance_id` 与当前 `plan.version`；**不要求文件预含 `check.anchor`**——本次 `check_anchor` 要到 Check 内部才算得出，由入口在写入 `acceptance_results` 时把该 Decision 核绑到本次锚点并在记录里补记 | `check.commands`（manual）/ `check.acceptance_results` |
 | 内部双轴审查 | `--review-notes <path>`：标准轴与需求轴各一段结论与依据；它是材料，不是人的决定。两轴 `conclusion` 必须均为 `pass`，任一 `fail` 或 `undecided` 都不判 pass（机制稿 §3.5） | `check.internal_review` |
-| Execute 期重复调试声明与 `debug-ruling` 裁定 | `task-check --decision <path>`（人或主会话声明 + 「同一问题/不同问题」裁定） | `execution.debug_declarations` / `execution.human_decisions` |
+| Execute 期重复调试声明与 `debug-ruling` 裁定 | `task-check --decision <path>`（主会话授权内声明与裁定、人兜底——机制稿 §1.3；「同一问题/不同问题」） | `execution.debug_declarations` / `execution.human_decisions` |
 | 复盘触发与可选复盘 | `task-retrospect --evidence <path>`（触发事实与证据引用）+ `--decision <path>`（裁定；无触发时人主动复盘记 `required=false`） | `task.retrospective` |
 
 `task.work-satisfied` 的首次 completed 回执由 `task-check` 在写入前核验并在同一 action 内写（**承载动作由本文指定**：机制稿只要求「由执行入口在后置成立时记录」，未钉死是哪个状态动作；与 `task.retrospect` 承担 `task.retrospective-done` 同构）。`gate` 是只读断言，不补写回执。

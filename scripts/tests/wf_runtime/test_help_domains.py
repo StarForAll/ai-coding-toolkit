@@ -71,6 +71,38 @@ class ExampleFileTest(unittest.TestCase):
             self.assertTrue(decisions.accepts("stop_choice", item["choice"]), item["choice"])
 
 
+class ReleaseRefExampleTest(unittest.TestCase):
+    """十四轮 b-4：升级示例引用的发行 tag 必须真实存在。
+
+    病灶：示例写着 `refs/tags/wf-v0.1.6`，而 0.1.1–0.1.6 从未打 tag——照抄示例的
+    操作者在 `rev-parse` 层面直接失败。判据不是"等于当前 manifest 版本"（开发中的
+    版本还没有 tag），而是"示例引用的版本已在本地 tag 列表里"。
+    """
+
+    def test_upgrade_example_refs_an_existing_tag(self):
+        import re
+        import subprocess
+
+        repo = str(Path(__file__).resolve().parents[3])
+        # 无 tag 的 clone（shallow/新 clone）无法核验存在性：跳过而不是误报
+        any_tag = subprocess.run(["git", "tag", "--list", "wf-v*"], cwd=repo,
+                                 capture_output=True, text=True, check=True).stdout.strip()
+        if not any_tag:
+            self.skipTest("本地 clone 无 wf-v* tag，存在性判据不可用")
+        entry = cli.COMMAND_HELP["upgrade"]
+        for field in ("example", "example_export"):
+            example = str(entry.get(field) or "")
+            match = re.search(r"refs/tags/(wf-v\d+\.\d+\.\d+)", example)
+            self.assertIsNotNone(match, f"升级示例 {field} 缺 refs/tags/wf-vX.Y.Z 形态：{example}")
+            tag = match.group(1)
+            existing = subprocess.run(
+                ["git", "tag", "--list", tag],
+                cwd=repo,
+                capture_output=True, text=True, check=True).stdout.strip()
+            self.assertEqual(existing, tag,
+                             f"升级示例 {field} 引用了不存在的 tag：{tag}（只引用已打 tag 的发行版本）")
+
+
 class UsageRegistryTest(unittest.TestCase):
     """2026-11-21（五轮审查 P0-1/P0-2）：help 全覆盖 + 用法校验注册表一致性。"""
 
