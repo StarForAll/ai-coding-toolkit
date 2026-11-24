@@ -200,7 +200,15 @@ class MechanicalRevisionDraftTest(unittest.TestCase):
                 json.dumps({"id": "t-d", "title": "草稿", "status": "in_progress", "phase": "execute",
                             "plan": {"complexity": "light", "touch_paths": ["src/**"]},
                             "entry_snapshot": {"touch_paths": ["src/**"]}}), encoding="utf-8")
-            task_dir.joinpath("prd.md").write_text("# PRD\n", encoding="utf-8")
+            # 草稿预检（2026-11-24）按正式入口同判据核 PRD：夹具给最小合法 plan 块。
+            _plan = {"schema_version": 1, "touch_paths": ["src/**"],
+                     "acceptance": [{"id": "a1", "statement": "可用", "verification_ids": ["v1"]}],
+                     "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["true"]},
+                                        "cwd": ".", "input_refs": [], "required": True,
+                                        "consume_at": "check"}]}
+            task_dir.joinpath("prd.md").write_text(
+                "# PRD\n\n<!-- wf-plan:v1 -->\n```json\n" + json.dumps(_plan, ensure_ascii=False, indent=2)
+                + "\n```\n", encoding="utf-8")
 
             class Ctx:
                 root = str(tmp)

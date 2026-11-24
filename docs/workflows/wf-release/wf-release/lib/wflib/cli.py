@@ -2761,11 +2761,16 @@ COMMAND_HELP = {
     "task-approve": {
         "purpose": "记录人的规划批准（含复杂度与 TDD 的人工确认）",
         "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填，JSON 数组）",
-                 "--draft": "只读生成批准决定草稿（object_digest 预填当前 PRD 摘要；TODO 占位须人替换）"},
+                 "--draft": "只读生成批准决定草稿：先按正式入口同判据预检 PRD（模板/plan 块/占位/"
+                            "touch_paths，不合格拒绝并给问题清单），通过后 object_digest 预填当前 PRD 摘要；"
+                            "TODO 占位须人替换"},
         "inputs": {"decision[]": {"source": "人答复来源（必填）", "at": "时间（必填）",
                                   "subject": "必须含任务 id 或对象摘要（必填）",
-                                  "object_digest": "当前 PRD 的 sha256（必填；摘要不符时错误回显 expected_prd_digest，"
-                                                   "入口不代填——人对 PRD 的批准留痕不可替代）",
+                                  "object_digest": "当前 PRD 的 sha256（键必填；推荐填值——精确绑定批准"
+                                                   "对应的 PRD 版本，摘要不符时报 expected_prd_digest，"
+                                                   "入口不代填——人对 PRD 的批准留痕不可替代；"
+                                                   "留空按最低绑定接受，须 subject 含任务 id，"
+                                                   "此时代码无法核对批准针对哪一版 PRD，仅作旧决定兼容）",
                                   "choice": f"批准：{PLAN_APPROVAL_CHOICES}；"
                                             f"机械修订：{MECHANICAL_REVISION_CHOICES}（必填）",
                                   "生成代次": "inputs.generation 可显式覆盖；缺省取本会话运行态记录的代次"

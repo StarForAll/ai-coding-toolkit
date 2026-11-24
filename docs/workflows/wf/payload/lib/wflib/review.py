@@ -801,19 +801,25 @@ def open_findings(ctx, task):
             "ambiguous": ambiguous}
 
 
-def round_open_blocking(ctx, task, round_no, extra_dispositions=(), extra_main=None):
+def round_open_blocking(ctx, task, round_no, extra_dispositions=(), extra_main=None, *,
+                        only_round=True):
     """本轮仍未关闭的 blocking（判定用）：复用 `open_findings`，只把本次 dispositions 临时并入。
 
     `open_findings` 消费的是已落盘 `reviews.dispositions`；判定要问的是"把本次 --plan 也
     算进去之后，本轮还剩哪些未关闭项"。这里不另写关闭匹配逻辑，只构造一个浅拷贝任务。
+    `only_round=False` 返回**全部轮次**的未关闭 blocking（pass 判定的任务级校验用：
+    pass 结论要求全部已知 blocking 已关闭，只拦本轮会让旧轮 fail 的未处置项被 pass 覆盖、
+    再在归档门禁反弹成"可 finish 却被拦"的打架提示）。
     """
     reviews = dict(task.get("reviews") or {})
     reviews["dispositions"] = list(reviews.get("dispositions") or []) + list(extra_dispositions)
     if extra_main is not None:
         reviews["main_reviews"] = list(reviews.get("main_reviews") or []) + [extra_main]
     probe = dict(task, reviews=reviews)
-    return [item for item in open_findings(ctx, probe)["blocking"]
-            if int(item.get("round") or 0) == int(round_no)]
+    blocking = open_findings(ctx, probe)["blocking"]
+    if only_round:
+        return [item for item in blocking if int(item.get("round") or 0) == int(round_no)]
+    return blocking
 
 
 def lint_report(ctx, task, text):
@@ -2745,7 +2751,8 @@ def materialize_delivery(root, paths, *, base=None):
     - 删除：同一个基线对比给出删除 hunk；随提交删除的路径同样出现在片段里；
     - 二进制：只给可见标记（路径 + 字节 + 摘要），不内联；
     - 取片段失败：进 `problems` 并在正文留下 `[wf-material-missing]`，绝不静默成"无差异"；
-    - 基线不可用（缺失/不可达）：如实进 `problems` 并退回 `HEAD`，同时在正文标注。
+    - 基线不可用（缺失/不可达）：如实进 `status.json.diff_base_problem` 与入口 facts
+      并退回 `HEAD`（不静默；载体是材料清单与 facts，不在 diff 正文插标注块）。
     """
     files, problems, chunks = [], [], []
     diff_base, base_problem = _resolve_diff_base(root, base)
@@ -2899,13 +2906,68 @@ def redact_patch(text):
     return "".join(pieces)
 
 
+MATERIALS_PROTOCOL = "wf-materials-v1"
+MANIFEST_NAME = "materials-manifest.json"
+
+
+def load_materials_manifest(materials_dir):
+    """轮次材料身份（manifest）：物化即固定，供续写与判定还原 reviewer 读到的版本。
+
+    manifest 缺失/损坏返回 None（按未物化处理，重新物化并覆盖写）；文件存在但
+    形状不符同样返回 None——不把损坏的 manifest 当有效身份。
+    """
+    path = os.path.join(materials_dir, MANIFEST_NAME)
+    if not os.path.isfile(path):
+        return None
+    try:
+        data = records.load_json(path)
+    except Exception:
+        return None
+    if not isinstance(data, dict) or data.get("protocol") != MATERIALS_PROTOCOL:
+        return None
+    return data
+
+
+def verify_materials_manifest(manifest, materials_dir):
+    """按 manifest 逐文件核摘要；返回失配列表（空即一致）。含子目录相对路径。"""
+    drift = []
+    for rel, digest in sorted((manifest.get("files") or {}).items()):
+        actual, cause, reason = records.file_digest_state(os.path.join(materials_dir, str(rel)))
+        if not actual:
+            drift.append({"file": str(rel), "reason": "missing",
+                          "unavailable_cause": cause, "detail": reason})
+        elif actual != digest:
+            drift.append({"file": str(rel), "reason": "digest mismatch",
+                          "recorded": digest, "actual": actual})
+    return drift
+
+
+def write_materials_manifest(materials_dir, check_id, check_anchor, material_facts):
+    """物化完成后扫描材料目录写 manifest（先扫后写，manifest 自身不入 files）。"""
+    files = {}
+    for base, _dirs, names in os.walk(materials_dir):
+        for name in sorted(names):
+            path = os.path.join(base, name)
+            if os.path.abspath(path) == os.path.abspath(os.path.join(materials_dir, MANIFEST_NAME)):
+                continue
+            rel = os.path.relpath(path, materials_dir)
+            digest, _cause, _reason = records.file_digest_state(path)
+            if digest:
+                files[rel] = digest
+    payload = {"protocol": MATERIALS_PROTOCOL, "check_id": check_id,
+               "check_anchor": check_anchor, "generated_at": records.now_str(),
+               "files": files, "facts": material_facts}
+    records.write_json(os.path.join(materials_dir, MANIFEST_NAME), payload)
+    return payload
+
+
 def write_materials(ctx, task, round_no, anchor, materials_dir, paths=None, delivery=None):
     """把本轮审查材料落盘（唯一实现）：diff.patch + status.json + prd/check/tests。
 
     交付面来自 `scope.delivery_set`；launch 声明缩小范围时由 `paths` 传入其子集，
     让"声明要发什么"与"实际物化什么"是同一份输入。未跟踪新文件必须出现在 diff.patch；
     生成失败写进 status.json 的 problems，正文留 `[wf-material-missing]`，不把失败伪装成
-    "无差异"。返回可并入入口 facts 的材料事实。
+    "无差异"。返回可并入入口 facts 的材料事实；写完由调用方落 manifest（材料身份）。
     """
     from . import tasks as tasks_mod
 
@@ -3148,8 +3210,57 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     directory = round_dir(ctx, task_id, round_no)
     materials = os.path.join(directory, "materials")
     os.makedirs(materials, exist_ok=True)
-    material_facts = write_materials(ctx, record, round_no, anchor, materials,
-                                     paths=paths, delivery=delivery)
+    # 轮次材料一经物化即固定（manifest 落盘）：同轮重入校验复用、不重写——reviewer
+    # 当时读到的材料版本可由 manifest 还原。同锚点重跑 Check（新 check_id）后旧轮
+    # 续写仍读首轮材料；当前 Check 与物化 check_id 不同时在 facts 标注，判定按本轮
+    # 固定材料核对（同内容免重审与证据身份不冲突：锚点相同 ⇒ 被审的是同一份内容）。
+    current_check_id = (record.get("check") or {}).get("id")
+    manifest = load_materials_manifest(materials)
+    if manifest is not None:
+        drift = verify_materials_manifest(manifest, materials)
+        if drift:
+            raise ReviewError("WF_REVIEW_INVALID", {
+                "reason": "本轮材料与 manifest 不符（材料在物化后被改动或损坏）",
+                "manifest_check_id": manifest.get("check_id"), "drift": drift,
+                "exits": ["不要手改材料目录；确认目录被外部改动后，人工删除 materials/"
+                          "materials-manifest.json 后重跑 review-context 重新物化",
+                          "报告按 manifest 记录的材料版本核对；改动会使判定无法核对证据身份"]})
+        material_facts = dict(manifest.get("facts") or {}, materials_fixed=True)
+    else:
+        material_facts = write_materials(ctx, record, round_no, anchor, materials,
+                                         paths=paths, delivery=delivery)
+        manifest = write_materials_manifest(materials, current_check_id, anchor, material_facts)
+    # 授权边界事实与首次分支同源（launch 记录是唯一登记处）：续写（上下文丢失后重入）
+    # 恰是最需要重读"本轮授权我读什么、排除什么"的场景。
+    launch_facts = {"submitted_scope": (launch or {}).get("submitted_scope") or {},
+                    "readable_scope": (launch or {}).get("readable_scope") or {},
+                    "exclusions": list((launch or {}).get("exclusions") or []),
+                    "anchor": (launch or {}).get("anchor") or {"check_anchor": anchor}}
+    request_paths = {}
+    request_path = None
+    for _slot, _cli in declared_slots(launch):
+        _path = os.path.join(slot_dir(ctx, task_id, round_no, _slot), "request.json")
+        request_paths[_slot] = _path
+        if _cli and _cli == agent:
+            request_path = _path
+    if request_path is None:
+        # 未声明 reviewer_cli 绑定时槽位由位置分配推导；每槽位请求内容相同，任取一份
+        # 都代表本轮授权事实（优先排序第一份，槽位缺失时按 agent 名回退）。
+        request_path = (sorted(request_paths.values())[0]
+                        if request_paths
+                        else os.path.join(slot_dir(ctx, task_id, round_no, agent), "request.json"))
+    materials_facts = {"diff": os.path.join(materials, "diff.patch"),
+                       "prd": os.path.join(materials, "prd.md"),
+                       "check": os.path.join(materials, "check.json"),
+                       "tests": os.path.join(materials, "tests.json"),
+                       "status": os.path.join(materials, "status.json"),
+                       # P2-8（2026-11-21 六轮）：授权请求原件——reviewer 需要时可核对
+                       # "本轮授权我读什么、排除什么"；路径指向发起写入的槽位目录。
+                       "request": request_path,
+                       "request_slots": request_paths}
+    materials_identity = {"check_id": manifest.get("check_id"),
+                          "current_check_id": current_check_id,
+                          "fixed": True}
     target = agent_report_path(ctx, task_id, round_no, agent)
     status = read_agent_status(target)
     if reset:
@@ -3174,19 +3285,14 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
             next_="已有 in-progress 草稿：从 report_path 续写，保留已写内容；写完改 done 再导入",
             facts={"round": round_no, "agent": agent, "report_path": target,
                    "resumed": True,
-                   "materials": {"diff": os.path.join(materials, "diff.patch"),
-                                 "prd": os.path.join(materials, "prd.md"),
-                                 "check": os.path.join(materials, "check.json"),
-                                 "tests": os.path.join(materials, "tests.json"),
-                                 "status": os.path.join(materials, "status.json"),
-                                 # P2-8（2026-11-21 六轮）：本槽位的授权请求原件——
-                                 # reviewer 需要时可核对"本轮授权我读什么、排除什么"
-                                 "request": os.path.join(directory, "request.json")},
+                   "materials": materials_facts,
                    **material_facts, "legacy_scope": legacy_scope, "narrowed": narrowed,
                    "delivery_path_count": len(delivery["paths"]),
                    "submitted_paths": (sorted(str(item) for item in declared_paths)
                                        if isinstance(declared_paths, list) else None),
-                   "skeleton_fields": list(REPORT_FIELDS)})
+                   "skeleton_fields": list(REPORT_FIELDS),
+                   "materials_check": materials_identity,
+                   **launch_facts})
     if status == "done":
         raise ReviewError("WF_REVIEW_INVALID",
                           {"reason": "this agent already has a report for the round",
@@ -3204,11 +3310,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
         next_="按 materials 写报告到 report_path；导入前先跑 `wf lint report --file <report_path>`，"
               "保存时把头部 status 改为 done",
         facts={"round": round_no, "agent": agent, "report_path": target,
-               "materials": {"diff": os.path.join(materials, "diff.patch"),
-                             "prd": os.path.join(materials, "prd.md"),
-                             "check": os.path.join(materials, "check.json"),
-                             "tests": os.path.join(materials, "tests.json"),
-                             "status": os.path.join(materials, "status.json")},
+               "materials": materials_facts,
                **material_facts,
                "legacy_scope": legacy_scope,
                "narrowed": narrowed,
@@ -3216,10 +3318,8 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                "submitted_paths": (sorted(str(item) for item in declared_paths)
                                    if isinstance(declared_paths, list) else None),
                "skeleton_fields": list(REPORT_FIELDS),
-               "submitted_scope": (launch or {}).get("submitted_scope") or {},
-               "readable_scope": (launch or {}).get("readable_scope") or {},
-               "exclusions": (launch or {}).get("exclusions") or [],
-               "anchor": {"check_anchor": anchor}},
+               "materials_check": materials_identity,
+               **launch_facts},
     )
 
 
@@ -4995,6 +5095,22 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         if open_blocking_now:
             verdict = "fail"
         elif verdict == "pass":
+            # ① 任务级一致性（2026-11-24）：pass 结论要求**全部**已知 blocking 已关闭——
+            # 只拦本轮会让旧轮 fail 报告的未处置项被 pass 覆盖，再在归档门禁 C2 反弹，
+            # 造出"提示可 finish、门禁必拦"的打架（dogfood 八轮审查的返工源）。
+            # 本次 --plan 里一并给出的处置已计入（same probe），无需二次提交。
+            _other_open = [item for item in round_open_blocking(ctx, task, round_no, dispositions,
+                                                                extra_main=main_record,
+                                                                only_round=False)
+                           if int(item.get("round") or 0) != int(round_no)]
+            if _other_open:
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "pass 结论与已知事实矛盾：仍有他轮未关闭 blocking",
+                    "open_blocking": _other_open,
+                    "exits": ["在本次处置文件中补齐对这些 finding 的处置（round+slot 明确；"
+                              "accepted 须 verified 证据，误报/重分类走 disputed 复核）后重跑 review-decide",
+                              "仍有真实阻塞时保持 fail：修复 → 重查 → 再判",
+                              "处置无法本地核实时登记 judgment（kind=缺口/未核实, outcome=escalated）交人"]})
             main_fail_axes = [axis for axis, value in ((main_record or {}).get("axes") or {}).items()
                               if _axis_conclusion(value) == "fail"]
             if main_fail_axes:
@@ -5030,6 +5146,17 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                        "decided_at": records.now_str()})
         reviews["rounds"] = rounds
         facts = dict(facts, scope=scope_facts)
+        # 判定引用的材料身份：本轮 manifest（轮次材料一经物化即固定）的摘要——
+        # "判定通过时 reviewer 读到的是哪份 check.json/日志"由此可还原，不靠时间推断。
+        _materials_identity = None
+        _manifest = load_materials_manifest(
+            os.path.join(round_dir(ctx, task.get("id"), round_no), "materials"))
+        if _manifest:
+            _manifest_bytes = json.dumps(_manifest, sort_keys=True,
+                                         ensure_ascii=False).encode("utf-8")
+            _materials_identity = {"check_id": _manifest.get("check_id"),
+                                   "manifest_digest": "sha256:"
+                                   + records.sha256_hex(_manifest_bytes)}
         result = {
             "verdict": verdict,
             "round": int(round_no),
@@ -5040,6 +5167,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             "imported": [{"slot": entry.get("slot"), "report_digest": entry.get("report_digest")} for entry in imported],
             "facts": facts,
             "degraded": (launch or {}).get("degraded"),
+            "materials": _materials_identity,
         }
         reviews["result"] = result
         # 历史 fail 事实须能重建：把本轮结论落到所在尝试的 outcome（机制稿 §9.2、§11.2）
@@ -5071,7 +5199,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         code,
         object={"id": task.get("id"), "name": task.get("title")},
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
-        next_=("verdict=pass 后由人调用 finish；他轮未关闭项见 status --short" if verdict == "pass" else
+        next_=("verdict=pass（全部已知 blocking 已关闭）后由人调用 finish（wf-finish）" if verdict == "pass" else
                ("按异常退出处置：暂停，或经人重新分级后按轻量完成" if verdict == "unavailable" else
                 "有未关闭 blocking：在批准范围内修复→重跑 task-check→重新发起；"
                 "误报/重分类经复核登记 accepted 后可重判")),

@@ -849,7 +849,15 @@ class DecisionDraftCommandsTest(unittest.TestCase):
             json.dumps({"id": "t-d", "title": "草稿", "status": "in_progress", "phase": "execute",
                         "plan": {"complexity": "light", "touch_paths": ["src/**"]},
                         "entry_snapshot": {"touch_paths": ["src/**"]}}), encoding="utf-8")
-        task_dir.joinpath("prd.md").write_text("# PRD\n", encoding="utf-8")
+        # 草稿预检（2026-11-24）按正式入口同判据核 PRD：夹具给最小合法 plan 块。
+        _plan = {"schema_version": 1, "touch_paths": ["src/**"],
+                 "acceptance": [{"id": "a1", "statement": "可用", "verification_ids": ["v1"]}],
+                 "verifications": [{"id": "v1", "invocation": {"kind": "argv", "argv": ["true"]},
+                                    "cwd": ".", "input_refs": [], "required": True,
+                                    "consume_at": "check"}]}
+        task_dir.joinpath("prd.md").write_text(
+            "# PRD\n\n<!-- wf-plan:v1 -->\n```json\n" + json.dumps(_plan, ensure_ascii=False, indent=2)
+            + "\n```\n", encoding="utf-8")
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -914,6 +922,32 @@ class DecisionDraftCommandsTest(unittest.TestCase):
         self._draft_of("cmd_task_approve", ["--task", "t-d", "--draft"])
         self._draft_of("cmd_task_replan", ["--task", "t-d", "--draft"])
         self.assertEqual((self.root / ".wf" / "tasks" / "t-d" / "task.json").read_bytes(), before)
+
+    def test_approve_draft_preflight_rejects_incomplete_prd(self):
+        """P1-4（2026-11-24）：草稿前按正式入口同判据预检 PRD——模板问题在人答复前暴露。"""
+        prd = self.root / ".wf" / "tasks" / "t-d" / "prd.md"
+        prd.write_text("# PRD（无 plan 块）\n", encoding="utf-8")
+        with self.assertRaises(tasks_mod.TaskError) as caught:
+            self._draft_of("cmd_task_approve", ["--task", "t-d", "--draft"])
+        self.assertEqual(caught.exception.code, "WF_TEMPLATE_INCOMPLETE")
+        self.assertTrue(caught.exception.facts["problems"])
+
+    def test_approve_draft_lists_pending_plan_questions(self):
+        """合法 PRD 出骨架，facts 附待答 plan-q 编号（答复仍由人在批准决定里给）。"""
+        prd = self.root / ".wf" / "tasks" / "t-d" / "prd.md"
+        prd.write_text("# PRD\n\nplan-q-1：要不要保留旧接口？\n\n"
+                       "<!-- wf-plan:v1 -->\n```json\n" + json.dumps({
+                           "schema_version": 1, "touch_paths": ["src/**"],
+                           "acceptance": [{"id": "a1", "statement": "可用",
+                                           "verification_ids": ["v1"]}],
+                           "verifications": [{"id": "v1",
+                                              "invocation": {"kind": "argv", "argv": ["true"]},
+                                              "cwd": ".", "input_refs": [], "required": True,
+                                              "consume_at": "check"}]},
+                           ensure_ascii=False) + "\n```\n", encoding="utf-8")
+        result = self._draft_of("cmd_task_approve", ["--task", "t-d", "--draft"])
+        self.assertEqual(result["facts"]["pending_plan_questions"], ["plan-q-1"])
+        self.assertEqual(result["facts"]["draft"][0]["choice"], "approve")
 
 
 class ContentBoundPatternsTest(unittest.TestCase):

@@ -1693,6 +1693,45 @@ def cmd_task_approve(ctx, args):
         task_id = args.value("--task")
         if not task_id:
             raise TaskError("WF_USAGE_INVALID", {"reason": "task-approve requires --task <id>"})
+        task = _load_or_fail(ctx, task_id)
+        # 批准前预检（2026-11-24，P1-4）：正式入口对 PRD 的结构性校验里，只依赖
+        # PRD/项目根的部分前移到草稿——人答复之前就把模板问题修完，不再出现
+        # "人批准完才第一次暴露 JSON/占位错误"的返工（dogfood 会话1 的原始失败）。
+        # 依赖决定文件的校验（未知 choice、摘要比对、subject 绑定、plan-q 答复）不前移；
+        # 正式入口保留全套重核（草稿与正式之间 PRD 可变，digest 失配仍会拦截）。
+        prd_raw = read_prd(ctx.root, task)
+        if prd_raw is None:
+            # PRD 文件缺失与「有 PRD 但没写 plan 块」是两个失败：前者连预检对象都没有，
+            # 给专门出口，不冒充模板问题（2026-11-24 R6）。
+            raise TaskError("WF_TEMPLATE_INCOMPLETE", {
+                "problems": [{"reason": "PRD missing"}],
+                "next_": "先写 PRD（含 wf-plan 块）再生成批准草稿；正式批准会按同一判据拒绝",
+            })
+        prd_text = prd_raw or ""
+        _block, _block_errors = parse_plan_block(prd_text)
+        problems = list(_block_errors)
+        pending_qs = extract_plan_questions(prd_text)
+        if not problems:
+            from . import templates as templates_mod
+            from . import paths as paths_mod
+
+            _markers = [{"kind": "required-field", "field": field} for field, _offset in
+                        templates_mod.find_markers(prd_text)]
+            _markers += [{"kind": "required-value", "pointer": pointer}
+                         for pointer in templates_mod.find_value_markers(_block)]
+            if _markers:
+                problems.append({"unfilled": _markers, "template": "prd.md"})
+            problems.extend(question_errors(pending_qs))
+            _touch = paths_mod.touch_path_errors(_block.get("touch_paths") or [], ctx.root)
+            if _touch:
+                problems.append({"invalid_touch_paths": [{"entry": entry, "reason": reason}
+                                                         for entry, reason in _touch]})
+        if problems:
+            raise TaskError("WF_TEMPLATE_INCOMPLETE", {
+                "problems": problems,
+                "next_": "先修 PRD（模板标记/plan 块/占位值/touch_paths）再生成批准草稿；"
+                         "正式批准会按同一判据拒绝",
+            })
         digest = _prd_digest_for_task(ctx, task_id)
         entry = {"source": "TODO human:<来源>",
                 "at": records.now_str(),
@@ -1707,7 +1746,8 @@ def cmd_task_approve(ctx, args):
                       "choice": "机械修订",
                       "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"
                       "——仅本任务已有批准、且只改排版/转义时保留本条，否则删除"}
-        return _decision_draft_result(ctx, task_id, [entry, mechanical], command="task-approve")
+        return _decision_draft_result(ctx, task_id, [entry, mechanical], command="task-approve",
+                                      extra_facts={"pending_plan_questions": pending_qs})
     from . import cli, lock
 
     task_id = args.value("--task")
@@ -2789,19 +2829,22 @@ def check_next_hint(task, check, ctx=None):
     hint = None
     # A3（三轮二审）：审查轮里仍有未关闭 blocking 时，下一跳不静默换到收工——
     # 可稳定计算（open_findings 唯一实现），让"修复→重查→再判"三步出现在 AI 必读的 next_。
-    open_blocking_hint = ""
+    # 列表同时供 _binding 分支条件化：有未关闭 blocking 时不再说"可请人 finish"
+    # （归档门禁会拦，同一条提示不能自相矛盾——2026-11-24）。
+    open_blocking = []
     if ctx is not None:
         try:
             from . import review as _review_mod
 
-            _open = _review_mod.open_findings(ctx, task)["blocking"]
-            if _open:
-                rounds = sorted({int(item.get("round") or 0) for item in _open})
-                open_blocking_hint = (f"；注意：审查仍有未关闭 blocking（轮次 {rounds}）——"
-                                      "在批准范围内修复 → 重跑 task-check → 重新发起判定"
-                                      "（误报/重分类经复核登记 accepted 后可同轮重判，见 wf-review-action）")
+            open_blocking = _review_mod.open_findings(ctx, task)["blocking"]
         except Exception:   # 投影失败不阻断下一跳本身
-            pass
+            open_blocking = []
+    open_blocking_hint = ""
+    if open_blocking:
+        rounds = sorted({int(item.get("round") or 0) for item in open_blocking})
+        open_blocking_hint = (f"；注意：审查仍有未关闭 blocking（轮次 {rounds}）——"
+                              "在批准范围内修复 → 重跑 task-check → 重新发起判定"
+                              "（误报/重分类经复核登记 accepted 后可同轮重判，见 wf-review-action）")
     if (task.get("plan") or {}).get("complexity") == "complex":
         export_note = ""
         if ctx is not None:
@@ -2830,14 +2873,27 @@ def check_next_hint(task, check, ctx=None):
         # 只有**门禁也认为绑定**时才敢请人收工：报告摘要失配时 gates.review_binding 会拒，
         # next_ 若仍说"直接 finish"就是把 AI 送进一次必然失败的归档（十三轮 a-3）。
         # 原轮尚未判定、且锚点仍是当前锚点：继续那一轮（取材料/导入/判定），不要重新发起
+        # 在途轮是否已判定：判据与 review 侧统一（2026-11-24）——走 latest_decision
+        # （rounds[] 为空时从存量 result 回退），不再直读 rounds[]。两处判据分裂时
+        # 同一轮会同时得到"仍在进行"（本函数）与"已判定"（review-status/repair_scope）。
+        _review_mod_decided = None
+        try:
+            from . import review as _review_mod_hint
+
+            _review_mod_decided = _review_mod_hint.latest_decision
+        except Exception:      # 投影失败退回旧判据，不阻断下一跳本身
+            _review_mod_decided = None
         _open_round = None
         for _launch in ((task.get("reviews") or {}).get("launches") or []):
             if not isinstance(_launch, dict):
                 continue
             _round = int(_launch.get("round") or 0)
-            _decided = any(int(item.get("round") or 0) == _round
-                           for item in ((task.get("reviews") or {}).get("rounds") or [])
-                           if isinstance(item, dict))
+            if _review_mod_decided is not None:
+                _decided = _review_mod_decided(task, _round) is not None
+            else:
+                _decided = any(int(item.get("round") or 0) == _round
+                               for item in ((task.get("reviews") or {}).get("rounds") or [])
+                               if isinstance(item, dict))
             _anchor = (_launch.get("anchor") or {}).get("check_anchor")
             if not _decided and _anchor and _anchor == _current:
                 _open_round = _round
@@ -2854,13 +2910,19 @@ def check_next_hint(task, check, ctx=None):
         # 的失败路径再造人工提醒与重复轮次。
         if _open_round is not None:
             hint = (f"第 {_open_round} 轮审查仍在进行且锚点未变（同内容重验）："
-                    "继续这一轮——review-context 取材料 → 人跑 reviewer → 导入 → 判定；"
+                    "继续这一轮——review-context 取材料（本轮材料按首轮物化固定，"
+                    "不随 Check 重跑改写）→ 人跑 reviewer → 导入 → 判定；"
                     "不要重新 review-launch")
             if _binding:
                 hint += "；已有绑定当前锚点的 pass 结论，该轮判定后即可请人 finish"
         elif _binding:
-            hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
-                    "内容或规划再变才需要重新 review-launch")
+            if open_blocking:
+                hint = ("已有审查结论绑定当前内容锚点，但仍有未关闭 blocking："
+                        "先按处置规则关闭（accepted 须核实证据，误报/重分类走复核登记）"
+                        "或保持判定一致，再请人 finish——直接 finish 会被归档门禁拦下")
+            else:
+                hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
+                        "内容或规划再变才需要重新 review-launch")
         elif _result.get("verdict") == "pass" and _bound and _bound == _current:
             hint = ("已有审查结论，但引用报告已失效或不再绑定（摘要失配/文件被改）："
                     "重新导入同一份报告，或 review-launch 换一轮后再 finish")
@@ -5062,20 +5124,23 @@ def cmd_task_replace(ctx, args):
 REWORK_CHOICES = ("rework", "返工")
 
 
-def _decision_draft_result(ctx, task_id, entries, *, command):
+def _decision_draft_result(ctx, task_id, entries, *, command, extra_facts=None):
     """决定文件草稿（十六轮批V）：只打印不落盘、不要求写权——结构与摘要由入口算好。
 
     **作决定 vs 转录（设计稿 §1.2）**：决定内容必须是人已明确给出的选择；本骨架只消除
     "猜字段"的成本，模型可按人的明确答复填写并落盘，但不得推测、补造或替人选择。
     占位统一 TODO 前缀（`_load_decision` 会拒绝照抄）。
     """
+    facts = {"draft": entries, "note": "草稿只读；本次未写入任何记录"}
+    if extra_facts:
+        facts.update(extra_facts)
     return codes.result(
         "WF_OK",
         object={"id": task_id},
         position_=codes.position(scope="task", task_id=task_id),
         next_=(f"草稿只打印不落盘；按人的明确答复填写（去掉 TODO；不得推测或替人选择）并写成决定文件后，"
                f"以 `{command} --task {task_id} --decision <文件>` 正式执行"),
-        facts={"draft": entries, "note": "草稿只读；本次未写入任何记录"})
+        facts=facts)
 
 
 def _prd_digest_for_task(ctx, task_id):
