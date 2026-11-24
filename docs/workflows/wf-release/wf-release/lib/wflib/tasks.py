@@ -246,15 +246,34 @@ def new_task_record(kind, title):
 # --------------------------------------------------------------------------
 
 
-def read_prd(root, task):
+def read_prd_bytes(root, task):
+    """PRD 一次读取：返回 `(text, digest)`，两者出自同一次读（唯一实现）。
+
+    `text` 保留文本模式的换行归一（`\\r\\n`/`\\r` → `\\n`），解析侧行为不变；`digest` 按
+    **磁盘原始字节**计。`task-approve --draft` 预填的 `object_digest`、正式批准、机械修订、
+    replan 都取这一个值——此前草稿/机械修订按原始字节、正式批准按文本重编码，CRLF 的 PRD
+    会得到两个摘要，人批准完才发现绑定失败（首轮 dogfood 的直接复发路径）。
+    单次读还有一层：解析与摘要不再各读一遍，同一份内容不会在两次读之间被拆开。
+    """
     path = task_dir(root, task.get("id"))
     if not path:
-        return None
+        return None, None
     try:
-        with open(os.path.join(path, "prd.md"), "r", encoding="utf-8") as handle:
-            return handle.read()
+        with open(os.path.join(path, "prd.md"), "rb") as handle:
+            raw = handle.read()
     except FileNotFoundError:
-        return None
+        return None, None
+    text = raw.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    return text, "sha256:" + records.sha256_hex(raw)
+
+
+def read_prd(root, task):
+    return read_prd_bytes(root, task)[0]
+
+
+def prd_digest(root, task):
+    """当前 PRD 的内容摘要（与 `read_prd` 同一读数）。"""
+    return read_prd_bytes(root, task)[1]
 
 
 def parse_plan_block(text):
@@ -1699,15 +1718,16 @@ def cmd_task_approve(ctx, args):
         # "人批准完才第一次暴露 JSON/占位错误"的返工（dogfood 会话1 的原始失败）。
         # 依赖决定文件的校验（未知 choice、摘要比对、subject 绑定、plan-q 答复）不前移；
         # 正式入口保留全套重核（草稿与正式之间 PRD 可变，digest 失配仍会拦截）。
-        prd_raw = read_prd(ctx.root, task)
-        if prd_raw is None:
+        # 一次读数同时拿文本与摘要：预检对象与预填的 object_digest 因此出自同一份内容，
+        # 不再出现"预检过的是这版、摘要指的是那版"。
+        prd_text, digest = read_prd_bytes(ctx.root, task)
+        if prd_text is None:
             # PRD 文件缺失与「有 PRD 但没写 plan 块」是两个失败：前者连预检对象都没有，
             # 给专门出口，不冒充模板问题（2026-11-24 R6）。
             raise TaskError("WF_TEMPLATE_INCOMPLETE", {
                 "problems": [{"reason": "PRD missing"}],
                 "next_": "先写 PRD（含 wf-plan 块）再生成批准草稿；正式批准会按同一判据拒绝",
             })
-        prd_text = prd_raw or ""
         _block, _block_errors = parse_plan_block(prd_text)
         problems = list(_block_errors)
         pending_qs = extract_plan_questions(prd_text)
@@ -1732,7 +1752,6 @@ def cmd_task_approve(ctx, args):
                 "next_": "先修 PRD（模板标记/plan 块/占位值/touch_paths）再生成批准草稿；"
                          "正式批准会按同一判据拒绝",
             })
-        digest = _prd_digest_for_task(ctx, task_id)
         entry = {"source": "TODO human:<来源>",
                 "at": records.now_str(),
                 "subject": f"approve {task_id}",
@@ -1769,7 +1788,7 @@ def cmd_task_approve(ctx, args):
         if task.get("status") not in ("not_started", "in_progress") or task.get("phase") != "plan":
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "approval only in plan phase",
                                                      "status": task.get("status"), "phase": task.get("phase")})
-        prd_text = _prd_text(ctx.root, task)
+        prd_text, prd_digest = read_prd_bytes(ctx.root, task)
         # 未知 choice 不得静默忽略：否则人以为"我说了"，记录里却什么都没有
         # （演练实测：{"choice":"complexity","value":"complex"} 被无声丢弃，直到归档门禁才炸）。
         _known_choices = set(APPROVE_CHOICES) | {MECHANICAL_REVISION, "plan-q", "risk-accept"}
@@ -1801,7 +1820,7 @@ def cmd_task_approve(ctx, args):
                              "accepted": list(APPROVE_CHOICES)},
                             next_="用 choice=approve 的决定重新批准")
         approval = approvals[0]
-        prd_digest = "sha256:" + records.sha256_hex(prd_text.encode("utf-8"))
+        # 摘要取自上面那次读（同一读数）：草稿/机械修订/replan 也用它，口径唯一。
         if approval.get("object_digest") and approval.get("object_digest") != prd_digest:
             raise TaskError("WF_APPROVAL_MISSING",
                             {"reason": "approval decision does not cover the current PRD",
@@ -2129,8 +2148,7 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
     # 入口此前不核对——拿旧摘要（草稿生成之后 PRD 又改过）调用仍返回 WF_OK，
     # 等于把旧确认沿用到未确认的内容（2026-11-23 十轮复审 b-1）。
     declared_digest = decision.get("object_digest")
-    _prd_path = os.path.join(task_dir(ctx.root, task.get("id")) or "", "prd.md")
-    current_digest = records.file_digest(_prd_path) if os.path.isfile(_prd_path) else None
+    prd_text, current_digest = read_prd_bytes(ctx.root, task)
     if not declared_digest:
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"reason": "机械修订的决定缺少 object_digest（需绑定人看过的 PRD 摘要）",
@@ -2147,7 +2165,6 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
                          "current_object_digest": current_digest,
                          "exits": ["重新生成草稿、请人按当前内容确认后重跑",
                                    "若内容实质变化，回 Plan 重新批准"]})
-    prd_text = _prd_text(ctx.root, task)
     block, errors = parse_plan_block(prd_text)
     if errors:
         raise TaskError("WF_TEMPLATE_INCOMPLETE", {"problems": errors})
@@ -2349,7 +2366,7 @@ def cmd_task_start(ctx, args):
             raise TaskError("WF_RECORD_INVALID", {"other_candidates": [item.get("id") for item in others]})
         # 触碰面按机制稿 §2.3「从该批准版本的 PRD 重提取并规范化」：
         # 直接抄 plan.touch_paths 会让手改 task.json 的 plan 反向影响快照（PRD 未变、版本比对仍通过）。
-        _prd_source = _prd_text(ctx.root, task)   # 注意：不要用 _prd_text 作变量名，会遮蔽同名函数
+        _prd_source, _prd_at_entry = read_prd_bytes(ctx.root, task)
         _plan_block, _block_errors = parse_plan_block(_prd_source)
         if _block_errors or not isinstance(_plan_block, dict):
             raise TaskError("WF_TEMPLATE_INCOMPLETE",
@@ -2357,7 +2374,7 @@ def cmd_task_start(ctx, args):
         entry = {
             "plan_version": (task.get("plan") or {}).get("version"),
             "approval_ref": records.plain_digest((task.get("plan") or {}).get("approval")),
-            "prd_digest": records.file_digest(join(path, "prd.md")),
+            "prd_digest": _prd_at_entry,
             "touch_paths": _dedupe_paths(_normalized_paths(_plan_block.get("touch_paths") or [])),
             "head_at_entry": head,
             "entered_at": records.now_str(),
@@ -2506,8 +2523,8 @@ def cmd_task_replan(ctx, args):
                 "exits": ["重出决定，subject 写明任务 id",
                           "继续沿用现有规划，不改回 Plan"],
             })
-        prd_digest = records.file_digest(join(path, "prd.md"))
-        candidates = [item for item in (current_version, prd_digest) if item]
+        prd_digest_value = prd_digest(ctx.root, task)
+        candidates = [item for item in (current_version, prd_digest_value) if item]
         if not candidates:
             raise TaskError("WF_TEMPLATE_INCOMPLETE", {
                 "reason": "无法从 PRD 重算规划版本，replan 不能以空摘要放行",
@@ -2518,8 +2535,8 @@ def cmd_task_replan(ctx, args):
             raise TaskError("WF_SEMANTIC_DECISION", {
                 "reason": "replan 决定的 object_digest 不等于当前规划版本或 PRD 摘要",
                 "task": task_id, "object_digest": decision.get("object_digest"),
-                "current_plan_version": current_version, "current_prd_digest": prd_digest,
-                "exits": [f"用当前 PRD 摘要（{prd_digest}）或 plan.version（{current_version}）重出决定",
+                "current_plan_version": current_version, "current_prd_digest": prd_digest_value,
+                "exits": [f"用当前 PRD 摘要（{prd_digest_value}）或 plan.version（{current_version}）重出决定",
                           "继续沿用现有规划，不改回 Plan"],
             })
         # 实质规划变更：旧批准必须失效（机制稿 §2.2），但历史保留可追
@@ -2839,12 +2856,15 @@ def check_next_hint(task, check, ctx=None):
             open_blocking = _review_mod.open_findings(ctx, task)["blocking"]
         except Exception:   # 投影失败不阻断下一跳本身
             open_blocking = []
-    open_blocking_hint = ""
+    # 未关闭 blocking 的收敛动作只写一份：分支说"可以 finish"之前必须先满足它，
+    # 否则同一条 next_ 会先叫人收工、再说 blocking 没关（归档门禁必拦）。
+    blocking_fix = ""
     if open_blocking:
         rounds = sorted({int(item.get("round") or 0) for item in open_blocking})
-        open_blocking_hint = (f"；注意：审查仍有未关闭 blocking（轮次 {rounds}）——"
-                              "在批准范围内修复 → 重跑 task-check → 重新发起判定"
-                              "（误报/重分类经复核登记 accepted 后可同轮重判，见 wf-review-action）")
+        blocking_fix = (f"按处置规则关闭未关闭 blocking（轮次 {rounds}：在批准范围内修复 → "
+                        "重跑 task-check → 重新发起判定；误报/重分类经复核登记 accepted 可同轮重判，"
+                        "见 wf-review-action）")
+    mentions_blocking = False
     if (task.get("plan") or {}).get("complexity") == "complex":
         export_note = ""
         if ctx is not None:
@@ -2913,13 +2933,17 @@ def check_next_hint(task, check, ctx=None):
                     "继续这一轮——review-context 取材料（本轮材料按首轮物化固定，"
                     "不随 Check 重跑改写）→ 人跑 reviewer → 导入 → 判定；"
                     "不要重新 review-launch")
-            if _binding:
+            if _binding and open_blocking:
+                hint += ("；已有绑定当前锚点的 pass 结论，但 blocking 仍未关闭——"
+                         "该轮判定后还需" + blocking_fix + "，才能请人 finish")
+                mentions_blocking = True
+            elif _binding:
                 hint += "；已有绑定当前锚点的 pass 结论，该轮判定后即可请人 finish"
         elif _binding:
             if open_blocking:
-                hint = ("已有审查结论绑定当前内容锚点，但仍有未关闭 blocking："
-                        "先按处置规则关闭（accepted 须核实证据，误报/重分类走复核登记）"
-                        "或保持判定一致，再请人 finish——直接 finish 会被归档门禁拦下")
+                hint = ("已有审查结论绑定当前内容锚点，但 blocking 仍未关闭：先"
+                        + blocking_fix + "，再请人 finish——直接 finish 会被归档门禁拦下")
+                mentions_blocking = True
             else:
                 hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
                         "内容或规划再变才需要重新 review-launch")
@@ -2929,9 +2953,17 @@ def check_next_hint(task, check, ctx=None):
         else:
             hint = ("复杂任务：先 review-launch 发起一轮审查（wf-review），"
                     "导入/判定通过后再请人调用 finish" + export_note)
+            if open_blocking:
+                hint += "；发起前" + blocking_fix
+                mentions_blocking = True
     else:
-        hint = "人了解结果后调用 finish（wf-finish）"
-    hint += open_blocking_hint
+        # 轻量任务本可直收工，但已有 blocking（返工/复核遗留）时先收口再 finish：
+        # 否则 finish 必然撞归档门禁 C2。
+        hint = ("人了解结果后调用 finish（wf-finish）" if not open_blocking
+                else "先" + blocking_fix + "，再请人调用 finish（wf-finish）")
+        mentions_blocking = bool(open_blocking)
+    if blocking_fix and not mentions_blocking:
+        hint += "；注意：" + blocking_fix
     # §0.2 试点期抽样提示（2026-11-21 降档为建议，不阻断；无 picks 时附注）
     try:
         from . import sampling as sampling_mod
@@ -5144,9 +5176,9 @@ def _decision_draft_result(ctx, task_id, entries, *, command, extra_facts=None):
 
 
 def _prd_digest_for_task(ctx, task_id):
-    """当前任务 PRD 的内容摘要（task-approve 草稿的 object_digest 预填值）。"""
-    directory = _require_task_dir(ctx, task_id)
-    return records.file_digest(os.path.join(directory, "prd.md"))
+    """当前任务 PRD 的内容摘要（与正式批准同一读数；任务目录缺失仍按记录错误报）。"""
+    _require_task_dir(ctx, task_id)
+    return prd_digest(ctx.root, {"id": task_id})
 
 
 def cmd_task_rework(ctx, args):
@@ -6111,15 +6143,24 @@ def _archive_terminal_problems(root, tasks):
         if not rel.startswith(".wf/tasks/archive/"):
             continue
         name = os.path.basename(str(path).rstrip("/"))  # iter_tasks 给的是任务目录本身
+        # 三类问题各自独立报：写成 elif 链时，目录名不符会把"记录未提交/未持久化"
+        # 一并掩掉，处置项在巡检里看不见。
         if task.get("terminal") not in ("normal", "abnormal"):
-            problems.append({"path": rel, "terminal": task.get("terminal")})
-        elif not name.startswith(str(task.get("id"))):
-            problems.append({"path": rel, "reason": "record id does not match directory name"})
-        elif task.get("terminal") == "abnormal":
+            problems.append({"path": rel, "kind": "terminal-missing",
+                             "reason": "terminal not recorded",
+                             "terminal": task.get("terminal")})
+        # 两类失配要能分开消费：拿目录名当 id（`carries_id` 出口）与记录 id 无对应目录
+        # （本节）。此前都只剩一句自由文本 reason，巡检输出无法按类筛选。
+        if not name.startswith(str(task.get("id"))):
+            problems.append({"path": rel, "kind": "dir-name-mismatch",
+                             "reason": "record id does not match directory name",
+                             "record_id": task.get("id"), "dir_name": name})
+        if task.get("terminal") == "abnormal":
             # 异常归档用 _record_committed（记录已入提交且无未提交差异），与 archive_persisted 判据不同
             if not _record_committed(root, rel):
                 problems.append({"path": rel, "reason": "abnormal archive record is not committed"})
-        else:
+        elif task.get("terminal") == "normal":
+            # 终态未记录时不再跑持久化核对：判据依赖 terminal，缺了只会叠一条推断结果。
             persisted = archive_persisted(root, task)
             if not persisted.get("persisted"):
                 problems.append({"path": rel, "reason": "archive record is not persisted",

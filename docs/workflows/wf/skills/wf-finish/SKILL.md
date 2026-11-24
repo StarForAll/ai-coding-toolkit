@@ -38,7 +38,7 @@ user-invoked: true
    `selected/total/narrowed` 与判定 `scope.unselected`；发起前的人外发确认——choice=export——见
    `wf-continue`「复杂任务审查」）、知识处置状态、待提交路径，以及当前生效的放行清单
    （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先跑 `authorize record --draft` 取只读骨架）、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
-   单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` vendor 段落库；
+   单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` 的 vendor 段；
    本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
 2. 人确认后，把「finish 调用证据 + 按精确路径的提交授权」写入决定文件数组
    （拿不准结构时先跑 `archive --task <id> --draft`：入口按待提交路径生成决定文件草稿、

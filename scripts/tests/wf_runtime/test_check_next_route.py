@@ -153,6 +153,50 @@ class CheckNextHintTest(unittest.TestCase):
         self.assertIn("先按处置规则关闭", hint)
         self.assertNotIn("可请人直接 finish", hint)
 
+    def test_light_task_with_open_blocking_fixes_first(self):
+        """P1：轻量任务遗留 blocking 时先收口再 finish（finish 必撞归档门禁 C2）。"""
+        import types
+        from unittest import mock
+
+        stub = types.SimpleNamespace(root="/nonexistent", debug_threshold=lambda: 3)
+        open_finding = {"finding_id": "f1", "slot": "s1", "round": 1, "severity": "blocking"}
+        with mock.patch("wflib.review.open_findings",
+                        return_value={"blocking": [open_finding], "unaddressed": [],
+                                      "unavailable": [], "closed": [], "ambiguous": []}):
+            hint = tasks.check_next_hint({"plan": {"complexity": "light"}},
+                                         {"result": "pass"}, ctx=stub)
+        self.assertIn("先按处置规则关闭", hint)
+        self.assertIn("task-check", hint)
+        self.assertIn("finish", hint)
+
+    def test_in_flight_round_with_binding_and_blocking_defers_finish(self):
+        """P1：在途轮 + 旧 pass 绑定 + blocking 未关——不能说"判定后即可 finish"。"""
+        import types
+        from unittest import mock
+
+        stub = types.SimpleNamespace(root="/nonexistent", debug_threshold=lambda: 3)
+        task = {
+            "id": "t-inflight-block",
+            "plan": {"complexity": "complex"},
+            "check": {"result": "pass", "anchor": {"check_anchor": "A"}},
+            "reviews": {
+                "launches": [
+                    {"round": 1, "anchor": {"check_anchor": "A"}},
+                    {"round": 2, "anchor": {"check_anchor": "A"}},
+                ],
+                "rounds": [{"round": 1, "verdict": "pass"}],
+                "result": {"verdict": "pass", "anchor": {"check_anchor": "A"}},
+            },
+        }
+        open_finding = {"finding_id": "f1", "slot": "s1", "round": 3, "severity": "blocking"}
+        with mock.patch("wflib.gates.review_binding", return_value={"binding": True}), \
+                mock.patch("wflib.review.open_findings",
+                           return_value={"blocking": [open_finding], "unaddressed": [],
+                                         "unavailable": [], "closed": [], "ambiguous": []}):
+            hint = tasks.check_next_hint(task, {"result": "pass"}, ctx=stub)
+        self.assertIn("才能请人 finish", hint)
+        self.assertNotIn("判定后即可请人 finish", hint)
+
     def test_in_flight_hint_mentions_fixed_materials(self):
         """P1-2（2026-11-24）：在途轮提示写明材料按首轮物化固定，不随 Check 重跑改写。"""
         task = {

@@ -83,6 +83,46 @@ def save_binding(root, key: str, payload: dict):
     return payload
 
 
+def object_terminal_state(root, binding) -> str:
+    """绑定对象是否已终态：`"terminal"` / `"in_flight"` / `"unknown"`（终态判据的唯一实现）。
+
+    在途**解析**另有 `cli._inflight_session`：那里问的是"这是不是可续用会话"，记录缺失
+    按"没有要保护的对象"处理（不算在途）；这里问的是"能不能换会话"，记录缺失证明不了
+    终态，按 `unknown` 交核对。同一事实两个问题，两个答案都是对的。
+    
+
+    轮换（`enable --new-session`）与普通启用问的是同一个问题——"这个对象还占着本会话吗"。
+    两处各判会把"找不到记录"读成两件事：轮换当终态放行、enable 标 unknown，于是同一事实
+    既能换会话又会在 state 里被报成待核对。`unknown` 只表示**无法证明**终态（记录缺失/
+    读不了），须交核对或恢复，不冒充终态。
+    """
+    try:
+        # 形状防御在 try 内：绑定文件可能被写成非对象或 `{"object": "x"}`，
+        # 那是"无法证明"而不是内部错误（旧实现整块 try 被删后这里会抛 AttributeError）。
+        if not isinstance(binding, dict):
+            return "unknown"
+        obj = binding.get("object")
+        obj = obj if isinstance(obj, dict) else {}
+        kind = obj.get("kind")
+        if kind == "task":
+            from . import tasks as tasks_mod
+
+            record = tasks_mod.load_task(root, str(obj.get("id")))
+            if not isinstance(record, dict):
+                return "unknown"
+            return "terminal" if record.get("status") == "archived" else "in_flight"
+        if kind == "run":
+            from . import runs as runs_mod
+
+            run = runs_mod.load_run(root, str(obj.get("id")))
+            if not isinstance(run, dict):
+                return "unknown"
+            return "terminal" if run.get("terminal") is not None else "in_flight"
+    except Exception:  # noqa: BLE001 — 只读探测失败只降级为 unknown，不阻断 enable
+        return "unknown"
+    return "unknown"
+
+
 def runtime_path(root, key: str):
     return join(root, f".wf/.runtime/sessions/{key}.json")
 

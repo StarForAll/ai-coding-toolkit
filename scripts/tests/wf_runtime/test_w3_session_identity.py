@@ -15,6 +15,7 @@
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -343,6 +344,44 @@ class NewSessionRotationTest(Harness):
             cli.cmd_enable(ctx, _Args(["--new-session", "--json"]))
         self.assertEqual(caught.exception.code, "WF_BINDING_MISMATCH")
         self.assertIn("task-abandon", json.dumps(caught.exception.facts, ensure_ascii=False))
+
+    def test_enable_survives_non_object_binding(self):
+        """绑定文件被写成字符串/对象非 dict：按 unknown 报，不落成内部错误。"""
+        anchors = [_pid_anchor()]
+        ctx = _make_ctx(self.root, anchors)
+        wf_key, _ = self._establish_wf_session(ctx, anchors)
+        path = session_mod.binding_path(self.root, wf_key)
+        for payload in ("hello", {"object": "x"}):
+            records.write_json(path, payload)
+            self.assertEqual(session_mod.object_terminal_state(self.root, payload), "unknown")
+            result = cli.cmd_enable(ctx, _Args(["--json"]))
+            self.assertEqual(result["facts"]["binding"]["terminal_state"], "unknown")
+
+    def test_rotate_rejects_non_object_binding(self):
+        anchors = [_pid_anchor()]
+        ctx = _make_ctx(self.root, anchors)
+        wf_key, _ = self._establish_wf_session(ctx, anchors)
+        records.write_json(session_mod.binding_path(self.root, wf_key), "hello")
+        with self.assertRaises(cli.CliError) as caught:
+            cli.cmd_enable(ctx, _Args(["--new-session", "--json"]))
+        self.assertEqual(caught.exception.code, "WF_BINDING_MISMATCH")
+
+    def test_rotate_rejected_when_bound_record_missing(self):
+        """P2：绑定还在、对象记录缺失——不是终态，不能当"可以换会话"放行。"""
+        anchors = [_pid_anchor()]
+        ctx = _make_ctx(self.root, anchors)
+        wf_key, _ = self._establish_wf_session(ctx, anchors)
+        self._bind_task(wf_key, status="archived")
+        shutil.rmtree(self.root / ".wf" / "tasks")
+        with self.assertRaises(cli.CliError) as caught:
+            cli.cmd_enable(ctx, _Args(["--new-session", "--json"]))
+        self.assertEqual(caught.exception.code, "WF_BINDING_MISMATCH")
+        facts = json.dumps(caught.exception.facts, ensure_ascii=False)
+        self.assertIn("repair", facts)
+        self.assertIn("status", facts)
+        # 同一事实普通 enable 也报 unknown（两处同一判据）
+        result = cli.cmd_enable(ctx, _Args(["--json"]))
+        self.assertEqual(result["facts"]["binding"]["terminal_state"], "unknown")
 
     def test_rotate_rejected_when_writer_held(self):
         anchors = [_pid_anchor()]

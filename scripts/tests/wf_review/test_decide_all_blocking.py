@@ -8,6 +8,7 @@
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -59,9 +60,18 @@ class DecideAllBlockingTest(unittest.TestCase):
         self.ctx = Ctx(self.root)
         self.task_dir = self.root / ".wf" / "tasks" / "t1"
         self.task_dir.mkdir(parents=True)
+        self.setUp_materials_clean()
 
     def tearDown(self):
         self._tmp.cleanup()
+
+    def _materials_dir(self):
+        return Path(review.round_dir(self.ctx, "t1", 2)) / "materials"
+
+    def setUp_materials_clean(self):
+        """staging 是全局 `/tmp/wf-review/<project>/t1`：不清就跑，前一条测试留下的
+        被改材料会被当成"已物化"，单跑绿、连跑红。"""
+        shutil.rmtree(self._materials_dir(), ignore_errors=True)
 
     def _stage(self):
         """第 1 轮 fail（blocking f1 未处置）→ 第 2 轮 pass。真实两轮记录形状。"""
@@ -168,17 +178,97 @@ class DecideAllBlockingTest(unittest.TestCase):
         task = records.load_json(self.task_dir / "task.json")
         self.assertNotEqual((task.get("reviews") or {}).get("result", {}).get("verdict"), "pass")
 
+    def _stage_materials(self, tamper=False):
+        """物化第 2 轮材料 + manifest；tamper 时改动物化后的字节。"""
+        materials = self._materials_dir()
+        shutil.rmtree(materials, ignore_errors=True)
+        materials.mkdir(parents=True, exist_ok=True)
+        (materials / "diff.patch").write_text("original\n", encoding="utf-8")
+        (materials / "check.json").write_text("{}\n", encoding="utf-8")
+        review.write_materials_manifest(materials, "c2", ANCHOR, {})
+        if tamper:
+            (materials / "diff.patch").write_text("tampered\n", encoding="utf-8")
+        return materials
+
+    def test_drifted_materials_block_verdict(self):
+        """P1：材料物化后被改 —— 判定必须拒，不能只把 manifest 摘要抄进结果。"""
+        self._stage()
+        self._stage_materials(tamper=True)
+        with self.assertRaises(review.ReviewError) as caught:
+            self._decide()
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertEqual(caught.exception.facts["drift"][0]["file"], "diff.patch")
+        task = records.load_json(self.task_dir / "task.json")
+        self.assertNotIn("result", task.get("reviews") or {})
+
+    def test_verdict_records_material_state(self):
+        """身份强度如实上报：fixed 有 manifest 摘要，legacy 无身份记录。"""
+        self._stage()
+        self._stage_materials()
+        plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
+                "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
+                "evidence_refs": ["v:v1"], "reason": "已修复"}
+        result = self._decide(plan=self._plan_file([plan]))
+        identity = result["facts"]["result"]["materials"]
+        self.assertEqual(identity["state"], "fixed")
+        self.assertIn("manifest_digest", identity)
+
+    def test_adopted_materials_stay_weak_after_rematerialized_manifest(self):
+        """删 manifest 重取（官方恢复出口）之后，弱身份必须一直保留，不能升格成 fixed。"""
+        from unittest import mock
+
+        self._stage()
+        materials = self._stage_materials()
+        # 采纳后的状态（"删 manifest → 重取"就走成这样）：manifest 只有自采纳后的摘要
+        manifest = records.load_json(materials / "materials-manifest.json")
+        manifest["facts"] = {"legacy_materials": True, "adopted_files": ["diff.patch"],
+                             "adopted_at": "2026-11-24T00:00:00.000000Z"}
+        records.write_json(materials / "materials-manifest.json", manifest)
+        self.assertEqual(review.materials_identity_state(self.ctx, "t1", 2)["state"],
+                         "legacy_adopted")
+        plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
+                "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
+                "evidence_refs": ["v:v1"], "reason": "已修复"}
+        result = self._decide(plan=self._plan_file([plan]))
+        self.assertEqual(result["facts"]["result"]["materials"]["state"], "legacy_adopted")
+        self.assertEqual(result["facts"]["result"]["facts"]["materials_state"],
+                         "legacy_adopted")
+        # 再次判定仍报弱身份（不会因为写了 manifest 就升格）
+        again = self._decide(plan=self._plan_file([plan]))
+        self.assertEqual(again["facts"]["result"]["materials"]["state"], "legacy_adopted")
+
+    def test_new_material_file_counts_as_drift(self):
+        """物化后新增的文件不属于 reviewer 读到的那一版。"""
+        self._stage()
+        materials = self._stage_materials()
+        (materials / "extra-notes.md").write_text("x\n", encoding="utf-8")
+        with self.assertRaises(review.ReviewError) as caught:
+            self._decide()
+        self.assertEqual(caught.exception.facts["drift"][0]["reason"], "not in manifest")
+
+    def test_legacy_materials_pass_with_weak_identity_fact(self):
+        """manifest 丢失但材料在：采纳现场字节继续，结果明确标 legacy。"""
+        self._stage()
+        materials = self._stage_materials()
+        (materials / "materials-manifest.json").unlink()
+        plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
+                "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
+                "evidence_refs": ["v:v1"], "reason": "已修复"}
+        result = self._decide(plan=self._plan_file([plan]))
+        self.assertEqual(result["facts"]["result"]["materials"]["state"], "legacy")
+        self.assertEqual(result["facts"]["result"]["facts"]["materials_state"], "legacy")
+
     def test_plan_closing_the_earlier_blocking_allows_pass(self):
         """本次 --plan 一并给出旧轮处置（accepted+verified 证据、非提出者复核）→ 可 pass。"""
         self._stage()
+        self._stage_materials()
         plan = [{"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
                  "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
                  "evidence_refs": ["v:v1"], "reason": "修复已在本轮交付并通过验证"}]
         result = self._decide(plan=self._plan_file(plan))
         self.assertEqual(result["code"], "WF_OK")
         self.assertEqual(result["facts"]["result"].get("verdict"), "pass")
-        # 判定引用本轮材料身份（manifest 存在时）；本夹具未物化材料，允许为 None。
-        self.assertIn("materials", result["facts"]["result"])
+        self.assertEqual(result["facts"]["result"]["materials"]["state"], "fixed")
 
 
 if __name__ == "__main__":

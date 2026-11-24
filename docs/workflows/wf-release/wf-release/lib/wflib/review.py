@@ -2913,8 +2913,8 @@ MANIFEST_NAME = "materials-manifest.json"
 def load_materials_manifest(materials_dir):
     """轮次材料身份（manifest）：物化即固定，供续写与判定还原 reviewer 读到的版本。
 
-    manifest 缺失/损坏返回 None（按未物化处理，重新物化并覆盖写）；文件存在但
-    形状不符同样返回 None——不把损坏的 manifest 当有效身份。
+    manifest 缺失/损坏返回 None（按"身份丢失"处理：调用方按现场字节采纳，不重写
+    reviewer 读过的材料）；文件存在但形状不符同样返回 None——不把损坏的 manifest 当有效身份。
     """
     path = os.path.join(materials_dir, MANIFEST_NAME)
     if not os.path.isfile(path):
@@ -2929,17 +2929,81 @@ def load_materials_manifest(materials_dir):
 
 
 def verify_materials_manifest(manifest, materials_dir):
-    """按 manifest 逐文件核摘要；返回失配列表（空即一致）。含子目录相对路径。"""
+    """按 manifest 逐文件核摘要；返回失配列表（空即一致）。含子目录相对路径。
+
+    分隔符两种形态都试：manifest 可能在另一平台写出（键是 `\\`），而文件名本身也可能
+    真的含反斜杠（Linux 上 `v\\1.log` 就是普通字符）。只按归一形式 join 会把这种真名
+    解析成子目录，报出"missing + not in manifest"的假 drift，且采纳出口也修不好。
+    已知静默面：真名键已存在时再加一个**同字节**的嵌套孪生文件不报 `not in manifest`
+    （内容相同，语义无差别）；字节不同则照常报 digest mismatch。
+    """
     drift = []
-    for rel, digest in sorted((manifest.get("files") or {}).items()):
-        actual, cause, reason = records.file_digest_state(os.path.join(materials_dir, str(rel)))
+    recorded_forms = set()
+    for rel, digest in (manifest.get("files") or {}).items():
+        rel = str(rel)
+        candidates = [rel]
+        normalized = rel.replace("\\", "/")
+        if normalized != rel:
+            candidates.append(normalized)
+        recorded_forms.update(candidates)
+        actual, cause, reason = None, None, None
+        for candidate in candidates:
+            actual, cause, reason = records.file_digest_state(
+                os.path.join(materials_dir, candidate))
+            if actual:
+                break
         if not actual:
-            drift.append({"file": str(rel), "reason": "missing",
+            drift.append({"file": rel, "reason": "missing",
                           "unavailable_cause": cause, "detail": reason})
         elif actual != digest:
-            drift.append({"file": str(rel), "reason": "digest mismatch",
+            drift.append({"file": rel, "reason": "digest mismatch",
                           "recorded": digest, "actual": actual})
+    # 物化后**新增**的文件同样是"不是 reviewer 读到的那一版"：不列出来就只能在
+    # 判定后靠人去目录里看（reviewer 当时没读过它，却会被后来的判定当成材料）。
+    for base, _dirs, names in os.walk(materials_dir):
+        for name in sorted(names):
+            path = os.path.join(base, name)
+            if os.path.abspath(path) == os.path.abspath(os.path.join(materials_dir, MANIFEST_NAME)):
+                continue
+            rel = os.path.relpath(path, materials_dir)
+            if rel in recorded_forms or rel.replace(os.sep, "/") in recorded_forms:
+                continue
+            drift.append({"file": rel.replace(os.sep, "/"), "reason": "not in manifest"})
     return drift
+
+
+def materials_identity_state(ctx, task_id, round_no):
+    """本轮材料身份状态（取材料与判定共用的唯一判据）：
+
+    `fixed`（有 manifest 且逐文件一致，未采纳过）/ `legacy_adopted`（一致但那批字节是
+    按现场采纳的，弱身份）/ `drift`（物化后被改、损坏或新增文件）/ `legacy`（有材料无
+    manifest）/ `unmaterialized`（没有材料）。返回值总含 `present`（当前文件名）。
+    
+
+    判定入口此前只读 manifest 写摘要、逐文件校验只在取材料时做——材料被改动后
+    `review-decide` 仍能返回 pass，等于 pass 声称的证据从未被核对过。判据收在这里，
+    两个入口问同一个问题，输出各自的出口。
+
+    `legacy`（有材料、无 manifest）不重写 reviewer 读过的字节，按现场采纳并记事实；
+    要按当前内容重出材料，由调用方给出"连内容一起删"的出口。
+    """
+    materials = os.path.join(round_dir(ctx, task_id, round_no), "materials")
+    present = []
+    if os.path.isdir(materials):
+        present = sorted(name for name in os.listdir(materials) if name != MANIFEST_NAME)
+    manifest = load_materials_manifest(materials)
+    if manifest is not None:
+        drift = verify_materials_manifest(manifest, materials)
+        if drift:
+            return {"state": "drift", "materials": materials, "manifest": manifest,
+                    "drift": drift, "present": present}
+        # 采纳过的这批字节从未被核对过（只是"自采纳以后再没动"）：不能因为写了
+        # manifest 就升格成 fixed，否则"删 manifest 再重取"这条恢复出口会把弱身份洗掉。
+        weak = bool((manifest.get("facts") or {}).get("legacy_materials"))
+        return {"state": "legacy_adopted" if weak else "fixed", "materials": materials,
+                "manifest": manifest, "drift": [], "present": present}
+    return {"state": "legacy" if present else "unmaterialized", "materials": materials,
+            "manifest": None, "drift": [], "present": present}
 
 
 def write_materials_manifest(materials_dir, check_id, check_anchor, material_facts):
@@ -2950,7 +3014,7 @@ def write_materials_manifest(materials_dir, check_id, check_anchor, material_fac
             path = os.path.join(base, name)
             if os.path.abspath(path) == os.path.abspath(os.path.join(materials_dir, MANIFEST_NAME)):
                 continue
-            rel = os.path.relpath(path, materials_dir)
+            rel = os.path.relpath(path, materials_dir).replace(os.sep, "/")
             digest, _cause, _reason = records.file_digest_state(path)
             if digest:
                 files[rel] = digest
@@ -3215,17 +3279,38 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     # 续写仍读首轮材料；当前 Check 与物化 check_id 不同时在 facts 标注，判定按本轮
     # 固定材料核对（同内容免重审与证据身份不冲突：锚点相同 ⇒ 被审的是同一份内容）。
     current_check_id = (record.get("check") or {}).get("id")
-    manifest = load_materials_manifest(materials)
-    if manifest is not None:
-        drift = verify_materials_manifest(manifest, materials)
-        if drift:
-            raise ReviewError("WF_REVIEW_INVALID", {
-                "reason": "本轮材料与 manifest 不符（材料在物化后被改动或损坏）",
-                "manifest_check_id": manifest.get("check_id"), "drift": drift,
-                "exits": ["不要手改材料目录；确认目录被外部改动后，人工删除 materials/"
-                          "materials-manifest.json 后重跑 review-context 重新物化",
-                          "报告按 manifest 记录的材料版本核对；改动会使判定无法核对证据身份"]})
-        material_facts = dict(manifest.get("facts") or {}, materials_fixed=True)
+    # 五种状态各自的处置（判据在 materials_identity_state，与 review-decide 共用）：
+    # fixed 复用；drift 阻断；legacy / legacy_adopted 按现场字节采纳（不重写 reviewer
+    # 读过的东西，后者沿用原 check_id 与采纳时间）；unmaterialized 才是首次物化。
+    material_state = materials_identity_state(ctx, task_id, round_no)
+    if material_state["state"] == "drift":
+        raise ReviewError("WF_REVIEW_INVALID", {
+            "reason": "本轮材料与 manifest 不符（材料在物化后被改动或损坏）",
+            "manifest_check_id": (material_state["manifest"] or {}).get("check_id"),
+            "drift": material_state["drift"],
+            "exits": ["材料改动可以接受：删掉 materials/materials-manifest.json 后重跑 "
+                      "review-context，按现场字节采纳（facts 记 legacy_materials）",
+                      "要按当前内容重出材料：把 materials/ 下的内容文件一并删掉后重跑 review-context",
+                      "报告按 manifest 记录的材料版本核对；改动会使判定无法核对证据身份"]})
+    if material_state["state"] == "fixed":
+        # 复用即不重写 manifest：其中记录的 check_id 是**被审 Check**的身份，不能被
+        # 后来的同锚点 Check 覆盖（重写会让判定引用的身份随重跑漂移）。
+        manifest = material_state["manifest"]
+        material_facts = dict((manifest or {}).get("facts") or {}, materials_fixed=True)
+    elif material_state["state"] in ("legacy", "legacy_adopted"):
+        # 采纳：不重写 reviewer 读过的字节。已有 manifest（此前已采纳过）时沿用它的
+        # check_id 与首次采纳时间，只用当前字节重算摘要——否则每重入一次就把
+        # "这批材料由哪个 Check 物化"改写一次，且弱身份被洗成 fixed。
+        prior = (material_state["manifest"] or {}).get("facts") or {}
+        material_facts = {"legacy_materials": True,
+                          "adopted_files": (material_state["present"]  # 顶层名，非路径
+                                            or sorted(prior.get("adopted_files") or [])),
+                          "adopted_at": prior.get("adopted_at") or records.now_str(),
+                          "note": "材料无核对身份（按现场字节采纳，未证明未被改动）"}
+        manifest = write_materials_manifest(
+            materials,
+            (material_state["manifest"] or {}).get("check_id") or current_check_id,
+            anchor, material_facts)
     else:
         material_facts = write_materials(ctx, record, round_no, anchor, materials,
                                          paths=paths, delivery=delivery)
@@ -4456,6 +4541,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         # ⑥ 消费写点②：本命令观察到「放行记录对应的报告当前可核实」→ 该放行失效。
         # A8：只登记关闭也是写点，两条路径共用这一次调用（一个写点只消费一次）。
         consume_recovered(ctx, task)
+        # 本轮材料身份：判定路径必须核（drift 即拒），结果一律按它记引用。
+        material_state = materials_identity_state(ctx, task.get("id"), round_no)
         if not register_only and not unavailable_path:
             # 正式结论必须绑定有效的 Check；只发起/导入已核，判定不能拿已失效 Check 产 verdict。
             from . import gates as gates_mod
@@ -4473,6 +4560,18 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                        blockers=validity.get("blockers"),
                                        exits=["重新 Check 后再判定",
                                               "无法重查时交人/按暂停处置；Check 失效不属审查不可用声明"]))
+            # 判定消费的是**本轮材料**：取材料时核过不等于此刻还成立。材料在物化后被改，
+            # 报告与 verdict 就都失去被审对象（P1：此前判定只把 manifest 抄进结果）。
+            if material_state["state"] == "drift":
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "本轮材料在物化后被改动，不能据此产结论",
+                    "round": round_no, "drift": material_state["drift"],
+                    "manifest_check_id": (material_state["manifest"] or {}).get("check_id"),
+                    "exits": ["材料改动可以接受：删 materials/materials-manifest.json 后重跑 "
+                              "review-context 采纳现场字节，再判定",
+                              "要按当前内容重出材料：删 materials/ 下内容文件后重跑 review-context，"
+                              "报告按新材料重写",
+                              "不手改材料目录；判定通过时记的是 manifest 摘要"]})
         if register_only:
             # A8：只登记复核关闭或主会话已核实 finding。与判定共用同一把锁、同一套处置校验，
             # 但**不产生结论**：result / rounds[] / attempts 一律不动。
@@ -4657,7 +4756,9 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                              action_id=task["action"]["id"],
                                              action_state=task["action"]["state"]),
                 next_="关闭已登记（不产生审查结论）；需要结论时另行 review-decide",
-                facts={"register_only": True, "registered": len(dispositions),
+                facts={"register_only": True,
+                       "materials_state": material_state["state"],
+                       "registered": len(dispositions),
                        "registered_main_findings": registered_main,
                        "closing": len(closed),
                        "not_closing": [{"finding_id": item.get("finding_id"),
@@ -5146,17 +5247,28 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                        "decided_at": records.now_str()})
         reviews["rounds"] = rounds
         facts = dict(facts, scope=scope_facts)
+        if material_state["state"] != "fixed":
+            # 身份强度如实上报：判定通过时材料是否有可核身份，不能靠调用方自己翻目录。
+            weak = material_state["state"] in ("legacy", "legacy_adopted")
+            drift = material_state["state"] == "drift"
+            facts = dict(
+                facts, materials_state=material_state["state"],
+                materials_note=("材料没有可核身份（按现场字节采纳，未证明未被改动；"
+                                "manifest 摘要只代表当时快照，重入会因重算摘要而变）；"
+                                "要可核身份则删材料内容后重跑 review-context" if weak else
+                                "材料在物化后被改动（本条未产结论，故未阻断）" if drift else
+                                "本轮没有材料目录：报告读到的材料已不可还原"))
         # 判定引用的材料身份：本轮 manifest（轮次材料一经物化即固定）的摘要——
         # "判定通过时 reviewer 读到的是哪份 check.json/日志"由此可还原，不靠时间推断。
-        _materials_identity = None
-        _manifest = load_materials_manifest(
-            os.path.join(round_dir(ctx, task.get("id"), round_no), "materials"))
+        # `state` 同时如实暴露身份强度：legacy=无身份记录（按现场采纳）、unmaterialized=无材料。
+        _manifest = material_state["manifest"]
+        _materials_identity = {"state": material_state["state"]}
         if _manifest:
             _manifest_bytes = json.dumps(_manifest, sort_keys=True,
                                          ensure_ascii=False).encode("utf-8")
-            _materials_identity = {"check_id": _manifest.get("check_id"),
-                                   "manifest_digest": "sha256:"
-                                   + records.sha256_hex(_manifest_bytes)}
+            _materials_identity.update({"check_id": _manifest.get("check_id"),
+                                        "manifest_digest": "sha256:"
+                                        + records.sha256_hex(_manifest_bytes)})
         result = {
             "verdict": verdict,
             "round": int(round_no),

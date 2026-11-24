@@ -41,7 +41,10 @@ user-invoked: true
    - **材料包不足**（例如缺测试记录）：先按 `readable_scope` 在仓库内补读并记 `read-scope`；补不到就把该轴记 `uncovered`，在正文写明缺什么。
    - **授权范围不足**（需要读排除面、项目外或其他任务目录）：**停止并回报**，不自行扩大；该轴记 `uncovered`，不要写自造字段。
    报告是辅助证据，主会话会逐轴复核并补足；你按事实写 `uncovered` 比猜测更有用。
-6. 材料是**脱敏副本**：`diff.patch` / `prd.md` 在生成时按协议 `secret-mask` 遮罩过（`status.json` 里 `redacted: true`），看到 `***` 是预期，不要据此判「材料缺失」；报告 = 头部状态行 + Markdown 正文 + 唯一协议块（`review-context` 已把整套骨架写到
+6. 材料目录**只读不改**：`review-context` 物化后即落身份记录（`materials-manifest.json`），
+   主会话判定时会逐文件复核——手改材料会让判定拒；重取也不会重写已有字节（新增文件同样算改了）。
+   缺材料就补读到仓库、写 `read-scope`。
+7. 材料是**脱敏副本**：`diff.patch` / `prd.md` 在生成时按协议 `secret-mask` 遮罩过（`status.json` 里 `redacted: true`），看到 `***` 是预期，不要据此判「材料缺失」；报告 = 头部状态行 + Markdown 正文 + 唯一协议块（`review-context` 已把整套骨架写到
    `report_path`，含预填的 `task-id`/`round`/`check-anchor`；照它填，不自己另写字段）：
 
 ```
@@ -53,12 +56,12 @@ user-invoked: true
 
 同一份报告内 `findings[].id` 必须唯一；不同报告之间可以复用同名 id（身份由 round+slot+id 组成）。
 
-7. `verdict` 只写本报告的事实结论；不得声称“已通过项目门禁”。
-8. **先在 `status=in-progress` 下跑一遍
+8. `verdict` 只写本报告的事实结论；不得声称“已通过项目门禁”。
+9. **先在 `status=in-progress` 下跑一遍
    `<python> <项目根>/.wf/bin/wf.py lint report --file <report_path> --task <任务 id> --json`**，
    按 `problems` 一次改全。草稿阶段的 `in-progress` 不是格式错误（lint 只在 `notes` 里提示
    “导入前须改 done”，`ok` 仍为 true）；`import`/`decide` 才要求 `status=done`。
-9. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
+10. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
 
 ## 不做
 

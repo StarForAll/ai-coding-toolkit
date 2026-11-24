@@ -106,6 +106,22 @@ class InspectGovernanceTest(unittest.TestCase):
         self.assertEqual(order, [".wf/spec/ai-extracted.md", ".wf/spec/human-extracted.md",
                                  ".wf/spec/ai-dated.md", ".wf/spec/human-dated.md"])
 
+    def test_archive_dir_name_mismatch_carries_typed_kind(self):
+        """目录名与记录 id 不符要能按类消费，不只靠一句自由文本（F10 的小欠账）。"""
+        root = _project({"a.md": ("human", "2026-11-01", ["src/**"])}, ["src/a.py"])
+        bad = os.path.join(root, ".wf/tasks/archive/2026-11", "2026-wrong-x")
+        os.makedirs(bad, exist_ok=True)
+        with open(os.path.join(bad, "task.json"), "w", encoding="utf-8") as handle:
+            json.dump({"schema_version": 1, "id": "2026-abc", "status": "archived",
+                       "terminal": "normal", "archived_at": "2026-11-01T00:00:00.000000Z",
+                       "curation": []}, handle, ensure_ascii=False)
+        problems = tasks_mod._archive_terminal_problems(
+            root, list(tasks_mod.iter_tasks(root)))
+        mismatch = [item for item in problems if item.get("kind") == "dir-name-mismatch"]
+        self.assertEqual(len(mismatch), 1)
+        self.assertEqual(mismatch[0]["record_id"], "2026-abc")
+        self.assertEqual(mismatch[0]["dir_name"], "2026-wrong-x")
+
     def test_governance_omitted_no_longer_hides_delivered_classes(self):
         root = _project({"a.md": ("human", "2026-11-01", ["src/**"])}, ["src/a.py"])
         from types import SimpleNamespace

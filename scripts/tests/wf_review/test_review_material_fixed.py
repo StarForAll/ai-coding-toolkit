@@ -144,6 +144,71 @@ class MaterialFixedTest(unittest.TestCase):
         self.assertEqual(drift[0]["file"], "diff.patch")
         self.assertEqual(drift[0]["reason"], "digest mismatch")
 
+    def test_adopted_round_can_be_contexted_again(self):
+        """采纳过的轮次再取材料不得崩，且不重写字节 / 不换被审 check_id 与采纳时间。"""
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set",
+                                  return_value=self._delivery()), \
+                mock.patch.object(review, "write_materials",
+                                  side_effect=lambda *_a, **_kw: (
+                                      records.atomic_write(
+                                          self._materials_dir() / "diff.patch", "read\n"),
+                                      {})[1]):
+            review.context(self._ctx(), self.task, 1, as_value="pi")
+        manifest_path = self._materials_dir() / "materials-manifest.json"
+        manifest_path.unlink()                        # 身份丢失（官方采纳出口）
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set",
+                                  return_value=self._delivery()), \
+                mock.patch.object(review, "write_materials", return_value={}):
+            first = review.context(self._ctx(), self.task, 1, as_value="pi")
+        self.assertIn("legacy_materials", str(first["facts"]))
+        adopted = records.load_json(manifest_path)
+        # 再取一次（压缩重入 / --reset 前）：走 legacy_adopted 分支，必须还能读完
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set",
+                                  return_value=self._delivery()), \
+                mock.patch.object(review, "write_materials", return_value={}) as wm:
+            second = review.context(self._ctx(), self.task, 1, as_value="pi")
+        self.assertEqual(wm.call_count, 0)
+        self.assertEqual((self._materials_dir() / "diff.patch").read_text(), "read\n")
+        again = records.load_json(manifest_path)
+        self.assertEqual(again["check_id"], adopted["check_id"])
+        self.assertEqual((again["facts"] or {})["adopted_at"],
+                         (adopted["facts"] or {})["adopted_at"])
+        self.assertTrue(second["facts"]["legacy_materials"])
+
+    def test_manifest_keys_use_posix_separator(self):
+        records.atomic_write(self._materials_dir() / "check-logs" / "a.log", "x\n")
+        review.write_materials_manifest(self._materials_dir(), "c1", ANCHOR, {})
+        manifest = records.load_json(self._materials_dir() / "materials-manifest.json")
+        self.assertIn("check-logs/a.log", manifest["files"])
+        self.assertEqual(review.verify_materials_manifest(manifest, self._materials_dir()), [])
+
+    def test_manifest_with_foreign_separator_still_verifies(self):
+        """两侧都归一：另一平台写出的反斜杠键在本机不能变成恒 drift。
+
+        Linux 上 `os.sep` 就是 `/`，只断"当前平台结果"拦不住归一被删，所以这里手工
+        造一份 Windows 形态的 manifest（键用反斜杠、摘要正确）。
+        """
+        path = self._materials_dir() / "check-logs" / "a.log"
+        records.atomic_write(path, "x\n")
+        digest = records.file_digest(path)
+        review.write_materials_manifest(self._materials_dir(), "c1", ANCHOR,
+                                        {"files": {"check-logs\\a.log": digest}})
+        manifest = records.load_json(self._materials_dir() / "materials-manifest.json")
+        manifest["files"] = {"check-logs\\a.log": digest}
+        self.assertEqual(review.verify_materials_manifest(manifest, self._materials_dir()), [])
+
+    def test_backslash_in_filename_survives_verify(self):
+        """Linux 上文件名可以真的含反斜杠（verification id 就是 `v\\1`）：键不能被归一掉。"""
+        name = "check-logs/v\\1.log"
+        records.atomic_write(self._materials_dir() / "check-logs" / "v\\1.log", "x\n")
+        review.write_materials_manifest(self._materials_dir(), "c1", ANCHOR, {})
+        manifest = records.load_json(self._materials_dir() / "materials-manifest.json")
+        self.assertIn(name, manifest["files"])          # 写入侧不归一真名
+        self.assertEqual(review.verify_materials_manifest(manifest, self._materials_dir()), [])
+
     def test_same_anchor_new_check_id_keeps_first_materials(self):
         """同内容重验（同锚点换 check_id）：旧轮续写读首轮材料，facts 标注两个 id。"""
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
@@ -170,11 +235,15 @@ class MaterialFixedTest(unittest.TestCase):
         self.assertEqual(second["facts"]["materials_check"]["current_check_id"], "c2")
         self.assertTrue(second["facts"]["materials_check"]["fixed"])
 
-    def test_corrupted_manifest_falls_back_to_rematerialization(self):
+    def test_corrupted_manifest_adopts_existing_bytes(self):
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
                 mock.patch.object(review.scope_mod, "delivery_set",
                                   return_value=self._delivery()), \
-                mock.patch.object(review, "write_materials", return_value={}):
+                mock.patch.object(review, "write_materials",
+                                  side_effect=lambda *_a, **_kw: (
+                                      records.atomic_write(
+                                          self._materials_dir() / "diff.patch", "reviewer-read\n"),
+                                      {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         (self._materials_dir() / "materials-manifest.json").write_text("{broken", encoding="utf-8")
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
@@ -182,8 +251,32 @@ class MaterialFixedTest(unittest.TestCase):
                                   return_value=self._delivery()), \
                 mock.patch.object(review, "write_materials", return_value={}) as wm:
             result = review.context(self._ctx(), self.task, 1, as_value="pi")
-        self.assertEqual(wm.call_count, 1)                       # 损坏 manifest 视为未物化
+        # 身份记录丢失但材料还在：按现场字节采纳（reviewer 读过的内容不重写）
+        self.assertEqual(wm.call_count, 0)                       # 采纳，不重物化
+        self.assertTrue(result["facts"]["legacy_materials"])
         self.assertEqual(result["facts"]["materials_check"]["check_id"], "c1")
+        manifest = records.load_json(self._materials_dir() / "materials-manifest.json")
+        self.assertTrue(manifest["facts"]["legacy_materials"])
+
+    def test_legacy_round_keeps_existing_material_bytes(self):
+        """第二次调用（manifest 已被删）不得覆盖已有 diff：采纳而非重物化。"""
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set",
+                                  return_value=self._delivery()), \
+                mock.patch.object(review, "write_materials",
+                                  side_effect=lambda *_a, **_kw: (
+                                      records.atomic_write(
+                                          self._materials_dir() / "diff.patch", "reviewer-read\n"),
+                                      {})[1]):
+            review.context(self._ctx(), self.task, 1, as_value="pi")
+        (self._materials_dir() / "materials-manifest.json").unlink()
+        with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
+                mock.patch.object(review.scope_mod, "delivery_set",
+                                  return_value=self._delivery()), \
+                mock.patch.object(review, "write_materials") as wm:
+            review.context(self._ctx(), self.task, 1, as_value="pi")
+        self.assertEqual(wm.call_count, 0)
+        self.assertEqual((self._materials_dir() / "diff.patch").read_text(), "reviewer-read\n")
 
 
 if __name__ == "__main__":

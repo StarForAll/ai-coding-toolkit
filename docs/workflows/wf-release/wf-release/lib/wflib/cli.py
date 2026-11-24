@@ -1255,20 +1255,22 @@ def _rotate_session(ctx):
                        next_="绑定不可读或实例不符：先修复再轮换")
     old_key = resolution["key"]
     binding = session_mod.load_binding(ctx.root, old_key)
-    if binding is not None and isinstance(binding, dict):
-        obj = binding.get("object") or {}
-        terminal = False
-        if obj.get("kind") == "task":
-            from . import tasks as tasks_mod
-
-            record = tasks_mod.load_task(ctx.root, str(obj.get("id")))
-            terminal = record is None or (isinstance(record, dict) and record.get("status") == "archived")
-        elif obj.get("kind") == "run":
-            from . import runs as runs_mod
-
-            run = runs_mod.load_run(ctx.root, str(obj.get("id")))
-            terminal = run is None or (isinstance(run, dict) and run.get("terminal") is not None)
-        if not terminal:
+    if binding is not None:
+        # 非 dict（形状坏了）也算有绑定但对象未知：helper 返回 unknown ⇒ 按未知拒绝。
+        raw_obj = binding.get("object") if isinstance(binding, dict) else None
+        obj = raw_obj if isinstance(raw_obj, dict) else {}
+        # 终态判据与普通 enable 同一个实现（session.object_terminal_state）：
+        # 找不到绑定对象记录既不是终态也不是在途，须先核对，不能当成"可以换会话"。
+        state = session_mod.object_terminal_state(ctx.root, binding)
+        if state == "unknown":
+            raise CliError("WF_BINDING_MISMATCH",
+                           {"reason": "绑定对象记录缺失或不可读：无法证明已到终态，不得轮换会话身份",
+                            "object": obj, "session_key": old_key,
+                            "exits": ["`wf status` 或 `wf repair --diagnose` 核对绑定对象记录后重试",
+                                      "确认对象记录已丢失时按 repair 恢复；不要直接换会话把原对象丢在旧身份上",
+                                      "对象确实存在且未结束时继续当前对象后再轮换"]},
+                           next_="先核对绑定对象记录（status/repair），再重试 enable --new-session")
+        if state != "terminal":
             raise CliError("WF_BINDING_MISMATCH",
                            {"reason": "绑定对象仍在途，不得轮换会话身份",
                             "object": obj, "session_key": old_key,
@@ -1464,6 +1466,9 @@ def cmd_enable(ctx, args):
     # 首次启用时调用方通常还没带 activation：这里给出**可直接缓存的模板**，
     # 由适配层在后续每次请求里重放（机制稿 §1.4：由宿主/skill 按本次真实调用形成缓存）
     binding = session_mod.load_binding(ctx.root, session_key)
+    # 绑定文件形状可能被写坏（字符串 / 非对象）：存在即算"有绑定"，对象事实按未知报，
+    # 不把形状问题落成 AttributeError。`_bound` 才是可安全读的视图。
+    _bound = binding if isinstance(binding, dict) else {}
     activation = ctx.activation()
     template = activation or {
         "enabled": True,
@@ -1476,27 +1481,12 @@ def cmd_enable(ctx, args):
     # 探测失败时标记 unknown 并如实说明，不冒充"未结束"。
     binding_terminal = False
     binding_terminal_unknown = False
-    if binding:
-        object_ref = binding.get("object") or {}
-        try:
-            if object_ref.get("kind") == "task":
-                from . import tasks as _tasks_mod
-
-                _bound = _tasks_mod.load_task(ctx.root, object_ref.get("id"))
-                if _bound is not None and _bound.get("status") == "archived":
-                    binding_terminal = True
-                elif _bound is None:
-                    binding_terminal_unknown = True
-            elif object_ref.get("kind") == "run":
-                from . import runs as _runs_mod
-
-                _run = _runs_mod.load_run(ctx.root, object_ref.get("id"))
-                if _run is not None and _run.get("terminal") in ("normal", "abnormal"):
-                    binding_terminal = True
-                elif _run is None:
-                    binding_terminal_unknown = True
-        except Exception:  # 只读探测失败不阻断 enable；标记 unknown 不冒充未结束
-            binding_terminal_unknown = True
+    if binding is not None:
+        # 与轮换同一判据（session.object_terminal_state）：unknown 只表示无法证明，
+        # 出口是核对/恢复，不冒充"已结束"。
+        terminal_state = session_mod.object_terminal_state(ctx.root, binding)
+        binding_terminal = terminal_state == "terminal"
+        binding_terminal_unknown = terminal_state == "unknown"
     return ok(
         facts={
             "session_key": ctx.key(),
@@ -1505,12 +1495,12 @@ def cmd_enable(ctx, args):
             "activation": template,
             "activation_source": "carried" if activation else "formed_by_enable",
             "cache_hint": "把 facts.activation 原样缓存进本会话，并随每次请求放入 session.activation",
-            "binding": ({"object": binding.get("object"),
-                         "instance_id": binding.get("instance_id"),
+            "binding": ({"object": _bound.get("object"),
+                         "instance_id": _bound.get("instance_id"),
                          "terminal": binding_terminal,
                          "terminal_state": ("archived-or-terminated" if binding_terminal
                                             else "unknown" if binding_terminal_unknown else "active")}
-                        if binding else None),
+                        if binding is not None else None),
             "platforms": ctx.platforms(),
             "trellis_data": state["data"],
             "trellis_disabled_confirmed": disabled,
@@ -1524,7 +1514,7 @@ def cmd_enable(ctx, args):
                 "绑定对象状态暂无法确认：先跑 `status`（任务）或 `run locate`（实例）核实后再决定；"
                 "不据猜测推进" if binding_terminal_unknown else
                 "已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
-                "（同进程内无法区分时开新终端）") if binding
+                "（同进程内无法区分时开新终端）") if binding is not None
                else "人显式选择对象：task-new、bind --task，或 run create"),
         warnings=warnings,
     )
@@ -2930,7 +2920,7 @@ COMMAND_HELP = {
                                  "报告有效性：沿用必须点名 d: 位置 → `wf-review-action`",
                                  "影响面 / 规模 / 计划没覆盖的缺口 / 未核实项 → `wf-finish` 收工四项",
                                  "标准变更：改的是尺子还是判断 → `wf-spec-update`",
-                                 "框架改动（vendor 归属确认）→ `wf-continue`「改仓库级规则文件」段"],
+                                 "框架改动（vendor 去向确认，judgments add）→ `wf-continue`「vendor_dirty」段"],
                       "escalate": "判断不了就 write outcome=escalated + 一个具体问题；人回答后用新条目 supersedes 收口"}},
     "lint": {"purpose": "报告一次性全量预检（格式/轴/verdict 一致性/引用/回执），不是门禁",
              "args": {"report": "子命令（唯一支持值）", "--file": "报告路径", "--task": "任务 id（给定时可核批准集合与规则状态）"},
