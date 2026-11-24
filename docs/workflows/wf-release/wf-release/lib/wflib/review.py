@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import tempfile
 
 from . import check as check_mod, config, records, scope as scope_mod, writer as writer_mod
@@ -72,7 +73,7 @@ AGENT_REPORT = re.compile(r"^review-([a-z0-9._-]+)\.md$")
 AGENT_HEADER = "<!-- wf-review-agent:v1 status={status} -->"
 
 
-def report_skeleton(task_id, round_no, check, anchor, launch=None):
+def report_skeleton(task_id, round_no, check, anchor, launch=None, materials_identity=None):
     """reviewer 手边的完整骨架：状态行 + 协议块 + 字段占位。
 
     骨架只铺路，不是门禁：未填的轴/verdict 仍会被 `wf lint report` 与导入端报出来。
@@ -80,6 +81,9 @@ def report_skeleton(task_id, round_no, check, anchor, launch=None):
     mandatory_exclusions 的 launch 口径；read-scope 预填 materials（只读材料包的
     合法默认值）。reviewer 仍可自行申报，但受同一套导入校验约束——预填只让骨架
     默认可过，不放宽任何校验。
+
+    `materials` 预填本轮材料身份（报告绑它读到的版本）：main 会话重物化材料后，
+    旧值就对不上并被拒，而不是让旧报告去替新材料作证。
     """
     exclusions = []
     if launch is not None:
@@ -98,13 +102,16 @@ def report_skeleton(task_id, round_no, check, anchor, launch=None):
         "findings": [],
         "verdict": "",
     }
+    if materials_identity:
+        payload["materials"] = {"identity": materials_identity}
     return chr(10).join([
         AGENT_HEADER.format(status="in-progress"),
         "<!-- 正文写在这里；保存前把首行 status=in-progress 改成 status=done，"
         "并先跑 `wf lint report --file <本文件>` 一次列全问题 -->",
         "",
         REPORT_MARKER,
-        "<!-- axes/verdict/findings 是占位：按材料逐轴填；verdict 取 pass|fail|unavailable -->",
+        "<!-- axes/verdict/findings 是占位：按材料逐轴填；verdict 取 pass|fail|unavailable；"
+        "materials.identity 是本轮材料身份，入口重物化材料后须按新骨架更新 -->",
         "```json",
         json.dumps(payload, ensure_ascii=False, indent=1),
         "```",
@@ -316,13 +323,22 @@ def report_status(text):
     return match.group(1) if match else None
 
 
-def report_input_problems(payload, *, task=None, text=None, launch=None, require_done=True):
+def report_input_problems(payload, *, task=None, text=None, launch=None, require_done=True,
+                          materials_identity=None, materials_required=False,
+                          materials_restored=False):
     """报告**输入面**的唯一校验实现（`lint` / `import` / `decide` 共用）。
 
     此前三处各写一套：`lint` 只核字段存在，导入核字段存在，判定核非空与敏感面——
     结果是"lint 通过 → 导入成功 → 判定失败 → 另开一轮"（dogfood 的格式返工链）。
     共享函数只覆盖输入面；锚点新鲜度、人数/异种、报告摘要一致性仍在导入与判定各自的
     （也是唯一的）位置核。
+
+    `materials_identity` 是本轮材料的**当前**身份（`materials_identity`，可为 None）：报告
+    若携带 `materials` 就必须等于它——报告只对它读到的那批字节成立，别的版本要重审。
+    `materials_required` 只在**导入**置真：入口能预填，漏填是新报告的信息缺口，不能与
+    "旧版本根本没这个字段"混为一谈；判定侧仍按可选处理（在途轮的旧报告要能判完）。
+    `materials_restored`：报告按 `--restore` 还原（身份取记录）。此时它自报的旧身份与当前
+    不同是预期——不在这里报问题，交给调用方的跨条目判据（混合基线）处理。
 
     返回 `{checks: {check_name: [problems]}, verdict, gaps, blocking}`：
     - `checks` 供 lint 逐项展示；
@@ -420,6 +436,42 @@ def report_input_problems(payload, *, task=None, text=None, launch=None, require
     missing = [field for field in REPORT_FIELDS if field not in payload]
     add("required-fields", [{"reason": "missing field", "field": field} for field in missing])
     add("check-anchor", anchor_identity_problems(payload.get("check-anchor"), task))
+
+    # 材料身份（可选字段：此前版本的报告没有它，按"未绑定"记事实，不因此失败）：
+    # 报告只对它读到的那批字节成立。给了就必须等于当前身份，否则等于"结论对应的材料已换"。
+    if "materials" in payload or materials_required:
+        materials_problems = []
+        declared_materials = payload.get("materials")
+        if declared_materials is None:
+            if materials_required and materials_identity:
+                materials_problems.append({
+                    "reason": "report omits materials.identity while the round has materials",
+                    "exits": ["照 report_path 首部的骨架补回 materials 块后重新导入",
+                              "入口重物化过材料的，先重跑 review-context 取新骨架"]})
+        elif not isinstance(declared_materials, dict):
+            materials_problems.append({"reason": "materials must be an object",
+                                       "field": "materials",
+                                       "actual": type(declared_materials).__name__})
+        else:
+            declared_identity = str(declared_materials.get("identity") or "")
+            if not re.match(r"^sha256:[0-9a-f]{64}$", declared_identity):
+                materials_problems.append({
+                    "reason": "materials.identity must be 'sha256:' + 64 hex chars",
+                    "actual": declared_identity[:80],
+                    "exits": ["按骨架重抄 materials 块（骨架在 report_path 首部）"]})
+            elif not materials_identity:
+                materials_problems.append({
+                    "reason": "report declares a material identity but the round has none",
+                    "declared": declared_identity,
+                    "exits": ["重跑 review-context 物化本轮材料后再导入",
+                              "材料已不可还原时开新一轮审查"]})
+            elif declared_identity != materials_identity and not materials_restored:
+                materials_problems.append({
+                    "reason": "report is bound to different round materials",
+                    "declared": declared_identity, "current": materials_identity,
+                    "exits": ["有备份时把原字节放回再重跑 review-context（原报告仍有效）",
+                              "材料确实变了：按新材料重写报告，再开新一轮（同轮已登记摘要不可覆盖）"]})
+        add("materials", materials_problems)
 
     if launch is None and task is not None:
         try:
@@ -599,6 +651,23 @@ def release_allowed_for(entry, task, *, cited=None):
     if cited is None:
         cited = release_key(entry)[:2] in cited_keys(task.get("reviews") or {})
     return not (cited and review_required(task))
+
+
+def undecided_rounds(task):
+    """已发起、但还没有判定的轮次（升序）。
+
+    导入缺省取最大发起轮，恢复较早一轮就会导错轮；错误里直接列出待处理轮次，
+    比让调用方再翻记录猜一次便宜。
+    """
+    reviews = (task or {}).get("reviews") or {}
+    decided = {int(item.get("round") or 0) for item in reviews.get("rounds") or []
+               if isinstance(item, dict)}
+    result = reviews.get("result") or {}
+    if isinstance(result, dict) and result.get("round"):
+        decided.add(int(result.get("round") or 0))
+    launched = {int(item.get("round") or 0) for item in reviews.get("launches") or []
+                if isinstance(item, dict)}
+    return sorted(round_no for round_no in launched - decided if round_no > 0)
 
 
 def inferred_rounds(reviews):
@@ -844,7 +913,12 @@ def lint_report(ctx, task, text):
                 "checks": [{"check": "protocol", "ok": False, "problems": structure_problems}],
                 "axes": {}, "verdict": None, "gaps": [], "deprecated_refs": []}
 
-    shared = report_input_problems(payload, task=task, text=text, require_done=False)
+    # 与导入同一份必填判据（`materials_required`）：预检说"过"、导入却因缺字段拒，
+    # 是 lint/import 同源纪律要消掉的那类分歧。
+    shared = report_input_problems(payload, task=task, text=text, require_done=False,
+                                   materials_identity=round_materials_identity(
+                                       ctx, task, payload.get("round")),
+                                   materials_required=True)
     for name, items in shared["checks"].items():
         done(name, items)
     verdict, gaps = shared["verdict"], shared["gaps"]
@@ -1571,17 +1645,34 @@ def status_of_round(ctx, task, round_no=None):
                 record["reason"] = f"报告无法读取：{reason}"
             elif entry.get("report_digest") != current:
                 record["state"] = "stale"
+                record["stale_cause"] = "report"
                 record["reason"] = "报告导入后被改写"
             elif anchor is None:
                 # 锚点算不出来（任务记录不完整）：到位但不核锚点，如实标注，不假装新鲜也不假装失效
                 record["state"] = "imported"
                 record["anchor_checked"] = False
-            elif ((entry.get("anchor") or {}).get("check_anchor") != anchor
-                  or (entry.get("anchor") or {}).get("check_id")
-                  != (task.get("check") or {}).get("id")):
+            elif (entry.get("anchor") or {}).get("check_anchor") != anchor:
+                # 与导入/判定同一判据（`anchor_identity_problems`）：同锚点换 check_id 是
+                # **同内容重验**，报告仍有效——状态页若把它算 stale，恢复会话时 AI 会白等
+                # 一份已经到齐的报告。
                 record["state"] = "stale"
                 record["anchor_checked"] = True
-                record["reason"] = "Check 身份或锚点已失效（对象/标准变化，或 Check 已重跑）"
+                record["stale_cause"] = "anchor"
+                record["reason"] = "锚点已失效（对象/标准/内容变化）"
+            elif ((entry.get("materials") or {}).get("identity")
+                  and (entry.get("materials") or {}).get("identity")
+                  != round_materials_identity(ctx, task, round_no)):
+                # 材料被重出/采纳后换了身份：报告读的那批字节已不可还原，和锚点失效同档
+                record["state"] = "stale"
+                record["anchor_checked"] = True
+                # restore 故意保留旧身份：它与"材料真被换了"是两件事，提示与出口都不同
+                if (entry.get("materials") or {}).get("restored"):
+                    record["stale_cause"] = "restored-historical"
+                    record["reason"] = ("现场材料已不是该记录的原证据（身份取记录，属弱身份）："
+                                        "可直接判定；要恢复可核身份就放回原字节")
+                else:
+                    record["stale_cause"] = "materials"
+                    record["reason"] = "本轮材料身份已变：报告对应的不是当前材料"
             else:
                 record["state"] = "imported"
                 record["anchor_checked"] = True
@@ -1664,6 +1755,9 @@ def status_of_round(ctx, task, round_no=None):
             "coverage": coverage,
             "single_reviewer": single_reviewer,
             "launch_scope": (launch or {}).get("scope"),
+            # 材料身份强度与当前身份：`stale` 只说明某份报告对不上，这里给出根因与恢复方向。
+            "materials": {"state": materials_identity_state(ctx, task_id, round_no)["state"],
+                          "identity": round_materials_identity(ctx, task, round_no)},
             "slots": slots, "anchor_current": anchor}
 
 
@@ -2972,6 +3066,49 @@ def verify_materials_manifest(manifest, materials_dir):
     return drift
 
 
+MATERIALS_STAGING_PREFIX = "materials.staging-"
+
+
+def materials_identity(manifest):
+    """轮次材料的**内容身份**（唯一实现）：被审 check_id + 逐文件摘要。
+
+    不含 `generated_at`/`facts`：时间戳每次物化都变，算进来会让"内容一字不差的重出材料"
+    也判失配，出口就只剩开新一轮。`legacy_materials` 这类强弱信息由 `materials_identity_state`
+    的 `state` 另报，不进身份。
+
+    身份的两个消费者：导入登记（报告绑它读到的版本）与判定比对（结论只对它成立）。
+    manifest 不存在时返回 None（弱身份，调用方如实标注）。
+    """
+    if not isinstance(manifest, dict):
+        return None
+    body = {"check_id": manifest.get("check_id"), "files": manifest.get("files") or {}}
+    return "sha256:" + records.sha256_hex(records.canonical_bytes(body))
+
+
+def _material_staging_dir(directory):
+    """本轮材料先在 staging 组装，写全（含 manifest）后一次 rename 发布。
+
+    逐文件直写会在中断时留下半包，而半包没有 manifest ⇒ 下次被当成 `legacy` 采纳
+    （reviewer 读到缺件的"材料"）。`materials_identity_state` 不读 staging，残留由本函数
+    起手清掉。
+    """
+    for name in sorted(os.listdir(directory)):
+        if name.startswith(MATERIALS_STAGING_PREFIX):
+            shutil.rmtree(os.path.join(directory, name), ignore_errors=True)
+    return tempfile.mkdtemp(dir=directory, prefix=MATERIALS_STAGING_PREFIX)
+
+
+def _publish_materials(staging, materials):
+    """原子发布材料目录：目标只可能是"不存在"或"空目录"（其余状态不走这条路）。"""
+    if os.path.isdir(materials):
+        if os.listdir(materials):
+            raise ReviewError("WF_PATH_INVALID", {
+                "reason": "materials directory is not empty but state said unmaterialized",
+                "materials": materials})
+        os.rmdir(materials)
+    os.replace(staging, materials)
+
+
 def materials_identity_state(ctx, task_id, round_no):
     """本轮材料身份状态（取材料与判定共用的唯一判据）：
 
@@ -3004,6 +3141,36 @@ def materials_identity_state(ctx, task_id, round_no):
                 "manifest": manifest, "drift": [], "present": present}
     return {"state": "legacy" if present else "unmaterialized", "materials": materials,
             "manifest": None, "drift": [], "present": present}
+
+
+def round_materials_basis(entries, current_identity):
+    """一轮报告的**材料基线**视图（唯一实现）：阻断与提示都读它，不各推一份。
+
+    `restored` 条目的身份来自记录，天然可能≠当前；单条不阻断。
+    同轮出现"还原 + 非还原"两份基线时，verdict 声称覆盖同一交付面却证据不同 —— 记为 mixed。
+    """
+    restored, live = [], []
+    for entry in entries or []:
+        materials = entry.get("materials") or {}
+        identity = materials.get("identity")
+        if not identity or not current_identity or identity == current_identity:
+            continue
+        (restored if materials.get("restored") else live).append(entry)
+    return {"restored": restored, "live_mismatch": live,
+            "mixed": bool(restored) and bool(live),
+            "stale": bool(live)}
+
+
+def round_materials_identity(ctx, task, round_no):
+    """本轮材料的**当前**身份（报告校验与判定共用的唯一取值点）：无 manifest 即 None。"""
+    try:
+        round_no = int(round_no)
+    except (TypeError, ValueError):
+        return None
+    if round_no < 1 or not task:
+        return None
+    state = materials_identity_state(ctx, task.get("id"), round_no)
+    return materials_identity(state.get("manifest"))
 
 
 def write_materials_manifest(materials_dir, check_id, check_anchor, material_facts):
@@ -3288,10 +3455,12 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
             "reason": "本轮材料与 manifest 不符（材料在物化后被改动或损坏）",
             "manifest_check_id": (material_state["manifest"] or {}).get("check_id"),
             "drift": material_state["drift"],
-            "exits": ["材料改动可以接受：删掉 materials/materials-manifest.json 后重跑 "
-                      "review-context，按现场字节采纳（facts 记 legacy_materials）",
-                      "要按当前内容重出材料：把 materials/ 下的内容文件一并删掉后重跑 review-context",
-                      "报告按 manifest 记录的材料版本核对；改动会使判定无法核对证据身份"]})
+            "exits": ["材料改动可接受且有备份：把备份/暂存副本的原字节放回材料目录后重跑 review-context"
+                      "（manifest 只记摘要、不放字节；原字节 ⇒ 原身份，已导入报告继续有效）",
+                      "要按当前内容重出材料：删 materials/ 下的内容文件**和** materials-manifest.json"
+                      "后重跑 review-context（只删内容会停在 drift）",
+                      "采纳现场字节的弱身份：只删 manifest、留着改动后的内容重跑（facts 记 "
+                      "legacy_materials，但已导入报告按新身份核对）"]})
     if material_state["state"] == "fixed":
         # 复用即不重写 manifest：其中记录的 check_id 是**被审 Check**的身份，不能被
         # 后来的同锚点 Check 覆盖（重写会让判定引用的身份随重跑漂移）。
@@ -3312,9 +3481,15 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
             (material_state["manifest"] or {}).get("check_id") or current_check_id,
             anchor, material_facts)
     else:
-        material_facts = write_materials(ctx, record, round_no, anchor, materials,
-                                         paths=paths, delivery=delivery)
-        manifest = write_materials_manifest(materials, current_check_id, anchor, material_facts)
+        staging = _material_staging_dir(directory)
+        try:
+            material_facts = write_materials(ctx, record, round_no, anchor, staging,
+                                             paths=paths, delivery=delivery)
+            manifest = write_materials_manifest(staging, current_check_id, anchor, material_facts)
+            _publish_materials(staging, materials)
+        except Exception:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise
     # 授权边界事实与首次分支同源（launch 记录是唯一登记处）：续写（上下文丢失后重入）
     # 恰是最需要重读"本轮授权我读什么、排除什么"的场景。
     launch_facts = {"submitted_scope": (launch or {}).get("submitted_scope") or {},
@@ -3343,9 +3518,13 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                        # "本轮授权我读什么、排除什么"；路径指向发起写入的槽位目录。
                        "request": request_path,
                        "request_slots": request_paths}
-    materials_identity = {"check_id": manifest.get("check_id"),
-                          "current_check_id": current_check_id,
-                          "fixed": True}
+    # 材料身份回显：state 与 fixed 都取真实判据（此前恒报 fixed=true，legacy/采纳态也说"已固定"，
+    # reviewer 与主会话都看不出身份强弱）。identity 是报告要抄进 materials 块的值。
+    materials_check = {"state": material_state["state"],
+                       "fixed": material_state["state"] == "fixed",
+                       "identity": materials_identity(manifest),
+                       "check_id": manifest.get("check_id"),
+                       "current_check_id": current_check_id}
     target = agent_report_path(ctx, task_id, round_no, agent)
     status = read_agent_status(target)
     if reset:
@@ -3376,16 +3555,21 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                    "submitted_paths": (sorted(str(item) for item in declared_paths)
                                        if isinstance(declared_paths, list) else None),
                    "skeleton_fields": list(REPORT_FIELDS),
-                   "materials_check": materials_identity,
+                   "materials_check": materials_check,
                    **launch_facts})
     if status == "done":
         raise ReviewError("WF_REVIEW_INVALID",
                           {"reason": "this agent already has a report for the round",
                            "agent": agent, "round": round_no, "status": status, "path": target,
+                           # done 报告改不了骨架，但缺身份时要知道往哪补：给出当前身份，别只说"去导入"
+                           "materials_check": materials_check,
                            "exits": ["报告已完成，下一步 review-import",
+                                     "报告缺 materials 块（此前版本写的）时，把 materials_check.identity "
+                                     "按 `{'materials': {'identity': …}}` 补进协议块再导入",
                                      "换一个审查 agent（须与实施 CLI 及其它审查 CLI 不同）"]})
     records.atomic_write(target, report_skeleton(task_id, round_no, record.get("check") or {}, anchor,
-                                                 launch=launch))
+                                                 launch=launch,
+                                                 materials_identity=materials_check["identity"]))
     from . import codes
 
     return codes.result(
@@ -3403,7 +3587,7 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                "submitted_paths": (sorted(str(item) for item in declared_paths)
                                    if isinstance(declared_paths, list) else None),
                "skeleton_fields": list(REPORT_FIELDS),
-               "materials_check": materials_identity,
+               "materials_check": materials_check,
                **launch_facts},
     )
 
@@ -3509,10 +3693,16 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
                                    "report": claim,
                                    "exits": ["确认报告已把头部 status 改成 done 后重试导入"]})
         if not targets:
+            undecided = undecided_rounds(record)
             raise ReviewError("WF_PATH_INVALID",
                               {"reason": "no finished report in this round", "round": round_no,
                                "agent": wanted, "directory": directory,
-                               "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）"]})
+                               # 缺省取最大发起轮：恢复较早一轮时错轮是常见形态，把待处理轮次
+                               # 直接列出来，调用方不必再去猜/翻记录。
+                               "undecided_rounds": undecided,
+                               "exits": ["先由 reviewer 会话运行 review-context 并写完报告（status=done）",
+                                         "本轮不是要处理的那一轮时用 `--round <n>` 显式指定"
+                                         + (f"（待处理轮次：{undecided}）" if undecided else "")]})
         # 发现式导入（2026-11-21 调整）：逐份导入，坏报告不中断其余槽位——
         # 导入是证据入库，能入的先入，失败槽位在 facts.import_errors 单列（含原因与出口）。
         imported, import_errors, results_by_agent = [], [], {}
@@ -3570,8 +3760,11 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         current_record = records.load_json(os.path.join(_task_dir(ctx, task), "task.json")) or task
     except Exception:  # noqa: BLE001 — 记录读不到时仍按调用方给的 task 做输入面检查
         current_record = task
-    input_problems = flatten_checks(report_input_problems(payload, task=current_record,
-                                                          text=text)["checks"])
+    input_problems = flatten_checks(report_input_problems(
+        payload, task=current_record, text=text,
+        materials_identity=round_materials_identity(ctx, current_record, round_no),
+        materials_required=not restore, materials_restored=restore)["checks"])
+    # restore 只放宽"身份相等"（校验器已按 `materials_restored` 处理），格式问题照报。
     if input_problems:
         raise ReviewError("WF_REVIEW_INVALID",
                           {"reason": "report input does not satisfy the protocol",
@@ -3586,6 +3779,17 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         declared_round = None
     if declared_round != int(round_no):
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "round mismatch", "report": payload.get("round")})
+    # 材料在物化后被改动（含量增加）时，报告与链上判定都不再对得上；导入端先拒一次，
+    # 不把同一件事推到判定才炸（lint/import/decide 同源的既有纪律）。
+    material_state = materials_identity_state(ctx, task.get("id"), round_no)
+    if material_state["state"] == "drift" and not restore:
+        # restore 还原的是历史证据，历史证据不必匹配当前现场；drift 留给判定侧如实报。
+        raise ReviewError("WF_REVIEW_INVALID", {
+            "reason": "本轮材料在物化后被改动，报告无法对上材料身份",
+            "round": int(round_no), "drift": material_state["drift"],
+            "exits": ["有备份时把原字节放回材料目录再重跑 review-context（原字节 ⇒ 原身份）",
+                      "材料确实变了：删 materials/ 下内容文件**和** materials-manifest.json 后重跑 "
+                      "review-context，再按新材料重写报告并开新一轮"]})
     # 身份优先看文件名；正文写了就要一致（2026-11-07：正文不再要求该字段）
     if payload.get("reviewer-id") and normalize_agent(payload.get("reviewer-id")) != identity:
         raise ReviewError("WF_REVIEW_INVALID", {"reason": "reviewer-id mismatch", "report": payload.get("reviewer-id")})
@@ -3747,6 +3951,22 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
         entry_record = {"round": int(round_no), "slot": record_slot,
                         "report_path": os.path.relpath(target, str(ctx.root)).replace(os.sep, "/"),
                         "report_digest": digest, "anchor": entry_anchor}
+        # 报告绑定它读到的那批材料（A1 裁定）：身份在导入时登记，判定按它核对。
+        # restore 保留原身份——不拿当前材料替旧报告作证。没有声明过 `materials` 的旧报告
+        # 照当前身份记但不宣称绑定（`unbound`），不阻断在途轮。
+        if restore and previous is not None and previous.get("materials"):
+            entry_record["materials"] = dict(previous.get("materials"), restored=True)
+        elif restore:
+            identity_now = materials_identity(material_state["manifest"])
+            entry_record["materials"] = dict(
+                {"identity": identity_now} if identity_now else {"state": material_state["state"]},
+                restored=True, unbound=True)
+        else:
+            identity_now = materials_identity(material_state["manifest"])
+            entry_record["materials"] = ({"identity": identity_now} if identity_now
+                                         else {"state": material_state["state"]})
+            if not payload.get("materials"):
+                entry_record["materials"]["unbound"] = True
         # 标准漂移在**导入**这一侧也标成事实（判定侧才阻断）：让"这份报告提交时标准已变"可见，
         # 又不因为"判断还没写"把正常顺序（导入 → 判断 → 判定）卡住。
         standard_positions = standard_drift_positions(
@@ -3776,11 +3996,14 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
     imported_slots_now = sorted({str(entry.get("slot")) for entry in imported
                                if int(entry.get("round") or 0) == int(round_no)})
     missing_slots = [slot for slot in launch_slots_now if slot not in imported_slots_now]
-    next_text = ("本轮报告已齐：用 `review-decide --main-review-draft` 生成复核骨架，"
+    next_text = (f"第 {int(round_no)} 轮报告已齐：用 `review-decide --round {int(round_no)} "
+                 "--main-review-draft` 生成复核骨架，"
                  "填完五轴/逐报告/逐 finding 后 `--main-review` 判定（处置与判定步骤见 wf-review-action）"
                  if not missing_slots else
-                 f"还差槽位报告：{'、'.join(missing_slots)}——补齐后按 wf-review 产出并 review-import；"
-                 "本轮报告已齐后用 `review-decide --main-review-draft` 生成复核骨架再判定")
+                 f"还差槽位报告：{'、'.join(missing_slots)}——补齐后按 wf-review 产出并 "
+                 f"`review-import --round {int(round_no)}`；"
+                 f"本轮报告已齐后用 `review-decide --round {int(round_no)} --main-review-draft` "
+                 "生成复核骨架再判定")
     return codes.result(
         "WF_OK",
         object={"id": task.get("id"), "name": task.get("title")},
@@ -3926,6 +4149,7 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
     declared_slots = {slot.get("slot"): slot.get("reviewer_cli")
                       for slot in (launch or {}).get("slots") or []
                       if isinstance(slot, dict) and slot.get("slot")}
+    current_materials = round_materials_identity(ctx, task, round_no)
     for entry in imported:
         rel = entry.get("report_path")
         if not rel:
@@ -3980,10 +4204,31 @@ def review_report_problems(ctx, task, *, round_no, launch, imported, anchor):
         # 输入面走**共享实现**（与 lint / import 同源）：同一份报告在三处的输入结论一致。
         # 状态头不在判定处重核——它是"导入时是否已完成"的事实，已在导入那一刻定案，
         # 判定侧重读同一份已导入文件不会产生新信息。
-        shared = report_input_problems(payload, task=task, launch=launch)
+        shared = report_input_problems(
+            payload, task=task, launch=launch, materials_identity=current_materials,
+            materials_restored=bool((entry.get("materials") or {}).get("restored")))
         for problem in flatten_checks(shared["checks"]):
             problems.append(dict(problem, slot=entry.get("slot")))
             blockers.append("report_invalid")
+        # 登记过材料身份、但与本轮当前材料不同：判定读不到 reviewer 当时读的那批字节。
+        bound = (entry.get("materials") or {}).get("identity")
+        # 基线视图只算一次（同一实现供提示与 status 复用）
+        basis = round_materials_basis(imported, current_materials)
+        # restore 记录的身份来自记录本身（历史证据），与现场不同是常态：降为事实不阻断，
+        # 否则"恢复入口允许导入、判定却永远过不去"。`unbound` 同档说明强度。
+        if bound and current_materials and bound != current_materials:
+            restored_entry = bool((entry.get("materials") or {}).get("restored"))
+            mixed = basis["mixed"]
+            if not restored_entry or mixed:
+                problems.append({"slot": entry.get("slot"),
+                                 "reason": ("round mixes restored and current material identities"
+                                            if mixed else "imported report is bound to different round materials"),
+                                 "bound": bound, "current": current_materials,
+                                 "restored": restored_entry,
+                                 "unbound": bool((entry.get("materials") or {}).get("unbound")),
+                                 **({"exits": ["把这一份也按 `--restore` 重导（标成历史证据）",
+                                               "或按新材料重写报告并开新一轮"]} if mixed else {})})
+                blockers.append("materials_stale")
         report_axes[entry.get("slot")] = payload.get("axes") or {}
         # 缺口只由 `axes: uncovered` 承载。`scope-exceptions` / `material-gaps` 这类自由文本
         # 不再一义多用：主会话复核补足或人接受缺口，材料不足写进对应轴。
@@ -4562,16 +4807,22 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                               "无法重查时交人/按暂停处置；Check 失效不属审查不可用声明"]))
             # 判定消费的是**本轮材料**：取材料时核过不等于此刻还成立。材料在物化后被改，
             # 报告与 verdict 就都失去被审对象（P1：此前判定只把 manifest 抄进结果）。
-            if material_state["state"] == "drift":
+            # 本轮导入记录是否"没有现场身份可言"（此处 `imported` 还没组装，直接从记录取）：
+            # restore 记录的身份来自记录、纯旧记录压根没有身份。两种都不该被现场漂移挡住。
+            _round_entries = [entry for entry in reviews.get("imported") or []
+                              if isinstance(entry, dict) and int(entry.get("round") or 0) == int(round_no)]
+            history_round = bool(_round_entries) and all(
+                (entry.get("materials") or {}).get("restored")
+                or not (entry.get("materials") or {}).get("identity")
+                for entry in _round_entries)
+            if material_state["state"] == "drift" and not history_round:
                 raise ReviewError("WF_REVIEW_INVALID", {
                     "reason": "本轮材料在物化后被改动，不能据此产结论",
                     "round": round_no, "drift": material_state["drift"],
                     "manifest_check_id": (material_state["manifest"] or {}).get("check_id"),
-                    "exits": ["材料改动可以接受：删 materials/materials-manifest.json 后重跑 "
-                              "review-context 采纳现场字节，再判定",
-                              "要按当前内容重出材料：删 materials/ 下内容文件后重跑 review-context，"
-                              "报告按新材料重写",
-                              "不手改材料目录；判定通过时记的是 manifest 摘要"]})
+                    "exits": ["有备份时把原字节放回材料目录，重跑 review-context（原字节 ⇒ 原身份）后再判定",
+                              "材料确实变了：报告按新材料重写并开新一轮（同轮已登记摘要不可覆盖）",
+                              "不手改材料目录；结果记的是报告绑定的材料身份"]})
         if register_only:
             # A8：只登记复核关闭或主会话已核实 finding。与判定共用同一把锁、同一套处置校验，
             # 但**不产生结论**：result / rounds[] / attempts 一律不动。
@@ -5254,21 +5505,31 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             facts = dict(
                 facts, materials_state=material_state["state"],
                 materials_note=("材料没有可核身份（按现场字节采纳，未证明未被改动；"
-                                "manifest 摘要只代表当时快照，重入会因重算摘要而变）；"
-                                "要可核身份则删材料内容后重跑 review-context" if weak else
-                                "材料在物化后被改动（本条未产结论，故未阻断）" if drift else
+                                "身份只覆盖 manifest 列出的文件）；"
+                                "要可核身份则删材料内容**和** manifest 后重跑 review-context" if weak else
+                                "材料在物化后被改动；本轮的结论按**记录给出的身份**成立"
+                                "（纯旧记录没有身份时见 unbound），现场字节只作参考"
+                                "（要恢复可核身份就放回原字节）" if drift else
                                 "本轮没有材料目录：报告读到的材料已不可还原"))
         # 判定引用的材料身份：本轮 manifest（轮次材料一经物化即固定）的摘要——
         # "判定通过时 reviewer 读到的是哪份 check.json/日志"由此可还原，不靠时间推断。
         # `state` 同时如实暴露身份强度：legacy=无身份记录（按现场采纳）、unmaterialized=无材料。
         _manifest = material_state["manifest"]
-        _materials_identity = {"state": material_state["state"]}
-        if _manifest:
-            _manifest_bytes = json.dumps(_manifest, sort_keys=True,
-                                         ensure_ascii=False).encode("utf-8")
-            _materials_identity.update({"check_id": _manifest.get("check_id"),
-                                        "manifest_digest": "sha256:"
-                                        + records.sha256_hex(_manifest_bytes)})
+        # 判定引用的材料身份取**报告绑定的那条**（结论对它成立），当前身份另列对账：
+        # 旧实现在这里只记当前 manifest，重物化后结论会冒充"审的是新那份"。
+        _bindings = sorted({(entry.get("materials") or {}).get("identity") for entry in imported
+                            if (entry.get("materials") or {}).get("identity")})
+        _current = materials_identity(_manifest)
+        _materials_identity = {"state": material_state["state"],
+                               # 老报告没绑身份（`unbound`）时只能记当前值，别留空数组
+                               "identity": ((_bindings[0] if len(_bindings) == 1 else _bindings)
+                                            or _current),
+                               "unbound": any(not (entry.get("materials") or {}).get("identity")
+                                              or (entry.get("materials") or {}).get("unbound")
+                                              for entry in imported),
+                               "check_id": (_manifest or {}).get("check_id")}
+        if _current and _bindings and _current not in _bindings:
+            _materials_identity["current"] = _current
         result = {
             "verdict": verdict,
             "round": int(round_no),

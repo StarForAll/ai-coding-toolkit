@@ -186,17 +186,23 @@ def debug_pending(task, threshold=None):
         key = parse_debug_ruling(subject)
         if key is not None:
             rulings[key] = decision.get("choice")
+    # 一次裁定覆盖**它之前的所有倍数**：根因判断是对"到目前为止这条验证为什么反复失败"的回答，
+    # 后来的裁定天然包含更早的。存档仍按 subject 精确记 (verification_id, multiple)，
+    # 计数与去重不变——只是不再要求为每个已越过的倍数各签一条。
+    ruled_upto = {}
+    for (verification_id, multiple) in rulings:
+        ruled_upto[verification_id] = max(ruled_upto.get(verification_id, 0), multiple)
     pending = []
     totals = {}
     for verification_id in sorted(verification_ids):
         merged = merged_failures(task, verification_id)
         totals[verification_id] = merged
         multiples = merged // threshold if threshold else 0
-        for multiple in range(1, multiples + 1):
-            # 精确比较 (verification_id, multiple)：前缀匹配会让「第 1 倍」被「第 10 倍」覆盖
-            if (verification_id, multiple) not in rulings:
-                pending.append({"verification_id": verification_id, "multiple": multiple,
-                                "merged": merged, "threshold": threshold})
+        covered = ruled_upto.get(verification_id, 0)
+        if multiples > covered:
+            pending.append({"verification_id": verification_id, "multiple": multiples,
+                            "covers": list(range(covered + 1, multiples + 1)),
+                            "merged": merged, "threshold": threshold})
     return {"pending": pending, "merged": totals, "rulings": rulings, "rulings_raw": rulings_raw}
 
 
@@ -1133,9 +1139,10 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
         return False, "WF_SEMANTIC_DECISION", {"unruled_debug_multiples": debug["pending"],
                                                "merged": debug["merged"],
                                                "threshold": ctx.debug_threshold(),
-                                               "next": "主会话按根因对每个倍数裁定「同一问题/不同问题」"
-                                                       "（依据与证据入裁定 reason，经 task-check --decision 落账；"
-                                                       "无法消解再交人）"}
+                                               "next": "主会话按根因裁定「同一问题/不同问题」——一条裁定覆盖 "
+                                                       "covers 列出的全部倍数（依据与证据入裁定 reason，"
+                                                       "subject 写 debug-ruling-<验证项>-<倍数>，经 "
+                                                       "task-check --decision 落账；无法消解再交人）"}
     pending = actions.pending(task)
     if pending and pending.get("id") == ignore_action_id:
         pending = None

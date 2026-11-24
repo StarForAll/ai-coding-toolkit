@@ -14,8 +14,9 @@ disable-model-invocation: false
 
 ```bash
 # 1) 导入：按文件名发现本轮已完成（status=done）的报告，重复调用幂等
+# 轮次必须显式给：缺省取**最大发起轮**，恢复较早一轮时会导到另一轮去
 # 自动模式（默认）不传信封；只有本会话确实有显式信封文件时才追加 --envelope <本会话信封>
-<python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --json
+<python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --round <n> --json
 
 # 2) 生成主会话复核骨架（不产生结论；放 .wf/.runtime/，该目录不入库）
 <python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \
@@ -46,6 +47,8 @@ disable-model-invocation: false
 - 判"沿用"必须点名漂移差异里的**具体位置**（`d:` + hunk/字段/行号）；框架只校验位置存在，**相关性与粒度是你的判断**——写进 `kind=沿用` 的 judgment（依据写实），判不了才 `outcome=escalated` 交人，不默认请示。
 - **纠错型漂移**（`broken-reference`，旧验证从未成功执行）不给"沿用"这条路：锚点指向被纠错 check 的报告只能重发。
 - 框架不判决后果，只保证"带 `standard_drift` 且没有对应 judgment 的报告不能产出 pass"。
+- **材料身份**（报告里的 `materials.identity`）是硬绑定：材料被重出后旧报告对不上，判定会拒；
+  能放回原字节就放回（原报告继续有效），放不回就按新材料重写并开新一轮。
 - 关闭证据要指回问题本身：见 `wf-repair-loop`「这条 blocking 真的修了吗」。
 
 ## 处置形状（只有 `accepted` 清零）

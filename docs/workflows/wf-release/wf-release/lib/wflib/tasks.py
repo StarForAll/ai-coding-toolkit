@@ -608,6 +608,22 @@ def complex_artifact_problems(root, task, complexity):
     return problems
 
 
+def artifact_drift(root, task, declared):
+    """决定绑定的规划产物与当前是否不同（未携带 `artifacts` 的旧决定返回空）。
+
+    两侧都核：声明过的路径变了/没了算漂移；**当前存在却没被声明**的也算——规划集在草稿与
+    批准之间从 {prd} 长成 {prd,design,implement} 时，新产物同样是人没看过的。
+    """
+    if not isinstance(declared, dict) or not declared:
+        return []
+    current = {item["path"]: item["digest"] for item in artifact_digests(root, task)}
+    drift = [{"path": path, "declared": digest, "current": current.get(path)}
+             for path, digest in sorted(declared.items()) if current.get(path) != digest]
+    drift += [{"path": path, "declared": None, "current": digest}
+              for path, digest in sorted(current.items()) if path not in declared]
+    return drift
+
+
 def artifact_digests(root, task):
     path = task_dir(root, task.get("id"))
     if not path:
@@ -1756,12 +1772,18 @@ def cmd_task_approve(ctx, args):
                 "at": records.now_str(),
                 "subject": f"approve {task_id}",
                 "object_digest": digest,
+                # 人看的是整套规划，不只是 PRD 字节：把 design/implement 的当时摘要一并绑上，
+                # 答复之后任一产物再变即拒（否则"批的是旧方案、记的是新方案"）。
+                "artifacts": {item["path"]: item["digest"]
+                              for item in artifact_digests(ctx.root, task)},
                 "choice": "approve",
                 "reason": "TODO（人填写：为什么批准本规划）"}
         mechanical = {"source": "TODO human:<来源>",
                       "at": records.now_str(),
                       "subject": f"机械修订 {task_id}",
                       "object_digest": digest,
+                      # 与 approve 条目同源：机械修订也核整套产物，草稿不带就会自我锁死
+                      "artifacts": dict(entry["artifacts"]),
                       "choice": "机械修订",
                       "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"
                       "——仅本任务已有批准、且只改排版/转义时保留本条，否则删除"}
@@ -1821,22 +1843,50 @@ def cmd_task_approve(ctx, args):
                             next_="用 choice=approve 的决定重新批准")
         approval = approvals[0]
         # 摘要取自上面那次读（同一读数）：草稿/机械修订/replan 也用它，口径唯一。
-        if approval.get("object_digest") and approval.get("object_digest") != prd_digest:
+        # 必填而不是"有才比"：留空的旧摘要能靠 subject 里的任务 id 混过，人答复之后 PRD
+        # 再变也算批准（2026-11-24 复核 b-P1）。subject 含任务 id 退回**次级**绑定。
+        declared_digest = approval.get("object_digest")
+        if not declared_digest:
+            raise TaskError("WF_APPROVAL_MISSING",
+                            {"reason": "approval decision lacks object_digest (PRD digest)",
+                             "expected_prd_digest": prd_digest},
+                            next_="按当前 PRD 重新出批准决定：`task-approve --draft` 会预填摘要；"
+                                  "入口不代填——人对 PRD 的批准留痕不可替代")
+        if declared_digest != prd_digest:
             raise TaskError("WF_APPROVAL_MISSING",
                             {"reason": "approval decision does not cover the current PRD",
-                             "decision_digest": approval.get("object_digest"), "current_digest": prd_digest,
+                             "decision_digest": declared_digest, "current_digest": prd_digest,
                              "expected_prd_digest": prd_digest},
                             next_="针对当前 PRD 重新出批准决定（object_digest 应为 expected_prd_digest；"
                                   "入口不代填——人对 PRD 的批准留痕不可替代）")
-        subject = str(approval.get("subject") or "")
-        # 最低绑定：subject 必须写明任务 id，或 object_digest 精确等于当前 PRD 摘要；
-        # 两者都空的决定不得批准任何任务（第十九轮复审外部 N-2）。
-        if task_id not in subject and approval.get("object_digest") != prd_digest:
+        declared_artifacts = approval.get("artifacts")
+        if not isinstance(declared_artifacts, dict) or not declared_artifacts:
+            # 只认 PRD 字节的决定会给"后来又补了方案"留门：产物一律要求现报（草稿已预填）。
             raise TaskError("WF_APPROVAL_MISSING",
-                            {"reason": "approval decision is not bound to this task",
-                             "subject": subject, "object_digest": approval.get("object_digest"),
+                            {"reason": "approval decision lacks plan artifacts",
+                             "expected_artifacts": {item["path"]: item["digest"]
+                                                    for item in artifact_digests(ctx.root, task)},
                              "expected_prd_digest": prd_digest},
-                            next_="在 subject 写明任务 id，或把 object_digest 设为当前 PRD 摘要")
+                            next_="重新生成草稿（task-approve --draft）后请人确认；"
+                                  "手写决定时按 expected_artifacts 补 `artifacts`")
+        changed_artifacts = artifact_drift(ctx.root, task, declared_artifacts)
+        if changed_artifacts:
+            raise TaskError("WF_APPROVAL_MISSING",
+                            {"reason": "plan artifacts changed after the decision was drafted",
+                             "changed": changed_artifacts,
+                             "expected_artifacts": {item["path"]: item["digest"]
+                                                    for item in artifact_digests(ctx.root, task)}},
+                            next_="重新生成草稿（task-approve --draft）并按当前规划请人确认；"
+                                  "答复之后新增或改写 design/implement 同样算没看过")
+        # 摘要只绑内容：两份任务 PRD 字节相同时，光凭摘要无法说是哪一项。subject 是
+        # **次级绑定**，所以仍核任务 id——它不是展示字段，help 的措辞与之对应。
+        if task_id not in str(approval.get("subject") or ""):
+            raise TaskError("WF_APPROVAL_MISSING",
+                            {"reason": "approval decision subject does not name this task",
+                             "subject": approval.get("subject"), "task": task_id,
+                             "expected_prd_digest": prd_digest},
+                            next_="在 subject 写明任务 id（摘要相同不等于同一项任务）；"
+                                  "`task-approve --draft` 已按此形态生成")
         questions = extract_plan_questions(prd_text)
         q_errors = question_errors(questions)
         if q_errors:
@@ -2165,6 +2215,20 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
                          "current_object_digest": current_digest,
                          "exits": ["重新生成草稿、请人按当前内容确认后重跑",
                                    "若内容实质变化，回 Plan 重新批准"]})
+    declared_artifacts = decision.get("artifacts")
+    if not isinstance(declared_artifacts, dict) or not declared_artifacts:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "机械修订的决定缺少 artifacts（签认要覆盖整套产物）",
+                         "expected_artifacts": {item["path"]: item["digest"]
+                                                for item in artifact_digests(ctx.root, task)},
+                         "exits": ["重新生成草稿（task-approve --draft）后请人确认并重跑"]})
+    changed_artifacts = artifact_drift(ctx.root, task, declared_artifacts)
+    if changed_artifacts:
+        raise TaskError("WF_SEMANTIC_DECISION",
+                        {"reason": "规划产物在签认之后变过：等价链会把新方案并进旧签认",
+                         "changed": changed_artifacts,
+                         "exits": ["重新生成草稿、请人确认后再跑",
+                                   "产物实质变化时回 Plan 重新批准"]})
     block, errors = parse_plan_block(prd_text)
     if errors:
         raise TaskError("WF_TEMPLATE_INCOMPLETE", {"problems": errors})
@@ -2713,7 +2777,7 @@ def _debug_idempotency_key(entry):
                    "evidence_refs": sorted(entry.get("evidence_refs") or [])})
 
 
-def _apply_debug_inputs(task, decisions, root=None):
+def _apply_debug_inputs(task, decisions, root=None, threshold=None):
     """把 Execute 期重复调试声明与 debug-ruling 裁定落到 execution（机制稿 §1.3）。"""
     execution = task.setdefault("execution", {})
     declarations = list(execution.get("debug_declarations") or [])
@@ -2763,10 +2827,26 @@ def _apply_debug_inputs(task, decisions, root=None):
         if subject.startswith("debug-ruling-"):
             from . import gates as gates_mod
 
-            if gates_mod.parse_debug_ruling(subject) is None:
+            parsed = gates_mod.parse_debug_ruling(subject)
+            if parsed is None:
                 raise TaskError("WF_RECORD_INVALID",
                                 {"subject": subject,
                                  "reason": "debug-ruling subject must be debug-ruling-<verification_id>-<multiple>"})
+            # 未来倍数不能提前裁：裁定按最大倍数覆盖之前的全部倍数，写一个还没到的倍数
+            # 会把尚未发生的倍数一并"覆盖"掉，之后的失败不再追问（a-P1）。
+            # 同一决定文件里的声明还没落盘，先把它计入，否则"补记 + 裁新倍数"会被误拒。
+            limit = threshold or gates_mod.DEBUG_THRESHOLD_DEFAULT
+            pending = sum(item["counted"] for item in declarations
+                          if item.get("verification_id") == parsed[0])
+            merged = gates_mod.merged_failures(task, parsed[0]) + pending
+            reached = merged // limit if limit else 0
+            if parsed[1] > reached:
+                raise TaskError("WF_SEMANTIC_DECISION",
+                                {"subject": subject, "multiple": parsed[1],
+                                 "verification_id": parsed[0], "merged": merged,
+                                 "threshold": limit, "reached": reached,
+                                 "exits": [f"把倍数改成当前已达的 {reached}（或更小）后重跑",
+                                           "确实要提前裁时，先让失败累计到该倍数再重跑"]})
             if not decisions_mod.accepts("debug_ruling", decision.get("choice")):
                 raise TaskError("WF_SEMANTIC_DECISION", {"subject": subject,
                                                          "reason": "ruling choice must be 同一问题/不同问题"})
@@ -2928,11 +3008,50 @@ def check_next_hint(task, check, ctx=None):
         # 在途轮是否可继续由「轮次 + 锚点」决定（十四轮 b-1）：launch 不改写 result.verdict
         # （v66），旧轮的 fail/pass 只是历史，不得把在途轮挤成"重新发起"——那会沿 dogfood
         # 的失败路径再造人工提醒与重复轮次。
+        # 在途轮的材料是否已被换掉（导入记录与当前身份不符，或按记录还原的旧身份）：
+        # 这决定了"继续这一轮"能不能等来报告——同轮摘要锁下旧报告导不回来。
+        _materials_stale = False
+        _materials_unknown = False
+        _materials_drift = False
+        _materials_mixed = False
         if _open_round is not None:
+            try:
+                from . import review as _review_mod_materials
+
+                _imported = [item for item in ((task.get("reviews") or {}).get("imported") or [])
+                             if isinstance(item, dict) and int(item.get("round") or 0) == _open_round]
+                _now = _review_mod_materials.round_materials_identity(ctx, task, _open_round)
+                # 判据取自 `materials_identity_state`（与 review-context/decide 同源）：
+                # drift 态下 `review-context` 会拒，不能指引"先取材料"；还原记录的身份来自
+                # 记录本身，不算"材料被换过"。
+                _state = _review_mod_materials.materials_identity_state(ctx, task.get("id"), _open_round)
+                _materials_drift = _state["state"] == "drift"
+                # 基线口径取 review 侧的唯一实现（不在这里重推一份，避免与阻断侧分叉）
+                _basis = _review_mod_materials.round_materials_basis(_imported, _now)
+                _materials_stale = _materials_drift or _basis["stale"]
+                _materials_mixed = _basis["mixed"]
+            except Exception:      # noqa: BLE001 — 只读投影失败：不明说失配，但让下一跳先看状态
+                _materials_stale = False
+                _materials_unknown = True
+        if _open_round is not None and _materials_mixed:
+            hint = (f"第 {_open_round} 轮审查在途，且还原记录与现场材料混在一轮："
+                    "把正常条目也按 `--restore` 重导（标成历史证据），或按新材料重写并开新一轮；"
+                    "直接判定会撞混合基线")
+        elif _open_round is not None and _materials_drift:
+            hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift）："
+                    "还原记录可直接 review-decide；要恢复可核身份就把原字节放回材料目录"
+                    "再重跑 review-context——此时先取材料会撞 drift 校验")
+        elif _open_round is not None and _materials_stale:
+            hint = (f"第 {_open_round} 轮审查在途，但材料已被换过（导入记录与当前材料身份不符）："
+                    "同轮不能重导——有备份就把原字节放回材料目录并重跑 review-context，"
+                    "没有备份则按新材料重写并开新一轮；等 reviewer 重交解决不了")
+        elif _open_round is not None:
             hint = (f"第 {_open_round} 轮审查仍在进行且锚点未变（同内容重验）："
                     "继续这一轮——review-context 取材料（本轮材料按首轮物化固定，"
                     "不随 Check 重跑改写）→ 人跑 reviewer → 导入 → 判定；"
                     "不要重新 review-launch")
+            if _materials_unknown:
+                hint += "（材料身份没核成：先看 `review-status` 再决定是否继续）"
             if _binding and open_blocking:
                 hint += ("；已有绑定当前锚点的 pass 结论，但 blocking 仍未关闭——"
                          "该轮判定后还需" + blocking_fix + "，才能请人 finish")
@@ -3034,7 +3153,7 @@ def cmd_task_check(ctx, args):
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "check requires in_progress", "status": task.get("status")})
         if task.get("paused") or task.get("suspended"):
             raise TaskError("WF_SEMANTIC_DECISION", {"paused": task.get("paused"), "suspended": task.get("suspended")})
-        _apply_debug_inputs(task, decisions, ctx.root)
+        _apply_debug_inputs(task, decisions, ctx.root, ctx.debug_threshold())
         findings = gates.evaluate(ctx, task, "before_check")
         blocking = [item for item in findings if item["status"] == "missing"]
         if blocking:

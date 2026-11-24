@@ -19,7 +19,7 @@ disable-model-invocation: false
 |---|---|
 | 未开工 / plan，未批准 | 呈现 PRD 机读块、复杂度与 TDD，请人批准 → `task-approve --task <id> --decision <path>` |
 | 已批准，未开工 | `task-start --task <id>` |
-| in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先向人确认这些是本任务交付还是外来——外来走排除声明，是本任务交付就继续；不默认归属、也不阻断）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
+| in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先按快照、提交和 WIP 证据判它是本任务交付还是外来——外来走排除声明，是本任务交付就继续；只有证据冲突、或必须决定接管/排除/提交时才问人，判断口径见下节「实施期要自己判的几件事」）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘） |
 | 需要记录知识处置（Check/归档前） | `task-knowledge --task <id> --decision no-update|updated [--changes <文件>]`；spec 变更走 `wf-spec-update` skill（`spec-update --task <id> --changes <文件>`），先看后改 |
@@ -157,6 +157,9 @@ disable-model-invocation: false
   `judgments add --draft`、`--changes-draft` 等），先用骨架再填。
 - 决定内容必须是人已明确给出的选择，模型只负责按它转录（作决定与转录是两件事，见设计稿 §1.2）。
 - 需要知道输入结构：`<python> <项目根>/.wf/bin/wf.py help <命令>`（有最小示例，不必读源码）。
+- "决定文件只能转录人的答复"**不覆盖诊断裁定**：重复调试的「同一问题/不同问题」由你在授权内判（见
+  `wf-diagnosing-bugs`），`task-check --decision` 记录的是你的裁定与依据，不是等人的签字；证据不足以
+  区分根因时才交人。
 
 ## 不做
 

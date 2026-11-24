@@ -42,8 +42,11 @@ user-invoked: true
    - **授权范围不足**（需要读排除面、项目外或其他任务目录）：**停止并回报**，不自行扩大；该轴记 `uncovered`，不要写自造字段。
    报告是辅助证据，主会话会逐轴复核并补足；你按事实写 `uncovered` 比猜测更有用。
 6. 材料目录**只读不改**：`review-context` 物化后即落身份记录（`materials-manifest.json`），
-   主会话判定时会逐文件复核——手改材料会让判定拒；重取也不会重写已有字节（新增文件同样算改了）。
-   缺材料就补读到仓库、写 `read-scope`。
+   并把该身份预填进报告 `materials.identity`；导入与判定都按它核对——手改材料会让入口拒，
+   重取也不会重写已有字节（新增文件同样算改了）。缺材料就补读到仓库、写 `read-scope`。
+   主会话若在你写报告前后重出了材料，`materials.identity` 会与当前不符：按新 facts 重抄该值，
+   然后**重核受影响的结论**（材料换了，你引用的行号、证据、覆盖判断都可能变——重抄不等于重审）；
+   或由主会话开新一轮。
 7. 材料是**脱敏副本**：`diff.patch` / `prd.md` 在生成时按协议 `secret-mask` 遮罩过（`status.json` 里 `redacted: true`），看到 `***` 是预期，不要据此判「材料缺失」；报告 = 头部状态行 + Markdown 正文 + 唯一协议块（`review-context` 已把整套骨架写到
    `report_path`，含预填的 `task-id`/`round`/`check-anchor`；照它填，不自己另写字段）：
 
