@@ -55,7 +55,7 @@ def context(project, task_id, round_no, agent):
                  inputs={"generation": H.generation(project)})
 
 
-def write_report(path, task_id, round_no, agent, anchor, check_id):
+def write_report(path, task_id, round_no, agent, anchor, check_id, materials_identity=None):
     axes = {name: {"conclusion": "pass", "basis": "人工审查"}
             for name in ("range", "acceptance", "contract", "regression", "testability")}
     body = {"protocol": "wf-review-v1", "task-id": task_id, "round": round_no,
@@ -63,6 +63,8 @@ def write_report(path, task_id, round_no, agent, anchor, check_id):
             "check-anchor": {"check_id": check_id, "check_anchor": anchor},
             "read-scope": ["pkg/**"], "excluded-scope": COVERED,
             "scope-exceptions": [], "axes": axes, "findings": [], "verdict": "pass"}
+    if materials_identity:
+        body["materials"] = {"identity": materials_identity}
     text = ("<!-- wf-review-agent:v1 status=done -->\n<!-- wf-review-report:v1 -->\n```json\n"
             + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
     open(path, "w", encoding="utf-8").write(text)
@@ -99,7 +101,7 @@ def check():
     round_no = (payload.get("facts") or {}).get("round") or 1
 
     # ③ --as 优先于信封 host_id（信封 host 仍是 dsh）
-    report_dirs, agents = [], []
+    report_dirs, agents, identities = [], [], []
     for agent in ("pi", "zcode"):
         rc, payload = context(project, task_id, round_no, agent)
         if (payload or {}).get("code") != "WF_OK":
@@ -110,6 +112,7 @@ def check():
             continue
         agents.append((payload.get("facts") or {}).get("agent"))
         report_dirs.append(os.path.dirname((payload.get("facts") or {}).get("report_path") or ""))
+        identities.append(((payload.get("facts") or {}).get("materials_check") or {}).get("identity"))
     if len(agents) == 2 and agents != ["pi", "zcode"]:
         problems.append(f"--as 未优先于 host_id：{agents}")
     if problems:
@@ -126,9 +129,9 @@ def check():
     record = json.load(open(os.path.join(task_dir, "task.json"), encoding="utf-8"))
     check_now = record.get("check") or {}
     anchor = (check_now.get("anchor") or {}).get("check_anchor")
-    for agent, directory in zip(("pi", "zcode"), report_dirs):
+    for agent, directory, identity in zip(("pi", "zcode"), report_dirs, identities):
         write_report(os.path.join(directory, f"review-{agent}.md"), task_id, round_no,
-                     agent, anchor, check_now.get("id"))
+                     agent, anchor, check_now.get("id"), materials_identity=identity)
     rc, payload = H.cli(project, ["review-import", "--task", task_id, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if (payload or {}).get("code") != "WF_OK":

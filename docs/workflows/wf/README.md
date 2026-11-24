@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.1.8`（dogfood 六~八轮修正：在途审查轮不再被旧结论挤掉——`check_next_hint` 按「轮次＋锚点」判在途，旧 fail/pass 留作历史，不再误导重新 `review-launch`；审查材料 `status.json` 汇总后一次写出，日志问题并入后不再丢 `redacted`/`redaction` 脱敏说明；wf-review 材料指引与实现对齐（`logs[]` 只含通过证据身份核对的日志，不符/缺失改在 `status.json.problems`）；升级帮助示例只引用已打 tag 的发行版本并加机械护栏测试；会话轮换出口修正（暂停不解除在途绑定，移除"暂停后重试"无效出口）；重复调试裁定（debug-ruling）归还主会话授权内——机制保留计数、证据、留痕与归档门禁，诊断语义不再逐倍数人签（机制稿 §1.3/§8.1/§11.2 同步；finish 草稿投影已裁「不同问题」倍数，复核面闭合）；wf-review-action 外发确认口径与 wf-continue 对齐（同任务同材料类持续有效）；**七轮**：轮次材料一经物化即固定（manifest，同轮重入只校验不重写），pass 判定要求全部轮次已知 blocking 已关闭，`check_next_hint` 判据统一走 `latest_decision`，`task-approve --draft` 前移 PRD 结构预检，`review-context` 续写补授权事实；**八轮**：判定侧消费材料身份（drift 拒、采纳记弱身份、不重写 manifest）、Check 下一跳在有 blocking 时不再指向 finish、PRD 摘要单读数（草稿/正式批准/机械修订/replan 同源，**0.1.7 上手写或照旧报错抄的 `object_digest` 需按新草稿重出**）、会话轮换与 `enable` 共用终态判据（记录缺失按 unknown 拒绝并给 status/repair 出口）、`judgments` 的 `kind` 增 `框架改动` 并修 help 指针。**0.1.7 → 0.1.8 升级通道（前提：人已按 §5 创建 `wf-v0.1.8` tag）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.1.8 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
+| 目标版本 | `0.0.1`（版本号已从 0.1.x 回退：wf 仍未达到正式可用，后续一律在此号上迭代；**只有人主动要求时才改版本号**）。本轮内容（dogfood 六~八轮 + 复核轮）：在途审查轮不再被旧结论挤掉——`check_next_hint` 按「轮次＋锚点」判在途，旧 fail/pass 留作历史，不再误导重新 `review-launch`；审查材料 `status.json` 汇总后一次写出，日志问题并入后不再丢 `redacted`/`redaction` 脱敏说明；wf-review 材料指引与实现对齐（`logs[]` 只含通过证据身份核对的日志，不符/缺失改在 `status.json.problems`）；升级帮助示例只引用已打 tag 的发行版本并加机械护栏测试；会话轮换出口修正（暂停不解除在途绑定，移除"暂停后重试"无效出口）；重复调试裁定（debug-ruling）归还主会话授权内——机制保留计数、证据、留痕与归档门禁，诊断语义不再逐倍数人签（机制稿 §1.3/§8.1/§11.2 同步；finish 草稿投影已裁「不同问题」倍数，复核面闭合）；wf-review-action 外发确认口径与 wf-continue 对齐（同任务同材料类持续有效）；**七轮**：轮次材料一经物化即固定（manifest，同轮重入只校验不重写），pass 判定要求全部轮次已知 blocking 已关闭，`check_next_hint` 判据统一走 `latest_decision`，`task-approve --draft` 前移 PRD 结构预检，`review-context` 续写补授权事实；**八轮**：判定侧消费材料身份（drift 拒、采纳记弱身份、不重写 manifest）、Check 下一跳在有 blocking 时不再指向 finish、PRD 摘要单读数（草稿/正式批准/机械修订/replan 同源，**0.1.7 上手写或照旧报错抄的 `object_digest` 需按新草稿重出**）、会话轮换与 `enable` 共用终态判据（记录缺失按 unknown 拒绝并给 status/repair 出口）、`judgments` 的 `kind` 增 `框架改动` 并修 help 指针。**0.1.x → 0.0.1 升级通道（前提：人确认版本号并创建 `wf-v0.0.1` tag）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.0.1 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道） |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -54,6 +54,9 @@
 
 打包入口另有两项机械守卫：`--version` 必须与本文「目标版本」一致（README 漂移即拒绝）；
 `refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
+
+**版本号只由人推进**：本仓库不按提交或轮次自动加版本（2026-11-24 人裁，wf 仍是 0.0.1 未达可用）。
+需要发新号时由人明确要求并同批改「目标版本」、`--version`、tag；自动化脚本只校验三者一致，不替你挑号。
 tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 
 **义务的机械核对（2026-11-23 起，dogfood 五轮 b-P0）**：上面这条"三者同批"过去只写在本文里——

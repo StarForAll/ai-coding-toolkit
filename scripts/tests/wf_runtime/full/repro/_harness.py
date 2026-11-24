@@ -16,6 +16,14 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import wfdrive as _wfdrive  # noqa: E402
+
+
+def plan_artifacts(root, subject):
+    """批准决定要绑的产物摘要（repro 的 project 是临时目录）。"""
+    return _wfdrive.plan_artifacts_in(root, subject)
+
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))))
 PAYLOAD = os.path.join(REPO, "docs", "workflows", "wf", "payload")

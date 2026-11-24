@@ -26,7 +26,7 @@ def wf(args, inputs=None, sid="sess-R12"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R1/R2 用例"}
 
 
@@ -60,7 +60,7 @@ def hashlib_sha(text):
 
 def approve(task_id, digest, gen, sid="sess-R12"):
     path = wfdrive.temp(f"r12_{task_id}_a.json")
-    json.dump([dec("approve", "approve", digest)], open(path, "w"))
+    json.dump([dec(f"approve {task_id}", "approve", digest)], open(path, "w"))
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单步", "evidence": "治理面"}}, sid)

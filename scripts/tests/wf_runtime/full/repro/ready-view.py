@@ -48,8 +48,8 @@ def approved_not_started(project, root, title="待接续任务"):
     for name in ("design.md", "implement.md"):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n\n内容。\n")
     decision = os.path.join(root, "approve-ready.json")
-    json.dump([F.decision("approve", "approve",
-                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+    json.dump([dict(F.decision(f"approve {task_id}", "approve",
+                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest()), artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
               open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     rc, payload = H.cli(project, ["task-approve", "--task", task_id, "--decision", decision, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})

@@ -53,8 +53,10 @@ prd = '''# 初始化项目基线
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T07:00:00.000000Z"
-json.dump([{"source": "human (sess-F)", "at": at, "subject": "approve init plan",
-            "object_digest": digest, "choice": "approve", "reason": "F0 自举"}],
+json.dump([{"source": "human (sess-F)", "at": at, "subject": f"approve {task_id}",
+            "object_digest": digest,
+            "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+            "choice": "approve", "reason": "F0 自举"}],
           open(wfdrive.temp("f0_approve.json"), "w"), ensure_ascii=False)
 inputs = {"generation": gen, "complexity": "light",
           "downgrade": {"reason": "初始化任务只生成骨架，项目无既有治理面与外部契约",

@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-U1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64, **extra):
-    base = {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    base = {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R17-R24 用例"}
     base.update(extra)
     return base
@@ -85,7 +85,7 @@ def approve(task_id, digest, gen, sid="sess-U1", extra=None):
     if extra:
         inputs.update(extra)
     rc, payload, out = wf(["task-approve", "--task", task_id, "--decision",
-                           dfile(wfdrive.temp(f"r17_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
+                           dfile(wfdrive.temp(f"r17_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
                           inputs, sid)
     if rc != 0:
         print(f"approve 原文({task_id}):", (out or "")[:400])

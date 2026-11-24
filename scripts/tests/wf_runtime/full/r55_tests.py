@@ -19,7 +19,7 @@ def wf(args, inputs=None, sid="sess-Z1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R55 用例"}
 
 
@@ -58,7 +58,7 @@ def make_task(title, sid):
 
 def approve(task_id, digest, gen, choice="approve", sid="sess-Z1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r55_{task_id}_{choice}.json"), [dec("approve", choice, digest)]), "--json"],
+               dfile(wfdrive.temp(f"r55_{task_id}_{choice}.json"), [dec(f"approve {task_id}", choice, digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 

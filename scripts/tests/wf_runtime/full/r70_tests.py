@@ -31,7 +31,7 @@ def wf(args, inputs=None, sid="sess-W1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest, "choice": choice,
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest, "choice": choice,
             "reason": "R70"}
 
 
@@ -163,7 +163,7 @@ prd = f"# R70\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=F
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 for name in ("design.md", "implement.md"):
     open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
-json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+json.dump([dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
           open(wfdrive.temp("r70_a.json"), "w"))
 wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r70_a.json"), "--json"],
    {"generation": genv, "complexity": "complex"}, "sess-W1")
@@ -240,7 +240,7 @@ record = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 first = (record.get("reviews") or {}).get("result") or {}
 outcome = ((record.get("reviews") or {}).get("attempts") or [{}])[0].get("outcome")
 if (payload or {}).get("code") != "WF_OK":
-    print("② decide 原文:", json.dumps(payload or {}, ensure_ascii=False)[:400])
+    print("② decide 原文:", json.dumps(payload or {}, ensure_ascii=False)[:4000])
 rec("2 首轮真失败被记录", "result.verdict=fail 且 outcome=fail",
     f"code={(payload or {}).get('code')} verdict={first.get('verdict')} outcome={outcome}",
     first.get("verdict") == "fail" and outcome == "fail")
@@ -257,8 +257,13 @@ for slot in ("slot-a", "slot-b"):
     import_report(staging2, slot, 2, check, anchor)
 main2 = wfdrive.write_main_review(wfdrive.temp("r70_main_2.json"), task_id, ["slot-a", "slot-b"],
                                   round_no=2)
+# 次轮要真的 pass，必须把上一轮的 blocking 关掉（pass 判定的任务级校验；无 plan 时它永远开着）
+close1 = wfdrive.temp("r70_close_1.json")
+json.dump([{"finding_id": "F1", "decision": "accepted", "round": 1, "slot": "slot-a",
+            "recheck_by": "zcode", "at": AT, "evidence_refs": ["v:v1"],
+            "reason": "空指针已修"}], open(close1, "w"), ensure_ascii=False)
 rc, payload, _ = wf(["review-decide", "--task", task_id, "--round", "2",
-                     "--main-review", main2, "--json"],
+                     "--main-review", main2, "--plan", close1, "--json"],
                     {"generation": gen()}, "sess-W1")
 record = json.load(open(os.path.join(directory, "task.json"), encoding="utf-8"))
 reviews = record.get("reviews") or {}

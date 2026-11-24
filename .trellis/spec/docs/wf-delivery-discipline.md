@@ -329,6 +329,7 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 | 外发确认范围 | `authorize.export_scope`（`scope_digest` = task + materials） | 旧确认无 `scope_digest` 一律要求补录；夹具里的 export 决定必须带 `task` + `materials` |
 | 脱敏入库 | `authorize.redact`（保留白名单） | 未知字段/嵌套结构一律丢弃；`quote` 只留遮罩摘要 |
 | 材料差异源 | `review.materialize_delivery(base=task.baseline_head)` | 已提交的中途改动必须出现在 `diff.patch`；基线不可达要如实报 |
+| 轮次材料身份 | `review.materials_identity(manifest)`（= 被审 check_id + 逐文件摘要，不含时间戳） | 骨架预填 → 导入（必填；`--restore` 例外）登记 `reviews.imported[].materials` → 判定比对；三处共用 `round_materials_identity` 取当前值；`test_materials_identity.py`。材料先写 staging 再 `os.replace` 发布（半包不再被当成 legacy 采纳）。**材料文件字节必须可确定性重产**：往材料里加任何随时间变化的内容（时间戳、耗时、随机 id）之前，先判它该不该进身份；改 `write_materials` 必须跑 `test_same_content_rematerialization_still_matches`，否则身份链会把"很少触发"的门禁变成高频换轮源 |
 | 验证日志 | `check._log_payload`（头 64 KiB + 尾 192 KiB） | 截断必须可见；记录只留 summary+digest |
 | 实例定义快照 | `check.workflow_snapshot_digest` | 实例任务缺快照报 `WF_RECORD_INVALID`，不折 null |
 
@@ -342,6 +343,24 @@ material = review.materialize_delivery(ctx.root, delivery["paths"])
 **新增字段/域的登记实例（照此四件套）**：`workspace_exclusion` 决策域 →
 `execution.workspace_exclusions` 字段 → 机制稿 §1.1/§1.3/§3.5 登记 + 实现稿 §2.3 域表 →
 `test_workspace_exclusion.py`（含幂等与失效两负例）。
+
+**一次性迁移成本（0.0.1 起）**：`materials` 在导入端必填后，此前版本写好、尚未导入的报告首次导入会被拒（`omits materials.identity`），reviewer 照 `review-context` 回报的 `materials_check.identity` 补一行即过；已导入的旧报告走 `unbound` 通道不受影响。首次撞上这是迁移，不是协议故障。
+
+**材料身份的错误矩阵（2026-11-24 复核，随 `report_input_problems` 的 `materials` 检查同批）**：
+
+| 输入 | 结果 |
+|---|---|
+| 报告无 `materials`（旧报告） | 通过；导入记 `unbound: true`，判定只记 fact |
+| `materials` 非对象 / `identity` 非法 | `WF_REVIEW_INVALID`（`check=materials`） |
+| 声明了身份但本轮无材料 | `WF_REVIEW_INVALID`（材料已不可还原） |
+| 身份 ≠ 当前身份 | 导入/判定都拒；出口＝放回原字节（原报告有效）或换一轮 |
+| 材料在物化后被改（drift） | 导入先拒（不必等到判定） |
+| `--restore` 重导遗留记录 | 跳过身份相等判断，登记值取记录原值 |
+
+Wrong：`result.materials` 记**当前** manifest 摘要 → 重物化后结论冒充"审的是新那份"。
+Correct：`result.materials.identity` 取报告登记值，当前值只在不等时另记 `current`。
+
+**启用前置（2026-11-24 复核）**：`enable` 与 `enable --new-session` 共用 `cli._enable_guards`（Trellis 互斥 + `check_platforms`），且**在写任何记录之前**跑——否则命令拒绝了仍留下 `activation.enabled=true`，后续命令按已启用放行。断言用 `test_enable_guards.py`（行为 + 源码顺序两段）。加新启用入口或新前置时，两处调用点与这个顺序断言同批核。
 
 **复审补充（2026-11-13）**：改入口参数或新增判定事实时，同批核四件**自述面**，缺一件即算遗留——
 `COMMAND_HELP`（`wf help` 是唯一自述来源，必填/可选必须与实现一致）、`status`/`review-status` 的事实投影

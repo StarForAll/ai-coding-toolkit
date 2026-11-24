@@ -100,8 +100,10 @@ open(os.path.join(task_dir, "implement.md"), "w", encoding="utf-8").write("""# �
 prd_digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T02:00:00.000000Z"
 json.dump([
-    {"source": "human terminal (session B)", "at": at, "subject": "approve plan for multiply task",
-     "object_digest": prd_digest, "choice": "approve", "reason": "范围两个文件，验收机械可核"},
+    {"source": "human terminal (session B)", "at": at, "subject": f"approve {task_id}",
+     "object_digest": prd_digest,
+     "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+     "choice": "approve", "reason": "范围两个文件，验收机械可核"},
     {"source": "human terminal (session B)", "at": at, "subject": "plan-q-1：是否按轻量处理",
      "object_digest": prd_digest, "choice": "是", "reason": "接受推荐项"},
 ], open(wfdrive.temp("decision_approve_multiply.json"), "w"), ensure_ascii=False, indent=2)

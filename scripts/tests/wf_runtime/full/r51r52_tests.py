@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-W1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R51/R52 用例"}
 
 
@@ -56,7 +56,7 @@ def make_task(title, touch, sid="sess-W1"):
 
 def approve(task_id, digest, gen, complexity="complex", sid="sess-W1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r51_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r51_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": complexity}, sid)
 
 
@@ -108,7 +108,7 @@ open(os.path.join(dir1, "implement.md"), "w", encoding="utf-8").write("# 执行\
 clean()
 wf(["task-pause", "--task", task1, "--reason", "R51", "--json"], {"generation": write_gen()}, "sess-W1")
 wf(["task-resume", "--task", task1, "--json"], {"generation": write_gen()}, "sess-W1")
-json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r51_re.json"), "w"))
+json.dump([dec(f"approve {task1}", "approve", d1)], open(wfdrive.temp("r51_re.json"), "w"))
 rc, payload, _ = wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r51_re.json"), "--json"],
                     {"generation": write_gen(), "complexity": "complex"}, "sess-W1")
 wf(["task-pause", "--task", task1, "--reason", "R51 收尾", "--json"], {"generation": write_gen()}, "sess-W1")
@@ -117,7 +117,7 @@ wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-W1")
 # ---------------- R52：disable 保留分隔符且可复验 ----------------
 clean()
 task2, gen2, dir2, d2 = make_task("R52 disable", ["pkg/**", ".wf/spec/**"], "sess-W2")
-json.dump([dec("approve", "approve", d2)], open(wfdrive.temp("r52_a.json"), "w"))
+json.dump([dec(f"approve {task2}", "approve", d2)], open(wfdrive.temp("r52_a.json"), "w"))
 wf(["task-approve", "--task", task2, "--decision", wfdrive.temp("r52_a.json"), "--json"],
    {"generation": gen2, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-W2")
 open(os.path.join(F, "pkg/b.py"), "w").write("b = 1\n")

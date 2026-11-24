@@ -601,7 +601,7 @@
     {
       "name": "r87_tests",
       "kind": "suite",
-      "expect": 11,
+      "expect": 13,
       "tags": [
         "fixed-point",
         "writer"

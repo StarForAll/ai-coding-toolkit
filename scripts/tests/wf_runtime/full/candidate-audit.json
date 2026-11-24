@@ -86,7 +86,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:34c1976c657292788b92450df1ac7c468d202a6024558a1afac4f203b4df0b89",
+        "script_sha256": "sha256:6adedb002b0088a6719df6dd27bbbb4d738b3a0a94835406117ca1be58f48762",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -110,7 +110,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:34c1976c657292788b92450df1ac7c468d202a6024558a1afac4f203b4df0b89",
+      "script_sha256": "sha256:6adedb002b0088a6719df6dd27bbbb4d738b3a0a94835406117ca1be58f48762",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -144,7 +144,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:7ae2f8326e2c910d84536b46e9e5ccecbd0a2fab554e5f7469704df100725454",
+        "script_sha256": "sha256:b02064a21c66f2a3bbf420138d93717cb73f46042941a582b01cf648f3bcea76",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -168,7 +168,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:7ae2f8326e2c910d84536b46e9e5ccecbd0a2fab554e5f7469704df100725454",
+      "script_sha256": "sha256:b02064a21c66f2a3bbf420138d93717cb73f46042941a582b01cf648f3bcea76",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -202,7 +202,7 @@
         "fixture": "template",
         "isolated_user": true,
         "kind": "suite",
-        "script_sha256": "sha256:0610a8d1d9c8a9b31004ca0dc945e23ce3e992eb540b31fda1d44315a00f0e10",
+        "script_sha256": "sha256:6e48e5cf57041c3a73f965cde81038810f633f75c087d07b5effdc4abaf86269",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -226,7 +226,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:0610a8d1d9c8a9b31004ca0dc945e23ce3e992eb540b31fda1d44315a00f0e10",
+      "script_sha256": "sha256:6e48e5cf57041c3a73f965cde81038810f633f75c087d07b5effdc4abaf86269",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -318,7 +318,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:fcaa408cb533c2fbd202a6747e0567ceffaa9e859a761bd20bd44d7e70cb312b",
+        "script_sha256": "sha256:d25e2eef74cbbcc5b013d40b25d19d763c883122fc1440e153fb5996eb482fbf",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -342,7 +342,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:fcaa408cb533c2fbd202a6747e0567ceffaa9e859a761bd20bd44d7e70cb312b",
+      "script_sha256": "sha256:d25e2eef74cbbcc5b013d40b25d19d763c883122fc1440e153fb5996eb482fbf",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -376,7 +376,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:8f66837cfc1829e68f5ce609ae3f4995953804d9d1f1cefc4c746f1a93da8eea",
+        "script_sha256": "sha256:faf9579ced9b85b46d0a640825523040afe2e4b87fd92537cebf1c69505c7654",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -400,7 +400,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:8f66837cfc1829e68f5ce609ae3f4995953804d9d1f1cefc4c746f1a93da8eea",
+      "script_sha256": "sha256:faf9579ced9b85b46d0a640825523040afe2e4b87fd92537cebf1c69505c7654",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -434,7 +434,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:70a87c140b5d862b909c00d77080c3f9d36866c7b915b17fcc7d9ec2be1f963f",
+        "script_sha256": "sha256:e2e355d8141a92d8726f10368e846ee6361eba90c057798ce1e1d95f07d3340e",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -458,7 +458,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:70a87c140b5d862b909c00d77080c3f9d36866c7b915b17fcc7d9ec2be1f963f",
+      "script_sha256": "sha256:e2e355d8141a92d8726f10368e846ee6361eba90c057798ce1e1d95f07d3340e",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -492,7 +492,7 @@
         "fixture": "install",
         "isolated_user": false,
         "kind": "flow",
-        "script_sha256": "sha256:d57635987e9208ba8c66fd768399b998cca54ff360180c4cabc76c2eff3341fc",
+        "script_sha256": "sha256:dbaac2a3626ce702069de3c0c249bea8852f325275b4c8d1a198827e2f1a570a",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -516,7 +516,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:d57635987e9208ba8c66fd768399b998cca54ff360180c4cabc76c2eff3341fc",
+      "script_sha256": "sha256:dbaac2a3626ce702069de3c0c249bea8852f325275b4c8d1a198827e2f1a570a",
       "source_layer": "mixed",
       "status": "ok",
       "suite_rc": 0,
@@ -608,7 +608,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:ae5ad3c4ef95e6c6feac2be44cda1e57044104bb76965262f907783917dd50b2",
+        "script_sha256": "sha256:42552204eae27b3ae81ba5c4539f1f0a790b29156c5245df71247e614ad2ae64",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -632,7 +632,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:ae5ad3c4ef95e6c6feac2be44cda1e57044104bb76965262f907783917dd50b2",
+      "script_sha256": "sha256:42552204eae27b3ae81ba5c4539f1f0a790b29156c5245df71247e614ad2ae64",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -666,7 +666,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "flow",
-        "script_sha256": "sha256:cb7c595d92205166b44f9e13de5cd6ac525f21236a16fd93fec2d49ed47ea63e",
+        "script_sha256": "sha256:873b9f42e31f8ce35e2c3e4ee483b4b33cffb1e8c1532ac7f54b877742085d1e",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -690,7 +690,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:cb7c595d92205166b44f9e13de5cd6ac525f21236a16fd93fec2d49ed47ea63e",
+      "script_sha256": "sha256:873b9f42e31f8ce35e2c3e4ee483b4b33cffb1e8c1532ac7f54b877742085d1e",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -782,7 +782,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "flow",
-        "script_sha256": "sha256:849e88fab378687d01a4b5e49f26cea8b55889e76e5da7ba0886fd51fd4ff323",
+        "script_sha256": "sha256:45f9689677e19dfa9e513bc52eaa9125f45f31c7c540fd342ca2d5f088a896a1",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -806,7 +806,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:849e88fab378687d01a4b5e49f26cea8b55889e76e5da7ba0886fd51fd4ff323",
+      "script_sha256": "sha256:45f9689677e19dfa9e513bc52eaa9125f45f31c7c540fd342ca2d5f088a896a1",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -840,7 +840,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "flow",
-        "script_sha256": "sha256:5a9808d08a28a2ee6f1a628665c70879474fce2b19b0624a16974270bc8d9683",
+        "script_sha256": "sha256:d983fa31497deb87026d32060befd5c7b62abc79603d1fcc4e126cded8c32a7b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -864,7 +864,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:5a9808d08a28a2ee6f1a628665c70879474fce2b19b0624a16974270bc8d9683",
+      "script_sha256": "sha256:d983fa31497deb87026d32060befd5c7b62abc79603d1fcc4e126cded8c32a7b",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -898,7 +898,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:6d55cf900d254709adc760025a02c91e8d01ec084ade4f293b791378d166a6dd",
+        "script_sha256": "sha256:41973f0866aed259be6639658140d843093a548f3421f231c7e0691ab4103bd6",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -922,7 +922,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:6d55cf900d254709adc760025a02c91e8d01ec084ade4f293b791378d166a6dd",
+      "script_sha256": "sha256:41973f0866aed259be6639658140d843093a548f3421f231c7e0691ab4103bd6",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -956,7 +956,7 @@
         "fixture": "template",
         "isolated_user": true,
         "kind": "suite",
-        "script_sha256": "sha256:25d57ff6a4ce9327efa0a226340d2862b0120c1809d185a8ace471bddfe512f6",
+        "script_sha256": "sha256:99d048808570d50188c3fa51d874bb90fa04119faa5a58b7f971412406750356",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -980,7 +980,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:25d57ff6a4ce9327efa0a226340d2862b0120c1809d185a8ace471bddfe512f6",
+      "script_sha256": "sha256:99d048808570d50188c3fa51d874bb90fa04119faa5a58b7f971412406750356",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1014,7 +1014,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:a45babedc464ceca446cfb25f52208d492959ae2078040878b13824fcae71d15",
+        "script_sha256": "sha256:f3748e64345aa64f20822ccc78a1e71ab099eefac45ba215daa6d55b2ca82173",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1038,7 +1038,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:a45babedc464ceca446cfb25f52208d492959ae2078040878b13824fcae71d15",
+      "script_sha256": "sha256:f3748e64345aa64f20822ccc78a1e71ab099eefac45ba215daa6d55b2ca82173",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1072,7 +1072,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:782e4794aea68bbcda5a1b78ddce84d17b94559042d76c47383115d3f0de943d",
+        "script_sha256": "sha256:417b50fed8d43668d014304cc6f9090c8340160684f6ae1dc726ce278b27e6fd",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1096,7 +1096,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:782e4794aea68bbcda5a1b78ddce84d17b94559042d76c47383115d3f0de943d",
+      "script_sha256": "sha256:417b50fed8d43668d014304cc6f9090c8340160684f6ae1dc726ce278b27e6fd",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1188,7 +1188,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:b4fc974bd21829b6d5c853f50ceaf7ae61542f00dda44d949efd23d1ee2ed26a",
+        "script_sha256": "sha256:9c2c4c88a57d99ece22a91a4686a66f31e588d3e81fd8e823078fe11260e21dd",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1212,7 +1212,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:b4fc974bd21829b6d5c853f50ceaf7ae61542f00dda44d949efd23d1ee2ed26a",
+      "script_sha256": "sha256:9c2c4c88a57d99ece22a91a4686a66f31e588d3e81fd8e823078fe11260e21dd",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1246,7 +1246,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:9a0a8cc2a89dc3556daf51e8663421a80b44fdbd8b7f0c5cfae9923557ddf8b8",
+        "script_sha256": "sha256:d33a4869a94507c030e11a38c2c7f12dfa3f4b00c3f88cf739b093960750f07f",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1270,7 +1270,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:9a0a8cc2a89dc3556daf51e8663421a80b44fdbd8b7f0c5cfae9923557ddf8b8",
+      "script_sha256": "sha256:d33a4869a94507c030e11a38c2c7f12dfa3f4b00c3f88cf739b093960750f07f",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1304,7 +1304,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:fd475ec152d0f028626c4ce9d12edc2d04d466f252a22d735eb8da26f3d20579",
+        "script_sha256": "sha256:8016774b4e3e432f7c5451779a68232af144cb8ab2100b3f278c61ceb46e574d",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1328,7 +1328,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:fd475ec152d0f028626c4ce9d12edc2d04d466f252a22d735eb8da26f3d20579",
+      "script_sha256": "sha256:8016774b4e3e432f7c5451779a68232af144cb8ab2100b3f278c61ceb46e574d",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1362,7 +1362,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:afbc214892db27212aed5584d922b1f522235df5241b10d082fe72b166bbdaa3",
+        "script_sha256": "sha256:665bccb1953013215b39c36169ba9e300f75c8e5df0ea97ee290a98d297fe623",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1386,7 +1386,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:afbc214892db27212aed5584d922b1f522235df5241b10d082fe72b166bbdaa3",
+      "script_sha256": "sha256:665bccb1953013215b39c36169ba9e300f75c8e5df0ea97ee290a98d297fe623",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1420,7 +1420,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:67b7911a34cffa6e4b9ec7b1830ed2a5b35acc9b3bf4260ffc6a3cac9512e7e0",
+        "script_sha256": "sha256:abb7d8eeab61a9897a1a0aa3270d95cd38b66a5e9f45d2ac97b005eaedf7459c",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1444,7 +1444,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:67b7911a34cffa6e4b9ec7b1830ed2a5b35acc9b3bf4260ffc6a3cac9512e7e0",
+      "script_sha256": "sha256:abb7d8eeab61a9897a1a0aa3270d95cd38b66a5e9f45d2ac97b005eaedf7459c",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1478,7 +1478,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:3a539e85687d9bd22e71f35bb4930d3f5d6c14feb4b0f70bf10b0327d0543ebb",
+        "script_sha256": "sha256:4e7816994a03828edae8b052f78bf2811e5a5610ef2d03ce97bcc7b6e9142a5d",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1502,7 +1502,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:3a539e85687d9bd22e71f35bb4930d3f5d6c14feb4b0f70bf10b0327d0543ebb",
+      "script_sha256": "sha256:4e7816994a03828edae8b052f78bf2811e5a5610ef2d03ce97bcc7b6e9142a5d",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1536,7 +1536,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:1b85bf4a977fce353e4882c77764bb344a9b6c54f00a353e5e00f12365ad9252",
+        "script_sha256": "sha256:f2b89be0e6bb088646b89120170f8027f1354cfc13355a1fbab667000e30de90",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1560,7 +1560,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:1b85bf4a977fce353e4882c77764bb344a9b6c54f00a353e5e00f12365ad9252",
+      "script_sha256": "sha256:f2b89be0e6bb088646b89120170f8027f1354cfc13355a1fbab667000e30de90",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1594,7 +1594,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:eb1ecec58ed52ae5922da815a8df9b6f62fb1487a1f43496fd4b2e441a166887",
+        "script_sha256": "sha256:8375d29fa0cd9d1f321c6b2236d19bdcb0b927450b0a7608171d878c7bd0cc5b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1618,7 +1618,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:eb1ecec58ed52ae5922da815a8df9b6f62fb1487a1f43496fd4b2e441a166887",
+      "script_sha256": "sha256:8375d29fa0cd9d1f321c6b2236d19bdcb0b927450b0a7608171d878c7bd0cc5b",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1652,7 +1652,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:3346d19ceb85faaaefb864a5b9d43e25d1826486629e382ff40bea621f04b502",
+        "script_sha256": "sha256:bdab397fccf3297a198aa1f876c612fbd0a22992671b2e84f24a12919eb494cf",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1676,7 +1676,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:3346d19ceb85faaaefb864a5b9d43e25d1826486629e382ff40bea621f04b502",
+      "script_sha256": "sha256:bdab397fccf3297a198aa1f876c612fbd0a22992671b2e84f24a12919eb494cf",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1710,7 +1710,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:32e0685fd5090e467cafd9d3cbc7a32a57958019109f39276426a486b152e368",
+        "script_sha256": "sha256:f07a75d33b662827c693f5770da0de514e3492fb1b9632d0c316d9a80f01c509",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1734,7 +1734,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:32e0685fd5090e467cafd9d3cbc7a32a57958019109f39276426a486b152e368",
+      "script_sha256": "sha256:f07a75d33b662827c693f5770da0de514e3492fb1b9632d0c316d9a80f01c509",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1768,7 +1768,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:79c8f7749642070b99c80a84d9598c51d2daa085db71f1b7f7786c02334e48a7",
+        "script_sha256": "sha256:2ff1d20fd478791c7fbd099c2217ee6a4475e3492ad6573a2f8a23f2d1853b92",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1792,7 +1792,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:79c8f7749642070b99c80a84d9598c51d2daa085db71f1b7f7786c02334e48a7",
+      "script_sha256": "sha256:2ff1d20fd478791c7fbd099c2217ee6a4475e3492ad6573a2f8a23f2d1853b92",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1826,7 +1826,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:0bec19aa704e90c9d76a264c70d4acb3a95ce146a099ff108c41ee0724c39530",
+        "script_sha256": "sha256:607ba15f11c795ab2b6987b8ab44e3e6b3a8e8fd181a1531ce7bd6cfbbfa83c0",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1850,7 +1850,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:0bec19aa704e90c9d76a264c70d4acb3a95ce146a099ff108c41ee0724c39530",
+      "script_sha256": "sha256:607ba15f11c795ab2b6987b8ab44e3e6b3a8e8fd181a1531ce7bd6cfbbfa83c0",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1884,7 +1884,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:79382eb1fcf60cdb2c7af65857db95ea94c6dd5a9ed00013f628e9d696ac4f5e",
+        "script_sha256": "sha256:5f35950056df879ee0cf9a3ab6411b2d502e880c280be74612462cf96c0f79d2",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1908,7 +1908,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:79382eb1fcf60cdb2c7af65857db95ea94c6dd5a9ed00013f628e9d696ac4f5e",
+      "script_sha256": "sha256:5f35950056df879ee0cf9a3ab6411b2d502e880c280be74612462cf96c0f79d2",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -1942,7 +1942,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:441a9b1c586ce891686e3852fde441ff27869456e85cad058c13721ec2fba82b",
+        "script_sha256": "sha256:7855b76100f1133002a734dbfdaf6227f6118a6169528b72edd463edb1aa5c9d",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -1966,7 +1966,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:441a9b1c586ce891686e3852fde441ff27869456e85cad058c13721ec2fba82b",
+      "script_sha256": "sha256:7855b76100f1133002a734dbfdaf6227f6118a6169528b72edd463edb1aa5c9d",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2000,7 +2000,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:880539ad357659f8d9862d90f727eb52586b433eeb030e964d95b514a0547350",
+        "script_sha256": "sha256:c18f98311d9732e4543f0f375583ed5d051ed81f79f9267bac1561522cf392e2",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2024,7 +2024,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:880539ad357659f8d9862d90f727eb52586b433eeb030e964d95b514a0547350",
+      "script_sha256": "sha256:c18f98311d9732e4543f0f375583ed5d051ed81f79f9267bac1561522cf392e2",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2058,7 +2058,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:743985722cdbf146d7ef40a6dfdaa15425a786422d0e3b4705b91fd3269f1d33",
+        "script_sha256": "sha256:829db2abf929934331c19cfe383bb3c3b59e61be49c21a8331ee80babc1dc517",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2082,7 +2082,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:743985722cdbf146d7ef40a6dfdaa15425a786422d0e3b4705b91fd3269f1d33",
+      "script_sha256": "sha256:829db2abf929934331c19cfe383bb3c3b59e61be49c21a8331ee80babc1dc517",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2232,7 +2232,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:195bc07a40aae08ef9f40739bceab9739c0e9e0cc32220ada10891c87e729933",
+        "script_sha256": "sha256:bab59c3800c23ef1e81fb3a1add3466b89e568c2ba4fad60afdd3991f100ec0e",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2256,7 +2256,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:195bc07a40aae08ef9f40739bceab9739c0e9e0cc32220ada10891c87e729933",
+      "script_sha256": "sha256:bab59c3800c23ef1e81fb3a1add3466b89e568c2ba4fad60afdd3991f100ec0e",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2290,7 +2290,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:399dc5cd22af038c77716373215080172f8fee021375d90986a736004534a3ca",
+        "script_sha256": "sha256:d59755637fe1465d10f76e76a95ea1e698c232ddf2103e768c139b26cb86dc8b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2314,7 +2314,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:399dc5cd22af038c77716373215080172f8fee021375d90986a736004534a3ca",
+      "script_sha256": "sha256:d59755637fe1465d10f76e76a95ea1e698c232ddf2103e768c139b26cb86dc8b",
       "source_layer": "mixed",
       "status": "ok",
       "suite_rc": 0,
@@ -2348,7 +2348,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:4480919ec2368d2a6b15c65717588447864de434729b15673b788f927804259f",
+        "script_sha256": "sha256:36f4ab01c4780f3632d6e91f34d1b1ed6103cf08cd2021940621325a8209fbfa",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2372,7 +2372,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:4480919ec2368d2a6b15c65717588447864de434729b15673b788f927804259f",
+      "script_sha256": "sha256:36f4ab01c4780f3632d6e91f34d1b1ed6103cf08cd2021940621325a8209fbfa",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2406,7 +2406,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:5214322af47e1e5650f42252a77a8fd4514bccc3349b1dd2ea8c990798c3df7f",
+        "script_sha256": "sha256:c6731b98d2ffb0e95e29baec5e1b98c7ea4bf52f5a95cf5c5d8496ed70821c8a",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2430,7 +2430,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:5214322af47e1e5650f42252a77a8fd4514bccc3349b1dd2ea8c990798c3df7f",
+      "script_sha256": "sha256:c6731b98d2ffb0e95e29baec5e1b98c7ea4bf52f5a95cf5c5d8496ed70821c8a",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2464,7 +2464,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:f1291b18eb8fa16244b03e5539bc01e53446f499b66f9106fbee1493babddf0c",
+        "script_sha256": "sha256:974c070a3457e9932e7326aaee0085d866de458ca90ff35822108c78a6b1de62",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2488,7 +2488,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:f1291b18eb8fa16244b03e5539bc01e53446f499b66f9106fbee1493babddf0c",
+      "script_sha256": "sha256:974c070a3457e9932e7326aaee0085d866de458ca90ff35822108c78a6b1de62",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2522,7 +2522,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:6ed99cc46f9960cb8d5c01e8b93ce953e3dfaace181902c59e6d66531ec062ed",
+        "script_sha256": "sha256:cf86abd8bd014fe22ee388fe3e1fc6d93dd182710736c89267826da1358d0cb1",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2546,7 +2546,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:6ed99cc46f9960cb8d5c01e8b93ce953e3dfaace181902c59e6d66531ec062ed",
+      "script_sha256": "sha256:cf86abd8bd014fe22ee388fe3e1fc6d93dd182710736c89267826da1358d0cb1",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2580,7 +2580,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:59fc248bfedf0d73d58e56e814d5e4d6d52b9c2a474b41ca05e861d6cd02a60d",
+        "script_sha256": "sha256:6a802ca53285bc9dc52606fc0aa08b8565a1652affdd7ceb30f82e7ee431f28e",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2604,7 +2604,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:59fc248bfedf0d73d58e56e814d5e4d6d52b9c2a474b41ca05e861d6cd02a60d",
+      "script_sha256": "sha256:6a802ca53285bc9dc52606fc0aa08b8565a1652affdd7ceb30f82e7ee431f28e",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2638,7 +2638,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:6f02260b32547eb5da063960dbc10892ffa4a0def3f51ce4b290dc024527a37b",
+        "script_sha256": "sha256:73b0a7bf957c66f3a73ea480e841921619426f3168d19d0f23c72e69f758174b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2662,7 +2662,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:6f02260b32547eb5da063960dbc10892ffa4a0def3f51ce4b290dc024527a37b",
+      "script_sha256": "sha256:73b0a7bf957c66f3a73ea480e841921619426f3168d19d0f23c72e69f758174b",
       "source_layer": "mixed",
       "status": "ok",
       "suite_rc": 0,
@@ -2696,7 +2696,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:234d4edb841c5866526f66c73bb1b2e847cf2802663076c8085a200c07c78489",
+        "script_sha256": "sha256:3744736b6214fcab9e16479d460c925d85a2c520fca99a30740d736a2788e29b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2720,7 +2720,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:234d4edb841c5866526f66c73bb1b2e847cf2802663076c8085a200c07c78489",
+      "script_sha256": "sha256:3744736b6214fcab9e16479d460c925d85a2c520fca99a30740d736a2788e29b",
       "source_layer": "mixed",
       "status": "ok",
       "suite_rc": 0,
@@ -2754,7 +2754,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:f73bbca05adb644b63610f5f261037b709b8225a21fa3b980eeb049105935986",
+        "script_sha256": "sha256:fe30e5b306b78f7e8f078eceb74cd01457c54af2381f41d57a608b949985eba4",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2778,7 +2778,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:f73bbca05adb644b63610f5f261037b709b8225a21fa3b980eeb049105935986",
+      "script_sha256": "sha256:fe30e5b306b78f7e8f078eceb74cd01457c54af2381f41d57a608b949985eba4",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2870,7 +2870,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:a648a7d7d1df9a46ba4ce86f55bd859ff6df9434148bcf2d3a76ba6028904501",
+        "script_sha256": "sha256:ab2ef14808977d125247abe6a47d2b71df5d3af8aadbd18022e2407d08ec800b",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2894,7 +2894,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:a648a7d7d1df9a46ba4ce86f55bd859ff6df9434148bcf2d3a76ba6028904501",
+      "script_sha256": "sha256:ab2ef14808977d125247abe6a47d2b71df5d3af8aadbd18022e2407d08ec800b",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -2928,7 +2928,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:b962b7a7f3a99432f6f82a2865d8b10bb0dc21bb0804a9c6324fd2c19e98a6b8",
+        "script_sha256": "sha256:1ee622b02af66be5c1da3c81dd8df3ef089d008fd6a47a7f848e0f2296e085d5",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -2952,7 +2952,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:b962b7a7f3a99432f6f82a2865d8b10bb0dc21bb0804a9c6324fd2c19e98a6b8",
+      "script_sha256": "sha256:1ee622b02af66be5c1da3c81dd8df3ef089d008fd6a47a7f848e0f2296e085d5",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -3102,7 +3102,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:33d4760024549690f87fb446ce5ed018b957d3e347586e785cecd4ff07fd7cbd",
+        "script_sha256": "sha256:cd50f7513a5e42ad31e91fca5e3203498e4ec404eb216f89a3d80712b7c13fd3",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -3126,7 +3126,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:33d4760024549690f87fb446ce5ed018b957d3e347586e785cecd4ff07fd7cbd",
+      "script_sha256": "sha256:cd50f7513a5e42ad31e91fca5e3203498e4ec404eb216f89a3d80712b7c13fd3",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -3160,7 +3160,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:5193cc15546d279853bf9e622791b846c74b26f17a8bd0e062bdc4c8872fcf0b",
+        "script_sha256": "sha256:5db236eec8c9a5802506cfa6d2f6ab17d64c2ea2dc91fabe6f42d57b487d8ed2",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -3184,7 +3184,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:5193cc15546d279853bf9e622791b846c74b26f17a8bd0e062bdc4c8872fcf0b",
+      "script_sha256": "sha256:5db236eec8c9a5802506cfa6d2f6ab17d64c2ea2dc91fabe6f42d57b487d8ed2",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,
@@ -3624,7 +3624,7 @@
         "fixture": "template",
         "isolated_user": false,
         "kind": "suite",
-        "script_sha256": "sha256:3945a09b634d9c362d3820d7be6519085b8935f6b6c59c7e218105816d2078e3",
+        "script_sha256": "sha256:cfce4c68023210de4a0719d25c5933b3c529a068c61a2b7c5b13f6a962e2a635",
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.1.7",
@@ -3648,7 +3648,7 @@
       "rc": 0,
       "runner_rc": 0,
       "runner_stderr_tail": "",
-      "script_sha256": "sha256:3945a09b634d9c362d3820d7be6519085b8935f6b6c59c7e218105816d2078e3",
+      "script_sha256": "sha256:cfce4c68023210de4a0719d25c5933b3c529a068c61a2b7c5b13f6a962e2a635",
       "source_layer": "installed-fixture",
       "status": "ok",
       "suite_rc": 0,

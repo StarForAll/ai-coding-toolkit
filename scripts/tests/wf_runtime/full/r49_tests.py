@@ -19,7 +19,7 @@ def wf(args, inputs=None, sid="sess-U1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R49 用例"}
 
 
@@ -75,7 +75,7 @@ open(os.path.join(F, "vendor/subrepo/.git"), "w").write("gitdir: " + wfdrive.tem
 open(os.path.join(F, "vendor/subrepo/data/rule.md"), "w").write(RULE)
 clean()
 task1, gen1, dir1, d1 = make_task("R49 链接进嵌套仓库", ["pkg/**", ".wf/spec/**"], "sess-U1")
-json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r49_a.json"), "w"))
+json.dump([dec(f"approve {task1}", "approve", d1)], open(wfdrive.temp("r49_a.json"), "w"))
 wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r49_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-U1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a = 1\n")

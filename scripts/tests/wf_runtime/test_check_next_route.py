@@ -24,6 +24,36 @@ class CheckNextHintTest(unittest.TestCase):
         hint = tasks.check_next_hint({"plan": {"complexity": "complex"}}, {"result": "fail"})
         self.assertIn("wf-repair-loop", hint)
 
+    def test_in_flight_mixed_materials_hint_points_at_new_round(self):
+        """混合基线（还原 + 不一致的正常条目）时，提示不能再让 AI"继续这一轮"。"""
+        import tempfile
+        import types
+        from unittest import mock
+
+        from wflib import review
+
+        task = {
+            "id": "t1",
+            "plan": {"complexity": "complex"},
+            "check": {"result": "pass", "anchor": {"check_anchor": "A"}},
+            "reviews": {
+                "launches": [{"round": 1, "anchor": {"check_anchor": "A"}}],
+                "rounds": [],
+                "result": {},
+                "imported": [
+                    {"round": 1, "slot": "s1", "materials": {"identity": "sha256:" + "a" * 64,
+                                                             "restored": True}},
+                    {"round": 1, "slot": "s2", "materials": {"identity": "sha256:" + "b" * 64}},
+                ],
+            },
+        }
+        ctx = types.SimpleNamespace(root=tempfile.mkdtemp(), debug_threshold=lambda: 3)
+        with mock.patch.object(review, "round_materials_identity", return_value="sha256:" + "c" * 64),                 mock.patch.object(review, "materials_identity_state",
+                                  return_value={"state": "fixed", "manifest": {}, "drift": []}):
+            hint = tasks.check_next_hint(task, {"result": "pass"}, ctx)
+        self.assertIn("混在一轮", hint)
+        self.assertIn("--restore", hint)
+
     def test_in_flight_round_survives_old_fail_verdict(self):
         """十四轮 b-1：旧锚点上的 fail 只是历史，不得把在途未判定轮挤成"重新发起"。"""
         task = {

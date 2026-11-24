@@ -24,13 +24,15 @@ TO = '    if False:  # 注入：不拦已完成报告的二次审查\n'
 COVERED = ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"]
 
 
-def report_body(task_id, round_no, anchor, agent):
+def report_body(task_id, round_no, anchor, agent, materials_identity=None):
     axes = {name: {"conclusion": "pass", "basis": "夹具"}
             for name in ("range", "acceptance", "contract", "regression", "testability")}
     body = {"protocol": "wf-review-v1", "task-id": task_id, "round": round_no,
             "review-time": "2026-11-07T00:00:00.000000Z", "review-focus": "范围/验收",
             "check-anchor": anchor, "read-scope": ["pkg/**"], "excluded-scope": COVERED,
             "scope-exceptions": [], "axes": axes, "findings": [], "verdict": "pass"}
+    if materials_identity:
+        body["materials"] = {"identity": materials_identity}
     return ("<!-- wf-review-agent:v1 status=done -->\n<!-- wf-review-report:v1 -->\n```json\n"
             + json.dumps(body, ensure_ascii=False, indent=2) + "\n```\n")
 
@@ -95,7 +97,8 @@ def check():
             problems.append("续写没有返回同一 report_path/resumed")
 
     # ③ 写完 status=done 后同一 agent 不能再起一份，只能导入
-    open(report, "w", encoding="utf-8").write(report_body(task_id, round_no, anchor, "pi"))
+    open(report, "w", encoding="utf-8").write(report_body(task_id, round_no, anchor, "pi",
+                                                     (pi_facts.get("materials_check") or {}).get("identity")))
     rc_done, _payload_done = context(project, task_id, round_no, "pi")
     if rc_done == 0:
         problems.append("同一 agent 的已完成报告未被阻止")
@@ -105,7 +108,8 @@ def check():
     if rc != 0:
         raise H.Precondition(f"review-context(zcode) 失败：{payload}")
     open((payload or {})["facts"]["report_path"], "w", encoding="utf-8").write(
-        report_body(task_id, round_no, anchor, "zcode"))
+        report_body(task_id, round_no, anchor, "zcode",
+                    ((payload or {}).get("facts") or {}).get("materials_check", {}).get("identity")))
     rc, payload = H.cli(project, ["review-import", "--task", task_id, "--json"], sid=SID,
                         inputs={"generation": H.generation(project)})
     if rc != 0:

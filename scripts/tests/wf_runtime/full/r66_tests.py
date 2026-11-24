@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-L1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest, "choice": choice, "reason": "R66"}
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest, "choice": choice, "reason": "R66"}
 
 
 
@@ -45,7 +45,7 @@ def make_task(title, sid):
     prd = f"# {title}\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
     open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
     digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-    json.dump([dec("approve", "approve", digest)], open(wfdrive.temp(f"r66_{facts['task_id']}.json"), "w"))
+    json.dump([dec(f"approve {facts['task_id']}", "approve", digest)], open(wfdrive.temp(f"r66_{facts['task_id']}.json"), "w"))
     wf(["task-approve", "--task", facts["task_id"], "--decision", wfdrive.temp(f"r66_{facts['task_id']}.json"), "--json"],
        {"generation": facts.get("generation"), "complexity": "light",
         "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)

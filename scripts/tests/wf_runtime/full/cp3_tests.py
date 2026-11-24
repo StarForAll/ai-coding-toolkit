@@ -26,7 +26,7 @@ def clean():
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64, reason="CP3 用例"):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": reason}
 
 
@@ -55,7 +55,7 @@ def make_task(title, touch, sid, acceptance=None, verifications=None):
 
 def approve(task_id, digest, gen, sid):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"cp3_{task_id}_a.json"), [dec("approve plan", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"cp3_{task_id}_a.json"), [dec(f"approve plan {task_id}", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 

@@ -45,8 +45,10 @@ prd = '''# V5 调试计数用例
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T05:00:00.000000Z"
-decision(wfdrive.temp("v5_approve.json"), [{"source": "human (sess-E)", "at": at, "subject": "approve",
-                                   "object_digest": digest, "choice": "approve", "reason": "V5"}])
+decision(wfdrive.temp("v5_approve.json"), [{"source": "human (sess-E)", "at": at, "subject": f"approve {task_id}",
+                                   "object_digest": digest,
+                                   "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+                                   "choice": "approve", "reason": "V5"}])
 inputs = {"generation": gen}
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("v5_approve.json"), "--json"], inputs)
 rec("准备：批准", "pass", (payload or {}).get("code"), rc == 0)

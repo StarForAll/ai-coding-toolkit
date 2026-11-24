@@ -27,7 +27,7 @@ def wf(args, inputs=None, sid="sess-F1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "CP5 用例"}
 
 
@@ -88,7 +88,7 @@ digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 inputs = {"generation": gen, "complexity": "light",
           "downgrade": {"reason": "单函数扩展", "evidence": "不碰治理面"}}
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision",
-                     json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("cp5_a.json"), "w")) or wfdrive.temp("cp5_a.json"),
+                     json.dump([dec(f"approve {task_id}", "approve", digest)], open(wfdrive.temp("cp5_a.json"), "w")) or wfdrive.temp("cp5_a.json"),
                      "--json"], inputs, "sess-F2")
 rec("B2 批准", "pass", (payload or {}).get("code"), rc == 0)
 open(os.path.join(F, "src/other.py"), "w").write("# other\n")

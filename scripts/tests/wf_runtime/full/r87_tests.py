@@ -95,14 +95,16 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/spec/**"],
 open(prd, "w").write("# R89\n\n<!-- wf-plan:v1 -->\n```json\n" + json.dumps(block, ensure_ascii=False, indent=2) + "\n```\n")
 import hashlib
 digest = "sha256:" + hashlib.sha256(open(prd, "rb").read()).hexdigest()
-json.dump([{"source": "human", "at": "2026-11-04T00:00:00.000000Z", "subject": "approve",
-            "object_digest": digest, "choice": "approve", "reason": "r89"}],
+json.dump([{"source": "human", "at": "2026-11-04T00:00:00.000000Z", "subject": f"approve {task_id}",
+            "object_digest": digest, "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"), "choice": "approve", "reason": "r89"}],
           open(wfdrive.temp("r89_approve.json"), "w"))
-wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r89_approve.json"), "--json"],
+rc_appr, payload_appr, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r89_approve.json"), "--json"],
    {"generation": gen(), "complexity": "light", "downgrade": {"reason": "x", "evidence": "y"}})
+rec("B0b 批准", "pass", f"{(payload_appr or {}).get('code')} {(payload_appr or {}).get('facts')}", rc_appr == 0)
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 open(os.path.join(F, "pkg/r89.py"), "w").write("x=1\n")
-wf(["task-start", "--task", task_id, "--json"], {"generation": gen()})
+rc_start, payload_start, _ = wf(["task-start", "--task", task_id, "--json"], {"generation": gen()})
+rec("B0a 开工", "pass", (payload_start or {}).get("code"), rc_start == 0)
 json.dump([{"source": "human", "at": "2026-11-04T00:00:00.000000Z", "subject": "external-changes",
             "object_digest": "sha256:" + "0" * 64, "choice": "已核对无影响", "reason": "夹具"}],
           open(wfdrive.temp("r89_ext.json"), "w"))

@@ -40,6 +40,7 @@ def build(project, root, kind, title, block):
     json.dump([{"source": "human:tester", "at": "2026-11-07T00:00:00.000000Z",
                 "subject": f"approve {task_id}",
                 "object_digest": "sha256:" + hashlib.sha256(prd.encode()).hexdigest(),
+                "artifacts": H.plan_artifacts(project, f"approve {task_id}"),
                 "choice": "approve", "reason": "用例"}], open(decision, "w", encoding="utf-8"),
               ensure_ascii=False)
     return H.cli(project, ["task-approve", "--task", task_id, "--decision", decision, "--json"],

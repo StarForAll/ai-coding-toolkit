@@ -53,6 +53,7 @@ def approve(project, root, task_id, digest, plan=None, inputs=None, sid=None):
     path = os.path.join(root, f"decision-{task_id}.json")
     decision = {"source": "human:tester", "at": "2026-11-07T00:00:00.000000Z",
                 "subject": f"approve {task_id}", "object_digest": digest,
+                "artifacts": H.plan_artifacts(project, f"approve {task_id}"),
                 "choice": "approve", "reason": "用例"}
     if plan is not None:
         decision["plan"] = plan

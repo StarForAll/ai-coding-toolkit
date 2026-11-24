@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-J1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest, "choice": choice, "reason": "R64"}
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest, "choice": choice, "reason": "R64"}
 
 
 

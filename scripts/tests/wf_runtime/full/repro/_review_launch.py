@@ -47,8 +47,8 @@ def prepare(project, root, sid, title="审查任务", complexity="complex"):
                        ("implement.md", "实现：修改 add 签名，接受可变参数并累加；用例覆盖 2 与 3 参数。\n")):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n\n{body}")
     decision = os.path.join(root, "approve-review.json")
-    json.dump([F.decision("approve", "approve",
-                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+    json.dump([dict(F.decision(f"approve {task_id}", "approve",
+                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest()), artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
               open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     inputs = {"generation": H.generation(project)}
     if complexity:

@@ -21,7 +21,11 @@ DECL = {"choice": "count", "subject": "debug-declaration:test-run:count=2:eviden
 
 
 def _task():
-    return {"id": "t1", "execution": {}, "check": {"id": "C1"}, "check_history": []}
+    # 3 条失败：让"第 1 倍"在默认阈值下成立（裁定还要过"倍数已跨过"的写入校验）
+    history = [{"id": f"C{i}", "result": "fail",
+                "commands": [{"verification_id": "test-run", "status": "failed"}]}
+               for i in range(1, 4)]
+    return {"id": "t1", "execution": {}, "check": {"id": "C1"}, "check_history": history}
 
 
 class DebugDeclarationIdempotencyTest(unittest.TestCase):
@@ -43,7 +47,7 @@ class DebugDeclarationIdempotencyTest(unittest.TestCase):
 
     def test_ruling_is_idempotent_too(self):
         task = _task()
-        ruling = {"choice": "同一问题", "subject": "debug-ruling-test-run-2", "evidence_refs": ["check:C1"]}
+        ruling = {"choice": "同一问题", "subject": "debug-ruling-test-run-1", "evidence_refs": ["check:C1"]}
         tasks_mod._apply_debug_inputs(task, [ruling])
         tasks_mod._apply_debug_inputs(task, [ruling])
         self.assertEqual(len(task["execution"]["human_decisions"]), 1)

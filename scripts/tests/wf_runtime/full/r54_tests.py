@@ -19,7 +19,7 @@ def wf(args, inputs=None, sid="sess-Y1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R54 用例"}
 
 
@@ -53,7 +53,7 @@ def approve(task_id, digest, gen, inputs_extra, sid="sess-Y1"):
     inputs = {"generation": gen}
     inputs.update(inputs_extra)
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r54_{task_id}.json"), [dec("approve", "approve", digest)]), "--json"], inputs, sid)
+               dfile(wfdrive.temp(f"r54_{task_id}.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"], inputs, sid)
 
 
 def plan_of(task_id):

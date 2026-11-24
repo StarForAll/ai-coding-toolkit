@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-B1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R57"}
 def dfile(path, items):
     json.dump(items, open(path, "w"), ensure_ascii=False, indent=2); return path

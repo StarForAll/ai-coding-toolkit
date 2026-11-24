@@ -21,7 +21,7 @@ def wf(args, inputs=None, sid="sess-Z1", **kw):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest, "choice": choice,
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest, "choice": choice,
             "reason": "R74"}
 
 
@@ -58,7 +58,7 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/spec/**"],
                             "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}]}
 prd = f"# R74\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
-json.dump([dec("approve", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+json.dump([dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
           open(wfdrive.temp("r74_a.json"), "w"))
 wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r74_a.json"), "--json"],
    {"generation": genv, "complexity": "light",

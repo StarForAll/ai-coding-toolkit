@@ -30,7 +30,7 @@ def decision_file(path, items):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64, source="human (test)", **extra):
-    base = {"source": source, "at": AT, "subject": subject, "object_digest": digest,
+    base = {"source": source, "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "CP1 用例"}
     base.update(extra)
     return base
@@ -66,7 +66,7 @@ def new_task(title, touch, verifications, acceptance, sid, prd_extra=""):
 
 
 def approve(task_id, digest, gen, sid, complexity="light", downgrade=True):
-    path = decision_file(wfdrive.temp(f"cp1_{task_id}_approve.json"), [dec("approve plan", "approve", digest)])
+    path = decision_file(wfdrive.temp(f"cp1_{task_id}_approve.json"), [dec(f"approve plan {task_id}", "approve", digest)])
     inputs = {"generation": gen, "complexity": complexity}
     if downgrade and complexity == "light":
         inputs["downgrade"] = {"reason": "仅新增一个纯函数", "evidence": "触碰面单文件、不碰治理面"}
@@ -124,7 +124,7 @@ task2, gen2, dir2, d2 = new_task("CP1 A15 plan-q", ["src/a15.txt"],
                                  prd_extra="\n## 待决问题\n\nplan-q-1：是否按轻量处理？推荐答案：是。\n")
 # 批准时需先有答复
 rc, payload, out = wf(["task-approve", "--task", task2, "--decision",
-                       decision_file(wfdrive.temp("cp1_a15_q.json"), [dec("approve plan", "approve", d2),
+                       decision_file(wfdrive.temp("cp1_a15_q.json"), [dec(f"approve plan {task2}", "approve", d2),
                                                              dec("plan-q-1：是否按轻量处理", "是", d2)]),
                        "--json"], {"generation": gen2, "complexity": "light",
                                    "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)

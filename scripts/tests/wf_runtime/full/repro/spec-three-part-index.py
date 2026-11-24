@@ -56,8 +56,8 @@ def start_task(project, root, sid, touch_paths=(".wf/spec/**",)):
     for name in ("design.md", "implement.md"):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n\n内容。\n")
     decision = os.path.join(root, "approve-639.json")
-    json.dump([F.decision("approve", "approve",
-                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+    json.dump([dict(F.decision(f"approve {task_id}", "approve",
+                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest()), artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
               open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     rc, payload = H.cli(project, ["task-approve", "--task", task_id, "--decision", decision, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})

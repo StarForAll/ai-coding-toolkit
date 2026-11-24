@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-X1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R31-R34 用例"}
 
 
@@ -52,7 +52,7 @@ def make_task(title, touch, sid="sess-X1"):
 
 def approve(task_id, digest, gen, sid="sess-X1"):
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r31_{task_id}_a.json"), [dec("approve", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r31_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
               {"generation": gen, "complexity": "light",
                "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, sid)
 

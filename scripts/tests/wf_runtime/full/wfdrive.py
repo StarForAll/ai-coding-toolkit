@@ -305,6 +305,47 @@ def main_review(task_id, slots, findings=(), axes=None, round_no=1):
                                if not item.get("slot") or item.get("slot") == slot]}
 
 
+def plan_artifacts_in(root, subject):
+    """按显式项目根算批准要绑的产物摘要（repro 的项目是临时目录，不用夹具根）。"""
+    import glob as _glob
+    import hashlib as _hashlib
+
+    task_id = str(subject).strip().split()[-1]
+    found = _glob.glob(os.path.join(str(root), ".wf", "tasks", f"{task_id}-*"))
+    base = found[0] if found else os.path.join(str(root), ".wf", "tasks", task_id)
+    out = {}
+    for name in ("prd.md", "design.md", "implement.md"):
+        path = os.path.join(base, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as handle:
+            digest = "sha256:" + _hashlib.sha256(handle.read()).hexdigest()
+        out[f".wf/tasks/{os.path.basename(base)}/{name}"] = digest
+    return out
+
+
+def plan_artifacts(subject):
+    """批准决定要绑定的规划产物 `{路径: 摘要}`（任务 id 取 subject 末尾 token）。
+
+    入口现在要求批准覆盖当前产物集，夹具据此现算；任务目录按 id 前缀找（目录名带 slug）。
+    """
+    import glob as _glob
+    import hashlib as _hashlib
+
+    task_id = str(subject).strip().split()[-1]
+    found = _glob.glob(os.path.join(FIX, ".wf", "tasks", f"{task_id}-*"))
+    base = found[0] if found else os.path.join(FIX, ".wf", "tasks", task_id)
+    out = {}
+    for name in ("prd.md", "design.md", "implement.md"):
+        path = os.path.join(base, name)
+        if not os.path.isfile(path):
+            continue
+        with open(path, "rb") as handle:
+            digest = "sha256:" + _hashlib.sha256(handle.read()).hexdigest()
+        out[f".wf/tasks/{os.path.basename(base)}/{name}"] = digest
+    return out
+
+
 def write_main_review(path, task_id, slots, findings=(), axes=None, round_no=1):
     import json as _json
     payload = main_review(task_id, slots, findings=findings, axes=axes, round_no=round_no)

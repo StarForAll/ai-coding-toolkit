@@ -1135,7 +1135,7 @@ def _sync_attachment_instance(ctx, key, instance_id):
         ctx._session["instance_id"] = instance_id
 
 
-def _establish_auto_session(ctx, host_establish=None):
+def _establish_auto_session(ctx, host_establish=None, identity=None):
     """自动模式首次启用：签发身份、写附件、登记路由（§3.1/§2.2a）。
 
     只在"当前锚点没有任何路由"时调用；已有路由由 `_auto_resolve` 命中，不走这里。
@@ -1156,10 +1156,16 @@ def _establish_auto_session(ctx, host_establish=None):
             next_="换到支持的终端形态后重跑 /wf-start",
         )
     at = records.now_str()
-    if host_establish is not None:
+    if identity is not None:
+        # 调用方已经算好身份（enable 要在写盘前用同一把会话 key 核锚点冲突）：
+        # 生成身份是纯计算，抽到调用点不改变落盘语义。
+        provider, identity_value = identity
+        issued_id = identity_value.get("issued_id")
+    elif host_establish is not None:
         identity_value = {"host_id": host_establish["host_id"],
                           "session_id": host_establish["session_id"]}
         provider = "host"
+        issued_id = None
     else:
         issued_id = uuid.uuid4().hex
         identity_value = {"issued_id": issued_id}
@@ -1236,24 +1242,46 @@ def _rotate_session(ctx):
                            {"reason": "--new-session 只在自动身份模式下轮换本边界会话；"
                                       "显式信封会话由宿主承载，不经本命令"},
                            next_="自动模式直接跑 enable；显式模式换信封身份即可")
+        evidence = resolution.get("evidence") or {}
         host_establish = None
         if resolution["state"] == "host_establish":
-            evidence = resolution.get("evidence") or {}
             host_establish = {"host_id": evidence.get("host_id"),
                               "session_id": evidence.get("session_id")}
+        # 首次启用等价的这条路也要过同一套前置（Trellis 互斥、平台），不因走的是
+        # `--new-session` 就少核。这两态 `ctx.session()` 还是 None，按将要签发的身份合成
+        # （与 `cmd_enable` 同一构造）。
+        guard_session = ({"provider": "host", "identity": dict(host_establish), "source": "auto"}
+                         if host_establish is not None
+                         else {"provider": "wf", "identity": {}, "source": "auto"})
+        first_guards = _enable_guards(ctx, guard_session)
         facts = _establish_auto_session(ctx, host_establish=host_establish)
         facts["rotated"] = False
         facts["note"] = "本边界此前无会话：本次为首次启用，不属轮换"
+        # 与轮换/普通启用同一份自述面：身份能力与 Trellis 线索不能只在这个分支缺席
+        first_identity = _identity_facts(ctx, facts["session_key"])
+        first_applicable = [item for item in first_guards["trellis"]["host_files"]
+                            if item["host"] == first_guards["trellis"]["host_id"]]
+        first_disabled = bool((ctx.inputs() or {}).get("trellis_disabled_confirmed"))
+        facts["identity"] = first_identity
+        facts["trellis_data"] = first_guards["trellis"]["data"]
+        facts["trellis_disabled_confirmed"] = first_disabled
+        first_warnings = _identity_warnings(first_identity, first_guards["trellis"],
+                                            first_applicable, first_disabled)
         return codes.result("WF_OK", position_=codes.position(scope="session"),
                              next_="新会话已启用；继续 task-new 选择对象",
-                             facts=facts)
+                             facts=facts, warnings=first_warnings)
     if resolution["state"] == "unresolved":
         raise CliError("WF_IDENTITY_UNRESOLVED",
                        dict(resolution.get("evidence") or {},
                             exits=["按 §5.4/repair 修复绑定/附件后重试",
                                    "人核实对象终态后走 enable --new-session"]),
                        next_="绑定不可读或实例不符：先修复再轮换")
+    # 前置在**写任何记录之前**：轮换与普通 enable 共用一套（此前轮换整段前置都不跑）。
+    # 身份取自解析出的附件，不经 `ctx.session()`——stale 激活会让它在核对完轮换资格前就拒。
     old_key = resolution["key"]
+    current_attachment = resolution.get("attachment") or {}
+    guards = _enable_guards(ctx, _session_like(current_attachment.get("provider"),
+                                               current_attachment.get("identity")))
     binding = session_mod.load_binding(ctx.root, old_key)
     if binding is not None:
         # 非 dict（形状坏了）也算有绑定但对象未知：helper 返回 unknown ⇒ 按未知拒绝。
@@ -1286,6 +1314,9 @@ def _rotate_session(ctx):
                        {"reason": "写权仍在持有（对象终态但未释放）——不得把在途写权带进新会话",
                         "holder": writer_record.get("holder")},
                        next_="先 `writer release` 释放写权，再重试 enable --new-session")
+    # 续期放在轮换资格全部核完之后：被拒的轮换不该顺手改启用状态（旧会话是否"已重新启用"
+    # 必须与命令结果一致）。后面只剩纯计算与写入块。
+    _renewed_attachment, renewed = _renew_activation(ctx, old_key, current_attachment)
     candidates = session_mod.candidates()
     keys = [session_mod.anchor_key(item) for item in candidates]
     at = records.now_str()
@@ -1312,9 +1343,22 @@ def _rotate_session(ctx):
              "removed_host_mapping": removed_mapping}
     if removed_mapping:
         facts["note"] = "宿主映射条目已随轮换移除；下次宿主 SessionStart 会按新会话标识重建"
+    # 与普通 enable 同口径的事实面（身份能力、Trellis 线索、停用确认）：轮换也要如实报
+    # 「这个宿主看不见同进程新会话」这类边界，否则两个入口的自述面分叉。
+    trellis_state = guards["trellis"]
+    applicable = [item for item in trellis_state["host_files"]
+                  if item["host"] == trellis_state["host_id"]]
+    disabled = bool((ctx.inputs() or {}).get("trellis_disabled_confirmed"))
+    identity_facts = _identity_facts(ctx, new_key)
+    facts["identity"] = identity_facts
+    if renewed:
+        facts["identity"] = dict(identity_facts, activation_renewed=True)
+    facts["trellis_data"] = trellis_state["data"]
+    facts["trellis_disabled_confirmed"] = disabled
     return codes.result("WF_OK", position_=codes.position(scope="session"),
                          next_="新会话已生效；旧附件/绑定保留为历史，新对象用 task-new 选择",
-                         facts=facts)
+                         facts=facts,
+                         warnings=_identity_warnings(identity_facts, trellis_state, applicable, disabled))
 
 
 def _identity_facts(ctx, session_key):
@@ -1386,43 +1430,15 @@ def _transfer_stub():
     return _handler
 
 
-def cmd_enable(ctx, args):
-    _check_layout(ctx.root)
-    # W3-1：`--new-session` —— 人在当前执行边界显式换新会话身份（宿主无关）。
-    if args.flag("--new-session"):
-        return _rotate_session(ctx)
-    # 自动模式且尚无可续用会话 ⇒ 本次 enable 就是"建立执行会话"（§3.1）。
-    # W3-2③：映射命中且路由无在途会话时也走建立（以 host 身份接管路由）。
-    established_facts = None
-    if ctx.explicit_session() is None:
-        resolution = ctx._auto_resolve()
-        if resolution["state"] in ("no_session", "host_establish"):
-            host_establish = None
-            if resolution["state"] == "host_establish":
-                evidence = resolution.get("evidence") or {}
-                host_establish = {"host_id": evidence.get("host_id"),
-                                  "session_id": evidence.get("session_id")}
-            established_facts = _establish_auto_session(ctx, host_establish=host_establish)
-    session = ctx.session()
-    session_key = ctx.key(required=False)
-    identity_facts = _identity_facts(ctx, session_key)
-    choice = (args.value("--identity") or "").strip() or None
-    if choice is not None and choice != "host":
-        raise CliError("WF_PATH_INVALID",
-                       {"reason": "--identity accepts only 'host'", "known": ["host"], "actual": choice},
-                       next_="用 --identity host 确认以宿主标识为准，或换新会话")
-    if identity_facts["anchor_conflict"] and choice is None:
-        raise CliError(
-            "WF_IDENTITY_UNRESOLVED",
-            {"host_session_key": session_key, "anchor_conflict": identity_facts["anchor_conflict"],
-             "exits": ["wf enable --identity host（确认以宿主标识为准并钉住）",
-                       "换新终端/新会话后重试"]},
-            next_="人确认本次会话身份来源；不以锚点或环境变量猜",
-        )
-    if choice == "host":
-        _pin_identity(ctx, session_key, identity_facts)
-        identity_facts["pinned"] = True
-    state = _trellis_state(ctx.root, (ctx.session().get("identity") or {}).get("host_id"))
+def _enable_guards(ctx, session_like):
+    """启用前置（唯一实现）：Trellis 互斥 + 平台可用性。**只读，两个启用入口共用**。
+
+    必须在写任何记录之前跑完：此前普通 `enable` 先写附件/路由再查冲突，命令拒绝了却留下
+    `activation.enabled=true`，后续命令的 `require_activation` 就会放行；`--new-session`
+    则整段前置都不跑。`session_like` 只需 `{provider, identity, source}`——会话还没建立时
+    由调用方按将要签发的身份合成。
+    """
+    state = _trellis_state(ctx.root, (session_like.get("identity") or {}).get("host_id"))
     host_id = state["host_id"]
     applicable = [item for item in state["host_files"] if item["host"] == host_id]
     unknown = [item for item in state["host_files"] if item["host"] != host_id]
@@ -1447,22 +1463,128 @@ def cmd_enable(ctx, args):
                        "确认仅是残留数据与历史引用后重入"]},
             next_="人核实适用性；已确认激活则清理后换新会话，仅残留可继续",
         )
-    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
+    code, profile_facts = session_mod.check_platforms(ctx.platforms(), session_like)
     if code:
         raise CliError(code, profile_facts, next_="install（已装齐全部平台）后重试，或换用已安装的宿主")
+    return {"trellis": state, "platforms": profile_facts}
+
+
+def _renew_activation(ctx, key, attachment):
+    """人重新 enable 即"重新启用"：`activation_stale` 由本命令清掉并刷新 activation。
+
+    此前 stale 只把出口写成"重新调用 /wf-start"，而 enable 自己的 `ctx.session()` 也会
+    撞同一标记 ⇒ 出口走不通（等于死锁）。续期只清这一个标记，roots 维护照旧。
+    """
+    from . import identity_store as store
+
+    if not isinstance(attachment, dict) or not attachment.get("activation_stale"):
+        return attachment, False
+    attachment = dict(attachment)
+    attachment["activation"] = {"enabled": True, "start_source": "human:enable",
+                                "enabled_at": records.now_str()}
+    attachment["activation_stale"] = False
+    store.save_attachment(ctx.root, key, attachment)
+    ctx._auto_attachment = attachment
+    return attachment, True
+
+
+def _session_like(provider, identity):
+    return {"provider": provider, "identity": dict(identity or {}), "source": "auto"}
+
+
+def _anchor_conflict(ctx, key):
+    """本会话 key 在现有路由上的同锚点冲突（写盘前的身份门禁用）。"""
+    from . import identity_store as store
+
+    keys = [session_mod.anchor_key(item) for item in session_mod.candidates()]
+    return store.conflicting_owners(store.load_routes(ctx.root), keys, key)
+
+
+def _identity_warnings(identity_facts, state, applicable, disabled):
+    """身份类警告（事实不是门禁）：两个启用入口共用同一份，避免轮换少了自述面。"""
     warnings = []
-    if identity_facts["host_identity_absent"]:
+    if identity_facts.get("host_identity_absent"):
         warnings.append({"reason": "host_identity_absent",
                          "note": ("本会话身份只能由进程锚派生；该宿主未提供会话标识，"
                                   "框架无法区分同一进程内的新会话（宿主自带的新会话命令、或同终端新开聊天），"
                                   "换会话请开新终端"),
                          "new_session_indistinguishable": True})
-    if state["data"]:
+    if state.get("data"):
         warnings.append({"clue": state["data"], "note": "仅数据线索；不构成当前激活指令"})
     if applicable and disabled:
-        warnings.append({"reason": "trellis_files_present_but_disabled_confirmed", "host_id": host_id,
+        warnings.append({"reason": "trellis_files_present_but_disabled_confirmed",
+                         "host_id": state["host_id"],
                          "trellis_host_config": applicable,
                          "note": "人已确认这些配置在本宿主不生效（停用/残留）；日后重新启用前必须先清理"})
+    return warnings
+
+
+def cmd_enable(ctx, args):
+    """启用本会话：**所有拒绝都在写盘之前**（被拒时不留 `enabled=true`）。"""
+    _check_layout(ctx.root)
+    # W3-1：`--new-session` —— 人在当前执行边界显式换新会话身份（宿主无关）。
+    if args.flag("--new-session"):
+        return _rotate_session(ctx)
+    # 纯参数校验也前移：`--identity` 打错是首次启用最常见的拒绝形态，不能先写后拒。
+    choice = (args.value("--identity") or "").strip() or None
+    if choice is not None and choice != "host":
+        raise CliError("WF_PATH_INVALID",
+                       {"reason": "--identity accepts only 'host'", "known": ["host"], "actual": choice},
+                       next_="用 --identity host 确认以宿主标识为准，或换新会话")
+    # 自动模式且尚无可续用会话 ⇒ 本次 enable 就是"建立执行会话"（§3.1）。
+    # W3-2③：映射命中且路由无在途会话时也走建立（以 host 身份接管路由）。
+    established_facts = None
+    pending = None
+    resolution = None
+    explicit = ctx.explicit_session()
+    if explicit is None:
+        resolution = ctx._auto_resolve()
+        if resolution["state"] == "no_session":
+            pending = _session_like("wf", {"issued_id": uuid.uuid4().hex})
+        elif resolution["state"] == "host_establish":
+            evidence = resolution.get("evidence") or {}
+            pending = _session_like("host", {"host_id": evidence.get("host_id"),
+                                             "session_id": evidence.get("session_id")})
+    if pending is not None:
+        # 首次/接管形态：前置在写盘前跑；锚点冲突不阻断——建立本来就接管同锚点路由
+        # （`established.route_taken_over_from` 如实报让出来源）。
+        guards = _enable_guards(ctx, pending)
+        host_establish = None
+        if pending["provider"] == "host":
+            host_establish = dict(pending["identity"])
+        established_facts = _establish_auto_session(
+            ctx, host_establish=host_establish,
+            identity=(pending["provider"], pending["identity"]))
+        renewed = False
+    else:
+        # 续用分支：身份来自显式信封，或解析出的附件；stale 激活由本命令续期。
+        base = explicit or (resolution or {}).get("attachment") or {}
+        session_key = (session_mod.session_key(explicit) if explicit is not None
+                       else (resolution or {}).get("key"))
+        guards = _enable_guards(ctx, _session_like(base.get("provider"), base.get("identity")))
+        conflict = _anchor_conflict(ctx, session_key)
+        if conflict and choice is None:
+            raise CliError(
+                "WF_IDENTITY_UNRESOLVED",
+                {"host_session_key": session_key, "anchor_conflict": conflict,
+                 "exits": ["wf enable --identity host（确认以宿主标识为准并钉住）",
+                           "换新终端/新会话后重试"]},
+                next_="人确认本次会话身份来源；不以锚点或环境变量猜",
+            )
+        attachment, renewed = _renew_activation(ctx, session_key, base)
+    session = ctx.session()
+    session_key = ctx.key(required=False)
+    identity_facts = _identity_facts(ctx, session_key)
+    if renewed:
+        identity_facts["activation_renewed"] = True
+    if choice == "host":
+        _pin_identity(ctx, session_key, identity_facts)
+        identity_facts["pinned"] = True
+    state = guards["trellis"]
+    host_id = state["host_id"]
+    applicable = [item for item in state["host_files"] if item["host"] == host_id]
+    disabled = bool((ctx.inputs() or {}).get("trellis_disabled_confirmed"))
+    warnings = _identity_warnings(identity_facts, state, applicable, disabled)
     # 首次启用时调用方通常还没带 activation：这里给出**可直接缓存的模板**，
     # 由适配层在后续每次请求里重放（机制稿 §1.4：由宿主/skill 按本次真实调用形成缓存）
     binding = session_mod.load_binding(ctx.root, session_key)
@@ -2164,7 +2286,10 @@ def _load_decision(path):
             raise CliError("WF_RECORD_INVALID", {
                 "reason": "decision missing fields", "missing": missing,
                 "field_notes": {"at": f"人答复时刻（ISO8601）；无法确知时写当前时刻 {records.now_str()}",
-                                "object_digest": "按决定语义填写（如 task-approve 是 PRD 的 sha256；"
+                                "artifacts": "批准类必填：{路径: 摘要}，取 task-approve --draft 的预填值；"
+                                             "缺或与当前产物不符都会被拒（expected_artifacts 为准）",
+                                "object_digest": "按决定语义填写（task-approve 是当前 PRD 的 sha256，"
+                                                 "值必填——缺/不符即 WF_APPROVAL_MISSING；"
                                                  "archive/stop 仅要求字段存在）"},
                 "required_fields": list(DECISION_FIELDS),
             })
@@ -2755,12 +2880,16 @@ COMMAND_HELP = {
                             "touch_paths，不合格拒绝并给问题清单），通过后 object_digest 预填当前 PRD 摘要；"
                             "TODO 占位须人替换"},
         "inputs": {"decision[]": {"source": "人答复来源（必填）", "at": "时间（必填）",
-                                  "subject": "必须含任务 id 或对象摘要（必填）",
-                                  "object_digest": "当前 PRD 的 sha256（键必填；推荐填值——精确绑定批准"
-                                                   "对应的 PRD 版本，摘要不符时报 expected_prd_digest，"
+                                  "subject": "人读的线索，**必须含任务 id**：摘要只绑内容，"
+                                             "两份字节相同的 PRD 靠它区分任务（次级绑定，不是替代摘要）",
+                                  "artifacts": "**必填**（0.0.1 起）：`{路径: 摘要}`，草稿按当时 "
+                                               "prd/design/implement 预填。核当前值且必须覆盖当前产物集——"
+                                               "产物被改、被删或**新增**都算没看过，一律拒；"
+                                               "0.1.7 及更早的决定重导会被拒，按 `expected_artifacts` 补即可",
+                                  "object_digest": "当前 PRD 的 sha256（**值必填**：缺或不等即 "
+                                                   "WF_APPROVAL_MISSING 并回显 expected_prd_digest；"
                                                    "入口不代填——人对 PRD 的批准留痕不可替代；"
-                                                   "留空按最低绑定接受，须 subject 含任务 id，"
-                                                   "此时代码无法核对批准针对哪一版 PRD，仅作旧决定兼容）",
+                                                   "`--draft` 预填）",
                                   "choice": f"批准：{PLAN_APPROVAL_CHOICES}；"
                                             f"机械修订：{MECHANICAL_REVISION_CHOICES}（必填）",
                                   "生成代次": "inputs.generation 可显式覆盖；缺省取本会话运行态记录的代次"
@@ -2870,10 +2999,14 @@ COMMAND_HELP = {
                                 "--as": "本次审查的 CLI（自动身份模式必填）"},
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
     "review-import": {"purpose": "导入本轮已完成的报告（按文件名发现，免路径）",
-                      "args": {"--task": "任务 id（必填）", "--round": "可选", "--slot": "可选（指定某个 agent）",
+                      "args": {"--task": "任务 id（必填）",
+                               "--round": "轮次（恢复较早一轮时必须给；缺省取最大发起轮，"
+                                          "无报告时 facts.undecided_rounds 列出待处理轮次）",
+                               "--slot": "可选（指定某个 agent）",
                                "--report": "可选（显式路径，兼容旧槽位制）",
                                "--as": "可选（显式声明报告署名）",
-                               "--restore": "只在恢复**已存在的记录**时用（缺登记摘要的遗留记录重导）"},
+                               "--restore": "只在恢复**已存在的记录**时用（缺登记摘要的遗留记录重导；"
+                                            "保留原登记的报告摘要与材料身份，不按当前材料冒充）"},
                       "example": "wf.py review-import --task <id> --json"},
     "project": {"purpose": "可重建投影（K8）：open-items / attribution / audit / skeleton；--check 断言等值",
                 "args": {"--kind": "投影类型（必填）", "--task": "任务 id（必填）", "--check": "断言重建等值"},
@@ -2928,7 +3061,9 @@ COMMAND_HELP = {
     "review-status": {"purpose": "查看本轮审查到位状态（只读：已到 n/2、缺哪份、文件状态）",
                       "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省取最新已发起轮）"},
                       "example": "wf.py review-status --task 2026-xxxx --json"},
-    "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名；实施 CLI 取 launch 时人声明的值）",
+    "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名；实施 CLI 取 launch 时人声明的值）。"
+                                 "报告带 `materials.identity`，结论只对它绑定的那批材料成立：与当前不符即拒",
+
                       "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
                                "--main-review": "主会话五轴复核文件（产生 verdict 时必填；也可与 --register-only 登记 main findings）",
                                "--main-review-draft": "按本轮已导入报告生成主会话复核待填骨架后退出",
@@ -2941,6 +3076,7 @@ COMMAND_HELP = {
                                                               "确认文件（by/at/quote/source + round + residual_risk）——"
                                                               "不默认；两位异种 reviewer 仍是复杂任务默认要求",
                                "--single-reviewer-acceptance-draft": "只读生成上述接受文件骨架（只打印不落盘）",
+
                                "--plan-draft": "只读生成处置数组骨架（当前未关闭 blocking 逐条占位，只打印不落盘）"},
                       "example": "wf.py review-decide --task <id> --main-review main-review.json "
                                  "--gap-acceptance gap.json --json"},
@@ -3669,8 +3805,31 @@ def cmd_review_status(ctx, args):
         next_ = (f"报告已写完待导入（{', '.join(facts['ready_to_import'])}）："
                  "先 review-import；其余槽位可继续写，不必等齐再导入")
     elif not facts["material_ready"]:
-        next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
-                 "等 reviewer 产出后 review-import")
+        # 材料身份失配与"报告还没交"是两回事：前者等不来新报告（同轮摘要锁），
+        # 必须给恢复原材料或另开一轮的出口，否则恢复会话会白等一轮。
+        # 基线口径与 decide/check_next_hint 同一实现（review.round_materials_basis）
+        _round_imported = [item for item in (task.get("reviews") or {}).get("imported") or []
+                           if isinstance(item, dict) and int(item.get("round") or 0) == facts["round"]]
+        _basis = review_mod.round_materials_basis(
+            _round_imported, review_mod.round_materials_identity(ctx, task, facts["round"]))
+        material_stale = [str(item.get("slot")) for item in _basis["live_mismatch"]]
+        restored_only = [str(item.get("slot")) for item in _basis["restored"]]
+        mixed = _basis["mixed"]
+        if mixed:
+            next_ = (f"本轮既有还原记录（{', '.join(restored_only)}）也有对不上当前材料的正常条目"
+                     f"（{', '.join(material_stale)}）：把后者也按 `--restore` 重导，"
+                     "或按新材料重写并开新一轮；直接判定会撞混合基线")
+        elif material_stale:
+            next_ = (f"材料身份已变（{', '.join(material_stale)}）：同轮不能重导——"
+                     "有备份就把原字节放回材料目录并重跑 review-context；"
+                     "没有备份则按新材料重写报告并开新一轮")
+        elif restored_only and not facts.get("ready_to_import"):
+            # 还原记录的身份来自记录本身：可直接判定，不必等也不必开新轮
+            next_ = (f"本轮报告按记录还原（{', '.join(restored_only)}），可直接 review-decide；"
+                     "要恢复可核身份再放回原字节并重跑 review-context")
+        else:
+            next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
+                     "等 reviewer 产出后 review-import")
     elif facts["eligibility"]["problems"]:
         next_ = ("材料已齐，但判定资格不足："
                  + "；".join(item["reason"] for item in facts["eligibility"]["problems"]))

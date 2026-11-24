@@ -45,8 +45,9 @@ def build_task(project, root, title="repro 任务", sid="sess-R", complexity=Non
     for name in ("design.md", "implement.md"):
         open(os.path.join(task_dir, name), "w").write(f"# {name}\n\n内容。\n")
     path = os.path.join(root, "approve.json")
-    approve = decision("approve", "approve",
-                       "sha256:" + hashlib.sha256(prd.encode()).hexdigest())
+    approve = dict(decision(f"approve {task_id}", "approve",
+                            "sha256:" + hashlib.sha256(prd.encode()).hexdigest()),
+                   artifacts=H.plan_artifacts(project, f"approve {task_id}"))
     if complexity:
         # 分级必须写在批准决定的 plan 里（decision.plan.complexity），否则归档门禁会拒绝
         approve["plan"] = {"complexity": complexity}

@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-G1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R62"}
 
 
@@ -96,7 +96,7 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**", ".wf/baseline.md"],
 prd = f"# R62\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r62_a.json"), "w"))
+json.dump([dec(f"approve {task_id}", "approve", digest)], open(wfdrive.temp("r62_a.json"), "w"))
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r62_a.json"), "--json"],
                     {"generation": gen, "complexity": "light",
                      "downgrade": {"reason": "只改索引一条", "evidence": "无验收口径变化"}}, "sess-G2")

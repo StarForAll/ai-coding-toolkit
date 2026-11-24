@@ -16,7 +16,7 @@ def rec(name, expected, actual, ok):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest, "choice": choice, "reason": "R65"}
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest, "choice": choice, "reason": "R65"}
 
 
 class Ctx:
@@ -52,7 +52,7 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R65\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r65_a.json"), "w"))
+json.dump([dec(f"approve {task_id}", "approve", digest)], open(wfdrive.temp("r65_a.json"), "w"))
 wfdrive.run(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r65_a.json"), "--json"],
             inputs={"generation": gen, "complexity": "light",
                     "complexity_conditions": {"scope": {"value": "unknown"}},
@@ -102,7 +102,7 @@ rec("R5 execution 未引入未登记字段", "无 spec_changes",
 
 # R6：调查任务成果收紧
 investigation = {"id": "2026-" + "f" * 32, "plan": {"touch_paths": []},
-                 "execution": {"human_decisions": [dec("approve", "approve")]}, "check": {}}
+                 "execution": {"human_decisions": [dec(f"approve {task_id}", "approve")]}, "check": {}}
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
 rec("R6 只有人判记录不算调查成果", "WF_CHECK_FAILED", f"{satisfied} {code}",
     satisfied is False and code == "WF_CHECK_FAILED")

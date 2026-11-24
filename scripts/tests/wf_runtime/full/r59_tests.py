@@ -34,7 +34,7 @@ def wf(args, inputs=None, sid="sess-D1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R59"}
 
 
@@ -105,7 +105,7 @@ block = {"schema_version": 1, "touch_paths": ["pkg/**"],
 prd = f"# R59 重叠任务\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
-json.dump([dec("approve", "approve", digest)], open(wfdrive.temp("r59_a.json"), "w"))
+json.dump([dec(f"approve {task_id}", "approve", digest)], open(wfdrive.temp("r59_a.json"), "w"))
 wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r59_a.json"), "--json"],
    {"generation": gen, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-D2")
 open(os.path.join(F, "pkg/n.txt"), "w").write("n\n")

@@ -19,7 +19,7 @@ def wf(args, inputs=None, sid="sess-T1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R47/R48 用例"}
 
 
@@ -72,7 +72,7 @@ def make_task(title, touch, sid="sess-T1"):
 clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 task1, gen1, dir1, d1 = make_task("R47 读取边界", ["pkg/**", ".wf/spec/**"], "sess-T1")
-json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r47_a.json"), "w"))
+json.dump([dec(f"approve {task1}", "approve", d1)], open(wfdrive.temp("r47_a.json"), "w"))
 wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r47_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-T1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a = 1\n")
@@ -109,7 +109,7 @@ wf(["writer", "release", "--json"], {"generation": write_gen()}, "sess-T1")
 clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 task2, gen2, dir2, d2 = make_task("R48 嵌套仓库", ["pkg/**", ".wf/spec/**"], "sess-T2")
-json.dump([dec("approve", "approve", d2)], open(wfdrive.temp("r48_a.json"), "w"))
+json.dump([dec(f"approve {task2}", "approve", d2)], open(wfdrive.temp("r48_a.json"), "w"))
 wf(["task-approve", "--task", task2, "--decision", wfdrive.temp("r48_a.json"), "--json"],
    {"generation": gen2, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}, "sess-T2")
 open(os.path.join(F, "pkg/b.py"), "w").write("b = 1\n")

@@ -43,8 +43,8 @@ def approved_not_started(project, root, sid=SID):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n")
     path = os.path.join(root, "approve-c7.json")
     import hashlib
-    json.dump([F.decision("approve", "approve",
-                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
+    json.dump([dict(F.decision(f"approve {task_id}", "approve",
+                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest()), artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
               open(path, "w", encoding="utf-8"), ensure_ascii=False)
     rc, payload = H.cli(project, ["task-approve", "--task", task_id, "--decision", path, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})

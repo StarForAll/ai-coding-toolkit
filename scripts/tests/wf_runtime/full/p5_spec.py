@@ -41,8 +41,10 @@ prd = '''# 本地 spec 生命周期
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T08:00:00.000000Z"
-json.dump([{"source": "human (sess-G)", "at": at, "subject": "approve spec lifecycle",
-            "object_digest": digest, "choice": "approve", "reason": "本地 spec 用例"}],
+json.dump([{"source": "human (sess-G)", "at": at, "subject": f"approve spec lifecycle {task_id}",
+            "object_digest": digest,
+            "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+            "choice": "approve", "reason": "本地 spec 用例"}],
           open(wfdrive.temp("spec_approve.json"), "w"), ensure_ascii=False)
 inputs = {"generation": gen}
 rc, payload, _ = wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("spec_approve.json"), "--json"], inputs)

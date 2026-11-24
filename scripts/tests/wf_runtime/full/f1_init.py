@@ -106,8 +106,10 @@ open(os.path.join(task_dir, "prd.md"), "w", encoding="utf-8").write(prd)
 prd_digest = "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 at = "2026-11-03T01:00:00.000000Z"
 approve = [
-    {"source": "human terminal (session A)", "at": at, "subject": "approve plan for initialize task",
-     "object_digest": prd_digest, "choice": "approve", "reason": "范围仅骨架文件，验收由 v1 机械核验；接受轻量分级"},
+    {"source": "human terminal (session A)", "at": at, "subject": f"approve {task_id}",
+     "object_digest": prd_digest,
+     "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+     "choice": "approve", "reason": "范围仅骨架文件，验收由 v1 机械核验；接受轻量分级"},
     {"source": "human terminal (session A)", "at": at, "subject": "plan-q-1：初始化任务是否按轻量处理",
      "object_digest": prd_digest, "choice": "是", "reason": "接受推荐项"},
 ]

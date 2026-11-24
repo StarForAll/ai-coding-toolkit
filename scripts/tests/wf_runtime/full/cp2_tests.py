@@ -23,8 +23,10 @@ def clean():
     subprocess.run(["git", "commit", "-qm", "test cleanup", "--allow-empty"], cwd=F, capture_output=True)
 
 
-def dec(subject, choice, digest="sha256:" + "0" * 64, reason="CP2 用例"):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+def dec(subject, choice, digest="sha256:" + "0" * 64, reason="CP2 用例", task=None):
+    # 机械修订的 subject 是"旧 -> 新"描述，没有任务 id：显式给 task 定位产物
+    return {"source": "human (test)", "at": AT, "subject": subject,
+            "artifacts": wfdrive.plan_artifacts(task or subject), "object_digest": digest,
             "choice": choice, "reason": reason}
 
 
@@ -54,7 +56,7 @@ def make_task(title, touch, verifications, acceptance, sid, body_note=""):
 
 
 def approve(task_id, digest, gen, sid, extra=None):
-    items = [dec("approve plan", "approve", digest)] + (extra or [])
+    items = [dec(f"approve plan {task_id}", "approve", digest)] + (extra or [])
     path = decision_file(wfdrive.temp(f"cp2_{task_id}_approve.json"), items)
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"],
               {"generation": gen, "complexity": "light",
@@ -100,14 +102,14 @@ current_prd_digest = "sha256:" + hashlib.sha256(
     open(prd_path, "rb").read()).hexdigest()
 stale = decision_file(wfdrive.temp("cp2_mech_stale.json"), [dec(f"{old_version} -> 新版本（仅修错字）",
                                                                 "机械修订", d1,
-                                                                "只改正文错字，机读块未变")])
+                                                                "只改正文错字，机读块未变", task=task1)])
 rc, payload, out = wf(["task-approve", "--task", task1, "--decision", stale, "--json"],
                       {"generation": gen1}, "sess-P1")
 rec("A2 旧摘要的机械修订被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 mech = decision_file(wfdrive.temp("cp2_mech.json"), [dec(f"{old_version} -> 新版本（仅修错字）", "机械修订",
                                                 current_prd_digest,
-                                                "只改正文错字，机读块未变")])
+                                                "只改正文错字，机读块未变", task=task1)])
 rc, payload, out = wf(["task-approve", "--task", task1, "--decision", mech, "--json"],
                       {"generation": gen1}, "sess-P1")
 facts = (payload or {}).get("facts", {})
@@ -131,7 +133,7 @@ approve(task2, d2, gen2, "sess-P2")
 text2 = open(os.path.join(dir2, "prd.md"), encoding="utf-8").read()
 open(os.path.join(dir2, "prd.md"), "w", encoding="utf-8").write(
     text2.replace('"statement": "文件存在"', '"statement": "文件存在且可读"'))
-mech2 = decision_file(wfdrive.temp("cp2_mech2.json"), [dec("旧 -> 新", "机械修订", d2, "改验收措辞")])
+mech2 = decision_file(wfdrive.temp("cp2_mech2.json"), [dec("旧 -> 新", "机械修订", d2, "改验收措辞", task=task2)])
 rc, payload, out = wf(["task-approve", "--task", task2, "--decision", mech2, "--json"],
                       {"generation": gen2}, "sess-P2")
 rec("A2 语义变化拒绝机械修订", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),

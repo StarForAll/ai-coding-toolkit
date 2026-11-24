@@ -42,13 +42,15 @@ class Ctx:
         return {"id": "sess-test"}, {"id": "human:test"}
 
 
-def report_text(round_no, agent, axes, findings=()):
+def report_text(round_no, agent, axes, findings=(), materials_identity=None):
     body = {"protocol": "wf-review-v1", "task-id": "t1", "round": round_no,
             "review-time": "2026-11-24T00:00:00.000000Z", "review-focus": "x",
             "check-anchor": {"check_id": f"c{round_no}", "check_anchor": ANCHOR},
             "read-scope": ["pkg/**"], "excluded-scope": list(COVERED),
             "axes": dict(axes), "findings": list(findings),
             "verdict": "fail" if findings else "pass"}
+    if materials_identity:
+        body["materials"] = {"identity": materials_identity}
     return ("<!-- wf-review-agent:v1 status=done -->\n" + MARKER
             + "\n\n```json\n" + json.dumps(body, ensure_ascii=False) + "\n```\n")
 
@@ -185,9 +187,15 @@ class DecideAllBlockingTest(unittest.TestCase):
         materials.mkdir(parents=True, exist_ok=True)
         (materials / "diff.patch").write_text("original\n", encoding="utf-8")
         (materials / "check.json").write_text("{}\n", encoding="utf-8")
-        review.write_materials_manifest(materials, "c2", ANCHOR, {})
+        manifest = review.write_materials_manifest(materials, "c2", ANCHOR, {})
         if tamper:
             (materials / "diff.patch").write_text("tampered\n", encoding="utf-8")
+        # 报告与材料绑定（真实轮次都有）：后面才有"材料被改 ⇒ 结论失效"可言。
+        task = records.load_json(self.task_dir / "task.json")
+        for entry in task["reviews"]["imported"]:
+            if int(entry.get("round") or 0) == 2:
+                entry["materials"] = {"identity": review.materials_identity(manifest)}
+        records.write_json(self.task_dir / "task.json", task)
         return materials
 
     def test_drifted_materials_block_verdict(self):
@@ -201,8 +209,51 @@ class DecideAllBlockingTest(unittest.TestCase):
         task = records.load_json(self.task_dir / "task.json")
         self.assertNotIn("result", task.get("reviews") or {})
 
+    def test_restored_round_tolerates_drifted_materials(self):
+        """restore 还原的是历史记录：现场材料漂移时仍可判，身份按记录、漂移只作事实。"""
+        self._stage()
+        self._stage_materials(tamper=True)
+        task = records.load_json(self.task_dir / "task.json")
+        identity = review.materials_identity(
+            review.load_materials_manifest(str(self._materials_dir())))
+        for entry in task["reviews"]["imported"]:
+            if int(entry.get("round") or 0) == 2:
+                entry["materials"] = {"identity": identity, "restored": True}
+        records.write_json(self.task_dir / "task.json", task)
+        plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
+                "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
+                "evidence_refs": ["v:v1"], "reason": "已修复"}
+        result = self._decide(plan=self._plan_file([plan]))
+        self.assertEqual(result["facts"]["result"]["materials"]["state"], "drift")
+        self.assertEqual(result["facts"]["result"]["verdict"], "pass")
+        self.assertIn("materials_note", result["facts"]["result"]["facts"])
+
+    def test_restored_round_judges_even_after_rematerialized_materials(self):
+        """还原记录的身份来自记录本身：报告自报旧身份也照样能判（不能被输入校验再挡一次）。"""
+        self._stage()
+        old_identity = "sha256:" + "a" * 64
+        for agent in ("pi", "zcode"):
+            path = self.task_dir / f"review/round-2/review-{agent}.md"
+            path.write_text(report_text(2, agent, PASS_AXES,
+                                        materials_identity=old_identity), encoding="utf-8")
+        self._stage_materials()
+        task = records.load_json(self.task_dir / "task.json")
+        for entry in task["reviews"]["imported"]:
+            if int(entry.get("round") or 0) == 2:
+                entry["materials"] = {"identity": old_identity, "restored": True}
+                # 报告被重写：摘要按当前字节更新，否则先撞"文件已变"
+                entry["report_digest"] = records.file_digest(
+                    self.task_dir / entry["report_path"].replace(".wf/tasks/t1/", ""))
+        records.write_json(self.task_dir / "task.json", task)
+        plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
+                "recheck_by": "zcode", "at": "2026-11-24T00:00:00.000000Z",
+                "evidence_refs": ["v:v1"], "reason": "已修复"}
+        result = self._decide(plan=self._plan_file([plan]))
+        self.assertEqual(result["facts"]["result"]["verdict"], "pass")
+        self.assertNotIn("materials_stale", json.dumps(result["facts"]["result"]))
+
     def test_verdict_records_material_state(self):
-        """身份强度如实上报：fixed 有 manifest 摘要，legacy 无身份记录。"""
+        """身份强度如实上报，且结论记的是**报告绑定**的材料身份（不是当前材料冒充）。"""
         self._stage()
         self._stage_materials()
         plan = {"finding_id": "f1", "decision": "accepted", "round": 1, "slot": "s1",
@@ -211,7 +262,10 @@ class DecideAllBlockingTest(unittest.TestCase):
         result = self._decide(plan=self._plan_file([plan]))
         identity = result["facts"]["result"]["materials"]
         self.assertEqual(identity["state"], "fixed")
-        self.assertIn("manifest_digest", identity)
+        current = review.round_materials_identity(review.__dict__["_ctx"] if False else
+                                                  self.ctx, {"id": "t1"}, 2)
+        self.assertEqual(identity["identity"], current)
+        self.assertNotIn("current", identity)
 
     def test_adopted_materials_stay_weak_after_rematerialized_manifest(self):
         """删 manifest 重取（官方恢复出口）之后，弱身份必须一直保留，不能升格成 fixed。"""

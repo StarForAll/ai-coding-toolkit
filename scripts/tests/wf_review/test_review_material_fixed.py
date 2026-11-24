@@ -130,7 +130,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review, "write_materials",
                                   side_effect=lambda *_a, **_kw: (
                                       records.atomic_write(
-                                          self._materials_dir() / "diff.patch", "original\n"),
+                                          Path(_a[4]) / "diff.patch", "original\n"),
                                       {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         records.atomic_write(self._materials_dir() / "diff.patch", "tampered\n")
@@ -152,7 +152,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review, "write_materials",
                                   side_effect=lambda *_a, **_kw: (
                                       records.atomic_write(
-                                          self._materials_dir() / "diff.patch", "read\n"),
+                                          Path(_a[4]) / "diff.patch", "read\n"),
                                       {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         manifest_path = self._materials_dir() / "materials-manifest.json"
@@ -217,7 +217,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review, "write_materials",
                                   side_effect=lambda *_a, **_kw: (
                                       records.atomic_write(
-                                          self._materials_dir() / "check.json", '{"old": true}\n'),
+                                          Path(_a[4]) / "check.json", '{"old": true}\n'),
                                       {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         # 同锚点重跑 Check：check.json 换成新 Check 的内容、id 变 c2（锚点不变）。
@@ -242,7 +242,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review, "write_materials",
                                   side_effect=lambda *_a, **_kw: (
                                       records.atomic_write(
-                                          self._materials_dir() / "diff.patch", "reviewer-read\n"),
+                                          Path(_a[4]) / "diff.patch", "reviewer-read\n"),
                                       {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         (self._materials_dir() / "materials-manifest.json").write_text("{broken", encoding="utf-8")
@@ -266,7 +266,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review, "write_materials",
                                   side_effect=lambda *_a, **_kw: (
                                       records.atomic_write(
-                                          self._materials_dir() / "diff.patch", "reviewer-read\n"),
+                                          Path(_a[4]) / "diff.patch", "reviewer-read\n"),
                                       {})[1]):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         (self._materials_dir() / "materials-manifest.json").unlink()

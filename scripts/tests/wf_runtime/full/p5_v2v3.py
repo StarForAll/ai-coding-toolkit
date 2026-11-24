@@ -52,8 +52,9 @@ def new_task(title, touch_paths, sid="sess-C", argv=("print(1)",)):
 def approve(task_id, digest, gen, sid="sess-C"):
     at = "2026-11-03T04:00:00.000000Z"
     path = wfdrive.temp(f"decision_{task_id}.json")
-    json.dump([{"source": f"human ({sid})", "at": at, "subject": "approve", "object_digest": digest,
-                "choice": "approve", "reason": "用例"}], open(path, "w"), ensure_ascii=False)
+    json.dump([{"source": f"human ({sid})", "at": at, "object_digest": digest,
+                "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+                "subject": f"approve {task_id}", "choice": "approve", "reason": "用例"}], open(path, "w"), ensure_ascii=False)
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"], {"generation": gen}, sid)
 
 

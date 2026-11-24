@@ -20,7 +20,7 @@ def wf(args, inputs=None, sid="sess-S1"):
 
 
 def dec(subject, choice, digest="sha256:" + "0" * 64):
-    return {"source": "human (test)", "at": AT, "subject": subject, "object_digest": digest,
+    return {"source": "human (test)", "at": AT, "subject": subject, "artifacts": wfdrive.plan_artifacts(subject), "object_digest": digest,
             "choice": choice, "reason": "R46 用例"}
 
 
@@ -78,7 +78,7 @@ clean()
 os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 os.makedirs(os.path.join(F, ".wf/spec/rules"), exist_ok=True)
 task1, gen1, dir1, d1 = make_task("R46 对照", ["pkg/**", ".wf/spec/**"], "sess-S1")
-json.dump([dec("approve", "approve", d1)], open(wfdrive.temp("r46_a.json"), "w"))
+json.dump([dec(f"approve {task1}", "approve", d1)], open(wfdrive.temp("r46_a.json"), "w"))
 wf(["task-approve", "--task", task1, "--decision", wfdrive.temp("r46_a.json"), "--json"],
    {"generation": gen1, "complexity": "light", "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}},
    "sess-S1")

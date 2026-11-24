@@ -96,10 +96,15 @@ def rulings_task(count, multiples):
     return {"check_history": history, "execution": {"human_decisions": decisions}}
 
 
+# 覆盖语义（2026-11-24）：裁定按最大倍数覆盖它之前的全部倍数；精确 keying 仍在
+# （第 10 倍不会被前缀匹配成"第 1 倍"），只是 1..9 不再各自追问。
 info = wf_gates.debug_pending(rulings_task(30, [10]), 3)
 pendings = [item["multiple"] for item in info["pending"]]
-rec("D04 第 1 倍不被第 10 倍覆盖", "1 在待裁定列表", pendings[:3], 1 in pendings)
-rec("D04b 已裁定的第 10 倍不重复", "10 不在待裁定列表", 10 in pendings, 10 not in pendings)
+rec("D04 裁到第 10 倍后 1..10 全部覆盖", "待裁定为空", pendings, pendings == [])
+lower = wf_gates.debug_pending(rulings_task(30, []), 3)
+rec("D04b 未裁定时一次覆盖到当前已跨倍数", "multiple=10 且 covers=1..10",
+    lower["pending"][:1], lower["pending"] and lower["pending"][0]["multiple"] == 10
+    and lower["pending"][0]["covers"] == list(range(1, 11)))
 
 # ---- D07：脱敏覆盖 Bearer 与分离参数 ----
 secret = "sentinel-value-12345"
