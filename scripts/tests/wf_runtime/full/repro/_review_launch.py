@@ -47,9 +47,13 @@ def prepare(project, root, sid, title="审查任务", complexity="complex"):
                        ("implement.md", "实现：修改 add 签名，接受可变参数并累加；用例覆盖 2 与 3 参数。\n")):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n\n{body}")
     decision = os.path.join(root, "approve-review.json")
-    json.dump([dict(F.decision(f"approve {task_id}", "approve",
-                          "sha256:" + hashlib.sha256(prd.encode()).hexdigest()), artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
-              open(decision, "w", encoding="utf-8"), ensure_ascii=False)
+    _entry = dict(F.decision(f"approve {task_id}", "approve",
+                             "sha256:" + hashlib.sha256(prd.encode()).hexdigest()),
+                  artifacts=H.plan_artifacts(project, f"approve {task_id}"))
+    # 分级是人的决定内容（机制稿 §2.3：请求 inputs 只作提议）；0.0.2 起复杂分级缺决定即拒
+    if complexity:
+        _entry["plan"] = {"complexity": complexity}
+    json.dump([_entry], open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     inputs = {"generation": H.generation(project)}
     if complexity:
         inputs["complexity"] = complexity

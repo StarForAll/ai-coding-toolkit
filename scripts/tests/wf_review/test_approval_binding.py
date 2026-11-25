@@ -35,7 +35,9 @@ DIGEST = "sha256:" + records.sha256_hex(PRD.encode())
 
 def decision(subject, digest, choice="approve", artifacts=None):
     body = {"source": "human:test", "at": "2026-11-24T00:00:00Z", "subject": subject,
-            "object_digest": digest, "choice": choice, "reason": "用例"}
+            "object_digest": digest, "choice": choice, "reason": "用例",
+            # 分级由人的决定承载（0.0.2 起复杂分级缺该键即拒）；本夹具走轻量路径
+            "plan": {"complexity": "light", "tdd": False}}
     if artifacts is not None:
         body["artifacts"] = artifacts
     return body
@@ -50,6 +52,11 @@ class ApproveBindingTest(unittest.TestCase):
         (self.task_dir / "prd.md").write_text(PRD, encoding="utf-8")
         for name in ("design.md", "implement.md"):
             (self.task_dir / name).write_text(f"# {name}\n\n内容。\n", encoding="utf-8")
+        # 治理面可用且为空：分级提议因此是 light（0.0.2 起复杂分级缺决定即拒，夹具要能判成轻量）
+        (self.root / ".wf/baseline.md").write_text(
+            "# 基线\n\n<!-- wf-governance:v1 -->\n```json\n"
+            '{"paths": [], "reason": "用例", "decided_by": "human:test", '
+            '"decided_at": "2026-11-25T00:00:00Z"}\n```\n', encoding="utf-8")
         records.write_json(self.task_dir / "task.json", {
             "id": "t1", "title": "t", "status": "not_started", "phase": "plan", "revision": 1,
             "reviews": {}})

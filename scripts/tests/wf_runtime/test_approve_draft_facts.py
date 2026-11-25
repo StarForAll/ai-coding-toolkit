@@ -181,20 +181,14 @@ class ApproveDraftFactsTest(unittest.TestCase):
         self.assertEqual(plan["tdd"], False)
         self.assertTrue(any("TDD 未由人确认" in warning for warning in result["warnings"]))
 
-    def test_complex_from_inputs_is_flagged_and_routed_back(self):
-        """复杂分级必须由人的决定承载（设计稿 §4.3）：请求 inputs 只算提议。
-
-        批准不提前硬拒（预发布期改批准行为要重跑候选审计，见交付纪律 §8.2），但要把后果
-        和收敛动作同时说清：归档会被拒，下一步不是 task-start 而是先补决定重批。
-        """
+    def test_complex_from_inputs_is_refused(self):
+        """复杂分级必须由人的决定承载（设计稿 §4.3）：请求 inputs 只算提议，批准时即拒。"""
         self.ctx.inputs.return_value = {"complexity": "complex"}
-        result = self.approve(self._decision(with_plan=False))
-        self.assertEqual(result["code"], "WF_OK")
-        plan = records.load_json(self.task_dir / "task.json")["plan"]
-        self.assertEqual(plan["confirmed_source"], "inputs")
-        self.assertTrue(any("归档门禁" in warning for warning in result["warnings"]))
-        self.assertTrue(result["next"].startswith("先补分级决定"))
-        self.assertIn("重新批准", result["next"])
+        with self.assertRaises(tasks.TaskError) as caught:
+            self.approve(self._decision(with_plan=False))
+        self.assertEqual(caught.exception.code, "WF_SEMANTIC_DECISION")
+        self.assertEqual(caught.exception.facts["confirmed_source"], "inputs")
+        self.assertTrue(any("plan.complexity" in exit_ for exit_ in caught.exception.facts["exits"]))
 
     def test_inputs_source_is_recorded_when_request_carries_it(self):
         # inputs 里的 TDD 同样只算提议；带上它只为让本用例聚焦"分级来源"（不带则会有 TDD 提示）

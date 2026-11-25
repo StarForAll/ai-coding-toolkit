@@ -55,8 +55,11 @@ def make_task(title, touch, sid="sess-W1"):
 
 
 def approve(task_id, digest, gen, complexity="complex", sid="sess-W1"):
+    item = dec(f"approve {task_id}", "approve", digest)
+    # 分级由人的决定承载（inputs 只作提议）；降级理由仍可留在 inputs，由入口与决定合并解析
+    item["plan"] = {"complexity": complexity}
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r51_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r51_{task_id}_a.json"), [item]), "--json"],
               {"generation": gen, "complexity": complexity}, sid)
 
 

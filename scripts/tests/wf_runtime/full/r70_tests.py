@@ -163,8 +163,9 @@ prd = f"# R70\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=F
 open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
 for name in ("design.md", "implement.md"):
     open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
-json.dump([dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-          open(wfdrive.temp("r70_a.json"), "w"))
+_approve = dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())
+_approve["plan"] = {"complexity": "complex"}
+json.dump([_approve], open(wfdrive.temp("r70_a.json"), "w"))
 wf(["task-approve", "--task", task_id, "--decision", wfdrive.temp("r70_a.json"), "--json"],
    {"generation": genv, "complexity": "complex"}, "sess-W1")
 open(os.path.join(F, "pkg/a.py"), "w").write("a\n")

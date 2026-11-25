@@ -1750,14 +1750,10 @@ def _approval_warnings(complexity, confirmed_source, tdd, tdd_source):
     - 轻量分级：四项条件全为 false 时机器可证，批准照常通过；但来源记 `proposed`，
       提示人可用决定 plan 把分级记成他的选择。
     - TDD：设计稿 §4.4 要求 Plan 末与复杂度一并由人确认；决定没写时按项目默认/发行缺省执行
-      （这是设计允许的缺省），但批准记录与提示要让"这个值不是人的明确选择"可见。
-    复杂分级没有 decision 承载时，批准入口直接拒绝（语义决定），不会走到这里。
+      （这是设计允许的缺省），但记录与提示要让"这个值不是人的明确选择"可见。
+    复杂分级没有 decision 承载时，批准入口直接拒绝，不会走到这里。
     """
     warnings = []
-    if complexity == "complex" and confirmed_source != "decision":
-        warnings.append("复杂分级没有人的批准决定承载：归档门禁会以 WF_SEMANTIC_DECISION 拒绝；"
-                        "先按 `task-approve --draft` 骨架（已预填 `plan.complexity`）补人的决定并重新批准，"
-                        "再开工")
     if confirmed_source == "proposed":
         warnings.append(f"分级未由人确认：本次记录来源为 proposed（机器提议，值 {complexity}）；"
                         "要按人确认的分级记账，请在决定的 `plan.complexity` 写明")
@@ -2026,6 +2022,17 @@ def cmd_task_approve(ctx, args):
             confirmed_source = "inputs"
         else:
             confirmed_source = "proposed"
+        # 复杂分级的载体只能是人的批准决定（设计稿 §4.3、机制稿 §2.3）：请求 inputs 是提议，
+        # 机器提议更不是确认。只提示"归档会被拒"会让 AI 干完活才撞墙，这里在批准时即拒。
+        if complexity == "complex" and confirmed_source != "decision":
+            raise TaskError("WF_SEMANTIC_DECISION", {
+                "reason": "complex 分级须由人在批准决定中确认（decision.plan.complexity）",
+                "complexity": complexity, "confirmed_source": confirmed_source,
+                "complexity_reasons": reasons,
+                "expected": {"plan": {"complexity": "complex"}},
+                "exits": ["用 `task-approve --draft` 生成骨架（已预填 `plan.complexity`），请人确认后按骨架写决定",
+                          "手写决定时在 `plan.complexity` 写明分级；请求 inputs 只作提议，不构成人确认"],
+            }, next_="补齐人的分级决定后重新批准")
         downgrade_entry = None
         if complexity == "light" and proposed == "complex":
             downgrade = plan_decision.get("downgrade") or inputs.get("downgrade") or {}
@@ -2113,9 +2120,7 @@ def cmd_task_approve(ctx, args):
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase="plan", task_id=task_id, action_id=task["action"]["id"],
                                  action_state=task["action"]["state"]),
-        next_=("人确认后开工：task-start" if complexity != "complex" or confirmed_source == "decision"
-               else "先补分级决定：按 `task-approve --draft` 骨架写含 `plan.complexity` 的决定并重新批准"
-                    "（未开工阶段可重批），再 task-start；否则归档会被拒"),
+        next_="人确认后开工：task-start",
         facts={
             "plan_version": version,
             "complexity": complexity,

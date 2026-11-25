@@ -110,9 +110,14 @@ def check():
             problems.append(f"review-context --as {agent} 失败：{(payload or {}).get('code')}/"
                             f"{((payload or {}).get('facts') or {}).get('reason')}")
             continue
-        agents.append((payload.get("facts") or {}).get("agent"))
-        report_dirs.append(os.path.dirname((payload.get("facts") or {}).get("report_path") or ""))
-        identities.append(((payload.get("facts") or {}).get("materials_check") or {}).get("identity"))
+        facts_now = payload.get("facts") or {}
+        agents.append(facts_now.get("agent"))
+        report_dirs.append(os.path.dirname(facts_now.get("report_path") or ""))
+        identities.append((facts_now.get("materials_check") or {}).get("identity"))
+        # 首次物化后的回显必须描述"现在"：此前取写入前状态，report 说 unmaterialized/fixed=false
+        state = (facts_now.get("materials_check") or {}).get("state")
+        if state != "fixed":
+            problems.append(f"review-context 首次物化后 materials_check.state={state}")
     if len(agents) == 2 and agents != ["pi", "zcode"]:
         problems.append(f"--as 未优先于 host_id：{agents}")
     if problems:

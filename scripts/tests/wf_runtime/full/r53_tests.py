@@ -55,8 +55,10 @@ def make_task(title, touch, sid="sess-X1"):
 
 
 def approve(task_id, digest, gen, sid="sess-X1"):
+    item = dec(f"approve {task_id}", "approve", digest)
+    item["plan"] = {"complexity": "complex"}
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r53_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
+               dfile(wfdrive.temp(f"r53_{task_id}_a.json"), [item]), "--json"],
               {"generation": gen, "complexity": "complex"}, sid)
 
 
