@@ -64,6 +64,11 @@ class BuildOrderingTest(unittest.TestCase):
         self.assertLess(cli_at, remove_at)
         self.assertLess(tag_at, remove_at)
 
+    def test_build_output_has_no_hash_dump(self):
+        source = (REPO / "scripts" / "build-wf-release.py").read_text(encoding="utf-8")
+        self.assertNotIn('print("hashes:")', source)
+        self.assertNotIn('print(f"rules_digest:', source)
+
     def test_cli_package_resolves_current_release_version(self):
         # CLI 版本动态读取发行清单；打包时这个路径/正则必须仍能解析到同一版本。
         MODULE.assert_cli_packaging(MODULE.readme_target_version())

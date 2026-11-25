@@ -93,6 +93,34 @@ def head_commit():
     return (result.stdout or "").strip()
 
 
+def current_branch():
+    result = git("rev-parse", "--abbrev-ref", "HEAD", capture=True)
+    branch = (result.stdout or "").strip() if result.returncode == 0 else ""
+    if not branch or branch == "HEAD":
+        raise ReleaseError("当前不是命名分支（detached HEAD）；不能推送项目内容")
+    return branch
+
+
+def project_remotes():
+    result = git("remote", capture=True)
+    if result.returncode != 0:
+        raise ReleaseError("无法读取 git remote 列表")
+    remotes = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    if not remotes:
+        raise ReleaseError("没有配置任何 git remote")
+    return remotes
+
+
+def push_project_branch(env):
+    branch = current_branch()
+    for remote in project_remotes():
+        print(f"release-wf: push project branch {branch} -> {remote}", file=sys.stderr)
+        pushed = git("push", remote, f"HEAD:refs/heads/{branch}", env=env)
+        if pushed.returncode != 0:
+            raise ReleaseError(f"项目分支推送到 {remote} 失败；未创建 tag")
+    return branch
+
+
 def update_docs(old, new):
     if old == new:
         return False
@@ -188,6 +216,7 @@ def main(argv=None):
         if verified.returncode != 0:
             raise ReleaseError("发行树字节复现失败；未创建 tag")
         commit_release_files(new)
+        push_project_branch(env)
 
         tag = f"wf-v{new}"
         created_tag = False
@@ -230,7 +259,7 @@ def main(argv=None):
                 git("tag", "-d", tag, capture=True)
 
         print(f"OK  {tag} 已发布：tag、release wheel 与 install.py 均完成")
-        print("提醒：版本提交未推送到项目分支；按你的流程推送到所有远端。tag 只推送了 Forgejo。")
+        print("项目分支已推送到所有 git remote；tag 只推送了 Forgejo。")
         print(f"安装：curl -fsSL \"${{WF_FORGEJO_BASE}}/xzc/ai-coding-toolkit/"
               f"releases/download/latest/install.py\" | python3 -")
         return 0

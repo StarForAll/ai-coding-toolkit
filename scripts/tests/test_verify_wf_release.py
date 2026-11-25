@@ -270,7 +270,8 @@ class ReleaseScriptTest(unittest.TestCase):
     def test_script_does_verify_tag_push_and_attach(self):
         for marker in ("build-wf-release.py", "verify-wf-release.py",
                        "build-wf-cli-wheel.py", "git", "tag",
-                       "attach-wf-cli-asset.py", "release-wf"):
+                       "attach-wf-cli-asset.py", "release-wf",
+                       "project_remotes", "HEAD:refs/heads/"):
             self.assertIn(marker, self.script)
 
     def test_pending_version_is_not_skipped_by_default(self):

@@ -24,3 +24,7 @@
 **0.0.8**：wf 改为系统级命令分发——`docs/workflows/wf-cli/` 以登记 Forgejo 发行 tag 安装为 `wf`，`wf install` 按命令自身版本、`wf upgrade` 取默认分支按 tag 创建时间最新的发行，`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`；用户面移除 `--release`/`--release-ref`/`--source`，发行安装器自定位发行根并按清单版本推导 tag，项目内 `wf.py upgrade` 只给系统命令出口。系统命令安装改为无版本 bootstrap（取 Forgejo 最新正式 release 的稳定 `install.py` 附件，再由它取同一 release 的 `wf_cli-<version>-py3-none-any.whl`），新增 `wf self-upgrade` 升级系统命令本身（与项目内 `wf upgrade` 分离），release 必须保存该 wheel 附件。
 
 **0.0.9**：系统命令卸载与发布自动化——`wf self-uninstall`（预览 + `--apply`，按 uv/pipx/pip 移除系统命令，区别于项目 `wf uninstall`）；`build-wf-cli-wheel.py` 在 tag 已存在时要求 `HEAD == tag 提交` 且 `wf-cli`/发行树干净，禁止把新工作树 wheel 附加到旧 tag；`scripts/release-wf.py` 一次性完成版本递增（默认 patch、`--minor`、`--major`）、本地 tag 创建、发行校验、wheel 构建、tag push 和 release 附件上传（不再依赖 wf 专属 pre-push 钩子）；`attach-wf-cli-asset.py` 兼容 Forgejo `git/refs/tags` 数组响应并支持 `--create-release`。
+
+**0.0.10**：发布输出与远端收口——`build-wf-release.py` 不再打印 `rules_digest` 与逐资产哈希；`release-wf.py` 不再接收 remote 参数，tag 固定推 Forgejo。
+
+**0.0.11**：项目内容推送补齐——`release-wf.py` 在发布时先把当前项目分支推送到所有已配置 git remote（GitHub 与 Forgejo 都拿到最新提交），随后才创建 tag 并只把 tag 推送到 Forgejo；release 附件仍只走 Forgejo。

@@ -103,9 +103,9 @@ python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y  
 3. 保持工作区干净（一次性发布脚本拒绝脏工作区，不自动收编无关改动）。
 4. 运行 `python3 scripts/release-wf.py [--minor|--major]`：默认 patch `x.x.y -> x.x.(y+1)`，
    `--minor` 为 `x.(x+1).0`，`--major` 为 `(x+1).0.0`；当前清单版本尚无本地 tag 时默认发布该版本。
-   脚本更新 README/发行树并提交、创建并校验本地 tag、构建 wheel、push tag 到 Forgejo，
-   再创建 release 并上传 wheel 与 `install.py`。脚本只处理 Forgejo 的 tag/release；
-   项目分支提交仍按你的流程推送到所有远端，不由本脚本推送。
+   脚本更新 README/发行树并提交，先把项目分支推送到**所有已配置 git remote**，再创建并校验
+   本地 tag、构建 wheel、push tag 到 Forgejo，最后创建 release 并上传 wheel 与 `install.py`。
+   项目分支走所有远端；tag/release 只走 Forgejo。
 5. 若 Forgejo Actions 已启用，可改用 tag push 的 [.forgejo/workflows/wf-release.yml](../../../.forgejo/workflows/wf-release.yml)；
    不要和 `release-wf.py` 同时跑。需要手动补发时仍可用
    `python3 scripts/build-wf-cli-wheel.py` 与
