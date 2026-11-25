@@ -85,6 +85,8 @@ class RoundEntryGateTest(unittest.TestCase):
         self.assertIn("轻量任务没有必需的外部审查轮", result["next"])
         # 外部审查对轻量任务是可选工具，不写成禁止、也不写成必需
         self.assertIn("可直接 review-launch", result["next"])
+        # 可选不等于无后果：自愿轮的未关闭 blocking 同样进归档门禁
+        self.assertIn("未关闭 blocking", result["next"])
 
     def test_complex_task_still_gets_launch(self):
         result = self.status_next(self.write_task("in_progress", "complex"))

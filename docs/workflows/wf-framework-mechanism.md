@@ -22,7 +22,7 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | 45dac02a3e24bb18549f8498b3141e66d7b884d08aa669bd843a715081dead96 |
+| wf-framework-design.md | fa7d451cb077f17fd2e328536944a205ca8af493646a5ca4776e3bd24c5394e3 |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
 | wf-framework-design.index.md | 6e33b952a0d3bc1c8e42711e67f830b04280399085f1807769af1562c750dafc |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |

@@ -12,3 +12,5 @@
 **0.0.2**：复杂分级没有人的批准决定承载时，`task-approve` 直接以 `WF_SEMANTIC_DECISION` 拒绝（出口：`--draft` 骨架已预填 `plan.complexity`，或手写决定补该键；请求 inputs 只作提议）；TDD 未写入决定仍按项目默认/发行缺省并给出「未由人确认」提示。
 
 **0.0.3**：复杂分级的人签判据/文案收敛为 `tasks.complex_needs_human_decision()` 单一实现（批准入口与归档门禁共用）；TDD 只由决定 `plan.tdd` 或项目/发行缺省取值，`inputs.tdd` 不再生效（模型不得自行开启 TDD）；轻量任务的外部审查改为可选工具（`wf-review` 与 `review-status` 同口径）；`AGENTS.md` 不再复述版本号，以 README 目标版本行为唯一事实；README 目标版本单元收敛并由 `test_readme_version_cell` 锁上限。
+
+**0.0.4**：TDD 缺省值按 `tdd_source` 记录、不要求额外人签（设计稿 TDD 段同步：要记成人的选择就写 `plan.tdd`）；轻量任务自愿外部审查的后果写全——一轮发起后未关闭 blocking 进归档门禁，fail 须逐条关闭；`task-approve` 帮助的 `plan` 说明与示例不再鼓励照抄 `tdd`。

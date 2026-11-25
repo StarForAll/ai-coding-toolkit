@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.0.3`（版本号已从 0.1.x 回退：wf 仍未达到正式可用，后续一律在此号上迭代；**只有人主动要求时才改版本号**）。本轮内容与历轮叙述见 [round-history](analysis/round-history.md)。**当前 0.0.3**：TDD 开关也只由人的批准决定承载（`inputs.tdd` 只作提议、不生效，缺省按项目/发行配置并提示）；轻量任务的外部审查改为可选工具（不改变分级与完成条件）；复杂分级判据与文案收敛为单一实现。**0.1.x → 0.0.2 升级通道（前提：人确认版本号并创建 `wf-v0.0.2` tag；`wf-v0.0.1` 是上一快照，不再作为升级目标）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.0.2 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。**存量分级载体**：`confirmed_source != decision` 的复杂任务在归档会被 `WF_SEMANTIC_DECISION` 拒（0.1.7 起同一门禁，非本版新增）；出口是未开工时用 `task-approve --draft` 重新批准、已开工时回 Plan 重新分级后再批准。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道）。 |
+| 目标版本 | `0.0.4`（版本号已从 0.1.x 回退：wf 仍未达到正式可用，后续一律在此号上迭代；**只有人主动要求时才改版本号**）。本轮内容与历轮叙述见 [round-history](analysis/round-history.md)。**当前 0.0.4**：TDD 缺省值与来源写入任务记录、不要求额外人签（`inputs.tdd` 仍不生效）；轻量任务自愿发起审查时写明「未关闭 blocking 会进入归档门禁」；`task-approve` 帮助示例不再预填 `tdd`，避免把项目缺省记成人的选择。**0.1.x → 0.0.2 升级通道（前提：人确认版本号并创建 `wf-v0.0.2` tag；`wf-v0.0.1` 是上一快照，不再作为升级目标）**：发行引用只认真实 tag，未建 tag 时该命令在 `REF_RE`/`rev-parse` 层面即不可执行；`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-v0.0.2 [--apply]`（或直接 `<检出根>/install.py --upgrade --target <项目> --release-ref … --source <检出根>`）；交互终端预览令牌确认，模型不代跑。升级前置：全部活动任务暂停或未开工、保留 WIP 已处置、写权空闲（入口逐项给出三步出口）。**存量分级载体**：`confirmed_source != decision` 的复杂任务在归档会被 `WF_SEMANTIC_DECISION` 拒（0.1.7 起同一门禁，非本版新增）；出口是未开工时用 `task-approve --draft` 重新批准、已开工时回 Plan 重新分级后再批准。已装 0.1.4 及更早版本仍需卸载重装（跨多版升级不在本通道）。 |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -55,7 +55,7 @@
 打包入口另有两项机械守卫：`--version` 必须与本文「目标版本」一致（README 漂移即拒绝）；
 `refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
 
-**版本号只由人推进**：本仓库不按提交或轮次自动加版本（2026-11-24 人裁，wf 仍是 0.0.3 未达可用）。
+**版本号只由人推进**：本仓库不按提交或轮次自动加版本（2026-11-24 人裁，wf 仍是 0.0.4 未达可用）。
 需要发新号时由人明确要求并同批改「目标版本」、`--version`、tag；自动化脚本只校验三者一致，不替你挑号。
 tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
 

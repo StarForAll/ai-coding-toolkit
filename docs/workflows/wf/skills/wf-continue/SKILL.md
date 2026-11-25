@@ -18,7 +18,7 @@ disable-model-invocation: false
 | 当前状态 | 动作 |
 |---|---|
 | 未开工 / plan，未批准 | 呈现 PRD 机读块、复杂度与 TDD（取值与理由取 `task-approve --draft` 的 `complexity_proposal`/`tdd`，不要自己猜分级），请人批准 → `task-approve --task <id> --decision <path>` |
-| 已批准，未开工 | 先看批准结果的 warnings：TDD 提示「未由人确认」时，向人确认按缺省执行即可（要改值再补 `plan.tdd` 重批），然后 `task-start --task <id>`；复杂分级缺决定在批准时已被拒，不会再出现在本步 |
+| 已批准，未开工 | 先看批准结果的 warnings：TDD 提示「未由人确认」时，把缺省值告诉人即可（设计允许按缺省执行，记录已记 `tdd_source`；要记成人的选择或改值，补 `plan.tdd` 重批），然后 `task-start --task <id>`；复杂分级缺决定在批准时已被拒，不会再出现在本步 |
 | in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先按快照、提交和 WIP 证据判它是本任务交付还是外来——外来走排除声明，是本任务交付就继续；只有证据冲突、或必须决定接管/排除/提交时才问人，判断口径见下节「实施期要自己判的几件事」）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
 | in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘）。`--decision` 承载**人工验收**（`kind=manual` 或空 `verification_ids` 的直接验收）与重复调试落账。人工验收/直接验收：`choice=passed|failed`（要通过须 `passed`）、`subject` 以整词含目标 id、`object_digest` 取规划批准的对象摘要（或给 `plan_version` = `status --json` 的 `facts.task.plan_version`）、`content_digest` = `status --json` 的 `facts.delivery.content_digest`（人看到的交付内容变了旧结论不沿用；缺该值：manual 项 `not_run`、直接验收 `pending`）。重复调试按 `wf help task-check` 的 subject 形状：声明无 choice，裁定 `choice=同一问题|不同问题`，不要套用验收字段 |
