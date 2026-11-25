@@ -6,8 +6,8 @@ If the current manifest version has no local tag yet, that prepared version is r
 (so a pending release is not skipped); once it is tagged, the next invocation bumps.
 
 After a successful release Forgejo keeps only the newest three wf-v* tags; older remote tags are
-deleted. Local old tags are kept unless ``--prune-local-tags`` is given. ``--prune-tags`` performs
-the retention pass without publishing.
+deleted. Local old tags are kept unless ``--prune-local-tags`` is given. ``--prune-tags`` is an
+explicit add-on to the normal release flow, not a standalone cleanup mode.
 
 The script reads FORGEJO_TOKEN and WF_FORGEJO_BASE from the environment. If either is absent it
 prompts interactively; in a non-interactive process it fails instead of hanging. The token is read
@@ -99,38 +99,47 @@ def head_commit():
     return (result.stdout or "").strip()
 
 
-def tag_key(tag):
-    match = TAG_RE.match(tag or "")
-    if not match:
-        raise ReleaseError(f"非法 wf tag：{tag!r}")
-    return tuple(int(part) for part in match.groups())
+def order_tags(names):
+    """Order tag names by creatordate, newest first; remote tags must be fetched first."""
+    wanted = {name for name in names if TAG_RE.match(name or "")}
+    result = git("for-each-ref", "--sort=-creatordate", "--format=%(refname:short)",
+                 "refs/tags", capture=True)
+    if result.returncode != 0:
+        raise ReleaseError("无法按创建时间排序 tag")
+    ordered = [line.strip() for line in (result.stdout or "").splitlines()
+               if line.strip() in wanted]
+    missing = wanted - set(ordered)
+    if missing:
+        raise ReleaseError("缺少本地 tag 对象，无法按创建时间排序：" + ", ".join(sorted(missing)))
+    return ordered
 
 
-def prune_candidates(tags, *, keep=KEEP_TAGS, protect=()):
-    """Return tags outside the newest `keep` versions; `protect` tags are never returned."""
+def prune_candidates(ordered_tags, *, keep=KEEP_TAGS, protect=()):
+    """Return tags after the newest `keep`; `ordered_tags` must be newest-first."""
     protected = set(protect)
-    ordered = sorted({tag for tag in tags if TAG_RE.match(tag or "")},
-                     key=tag_key, reverse=True)
-    return [tag for tag in ordered[keep:] if tag not in protected]
+    return [tag for tag in ordered_tags[keep:] if tag not in protected]
 
 
 def remote_tags():
+    fetched = git("fetch", FORGEJO_REMOTE, "--tags")
+    if fetched.returncode != 0:
+        raise ReleaseError("无法从 Forgejo 获取 tag 以按创建时间排序")
     result = git("ls-remote", "--tags", "--refs", FORGEJO_REMOTE, "refs/tags/wf-v*", capture=True)
     if result.returncode != 0:
         raise ReleaseError("无法读取 Forgejo 远端 tag 列表")
-    tags = []
+    names = []
     for line in (result.stdout or "").splitlines():
         fields = line.split("\t")
         if len(fields) == 2 and fields[1].startswith("refs/tags/"):
-            tags.append(fields[1][len("refs/tags/"):])
-    return tags
+            names.append(fields[1][len("refs/tags/"):])
+    return order_tags(names)
 
 
 def local_tags():
     result = git("tag", "--list", "wf-v*", capture=True)
     if result.returncode != 0:
         raise ReleaseError("无法读取本地 wf tag 列表")
-    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+    return order_tags([line.strip() for line in (result.stdout or "").splitlines() if line.strip()])
 
 
 def prune_remote_tags(current_tag, env):
@@ -250,22 +259,10 @@ def main(argv=None):
     parser.add_argument("--prune-local-tags", action="store_true",
                         help="同时删除本地超过最新 3 个的 wf tag（默认保留本地 tag）")
     parser.add_argument("--prune-tags", action="store_true",
-                        help="只清理旧 tag（Forgejo 保留最新 3 个），不发布")
+                        help="发布后清理 Forgejo 旧 tag（默认发布已执行；显式开关保留）")
     args = parser.parse_args(argv)
 
     try:
-        if args.prune_tags and (args.minor or args.major):
-            raise ReleaseError("--prune-tags 不能和 --minor/--major 同时使用")
-        if args.prune_tags:
-            current_tag = f"wf-v{current_version()}"
-            protect = current_tag if tag_commit(current_tag) else None
-            removed = prune_remote_tags(protect, dict(os.environ))
-            if args.prune_local_tags:
-                prune_local_tags(protect)
-            print(f"OK  Forgejo 保留最新 {KEEP_TAGS} 个 wf tag"
-                  + (f"，删除远端 {len(removed)} 个" if removed else ""))
-            return 0
-
         status = git("status", "--porcelain", capture=True)
         if status.returncode != 0:
             raise ReleaseError("无法读取 Git 状态")

@@ -261,16 +261,11 @@ class ReleaseScriptTest(unittest.TestCase):
         self.script = path.read_text(encoding="utf-8")
         self.hook = (REPO / "scripts" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
 
-    def test_prune_keeps_newest_three_versions(self):
-        tags = [f"wf-v0.0.{n}" for n in range(1, 11)]
-        self.assertEqual(set(self.module.prune_candidates(tags)),
-                         {f"wf-v0.0.{n}" for n in range(1, 8)})
-        self.assertEqual(self.module.prune_candidates(
-            ["wf-v0.0.1", "wf-v0.1.0", "wf-v1.0.0", "wf-v0.0.2"]),
-            ["wf-v0.0.1"])
-        self.assertEqual(set(self.module.prune_candidates(
-            tags + ["wf-v0.0.11"], protect={"wf-v0.0.11"})),
-            {f"wf-v0.0.{n}" for n in range(1, 9)})
+    def test_prune_keeps_newest_three_tags_in_creation_order(self):
+        ordered = ["wf-v0.0.13", "wf-v0.0.12", "wf-v0.1.7", "wf-v0.1.0"]
+        self.assertEqual(self.module.prune_candidates(ordered), ["wf-v0.1.0"])
+        self.assertEqual(self.module.prune_candidates(ordered, protect={"wf-v0.1.0"}), [])
+        self.assertEqual(self.module.prune_candidates(ordered[:3]), [])
 
     def test_version_bumps(self):
         self.assertEqual(self.module.next_version("0.0.9", "patch"), "0.0.10")
@@ -334,6 +329,10 @@ class ReleaseScriptTest(unittest.TestCase):
     def test_script_compiles(self):
         subprocess.run([sys.executable, "-m", "py_compile",
                         str(REPO / "scripts" / "release-wf.py")], check=True)
+
+    def test_prune_flags_are_additive_not_standalone(self):
+        self.assertNotIn("if args.prune_tags:", self.script)
+        self.assertNotIn("只清理旧 tag", self.script)
 
     def test_pre_push_no_longer_handles_wf_release(self):
         self.assertNotIn("refs/tags/wf-v", self.hook)

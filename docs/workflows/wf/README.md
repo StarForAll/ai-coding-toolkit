@@ -107,7 +107,7 @@ python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y  
    本地 tag、构建 wheel、push tag 到 Forgejo，最后创建 release 并上传 wheel 与 `install.py`。
    项目分支走所有远端；tag/release 只走 Forgejo。发布成功后 Forgejo 只保留最新 3 个
    `wf-v*` tag，旧远端 tag 必须删除；本地旧 tag 默认保留，加 `--prune-local-tags` 才删。
-   只清理旧 tag、不发布时运行 `python3 scripts/release-wf.py --prune-tags [--prune-local-tags]`。
+   `--prune-tags` 是对正常发布流程的补充开关，不是独立清理命令；远端清理在每次成功发布后都会执行。
 5. 若 Forgejo Actions 已启用，可改用 tag push 的 [.forgejo/workflows/wf-release.yml](../../../.forgejo/workflows/wf-release.yml)；
    不要和 `release-wf.py` 同时跑。需要手动补发时仍可用
    `python3 scripts/build-wf-cli-wheel.py` 与

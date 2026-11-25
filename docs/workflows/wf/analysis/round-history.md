@@ -27,4 +27,4 @@
 
 **0.0.10**：发布输出与远端收口——`build-wf-release.py` 不再打印 `rules_digest` 与逐资产哈希；`release-wf.py` 不再接收 remote 参数，tag 固定推 Forgejo。
 
-**0.0.11**：项目内容推送与 tag 保留——`release-wf.py` 在发布时先把当前项目分支推送到所有已配置 git remote（GitHub 与 Forgejo 都拿到最新提交），随后才创建 tag 并只把 tag 推送到 Forgejo；release 附件仍只走 Forgejo。发布成功后 Forgejo 只保留最新 3 个 `wf-v*` tag，旧远端 tag 强制删除；本地旧 tag 默认保留，`--prune-local-tags` 才删；`--prune-tags` 可只清理不发布。
+**0.0.11**：项目内容推送与 tag 保留——`release-wf.py` 在发布时先把当前项目分支推送到所有已配置 git remote（GitHub 与 Forgejo 都拿到最新提交），随后才创建 tag 并只把 tag 推送到 Forgejo；release 附件仍只走 Forgejo。发布成功后 Forgejo 只保留最新 3 个 `wf-v*` tag，旧远端 tag 强制删除；本地旧 tag 默认保留，`--prune-local-tags` 才删。`--prune-tags` 只是正常发布流程的补充开关，不是独立清理命令。

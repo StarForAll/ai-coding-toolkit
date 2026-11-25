@@ -186,13 +186,10 @@ checks plugin bundles.
 
 Tag retention: after a successful release, Forgejo keeps only the newest three `wf-v*` tags;
 older remote tags are deleted (mandatory). Local old tags are kept by default; add
-`--prune-local-tags` to delete them too. The comparison is semantic version order, not creation
-time. To enforce retention immediately without publishing:
-
-```bash
-python3 scripts/release-wf.py --prune-tags
-python3 scripts/release-wf.py --prune-tags --prune-local-tags  # also local
-```
+`--prune-local-tags` to delete them too. The comparison is tag creation time (`creatordate`),
+matching release selection, not semantic version order. `--prune-tags` is an add-on to the normal release flow, not a standalone cleanup command;
+remote pruning already runs after every successful release, and the flag only makes that intent
+explicit. It never replaces version bump/build/tag/push/attach.
 
 `FORGEJO_TOKEN` / `WF_FORGEJO_BASE` are read from the environment. If either is missing, the
 script prompts on a TTY; in a non-interactive process it fails instead of hanging. The token uses
