@@ -300,11 +300,7 @@ def print_summary(manifest, manifest_path):
     print(f"assets: {len(manifest['assets'])}")
     print(f"required_steps: {len(manifest['required_steps'])}")
     print(f"template uses: {len(manifest['template_markers']['uses'])}")
-    print(f"rules_digest: {manifest['compatibility']['rules_digest']}")
     print(f"manifest: {os.path.relpath(manifest_path, common.REPO_ROOT)}")
-    print("hashes:")
-    for asset in manifest["assets"]:
-        print(f"  {asset['digest']}  {asset['source_path']}")
 
 
 def main(argv=None):

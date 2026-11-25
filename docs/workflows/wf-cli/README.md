@@ -124,14 +124,15 @@ complete sequence:
 ```bash
 export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
 export FORGEJO_TOKEN="..."
-python3 scripts/release-wf.py backup
+python3 scripts/release-wf.py
 ```
 
 The worktree must be clean before it runs; the script refuses to sweep unrelated changes. The
 Python script reads the current version from the release manifest, chooses the next version,
 updates the README/release tree, builds and commits the release, creates the local tag, verifies
-the tag, builds the wheel, pushes the tag, and then creates the release and attaches the wheel plus
-`install.py`.
+the tag, builds the wheel, pushes the tag to the Forgejo remote, and then creates the release and
+attaches the wheel plus `install.py`. The script handles Forgejo tag/release only; project branch
+pushes to all remotes remain separate.
 
 Version selection:
 

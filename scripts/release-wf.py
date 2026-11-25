@@ -23,6 +23,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+FORGEJO_REMOTE = "backup"
 README = REPO_ROOT / "docs" / "workflows" / "wf" / "README.md"
 CLI_README = REPO_ROOT / "docs" / "workflows" / "wf-cli" / "README.md"
 RELEASE_ROOT = REPO_ROOT / "docs" / "workflows" / "wf-release"
@@ -158,7 +159,6 @@ def main(argv=None):
                        help="常规版本 x.x.y -> x.(x+1).0（默认是小版本 +1）")
     group.add_argument("--major", action="store_true",
                        help="正式版本 x.x.y -> (x+1).0.0")
-    parser.add_argument("remote", nargs="?", default="backup", help="git remote（默认 backup）")
     args = parser.parse_args(argv)
 
     try:
@@ -214,7 +214,7 @@ def main(argv=None):
                 raise ReleaseError("系统命令 wheel 构建失败；未推送")
 
             pushed = True  # 推送一旦尝试就保留本地 tag，避免远端可能已存在而本地被删
-            pushed_result = git("push", args.remote, f"refs/tags/{tag}", env=env)
+            pushed_result = git("push", FORGEJO_REMOTE, f"refs/tags/{tag}", env=env)
             if pushed_result.returncode != 0:
                 raise ReleaseError(f"推送 {tag} 失败；本地 tag 保留")
 
@@ -230,6 +230,7 @@ def main(argv=None):
                 git("tag", "-d", tag, capture=True)
 
         print(f"OK  {tag} 已发布：tag、release wheel 与 install.py 均完成")
+        print("提醒：版本提交未推送到项目分支；按你的流程推送到所有远端。tag 只推送了 Forgejo。")
         print(f"安装：curl -fsSL \"${{WF_FORGEJO_BASE}}/xzc/ai-coding-toolkit/"
               f"releases/download/latest/install.py\" | python3 -")
         return 0
