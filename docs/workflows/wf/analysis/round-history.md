@@ -18,3 +18,5 @@
 **0.0.5**：`install.py` 的 tag 校验把 source 相对仓库根的前缀拼入 `git show <commit>:<path>`，发行树位于仓库子目录（作者仓库 `docs/workflows/wf-release/`）时可直接安装/升级；根级候选仓库布局继续可用。新增 `test_install_source_layout` 锁定两种布局。
 
 **0.0.6**：安装命令自带解释器选择与确认——`--python` 缺省系统 `python3`（没有则拒绝安装），安装成功后由同一条命令转交 `confirm-executor`（人输入 yes），`--python` 写入本机用户级配置并按 global 确认；安装/升级 tag 校验支持 source 在仓库子目录（0.0.5 已改，0.0.6 起文档与示例直接使用）。
+
+**0.0.7**：`wf help` 的 48 个命令示例与安装/升级示例统一给取值加引号（单/双均可）；`wf help` 无参输出增 `quoting` 约定；`session-flow` 运行约定第 7 条把「命令取值一律加引号」写成唯一论述位，skills 以指针继承；测试的示例解析改用 `shlex.split` 与 shell 语义一致。

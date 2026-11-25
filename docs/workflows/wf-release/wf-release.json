@@ -42,7 +42,7 @@
       "target_relative": ".codex/hooks/wf-session-identity.py"
     },
     {
-      "digest": "sha256:f1821306991b0dda2db5dba5b8ffdb29287763157304d5bdb94fe9405195cdeb",
+      "digest": "sha256:dbdc34a7f55308ae537547093eb0fdac8c298c6e53b6f7384a37e67d01489df7",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:fad86ea96fe1bc3b9ab417607f281d85254dce335588f32614d0fe8a8c9e912a",
+      "digest": "sha256:aac4aca888655defb50210722f8fc99fbf64dd629fbdc4e7749bde7777371708",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -592,7 +592,7 @@
       "target_relative": ".wf/workflows/review-flow.md"
     },
     {
-      "digest": "sha256:f11201006a3fde75c0e8dc92fa9c4c332de3f24b0786332483d09dc37ffdc56d",
+      "digest": "sha256:d1d40de7ee136f94280ef251d6dde58563420e323c8339286a46a2570ddd843a",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+    "rules_digest": "sha256:b51a231307874d8522c0f01ad166fa952c44db62c3c2d0cf12d5ce8658a2c059",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.6"
+  "version": "0.0.7"
 }

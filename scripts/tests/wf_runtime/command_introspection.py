@@ -136,7 +136,13 @@ def consumed_flags(cli_module, command, argv=()):
 
 
 def example_argv(cli_module, command):
-    """帮助里的 `example` → 可直接 dispatch 的 argv（去掉 `wf.py` 前缀）。"""
+    """帮助里的 `example` → 可直接 dispatch 的 argv（去掉 `wf.py` 前缀）。
+
+    帮助示例按 shell 习惯给取值加引号；这里必须用 shlex 拆，否则 `--title "a b"` 会被拆成
+    两个 token、引号也留在值里，断言就会锚到错误的输入形态。
+    """
+    import shlex
+
     entry = cli_module.COMMAND_HELP.get(command) or {}
-    tokens = [token for token in (entry.get("example") or "").split() if token != "wf.py"]
+    tokens = [token for token in shlex.split(entry.get("example") or "") if token != "wf.py"]
     return tokens or [command]

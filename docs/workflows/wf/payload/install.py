@@ -2474,9 +2474,10 @@ def main(argv=None):
 
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--python", default=None,
-                        help="安装时确定用于运行 wf 的 Python 解释器（绝对路径，>=3.11）；"
-                             "缺省用系统 python3，系统没有则拒绝安装。安装成功后由同一条命令"
-                             "在终端完成解释器确认（人输入 yes），不再单独跑 confirm-executor")
+                        help="安装时确定用于运行 wf 的 Python 解释器（绝对路径，>=3.11；"
+                             "命令行里用单/双引号包住路径）；缺省用系统 python3，系统没有则拒绝安装。"
+                             "安装成功后由同一条命令在终端完成解释器确认（人输入 yes），"
+                             "不再单独跑 confirm-executor")
     parser.add_argument("--strict-source", dest="strict_source", action="store_true",
                         help="发行子树必须与提交一致（脏检出即拒绝）；发行作者仓库通常不带此参数")
     parser.add_argument("--upgrade", action="store_true",
