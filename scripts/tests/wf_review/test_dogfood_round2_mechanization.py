@@ -868,6 +868,11 @@ class DecisionDraftCommandsTest(unittest.TestCase):
         class Ctx:
             root = str(self.root)
 
+            # 上下文接口的一部分：批准草稿用请求 inputs 里的复杂度声明与 TDD 覆盖
+            # （第四轮复审 F1 起草稿也走同一份事实）；夹具补上，避免"接口变了、夹具没跟"。
+            def inputs(self):
+                return {}
+
         class Args:
             def __init__(self, a):
                 self.argv = list(a); self.used = set()

@@ -117,7 +117,7 @@ authoring 机检统一使用 `scripts/validate-wf-design.py`：保留上位七�
 | `prerequisites` | 去重 task id 数组，显式空允许 | 建任务/建删边/返工入口；唯一前置集合 |
 | `rework_of`、`successor_id` | task id 或 null | 返工/替换入口；反向集合及继承检查 |
 | `run_id`、`independent_resume` | run id 或 null；null 或 `{decision, termination_action}` | 实例创建/终止入口；归属与保留任务恢复 |
-| `plan` | `{version, artifacts, touch_paths, acceptance_digest, acceptance_ids, verifications, complexity, complexity_reasons, tdd, approval, confirmed_source, human_inputs, unconfirmed_keys, equivalences}`；`confirmed_source` 取 `decision`/`inputs`（复杂分级必须为 `decision`），`human_inputs` 保存决定 `plan` 块原值，`unconfirmed_keys` 列出未登记的人判键（2026-11-07 增补） | continue 从本文 §2.3 的 PRD 块提取并记录批准快照；开工、范围、检查/审查 |
+| `plan` | `{version, artifacts, touch_paths, acceptance_digest, acceptance_ids, verifications, complexity, complexity_reasons, tdd, approval, confirmed_source, human_inputs, unconfirmed_keys, equivalences}`；`confirmed_source` 取 `decision`/`inputs`/`proposed`（`proposed` = 决定与 inputs 都未给值、取机器提议；后两者不构成人确认过分级，复杂分级必须为 `decision`），`human_inputs` 保存决定 `plan` 块原值，`unconfirmed_keys` 列出未登记的人判键（2026-11-07 增补） | continue 从本文 §2.3 的 PRD 块提取并记录批准快照；开工、范围、检查/审查 |
 | `entry_snapshot` | null 或本文 §2.3 的开工核对快照 | 首次开工/再入 Execute 由入口保存；范围/检查/Finish 消费，批准时不写 |
 | `baseline_head` | GitOid 或 null | 首次开工固定，按 2026-11-02 人裁同步的设计稿 §4.2；恢复与外部提交扫描 |
 | `attribution` | `{decisions: [{commit, decision}], inherited: [{source_task, commits, paths, decision}]}` | 归属/替换入口；本文 §3.3 |
@@ -242,7 +242,7 @@ PRD 是规划内容来源：正文写目标、范围、方案说明与不做项�
 
 invocation 取 `{kind: argv, argv: [字符串…]}` 或 `{kind: manual, criterion: 非空验收说明}`。前者是固定参数数组，不作输入插值或 shell 求值；项目既有脚本可作为获批 argv 调用。cwd 为 `.` 或项目内安全路径；input_refs 的全部引用类型、允许场景及秘密引用规则统一见本文 §7.1，普通任务只使用其中标明适用普通任务的类型。manual 供文档等人工可观察验收，其实际人判进入检查证据，不伪造 exit_code。开工时必须立即可运行的检查由 consume_at=start 指定；新测试设施可在规划中给出确定的未来路径/调用并标 check，消费前仍须核实。验收项允许 verification_ids 为空，但须由本任务 check.acceptance_results 中的实际人判证据覆盖，不能从空数组推出验收通过。
 
-批准入口先读取 PRD 块和所需规划文件，核 schema、唯一 id、全部 glob、验收引用与验证声明，再提出复杂度/TDD 并交人同批确认。`plan.version=H("wf-plan-v1", C({artifact_digests, plan_block, complexity, complexity_reasons, tdd}))`（五个键的逐键取值、排序与降级条目的排除见本文 §1.1 的哈希域登记表），artifact_digests 包含 PRD 整文件及适用的 design/implement，且不包含带有本 version 的控制记录。确认时重读输入；发生变化就返回重新核对，不保存过时批准。批准成功保存可读快照、提取值和 Decision。普通任务 Plan 期的 grilling 类待决问题由规划材料按本文 §1.3 的固定格式承载：每个待决问题编号 `plan-q-<n>` 并附推荐答案，措辞使“是”即接受推荐项；人一轮内批量作答后，由批准/开工入口将答复写入 execution.human_decisions（对齐设计稿 §4.3 grilling 行的完成信号），未答的问题不写入 Decision。首次开工和回 Plan 后再入 Execute 都重新提取当前 PRD，与当前有效批准逐项核对后保存 entry_snapshot，再迁移阶段；只有首次开工同时固定 baseline_head。批准入口不能提前替代开工时点的这次核对。
+批准入口先读取 PRD 块和所需规划文件，核 schema、唯一 id、全部 glob、验收引用与验证声明，再提出复杂度/TDD 并交人同批确认（`task-approve --draft` 输出 `complexity_proposal` 与生效 `tdd`，并把两值写进 approve 条目的 `plan` 骨架，复杂提议时同时报 design/implement 缺口；正式批准在决定与 inputs 都没有 complexity 时把 `confirmed_source` 记 `proposed` 并给出可见提示）。分级的人确认只由决定 `plan` 承载：复杂分级未写入决定时，批准结果记 `confirmed_source` 原值并给出「归档门禁会拒」的警告，下一步指向「先补 `plan.complexity` 再重批，再开工」（不提前硬拒——批准入口行为变更须与候选审计重跑同批）；轻量分级在四项条件全为 false 时按机器提议成立并记 `proposed`；TDD 未写入决定时按项目默认/发行缺省并给出"未由人确认"的提示（设计稿 §4.4）。`plan.version=H("wf-plan-v1", C({artifact_digests, plan_block, complexity, complexity_reasons, tdd}))`（五个键的逐键取值、排序与降级条目的排除见本文 §1.1 的哈希域登记表），artifact_digests 包含 PRD 整文件及适用的 design/implement，且不包含带有本 version 的控制记录。确认时重读输入；发生变化就返回重新核对，不保存过时批准。批准成功保存可读快照、提取值和 Decision。普通任务 Plan 期的 grilling 类待决问题由规划材料按本文 §1.3 的固定格式承载：每个待决问题编号 `plan-q-<n>` 并附推荐答案，措辞使“是”即接受推荐项；人一轮内批量作答后，由批准/开工入口将答复写入 execution.human_decisions（对齐设计稿 §4.3 grilling 行的完成信号），未答的问题不写入 Decision。首次开工和回 Plan 后再入 Execute 都重新提取当前 PRD，与当前有效批准逐项核对后保存 entry_snapshot，再迁移阶段；只有首次开工同时固定 baseline_head。批准入口不能提前替代开工时点的这次核对。
 
 PRD 改动不会自动扩充 plan.touch_paths；plan 被手改也不能反向授权 PRD。两侧不一致时，机械修订可经 equivalences 衔接并由入口重取同义快照；影响范围、验收、调用或取舍的变化回 Plan 重批。在此之前执行以最近有效批准为边界，但不允许带失配继续开工、Check 或 Finish。
 
@@ -652,7 +652,7 @@ installed 入口从自身真实位置核 `.wf/bin` 与项目根；源码/重取�
 
 ### 8.3 spec 元数据、策展与读取
 
-spec frontmatter 使用 `---` 分隔，内部采用标准库可解析的受限形式：每行 `key: <JSON值>`，key 为固定 ASCII 名称，字符串双引号、数组为 JSON 数组、整数为十进制；没有多行 YAML、alias、tag 或隐式类型。未知键保存原行，重复键/不支持结构可见标不可解析。只对本框架 spec 使用此格式，不要求改写其他流程规范。正文 Markdown 不作程序执行。
+spec frontmatter 使用 `---` 分隔，内部采用标准库可解析的受限形式：每行 `key: <JSON值>`，key 为固定 ASCII 名称，字符串双引号、数组为 JSON 数组、整数为十进制；没有多行 YAML、alias、tag 或隐式类型。未知键保存原行，重复键/不支持结构可见标不可解析。只对本框架 spec 使用此格式，不要求改写其他流程规范。正文 Markdown 不作程序执行。**结构文件不是规则**：`.wf/spec/` 顶层的 `index.md`、`pre-dev-checklist.md`、`quality-checklist.md` 由本节「三段同步」维护、从不按 paths 匹配，不进规则集也不参与元数据校验（否则出厂模板会被判 3 条「frontmatter missing」）；子目录里的同名文件仍按规则校验，缺 frontmatter 的真规则照常报出。
 
 首版字段：`paths` 为字符串数组；`status` 为 template/active/disabled；`verified_at` 为合法日期或 extracted（template 可为 null）；`schema_version=1`；`author` 为 human/ai；`counterexample` 为非空字符串或明确模板标记；`check` 为该规则的可执行判定（引用项目内验证命令或等价可判事实的字符串，可为 null）；`clauses` 为判定条件数组，每项 `{id, status, statement, deprecated_summary?}`。active 才参与规则加载，模板不是已核实知识；extracted 永久待核实直至人实际核验转日期。
 
@@ -910,7 +910,7 @@ purge 另由人直调并确认数据丢失、备份位置和全部目标。应�
 
 ### 11.1 结果结构与原因码
 
-每次路由/判定返回 `{tier, code, object, position, next, facts, exit, prohibited_repairs, warnings}`。position 为 `{scope, phase, step_id, task_id, action_id, action_state}`：scope 取 session/task/run/preparation/maintenance；无适用值写 null，未知记录的事实写入 facts，不猜阶段。任务 phase 取 task.phase，实例 step_id/task_id 取当前 cursor，维护位置取 action.id/state；查询也返回实际定位。next 是具名下一操作及所需人工动作，exit 是失败/待决时可走的出口；通过时 next 给合法后续入口。tier 为 pass/blocked/needs_decision；object 显示名称与稳定 id。blocked 的 facts 至少含决定性事实，exit 给下一步；needs_decision 列待决事实和人可选出口。执行失败还含命令、关键错误、影响；输出不携带秘密。warnings 用于截断/未核实等降级事实，不自动将 blocked 转 pass。
+每次路由/判定返回 `{tier, code, object, position, next, facts, exit, prohibited_repairs, warnings}`。position 为 `{scope, phase, step_id, task_id, action_id, action_state}`：scope 取 session/task/run/preparation/maintenance；无适用值写 null，未知记录的事实写入 facts，不猜阶段。任务 phase 取 task.phase，实例 step_id/task_id 取当前 cursor，维护位置取 action.id/state；查询也返回实际定位。next 是具名下一操作及所需人工动作，exit 是失败/待决时可走的出口（通过结果的 `exit` 为 null，下一步只由 next 承载）；通过时 next 给合法后续入口。tier 为 pass/blocked/needs_decision；object 显示名称与稳定 id。blocked 的 facts 至少含决定性事实，exit 给下一步；needs_decision 列待决事实和人可选出口。执行失败还含命令、关键错误、影响；输出不携带秘密。warnings 用于截断/未核实等降级事实，不自动将 blocked 转 pass。
 
 以下码值首版固定，发布后只能新增、不改义；具体对象/路径/缺失项放 facts，不为每个文件新增原因码。同次多个问题可返回有序 issues，先列权限/结构问题，相关判断停止，无关只读诊断继续。
 

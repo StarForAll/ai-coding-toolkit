@@ -62,15 +62,19 @@ def result(
     issues=None,
 ):
     """构造 §11.1 的单一结果结构。"""
+    tier = tier_of(code)
     payload = {
-        "tier": tier_of(code),
+        "tier": tier,
         "code": code,
         "object": object,
         "position": position_ or position(),
         "next": next_,
         "facts": facts or {},
-        "exit": exit_of(code),
-        "prohibited_repairs": prohibited_of(code) if tier_of(code) != "pass" else None,
+        # `exit` 是失败/待决的出口（机制稿 §11.1）：pass 时下一步只由 `next` 承载。
+        # 此前每个 pass 也带码表通用文案「继续当前绑定步骤」，与只读命令的 next 直接矛盾
+        # （2026-11-25 第四轮复审 F3），文本渲染器本来也不显示 pass 的该字段。
+        "exit": exit_of(code) if tier != "pass" else None,
+        "prohibited_repairs": prohibited_of(code) if tier != "pass" else None,
         "warnings": warnings or [],
     }
     if issues:

@@ -87,10 +87,10 @@ class AtomicPublishTest(unittest.TestCase):
         materials = self._materials_dir()
         self.assertTrue((materials / "materials-manifest.json").is_file())
         self.assertTrue((materials / "diff.patch").is_file())
-        # facts.materials_check 记的是进入时状态（本轮开始时确实未物化）；发布后的终态用判据函数核
-        self.assertEqual(result["facts"]["materials_check"]["state"], "unmaterialized")
-        self.assertEqual(review.materials_identity_state(self._ctx(), self.task_id, 1)["state"],
-                         "fixed")
+        # 回显必须描述动作之后的状态：与同一响应里的 identity 同源（都取自刚发布的 manifest），
+        # 否则 reviewer 读到的是一对自相矛盾的事实（2026-11-25 复杂链路 dogfood）。
+        self.assertEqual(result["facts"]["materials_check"]["state"], "fixed")
+        self.assertTrue(result["facts"]["materials_check"]["fixed"])
 
     def test_injected_failure_leaves_no_half_package_and_retry_publishes(self):
         def _boom(*_args, **_kwargs):
@@ -138,7 +138,7 @@ class AtomicPublishTest(unittest.TestCase):
         self.assertFalse((materials / "check-logs").exists(), "残留子目录必须随重建清掉")
         self.assertEqual(review.materials_identity_state(self._ctx(), self.task_id, 1)["state"],
                          "fixed")
-        self.assertEqual(result["facts"]["materials_check"]["state"], "unmaterialized")
+        self.assertEqual(result["facts"]["materials_check"]["state"], "fixed")
 
     def test_incomplete_legacy_package_is_not_adopted(self):
         """缺必需文件的旧半包不是"现场字节"：拒绝采纳并给删除/放回出口。"""

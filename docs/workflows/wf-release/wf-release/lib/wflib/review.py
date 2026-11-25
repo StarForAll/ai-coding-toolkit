@@ -1602,6 +1602,25 @@ def gap_acceptance(decision, uncovered, round_no, task_id=None):
             "attestation_digest": digest}, []
 
 
+def round_entry_gate(task):
+    """审查入口的前置事实（唯一实现：`review-status` 投影与 `review-launch` 首报共用）。
+
+    2026-11-25 第四轮复审 F2：已归档对象被 `review-status` 劝去 `review-launch`，
+    而后者对归档对象报「规划批准已失效」（归档把 PRD 移走造成的副作用，不是真实原因）。
+    这里只把两个可判事实算出来——对象是否终态、外部审查轮是否必需——由消费点决定文案：
+    `external_review_required` 取"复杂任务且对象未终态"。轻量任务不设外部审查轮（设计稿 §6.5、
+    `wf-review` 适用面同口径）：实际需要异种审查说明分级不成立，处置是回 Plan 重新分级，
+    而不是给轻量任务临时加一轮——所以这里只给事实，临时轮次的出口不在投影里。
+    """
+    status = task.get("status")
+    complexity = (task.get("plan") or {}).get("complexity")
+    terminal = status == "archived"
+    return {"task_status": status,
+            "complexity": complexity,
+            "terminal": terminal,
+            "external_review_required": (complexity == "complex") and not terminal}
+
+
 def status_of_round(ctx, task, round_no=None):
     """审查到位状态（S9，`wf review-status` 的唯一实现；只读，不写任何记录）。
 
@@ -2543,6 +2562,7 @@ def launch_preview(ctx, task, request_path=None, implementation_cli=None):
             _logs_omitted = max(0, len(_names_all) - 20)   # 截断可见：预览不假装全量
     return {
         "request": request,
+        "entry_gate": round_entry_gate(task),
         "export_authorization": {
             "recorded": recorded is not None,
             "scope_digest": (recorded or {}).get("scope_digest"),
@@ -2564,6 +2584,16 @@ def launch_preview(ctx, task, request_path=None, implementation_cli=None):
 def launch(ctx, task, request_path=None, implementation_cli=None):
     from . import cli, lock
 
+    # 终态对象没有审查轮次（2026-11-25 第四轮复审 F2）：必须在其它核验之前报真实原因。
+    # 归档会把 PRD 移入 `.wf/tasks/archive/`，若先跑 `_is_approved_plan`，得到的是
+    # 「规划批准已失效」——处置方向（回 Plan 重批）对已归档对象是错的。
+    gate = round_entry_gate(task)
+    if gate["terminal"]:
+        raise ReviewError("WF_SEMANTIC_DECISION", {
+            "reason": "task is archived; review rounds are closed",
+            "status": gate["task_status"],
+            "exits": ["对象已归档：审查结论看归档记录，不再发起新轮",
+                      "确实需要再审：对新对象（新任务）重新发起审查"]})
     if request_path:
         # 三轮三审：`--launch-request` 只作**覆盖/补充**（机制稿 §9.1 登记口径）——
         # 三类材料/只读范围/排除面仍由入口按当前对象生成，请求里显式给的键覆盖对应项，
@@ -3589,6 +3619,10 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
         except Exception:
             shutil.rmtree(staging, ignore_errors=True)
             raise
+    # 首次物化后重算状态：`material_state` 是写入前的判定输入（决定走哪个分支），
+    # 直接拿它回显会让本调用自己产出的材料在响应里仍显示 unmaterialized/fixed=false
+    # （2026-11-25 复杂链路 dogfood 实测：reviewer 拿到"材料未物化"的错误事实）。
+    material_state = materials_identity_state(ctx, task_id, round_no)
     # 授权边界事实与首次分支同源（launch 记录是唯一登记处）：续写（上下文丢失后重入）
     # 恰是最需要重读"本轮授权我读什么、排除什么"的场景。
     launch_facts = {"submitted_scope": (launch or {}).get("submitted_scope") or {},

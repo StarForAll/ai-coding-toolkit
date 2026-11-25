@@ -1716,6 +1716,57 @@ def _complexity_proposal(ctx, task, block, extra_conditions=None):
     return proposed, reasons
 
 
+def _resolve_tdd(ctx, plan_decision, inputs):
+    """TDD 生效值与来源（唯一实现：草稿与正式批准共用；机制稿 §2.3）。
+
+    顺序：决定 `plan.tdd` → 请求 `inputs.tdd` → 项目配置 `tdd_default` → 发行缺省。
+    返回 `(value, source)`，source 取 `decision|inputs|project-default|built-in-default`。
+    """
+    inputs = inputs or {}
+    value, source = None, None
+    if isinstance(plan_decision, dict) and plan_decision.get("tdd") is not None:
+        value, source = plan_decision.get("tdd"), "decision"
+    elif inputs.get("tdd") is not None:
+        value, source = inputs.get("tdd"), "inputs"
+    else:
+        project_config, config_problems = config.load_project_config(ctx.root, allow_missing=True)
+        value, tdd_problem = config.value_of(project_config, config_problems, "tdd_default")
+        if tdd_problem:
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": tdd_problem, "key": "tdd_default"},
+                            next_="修正 project-config.json 的该键，或显式传 inputs.tdd")
+        if value is None:
+            value, source = config.DEFAULTS["tdd_default"], "built-in-default"
+        else:
+            source = "project-default"
+    if not isinstance(value, bool):
+        raise TaskError("WF_PATH_INVALID", {"reason": "tdd must be boolean", "value": value})
+    return value, source
+
+
+def _approval_warnings(complexity, confirmed_source, tdd, tdd_source):
+    """批准结果的可见提示（唯一实现）：把"没有人确认过"的地方说在前面。
+
+    - 轻量分级：四项条件全为 false 时机器可证，批准照常通过；但来源记 `proposed`，
+      提示人可用决定 plan 把分级记成他的选择。
+    - TDD：设计稿 §4.4 要求 Plan 末与复杂度一并由人确认；决定没写时按项目默认/发行缺省执行
+      （这是设计允许的缺省），但批准记录与提示要让"这个值不是人的明确选择"可见。
+    复杂分级没有 decision 承载时，批准入口直接拒绝（语义决定），不会走到这里。
+    """
+    warnings = []
+    if complexity == "complex" and confirmed_source != "decision":
+        warnings.append("复杂分级没有人的批准决定承载：归档门禁会以 WF_SEMANTIC_DECISION 拒绝；"
+                        "先按 `task-approve --draft` 骨架（已预填 `plan.complexity`）补人的决定并重新批准，"
+                        "再开工")
+    if confirmed_source == "proposed":
+        warnings.append(f"分级未由人确认：本次记录来源为 proposed（机器提议，值 {complexity}）；"
+                        "要按人确认的分级记账，请在决定的 `plan.complexity` 写明")
+    if tdd_source in ("project-default", "built-in-default"):
+        warnings.append(f"TDD 未由人确认：按 {tdd_source} 取 {str(tdd).lower()}；"
+                        "要定这个值请在决定的 plan.tdd 写明")
+    return warnings or None
+
+
 def cmd_task_approve(ctx, args):
     import json as _json
 
@@ -1768,6 +1819,23 @@ def cmd_task_approve(ctx, args):
                 "next_": "先修 PRD（模板标记/plan 块/占位值/touch_paths）再生成批准草稿；"
                          "正式批准会按同一判据拒绝",
             })
+        # 复杂度提议与生效 TDD 是入口按事实算出的（机制稿 §2.3「先提出复杂度/TDD 交人同批确认」）：
+        # 草稿把它们连同四项条件的理由一起给出，并把两值写进 approve 条目的 plan 骨架——
+        # 否则 wf-continue「呈现复杂度与 TDD」没有事实可呈现，人批准的分级也从未被看见
+        # （2026-11-25 第四轮复审 F1：此前草稿只给 TODO，正式批准把来源记成 inputs）。
+        _request_inputs = ctx.inputs() or {}
+        proposed, reasons = _complexity_proposal(ctx, task, _block,
+                                                 _request_inputs.get("complexity_conditions") or {})
+        # 草稿是只读骨架：项目配置/请求里的 TDD 取值坏掉时，不能连骨架都拿不到。
+        # 问题进 facts（与 pending_plan_questions 同性质），由人先修配置/输入再批准；
+        # 正式批准仍按严格解析 raise（那里坏值就是拒绝理由）。
+        try:
+            tdd_value, tdd_source = _resolve_tdd(ctx, None, _request_inputs)
+            tdd_problem = None
+        except TaskError as exc:
+            if exc.code not in ("WF_SEMANTIC_DECISION", "WF_PATH_INVALID"):
+                raise
+            tdd_value, tdd_source, tdd_problem = None, "unavailable", dict(exc.facts, code=exc.code)
         entry = {"source": "TODO human:<来源>",
                 "at": records.now_str(),
                 "subject": f"approve {task_id}",
@@ -1777,6 +1845,10 @@ def cmd_task_approve(ctx, args):
                 "artifacts": {item["path"]: item["digest"]
                               for item in artifact_digests(ctx.root, task)},
                 "choice": "approve",
+                # 人的答复可以改这两个值；原样保留即"确认入口的提议"（来源记 decision）。
+                # TDD 不可解析时不预填该键，让正式批准按同一问题报出（facts.tdd.problem 已先给）。
+                "plan": ({"complexity": proposed} if tdd_problem else
+                         {"complexity": proposed, "tdd": tdd_value}),
                 "reason": "TODO（人填写：为什么批准本规划）"}
         mechanical = {"source": "TODO human:<来源>",
                       "at": records.now_str(),
@@ -1787,8 +1859,18 @@ def cmd_task_approve(ctx, args):
                       "choice": "机械修订",
                       "reason": "TODO（人填写：排版/转义等不改验收与触碰面的修订说明）"
                       "——仅本任务已有批准、且只改排版/转义时保留本条，否则删除"}
+        # 复杂提议下 design/implement 是否齐备也是入口能算的：草稿先报，别让"人批准完才第一次暴露"。
+        complex_artifacts = (complex_artifact_problems(ctx.root, task, proposed)
+                             if proposed == "complex" else [])
         return _decision_draft_result(ctx, task_id, [entry, mechanical], command="task-approve",
-                                      extra_facts={"pending_plan_questions": pending_qs})
+                                      extra_facts={"pending_plan_questions": pending_qs,
+                                                   "complexity_proposal": {"value": proposed,
+                                                                           "reasons": reasons},
+                                                   "complex_artifacts": complex_artifacts,
+                                                   "tdd": ({"value": tdd_value, "source": tdd_source}
+                                                           if tdd_problem is None else
+                                                           {"value": None, "source": tdd_source,
+                                                            "problem": tdd_problem})})
     from . import cli, lock
 
     task_id = args.value("--task")
@@ -1936,7 +2018,14 @@ def cmd_task_approve(ctx, args):
         complexity = plan_decision.get("complexity") or inputs.get("complexity") or proposed
         if complexity not in ("light", "complex"):
             raise TaskError("WF_PATH_INVALID", {"reason": "complexity must be light|complex"})
-        confirmed_source = "decision" if "complexity" in plan_decision else "inputs"
+        # 来源如实声明（2026-11-25 第四轮复审 F1）：决定与 inputs 都没有该值时，取值来自机器提议，
+        # 旧实现记 "inputs" 会把"没有人确认过"写成"请求输入确认过"。
+        if "complexity" in plan_decision:
+            confirmed_source = "decision"
+        elif inputs.get("complexity") is not None:
+            confirmed_source = "inputs"
+        else:
+            confirmed_source = "proposed"
         downgrade_entry = None
         if complexity == "light" and proposed == "complex":
             downgrade = plan_decision.get("downgrade") or inputs.get("downgrade") or {}
@@ -1955,18 +2044,9 @@ def cmd_task_approve(ctx, args):
                             {"reason": "complex task requires complete design/implement",
                              "complexity": complexity, "artifacts": artifact_problems},
                             next_="补齐 design.md / implement.md 并填写必填占位后重新批准")
-        tdd = plan_decision.get("tdd", inputs.get("tdd"))
-        if tdd is None:
-            project_config, config_problems = config.load_project_config(ctx.root, allow_missing=True)
-            tdd, tdd_problem = config.value_of(project_config, config_problems, "tdd_default")
-            if tdd_problem:
-                raise TaskError("WF_SEMANTIC_DECISION",
-                                {"reason": tdd_problem, "key": "tdd_default"},
-                                next_="修正 project-config.json 的该键，或显式传 inputs.tdd")
-            if tdd is None:
-                tdd = config.DEFAULTS["tdd_default"]
-        if not isinstance(tdd, bool):
-            raise TaskError("WF_PATH_INVALID", {"reason": "inputs.tdd must be boolean"})
+        # TDD 生效值：决定 → 请求 inputs → 项目配置 → 发行缺省（唯一实现在 _resolve_tdd，
+        # 草稿与正式批准共用，避免"草稿显示一个值、正式记另一个值"）。
+        tdd, tdd_source = _resolve_tdd(ctx, plan_decision, inputs)
         version = compute_plan_version(ctx.root, task, block, complexity, reasons, tdd)
         if downgrade_entry is not None:
             reasons = reasons + [downgrade_entry]
@@ -2033,12 +2113,16 @@ def cmd_task_approve(ctx, args):
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase="plan", task_id=task_id, action_id=task["action"]["id"],
                                  action_state=task["action"]["state"]),
-        next_="人确认后开工：task-start",
+        next_=("人确认后开工：task-start" if complexity != "complex" or confirmed_source == "decision"
+               else "先补分级决定：按 `task-approve --draft` 骨架写含 `plan.complexity` 的决定并重新批准"
+                    "（未开工阶段可重批），再 task-start；否则归档会被拒"),
         facts={
             "plan_version": version,
             "complexity": complexity,
             "complexity_reasons": reasons,
+            "confirmed_source": confirmed_source,
             "tdd": tdd,
+            "tdd_source": tdd_source,
             "touch_paths": block["touch_paths"],
             "acceptance_digest": plan["acceptance_digest"],
             "verifications": [item.get("id") for item in block["verifications"]],
@@ -2046,6 +2130,7 @@ def cmd_task_approve(ctx, args):
             # P2-5：配置了复评提示键就让它们真的出现（提醒复评复杂度，不自动分类）
             "complexity_hints": _complexity_hints(ctx.root),
         },
+        warnings=_approval_warnings(complexity, confirmed_source, tdd, tdd_source),
     )
 
 

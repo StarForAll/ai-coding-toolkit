@@ -135,11 +135,10 @@ class UnknownDecisionChoiceTest(unittest.TestCase):
         self.assertIn("unknown decision choice in approval file", source)
         self.assertIn("plan:{complexity:...}", source)
 
-    def test_complexity_must_live_inside_the_approval_plan(self):
-        """`confirmed_source` 只在 `approval["plan"]` 里带 complexity 时才记 decision。"""
-        source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
-        self.assertIn('plan_decision = approval.get("plan")', source)
-        self.assertIn('confirmed_source = "decision" if "complexity" in plan_decision else "inputs"', source)
+    # `confirmed_source` 的取值语义（decision / inputs / proposed）改由
+    # scripts/tests/wf_runtime/test_approve_draft_facts.py 按记录事实断言——旧写法锚的是
+    # 源码字符串，第四轮复审（F1）把来源改成三值后它会变成"看起来在检查、其实已失效"的存量断言
+    # （.trellis/spec/docs/wf-delivery-discipline.md §8 第 2 条）。
 
 
 class AssertionRefFormsTest(unittest.TestCase):

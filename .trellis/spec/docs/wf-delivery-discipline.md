@@ -795,3 +795,33 @@ verdict = "fail" if open_blocking else "pass"
    （`"token": "…"`、多行日志）、**键名变体**（`access_token_value`）、**无关键词形态**
    （URL userinfo）、**成本上界**（对抗输入不得让后处理退化成平方；曾有 100KB → 43s）。
    判据不是"我加了一条断言"，而是"回退注入后这条断言必须变红"。
+
+6. **草稿骨架必须交付"待确认的值"，来源字段不得冒充**（2026-11-25 第四轮独立复审）
+   — 触发：新增/改动 `--draft` 骨架、人签面记录字段（`confirmed_source`/`human_inputs` 一类）。
+   机器已算出的分级/TDD 若只在正式入口内部使用，`--draft` 只给 TODO，AI 就只能猜或读源码
+   （`wf-continue` 要求"呈现复杂度与 TDD"，而草稿 facts 里没有这两项）；更贵的是记录里把
+   "机器提议"写成 `inputs`——"没有人确认过"看起来像"人确认过"（§1.1 强度如实声明）。
+   做法：草稿 facts 给提议与判定理由、骨架预填**可被改**的值；来源按
+   `decision|inputs|proposed` 三值如实落账，"未获人确认"用 warning 让它可见。
+   反例：`task-approve --draft` 只回 `pending_plan_questions`，正式批准
+   `confirmed_source="inputs"`、`human_inputs={}`，而请求 inputs 里并没有该值。
+   用例：草稿→正式往返一次（来源 `decision`）、省略 plan（来源 `proposed` 且有 warning）、
+   请求 inputs 带值（来源 `inputs`）——三条都按记录断言，不锚源码字符串。
+
+7. **回显要描述动作之后的状态，不是动作之前**（2026-11-25 复杂链路 dogfood）
+   — 触发：入口在同一个响应里既执行写入（物化/发布/迁移）又回显该对象状态。
+   `review-context` 首次物化材料后，`materials_check.state` 仍取写入前的 `unmaterialized`、
+   `fixed=false`：reviewer 拿到的是"材料没物化"的错误事实，按它处置会重复物化或诊断错方向
+   （实测：第二次调用才变成 `fixed`）。做法：判定用的状态先算（决定走哪个分支），
+   **回显前用同一实现重算一次**；只用一个 `state` 取值函数，不另写一份"应该是什么"。
+   用例：`review-identity-c6` 断言首次调用后 `materials_check.state == "fixed"`。
+
+8. **改套件脚本前先确认候选审计能重生成**（2026-11-25 第四轮复审实测）
+   — 触发：为迁移夹具而改 `scripts/tests/wf_runtime/full/**` 的套件或 repro 脚本字节。
+   `full/candidate-audit.json` 的 `script_sha256` 与脚本字节绑定；改了脚本但还没有候选/tag
+   可跑 candidate 模式时，T0 会直接红（`units_candidate_verified` 下降、审计行变
+   `declared-candidate-unverified`），而**不得手改审计记录迁就断言**。
+   做法：需要夹具跟改的入口行为变更与 tag/候选审计同批做；本轮不值得为它牵动审计时，
+   用单元层覆盖判据，并把握手（`next`）写成收敛动作，别把"已知会被门禁拒"留成静默状态。
+   反例：把 `task-approve` 的复杂分级改成硬拒，同时改 6 个套件的批准夹具——T0 立刻红，
+   只能整体回退。

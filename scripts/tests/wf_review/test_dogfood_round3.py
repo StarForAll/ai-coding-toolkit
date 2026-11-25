@@ -213,6 +213,9 @@ class MechanicalRevisionDraftTest(unittest.TestCase):
             class Ctx:
                 root = str(tmp)
 
+                def inputs(self):
+                    return {}
+
             class Args:
                 def __init__(self, a):
                     self.argv = list(a); self.used = set()

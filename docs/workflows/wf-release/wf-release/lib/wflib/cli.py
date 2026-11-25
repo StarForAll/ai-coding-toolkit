@@ -3845,6 +3845,10 @@ def cmd_review_status(ctx, args):
         raise CliError(exc.code, exc.facts)
     # A9：无法归属到精确身份的历史处置**不关闭**任何 finding，在这里单列待人裁
     facts["pending_dispositions"] = review_mod.open_findings(ctx, task)["ambiguous"]
+    # 审查入口的前置事实（对象终态 / 外部审查是否必需）：只读投影，供只看 JSON 的调用方核对。
+    # 与 review.launch 的首报共用 `review.round_entry_gate`（同一判定，不在这里另写一套）。
+    gate = review_mod.round_entry_gate(task)
+    facts["entry_gate"] = gate
     # A6（三轮二审）：实施宿主与最近 launch 的实施 CLI 是否一致是可稳定计算的客观事实——
     # 换宿主后未重新 launch 时提前可见（F18 残余），不留给 AI 临场发现。
     latest_launch_cli = None
@@ -3873,7 +3877,12 @@ def cmd_review_status(ctx, args):
     waiting = sorted(set(facts["missing"]) | set(facts["writing"]) | set(facts["staged_unknown"]))
     # decide 的 drift 豁免判据（唯一实现）：全部 restored 或无身份才是历史轮。
     history_round = review_mod.round_is_history(_round_imported)
-    if result_record.get("round") == facts["round"]:
+    if gate["terminal"]:
+        # 终态对象：无论此前有没有判定，都不能再发起或重判（2026-11-25 第四轮复审 F2）。
+        # 本轮事实上面的 facts 照常报告；这里只固定出口。
+        next_ = ("对象已归档：审查轮次已关闭，不再发起或重判；结论看归档记录；"
+                 "需要再审请对新对象（新任务）发起")
+    elif result_record.get("round") == facts["round"]:
         # 已判定轮优先：资格/材料分支对已判轮只会给出不可修复或重复轮次的出口。
         if result_record.get("verdict") == "fail":
             next_ = ("本轮已 fail：先核实是否误报/漏处置；误报可在本轮用 --plan + --main-review "
@@ -3949,9 +3958,18 @@ def cmd_review_status(ctx, args):
                  "先 review-import；其余槽位可继续写，不必等齐再导入")
     elif not facts["material_ready"]:
         if facts["round"] < 1:
-            # 尚未发起任何审查轮：此时"等 reviewer 产出"永远等不到，正确动作是先发起。
-            next_ = ("本轮尚未发起审查：复杂任务 Check pass 后先 review-launch（取人外发确认与实施 CLI），"
-                     "再让 reviewer 取材料写报告")
+            # 尚未发起任何审查轮。此前无条件劝 review-launch：对已归档对象与轻量任务都是错话
+            # （2026-11-25 第四轮复审 F2——归档对象的 launch 会报「规划批准已失效」）。
+            if gate["complexity"] == "light":
+                # 与 wf-review「轻量任务不发起审查」同口径：这里不给"临时加一轮"的出口，
+                # 因为审查强度由分级决定——实际需要异种审查，说明分级不成立（回 Plan 重新分级）。
+                next_ = ("轻量任务不设外部审查轮（结论以 task-check 的双轴内部审查为准）；"
+                         "若实际需要异种审查，说明分级不成立：回 Plan 由人提高复杂度并重新批准后"
+                         "再按复杂任务发起")
+            else:
+                # 尚未发起任何审查轮：此时"等 reviewer 产出"永远等不到，正确动作是先发起。
+                next_ = ("本轮尚未发起审查：复杂任务 Check pass 后先 review-launch（取人外发确认与实施 CLI），"
+                         "再让 reviewer 取材料写报告")
         elif not facts.get("required"):
             # 已发起但旧 launch 没有声明槽位：不能再说"尚未发起"，也不能让 AI 重复 launch。
             next_ = ("本轮已发起但未声明槽位（旧 launch 兼容）：先 review-context 取材料，"

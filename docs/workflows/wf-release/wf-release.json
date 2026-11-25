@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:ed671142530cfa368a52901deb2ecdba53185703b6b06df134229cadb37e7d7c",
+      "digest": "sha256:8d4101aa0c08f2e27521062292d8d40320b40003274caa8bb1080a9a5b96a845",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -122,7 +122,7 @@
       "target_relative": ".wf/lib/wflib/cli.py"
     },
     {
-      "digest": "sha256:d54d8432f3a03c97eeacda1fc7043a080eb591312cfd9548d335f370d687d9ed",
+      "digest": "sha256:4c0c3f0c52480835d353f50f75b11b6dbd22473b2e207a8c2c703888e6a922be",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -262,7 +262,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:3d5009dc69215673c2b963b8a961df8da3c0b16d0d1d31ea664e492ffe355aff",
+      "digest": "sha256:cf1e34a982efd9dce37a754a89ccfc257dd7209928baf55617418795555ced3b",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -322,7 +322,7 @@
       "target_relative": ".wf/lib/wflib/session.py"
     },
     {
-      "digest": "sha256:52d2b720ca8457d736967e577378cdbe34097ccec70c7154b46c89d056ee1ac3",
+      "digest": "sha256:5f9627b5077afc7c9cca4232600c35f7197ea1cd9f79cfa79820bb41e1460364",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -342,7 +342,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:81bbc2b6e2da0bd32bb0736f48a82d981cbaa0522c41ce976cb4f0efe8fe1202",
+      "digest": "sha256:e6340247f06681c410632d7bbb33e34a88d17806e6eaf267182e5561b0dea64f",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -632,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:53f95d0a3d97e33110a5e0085f38aac81aa18893fe157b15b6b90405d3e30fdc",
+      "digest": "sha256:d4d236056f271fc983f3f74f3ebc4787c889b66fee39bf88d1a510ad16f5fb1b",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:3563f69596f122eb940221dd9b6e1765c6d41702d5ad31fcc508b142e3786c42",
+    "rules_digest": "sha256:e059a4c647348d087b43ad90cfc1f831852bdc989e3ebe0993f4bb36a2eb6268",
     "systems": [
       "linux"
     ],

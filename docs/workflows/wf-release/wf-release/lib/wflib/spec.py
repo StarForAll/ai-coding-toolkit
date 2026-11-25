@@ -184,6 +184,14 @@ def load_spec(root, relative):
             "routable": routable, "digest": records.file_digest(absolute)}
 
 
+# `.wf/spec/` 顶层由框架模板定义的结构文件（索引与两份 checklist），不是规则：
+# 它们由 spec-update 的三段同步维护（机制稿 §8.5），从不参与按 paths 的规则匹配，
+# 也不该被元数据校验当成"缺 frontmatter 的规则"。此前 `all_specs` 把它们当规则加载，
+# 出厂模板因此自带 3 条元数据问题（dogfood 会话 1 收工前被迫手工补 frontmatter）。
+# 只排除顶层的这三个框架定义名字；子目录里同名文件仍按规则校验。
+SPEC_STRUCTURE_FILES = ("index.md", "pre-dev-checklist.md", "quality-checklist.md")
+
+
 def all_specs(root):
     directory = join(root, ".wf/spec")
     found = []
@@ -195,6 +203,8 @@ def all_specs(root):
                 continue
             absolute = os.path.join(base, name)
             relative = os.path.relpath(absolute, str(root)).replace(os.sep, "/")
+            if os.path.dirname(relative) == ".wf/spec" and name in SPEC_STRUCTURE_FILES:
+                continue
             found.append(load_spec(root, relative))
     return found
 
