@@ -6,8 +6,8 @@
   },
   "generated_by": "scripts/tests/wf_runtime/full/candidate_audit.py",
   "identity": {
-    "candidate_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
-    "candidate_tree_digest": "sha256:5cd3ad1ab3b269ee8a987243c83e1dac7cde7c64777c4858e93e395bbbff6901",
+    "candidate_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
+    "candidate_tree_digest": "sha256:101ddd1cebb7c5ef430c7e3572d23825fd8de916eaeb0c38df86f10985c74b54",
     "helpers": {
       "scripts/python_runtime_identity.py": "sha256:2ffa65e22815ebac03db22ba865526253af2cff777d64fa02c4abb5d9b3ac21a",
       "scripts/release_lock.py": "sha256:bf68332f09defe4b3508d94509021ff68e5e8ef93f2ba578a99a360565a1b034",
@@ -35,10 +35,10 @@
       "implementation": "CPython",
       "version": "3.14.7"
     },
-    "manifest_digest": "sha256:e46e50b52c650bcb30416853993f3ed1024fcbf96baff0cf951c1545aeb78ed1",
+    "manifest_digest": "sha256:25be96f97c0f6803a48f8c241cc87948951803aefd04a029655dfae05294420e",
     "release_ref": "refs/tags/wf-v0.0.6",
-    "release_subject": "sha256:bcff9a66eaa1781075624a324c124b0f27161fa695542d1cc8c66491181e5a29",
-    "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
+    "release_subject": "sha256:1c3aebb474ef5dce3c0b15f5d26ffd37fe60b503b3ff9817ed49bae6bae235e0",
+    "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
     "runtime": {
       "sut": {
         "binary_digest": "sha256:889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
@@ -57,7 +57,7 @@
         "version": "3.14.7"
       }
     },
-    "source_tree_digest": "sha256:5cd3ad1ab3b269ee8a987243c83e1dac7cde7c64777c4858e93e395bbbff6901",
+    "source_tree_digest": "sha256:101ddd1cebb7c5ef430c7e3572d23825fd8de916eaeb0c38df86f10985c74b54",
     "units_registry_digest": "sha256:c8967ef195337460ea2f7104d5b741ce91d947d84624c8315111edfa3e4625fe",
     "version": "0.0.6"
   },
@@ -80,7 +80,7 @@
       "expected": 20,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:50d478f7d7cec9771c5363514133cd78ab01834c1f8de875d789b23b84223c68",
+      "input_digest": "sha256:b819c5cf51f604c007ab6102535214bf0c21f689b5c3c6f72535f63bf00da9f1",
       "input_identity": {
         "expect": 20,
         "fixture": "template",
@@ -90,8 +90,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -99,11 +99,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "c8b394795b714162b9b8d2cb4b4fe2f9",
+      "invocation_id": "61ceea8521f74cb6b7c6a01c30c64dda",
       "isolated_user": false,
       "kind": "suite",
       "observed": 20,
@@ -119,12 +119,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -138,7 +138,7 @@
       "expected": 16,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:e5fc6188eab86c51240cef496f24b98ed3b268630f39a87facf7998402355e48",
+      "input_digest": "sha256:6527edc23d1c7483479c293078be00c291486ca499b79a378d10741116cc23d9",
       "input_identity": {
         "expect": 16,
         "fixture": "template",
@@ -148,8 +148,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -157,11 +157,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "31ecd757fd2b493d9d7834cc7a20674a",
+      "invocation_id": "fc88f90b7e6d441da4bbc4151150211b",
       "isolated_user": false,
       "kind": "suite",
       "observed": 16,
@@ -177,12 +177,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -196,7 +196,7 @@
       "expected": 19,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:3a937284e642194cd84034453f0f13c91aec359f452b4010ea4977930564c0b4",
+      "input_digest": "sha256:9d199c8524263abf80f9fb08175d036d5f1fbf63930ea3e0a5e17655787cd5d7",
       "input_identity": {
         "expect": 19,
         "fixture": "template",
@@ -206,8 +206,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -215,11 +215,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "b4591d62f5384173aabe01f1854250dc",
+      "invocation_id": "0d6844d1d4854c118243bb360d5ccdfc",
       "isolated_user": true,
       "kind": "suite",
       "observed": 19,
@@ -235,12 +235,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -254,7 +254,7 @@
       "expected": 10,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:4bb565c1b2fd8a7f259c9e1574ef430d9be16b90d44a77238048fad7c32e2bc1",
+      "input_digest": "sha256:782b0eb8521c551320777c96f3422e5f036c9d5f1801c6c910a591ee68cf473f",
       "input_identity": {
         "expect": 10,
         "fixture": "template",
@@ -264,8 +264,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -273,11 +273,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "4f11b9217bb64360bb062ea4fd293490",
+      "invocation_id": "b3f3fa0f25b44e75a1d0ace3217e9412",
       "isolated_user": false,
       "kind": "suite",
       "observed": 10,
@@ -293,12 +293,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -312,7 +312,7 @@
       "expected": 6,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:4e1c7725873d0c372e1038c5ef978dd1899d2ee7718c223e0874deb24764dd06",
+      "input_digest": "sha256:11fe71cf8840179a34c42cb98dfe81abb4ac5dc21a7b6547063bab3551aec2f3",
       "input_identity": {
         "expect": 6,
         "fixture": "template",
@@ -322,8 +322,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -331,11 +331,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "9cce2b67449249a7ae09b6dd1c4f43fb",
+      "invocation_id": "dfc04d5289ae45fc8eeccd5c10a55b4e",
       "isolated_user": false,
       "kind": "suite",
       "observed": 6,
@@ -351,12 +351,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -370,7 +370,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:6a19e848d9ff827f9297d53c84929e71bb578b84a099147dacf9873183c1fd4f",
+      "input_digest": "sha256:7853f09be2d28422f406945f317255df15105b84b66e7f40d8ac4b6c4d1fcaf3",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -380,8 +380,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -389,11 +389,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "1a9ccc16a9124150a361fa68be584488",
+      "invocation_id": "8c941d1927584cf5a0ea406a044006e9",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -409,12 +409,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -428,7 +428,7 @@
       "expected": 8,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:55426a87758d567fec806b909558cb9cfd23047887dbb115765c824bf6b1abc0",
+      "input_digest": "sha256:48f8092e591a01788055cae1bc8d220d4c26cb56569ae40736ae3d7624ab8e9c",
       "input_identity": {
         "expect": 8,
         "fixture": "template",
@@ -438,8 +438,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -447,11 +447,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "a9727741935e41a08ba07e6e4f13d1b5",
+      "invocation_id": "2212d7c78ab349c78d6e1915f0b2c16c",
       "isolated_user": false,
       "kind": "suite",
       "observed": 8,
@@ -467,12 +467,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -486,7 +486,7 @@
       "expected": 9,
       "failures": [],
       "fixture": "install",
-      "input_digest": "sha256:a8cf629837ef22e403e3ca67f9d32b48a23c92a031a205078a571229ba8846f2",
+      "input_digest": "sha256:f4ffe592c0f623c17e58029c7eda5ff1cb0429058d509d285485eee91645a515",
       "input_identity": {
         "expect": 9,
         "fixture": "install",
@@ -496,8 +496,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -505,11 +505,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "a119964e370a4849a2bca61d44f7bb84",
+      "invocation_id": "a6064252e7eb473db657cf9213f60adc",
       "isolated_user": false,
       "kind": "flow",
       "observed": 9,
@@ -525,12 +525,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -544,7 +544,7 @@
       "expected": 18,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:ed69738d98d67cd4bba6bedb623a2df2a7ec02c8ecdc660eae0a9dd41f62909d",
+      "input_digest": "sha256:bc4b6a13fff10bf1decc5b7545462fff8f20724d14729abf2e560b7643ec3e12",
       "input_identity": {
         "expect": 18,
         "fixture": "template",
@@ -554,8 +554,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -563,11 +563,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "56aa5a3c87bb460d93a9e7eb9725c2f9",
+      "invocation_id": "bc2ac81441974b8687bf1e80e30fa957",
       "isolated_user": false,
       "kind": "candidate",
       "observed": 18,
@@ -583,12 +583,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -602,7 +602,7 @@
       "expected": 9,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:c008b38e8702b7c5fa1f320c71654f29053b00a3fb7e0e950c868b1e5bdb37b6",
+      "input_digest": "sha256:4b381d6df2e802870d51f02a2ab027eb06de1fb1be80a42f88d25c6cb0b5c234",
       "input_identity": {
         "expect": 9,
         "fixture": "template",
@@ -612,8 +612,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -621,11 +621,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "61c95ab2c1334b778fc9ab4a2fe2c8e1",
+      "invocation_id": "55915f403f444fdaa6eb799302b06965",
       "isolated_user": false,
       "kind": "suite",
       "observed": 9,
@@ -637,16 +637,16 @@
       "status": "ok",
       "suite_rc": 0,
       "supervision_cleanup_state": "cleaned",
-      "tail": "TASK_ID 2026-333f3715c137418abeb69386cd0f9824",
+      "tail": "TASK_ID 2026-5d77b62d776b4d0fb2d1d35122586fbd",
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -660,7 +660,7 @@
       "expected": 19,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:a33538acb2c4f97a827461457340f83d6bb64be3d379027f39998e66b7b3579f",
+      "input_digest": "sha256:8f30ffa72b8b8a4c768b757ea2681d5796c978c8483500f97e64595eee8a408c",
       "input_identity": {
         "expect": 19,
         "fixture": "template",
@@ -670,8 +670,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -679,11 +679,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "b844db75b1014d2da17212f7564bda56",
+      "invocation_id": "ef9fb1c6db714e68be3026867804dd9e",
       "isolated_user": false,
       "kind": "flow",
       "observed": 19,
@@ -699,12 +699,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -718,7 +718,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:cb8547658377ea9ad5961369d89dba2556630a2ce356653616ea938f0017915a",
+      "input_digest": "sha256:78fabd11245fd1456f8ead5ffdd431d8e168ef8f1f49b862693f9e1c70f34e42",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -728,8 +728,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -737,11 +737,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "b0197c3f8f1c42fdb256ab4c6181b6ad",
+      "invocation_id": "0999b651b2e14801b964106b44d09aa4",
       "isolated_user": false,
       "kind": "suite",
       "observed": 12,
@@ -757,12 +757,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -776,7 +776,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:3a8374f24ea8a6c6a70e41d8a1475a31261174117a5e8c9173974cbcad1ad2e3",
+      "input_digest": "sha256:7b8b1d739c67bdc08f62d560ce42e655445271ea00e27c640561e34a57a436da",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -786,8 +786,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -795,11 +795,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "dcab2d4e31d94160a7fb843cebd25a0e",
+      "invocation_id": "83c7c4e645af49638f063c99749c3e6c",
       "isolated_user": false,
       "kind": "flow",
       "observed": 12,
@@ -815,12 +815,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -834,7 +834,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:96352542ff129af897f4efe124d7c6d11a6bac6ff60e87149e3c9bdb2a8f6356",
+      "input_digest": "sha256:f7aadd7f667d582d3bb45c97713ad1aa8d8da6d2f47c75bcfe66f5dae915dfcf",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -844,8 +844,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -853,11 +853,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "8688e20396934944b36b955a9cd97c21",
+      "invocation_id": "94bc8b6a08b941849aa74c7e26c07cd9",
       "isolated_user": false,
       "kind": "flow",
       "observed": 12,
@@ -873,12 +873,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -892,7 +892,7 @@
       "expected": 30,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:bba65a11664848873b4359da32a849722ac5536d4533ea3dcc73ec0a035f3322",
+      "input_digest": "sha256:161b3b18ec5b4e71f7b7a0e229426ebe47fccb51080823d053b39523289ac7d7",
       "input_identity": {
         "expect": 30,
         "fixture": "template",
@@ -902,8 +902,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -911,11 +911,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "89130a0bbb2349b6bbe1d0c24601b6c8",
+      "invocation_id": "835147e99fb642cc97a9c5517b156eeb",
       "isolated_user": false,
       "kind": "suite",
       "observed": 30,
@@ -931,12 +931,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -950,7 +950,7 @@
       "expected": 14,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:ffdc4195d4821438c5e04c83caedf6cb11382eda8565428742e7da6cc5435523",
+      "input_digest": "sha256:94f12807ac7d64aaff2d4a37c9a38778ee6bae4b8277f1fb0be7116adae6acae",
       "input_identity": {
         "expect": 14,
         "fixture": "template",
@@ -960,8 +960,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -969,11 +969,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "cf1fa1026be2412cba62360dbcaafe53",
+      "invocation_id": "48cdd9c0d29a4e46b3de3151e2f34553",
       "isolated_user": true,
       "kind": "suite",
       "observed": 14,
@@ -989,12 +989,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1008,7 +1008,7 @@
       "expected": 10,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:3c2c3ee015d6be8322ca6728f6dfedceb1cb8a62305d24e0048b331220ff9050",
+      "input_digest": "sha256:c0f0b86a9c76191830e1427d84c65b5fe5f487d0608d4d28de724ab6d7a26ea8",
       "input_identity": {
         "expect": 10,
         "fixture": "template",
@@ -1018,8 +1018,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1027,11 +1027,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "8e9d30b2f41246c08003509a232f61eb",
+      "invocation_id": "e57ec78af9f54faeb15c3dc04aafc6c9",
       "isolated_user": false,
       "kind": "suite",
       "observed": 10,
@@ -1047,12 +1047,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1066,7 +1066,7 @@
       "expected": 13,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:7970cf87c3f8faf49f775331655f08b10bf47b1abae3a9da40c62c05ae2da375",
+      "input_digest": "sha256:9425de92f5ded867d02c2147b6f2fd6c976b390a44348ce651380f90a93e3a92",
       "input_identity": {
         "expect": 13,
         "fixture": "template",
@@ -1076,8 +1076,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1085,11 +1085,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "8fd28739e4544a93bb957e797be6af32",
+      "invocation_id": "528d3b58336b41328444f76a8f3b0399",
       "isolated_user": false,
       "kind": "suite",
       "observed": 13,
@@ -1105,12 +1105,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1124,7 +1124,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:c5b24963c7f593a088a3db8ebe4b3ef31e77556de01eccc5b12ffe9d346c2f1c",
+      "input_digest": "sha256:16d2ad52f6d0069938ce7998710b33fd4a91fb0ab60a1f002e84494d469251ea",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -1134,8 +1134,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1143,11 +1143,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "9bb6aa8f3e444f679484b8bff36bb984",
+      "invocation_id": "5be394eb065142069ff0ac5a3b993ad3",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -1163,12 +1163,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1182,7 +1182,7 @@
       "expected": 15,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:f520aa67d49bb4d115837bcdbf3d8c058eaaf2faf2a959b194b8a8f943c0d6a7",
+      "input_digest": "sha256:77fd026781a3ab751ec53a1d2418bb4437c79b77a7d0ed4e5bb8383c31816312",
       "input_identity": {
         "expect": 15,
         "fixture": "template",
@@ -1192,8 +1192,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1201,11 +1201,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "8765b003347346d39aa7535fd33030cd",
+      "invocation_id": "7732aa6044374dc3b15cf16d8ac41b81",
       "isolated_user": false,
       "kind": "suite",
       "observed": 15,
@@ -1221,12 +1221,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1240,7 +1240,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:ad206fedb0a1a26f111beaa0a35a3d10c085a5c1b35119efad46fdbc552cde82",
+      "input_digest": "sha256:0e78d3f67467b25c69ee3214a52b03366274272ca9d22da9d738346eeb60f559",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -1250,8 +1250,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1259,11 +1259,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "cdd92f9850ef42938f99f3e84170a5ae",
+      "invocation_id": "ea55a7e958ed4403b49dca123c6e9d56",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -1279,12 +1279,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1298,7 +1298,7 @@
       "expected": 10,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:7f1bf15214609de145bcd8693ee5e72103a1d661d273697c0b28cc5a105517e3",
+      "input_digest": "sha256:8985f160d3403652e6a8934b1b64a5d32dc6b3b8a9abad0f3d46ca9893f97638",
       "input_identity": {
         "expect": 10,
         "fixture": "template",
@@ -1308,8 +1308,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1317,11 +1317,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "aa72109c69eb424687993c8ec7e061bc",
+      "invocation_id": "101aa1c5d48843ba970dc17f80681707",
       "isolated_user": false,
       "kind": "suite",
       "observed": 10,
@@ -1337,12 +1337,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1356,7 +1356,7 @@
       "expected": 16,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:b92f08bfd5b672715b99ec7216ea78b43cec170f542e2f21bf2ea6099684e6fa",
+      "input_digest": "sha256:7ce595e3ae82a236155abcf37c94edc1c9019aa676318bc3b61a1a346b3dc71b",
       "input_identity": {
         "expect": 16,
         "fixture": "template",
@@ -1366,8 +1366,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1375,11 +1375,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "2940672fd3494ce5b5fdd34e730035ca",
+      "invocation_id": "97f209ff6d1a46d9b508f2785ae29643",
       "isolated_user": false,
       "kind": "suite",
       "observed": 16,
@@ -1395,12 +1395,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1414,7 +1414,7 @@
       "expected": 5,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:8aeaf59db7f7084307a66201fb339829b605613677051554764f2b017eb4230a",
+      "input_digest": "sha256:cde11b1e68fc61eb253b8394e59ee90efe840f3ceb1a86384c7bfbeb669cd520",
       "input_identity": {
         "expect": 5,
         "fixture": "template",
@@ -1424,8 +1424,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1433,11 +1433,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "4336f26acbc6495799b02d826e773719",
+      "invocation_id": "224ebab354a8435099b0730e81de8616",
       "isolated_user": false,
       "kind": "suite",
       "observed": 5,
@@ -1453,12 +1453,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1472,7 +1472,7 @@
       "expected": 8,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:6792292c61f366eb6a6a08734a59925b3be6e61f2c7bd6cf9af55b02b9916571",
+      "input_digest": "sha256:c3d84f61380c55e8c0623699095a423f3a82b3f99b62ee02d34bdbbd1508b1f0",
       "input_identity": {
         "expect": 8,
         "fixture": "template",
@@ -1482,8 +1482,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1491,11 +1491,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "6ed8474f5fd94e3294af05ecf9c61a2b",
+      "invocation_id": "8cccb087cb6f4934b15be3f456ba8beb",
       "isolated_user": false,
       "kind": "suite",
       "observed": 8,
@@ -1511,12 +1511,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1530,7 +1530,7 @@
       "expected": 7,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:8d99439bb4fd46ff3887a031b25f542203ca46fdc3eabb6771ccddc669c6a27e",
+      "input_digest": "sha256:9f621e9041f23dbe8fcc1788c781366eda41ea15b72e07692bb3661e71d4b4ad",
       "input_identity": {
         "expect": 7,
         "fixture": "template",
@@ -1540,8 +1540,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1549,11 +1549,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "36ee9316a5f344e7a88227a397f9cb63",
+      "invocation_id": "d90203ee64bb4d378aa1a56831d7e31e",
       "isolated_user": false,
       "kind": "suite",
       "observed": 7,
@@ -1569,12 +1569,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1588,7 +1588,7 @@
       "expected": 7,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:8427502fdef49eb984114f3157273473c90e6a60c5ba96dd75d707d96d5fbc18",
+      "input_digest": "sha256:657550b207f5595016446514f2f7891550a9c19710dc47958f00205ae436ed64",
       "input_identity": {
         "expect": 7,
         "fixture": "template",
@@ -1598,8 +1598,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1607,11 +1607,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "cd56c86e04184a2fa29a23d17e5c6c5b",
+      "invocation_id": "bc3bde7df49347abb58b614aa6571839",
       "isolated_user": false,
       "kind": "suite",
       "observed": 7,
@@ -1627,12 +1627,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1646,7 +1646,7 @@
       "expected": 9,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:16112b6521f6a82f742a31d4e26d83b39a63921fe90b37d200eaf4af6a0449a8",
+      "input_digest": "sha256:9b56c3864977ef17df71f3d030a61b5631e771e2d5dad71873bd686866a47aae",
       "input_identity": {
         "expect": 9,
         "fixture": "template",
@@ -1656,8 +1656,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1665,11 +1665,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "38682c62040446119cb8dadb2a6798f0",
+      "invocation_id": "26332efa04a949edb4d2b9529fdceefb",
       "isolated_user": false,
       "kind": "suite",
       "observed": 9,
@@ -1685,12 +1685,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1704,7 +1704,7 @@
       "expected": 9,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:d977e686d9b1758cd496dedba0c175c4f453ac23f1a18ab1832f62726f192633",
+      "input_digest": "sha256:bcf22b1316c3f31fee61024a879785011aedffe262779f8ce1e672a884a262fe",
       "input_identity": {
         "expect": 9,
         "fixture": "template",
@@ -1714,8 +1714,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1723,11 +1723,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "3d19009aab4b43778940c27673852c47",
+      "invocation_id": "92973b7302ea459daff8e61f122e4b21",
       "isolated_user": false,
       "kind": "suite",
       "observed": 9,
@@ -1743,12 +1743,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1762,7 +1762,7 @@
       "expected": 15,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:4fb3831f793d691683699e64d04e6a7251539829f91de6e83b8ed58ff55c5120",
+      "input_digest": "sha256:0fe5431962ba94318c38cbe5688b631b7d4335c7076891fa860871ee5fbf7f96",
       "input_identity": {
         "expect": 15,
         "fixture": "template",
@@ -1772,8 +1772,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1781,11 +1781,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "ca48392267734b53a711c802c06580d7",
+      "invocation_id": "613fe7d92f8d43e5a5ddebe92f42bd02",
       "isolated_user": false,
       "kind": "suite",
       "observed": 15,
@@ -1801,12 +1801,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1820,7 +1820,7 @@
       "expected": 8,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:5048e707ce87b48019b6b349a1c2b7881823d9370f97e008091e761334ca590a",
+      "input_digest": "sha256:216af1c83e75c235962f0f522e022147d7e24e84322a9cdda78597c5fedee2fc",
       "input_identity": {
         "expect": 8,
         "fixture": "template",
@@ -1830,8 +1830,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1839,11 +1839,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "07edff7d65de47efa32c2914a8f1ee29",
+      "invocation_id": "527d0ecead9a49cdb7656c39e9f4de6e",
       "isolated_user": false,
       "kind": "suite",
       "observed": 8,
@@ -1859,12 +1859,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1878,7 +1878,7 @@
       "expected": 4,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:a0dff45e200673571c1f990589f4fefadf8320042be44a50e725e8a3673994f2",
+      "input_digest": "sha256:66af8dcb9b89140137d8dd241de0c64ef3b9fdd2bc9d7e8fb496645dfa175b57",
       "input_identity": {
         "expect": 4,
         "fixture": "template",
@@ -1888,8 +1888,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1897,11 +1897,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "535f4db440334ccfbadc802275f966ee",
+      "invocation_id": "2f7121159dc24bb8ad7ed368777bff65",
       "isolated_user": false,
       "kind": "suite",
       "observed": 4,
@@ -1917,12 +1917,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1936,7 +1936,7 @@
       "expected": 7,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:e49dd291db2d7897e4efb38d7f7e83ee9876e188241daa5ecaa458df8303fb09",
+      "input_digest": "sha256:a3ba5415cd1bd5bcc542d2fb9df30b539afddf19243e6b8fd8af2ad38ab57383",
       "input_identity": {
         "expect": 7,
         "fixture": "template",
@@ -1946,8 +1946,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -1955,11 +1955,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "5a44fa484a8042668aae4528786f76d1",
+      "invocation_id": "83ad50d45e6444dabd709f84cbe22fb7",
       "isolated_user": false,
       "kind": "suite",
       "observed": 7,
@@ -1975,12 +1975,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -1994,7 +1994,7 @@
       "expected": 10,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:15e7ab1d3e1b7566de4cae4c404bce3d4914da37a8bc910003b5d612afa37396",
+      "input_digest": "sha256:d39961cb08063c197398d3d1b9160bd67332bbd83aa2061a79b6ca5a38ff6cd2",
       "input_identity": {
         "expect": 10,
         "fixture": "template",
@@ -2004,8 +2004,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2013,11 +2013,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "0294d1ff4e1e4cdd9831a3da94051f58",
+      "invocation_id": "2a7b2351f0b64c038c4984e785e7b288",
       "isolated_user": false,
       "kind": "suite",
       "observed": 10,
@@ -2033,12 +2033,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2052,7 +2052,7 @@
       "expected": 8,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:a66ad33a24ea5f98f76c3b829ee0d59e693215625755e3496809d24e17f48ca9",
+      "input_digest": "sha256:6148ed1581792e449ec12a89563c68d835c1df98c8827d62a9eb473af2f37a06",
       "input_identity": {
         "expect": 8,
         "fixture": "template",
@@ -2062,8 +2062,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2071,11 +2071,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "a2856d8457f24021b4c10357bc7e4ac2",
+      "invocation_id": "3bb11879667740b8b41a098d28a042c3",
       "isolated_user": false,
       "kind": "suite",
       "observed": 8,
@@ -2091,12 +2091,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2110,7 +2110,7 @@
       "expected": 6,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:6dcd8b281a6fffe8efe51fa38377f76d5aa8a3984ff75a51c478474b6e69a51d",
+      "input_digest": "sha256:a8053cbf61c4b36db2bbf7fd8832eb4ccf532f6624330ca4e520983b6c1a92dd",
       "input_identity": {
         "expect": 6,
         "fixture": "template",
@@ -2120,8 +2120,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2129,11 +2129,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "4a99e9c148a44494a903104c4af6a575",
+      "invocation_id": "9a3f3e3473404bff9d6b7be77cb53968",
       "isolated_user": false,
       "kind": "suite",
       "observed": 6,
@@ -2149,12 +2149,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2168,7 +2168,7 @@
       "expected": 6,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:bb77b6c3b320763192226215d28efb1589ea1c020ff36ab710344b2a72054610",
+      "input_digest": "sha256:28ef052d201bd4a0b0c69ff74cc5747382fc5bbe0cee3d69e3f3d7eba54ef60b",
       "input_identity": {
         "expect": 6,
         "fixture": "template",
@@ -2178,8 +2178,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2187,11 +2187,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "788ae79852764fa8ba3c7ead3c6f432a",
+      "invocation_id": "8b2a26ec262c49d096ffbb9e3e6bf5db",
       "isolated_user": false,
       "kind": "suite",
       "observed": 6,
@@ -2207,12 +2207,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2226,7 +2226,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:6fcd37996bcf01f8276300e9159e565c0bd21adcbd59c036d74e78d97293307e",
+      "input_digest": "sha256:9bd073ba1a926ebda59acd29a7b8f398e04dc61599518571c410b585843f131f",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -2236,8 +2236,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2245,11 +2245,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "74cd5de9ac3844b4907071d68dad2eb3",
+      "invocation_id": "b527025743b34fa0b443868a31d4fd99",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -2265,12 +2265,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2284,7 +2284,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:65bb76aff756d3e9fe32cc2fdda55529da51b5b292a652c0a956f3fd806e196a",
+      "input_digest": "sha256:15f070413a9e209217ec6cdca5de1364d832b0f2ef45ea76ebf14c78c8a7bf26",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -2294,8 +2294,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2303,11 +2303,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "e23c3ffae749476a8a77ad6381a30d45",
+      "invocation_id": "69a626c1900844038b68d306f7f5abbc",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -2323,12 +2323,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2342,7 +2342,7 @@
       "expected": 5,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:3b7d8e9ee3e9060052fc866ad72a5d3814b576082c9d092b02e1a3b2d165a5ab",
+      "input_digest": "sha256:e1e11c3a53a8921da2ce03868b1ff5039729ee79f325aff75df736f46b59e7a7",
       "input_identity": {
         "expect": 5,
         "fixture": "template",
@@ -2352,8 +2352,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2361,11 +2361,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "e04d4796d0e04e6aa72cb8962c8ddc35",
+      "invocation_id": "02ee26f5e27c4025a1feae3d9663d72d",
       "isolated_user": false,
       "kind": "suite",
       "observed": 5,
@@ -2381,12 +2381,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2400,7 +2400,7 @@
       "expected": 6,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:a8c28521136ab833391e3d3925d6909670879be62764075c81420c8b23c162b7",
+      "input_digest": "sha256:940eb38f80c77a547ce4f28336fec8648fe77d38e8bb855de0a3382330005817",
       "input_identity": {
         "expect": 6,
         "fixture": "template",
@@ -2410,8 +2410,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2419,11 +2419,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "212470edfa854f94b39d183044565354",
+      "invocation_id": "6a5677a4f1034b6999e51934045c40c5",
       "isolated_user": false,
       "kind": "suite",
       "observed": 6,
@@ -2439,12 +2439,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2458,7 +2458,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:f166c344fee5b10d30f913af8dca7f5772a51568303364b44695d8edbf7830c8",
+      "input_digest": "sha256:83c680c0828638339276567acb2407af32cbf22f8fe803af3067bdf4e84e7a3c",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -2468,8 +2468,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2477,11 +2477,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "8d025ba242b541668f72d5404cbca1e1",
+      "invocation_id": "40d233c7f180416b97aa2ecdaf21510f",
       "isolated_user": false,
       "kind": "suite",
       "observed": 12,
@@ -2497,12 +2497,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2516,7 +2516,7 @@
       "expected": 13,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:c162d377fd18233bfe64a324beb6df60116a25d7e34963980d0dff893446933c",
+      "input_digest": "sha256:afbf5f071bea827be5798936d0278010d0956262cece8825893775f5259c9963",
       "input_identity": {
         "expect": 13,
         "fixture": "template",
@@ -2526,8 +2526,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2535,11 +2535,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "acbc81ab7863416db8a137fefe517ba4",
+      "invocation_id": "da9a442975b343f8b33aaa5d87e2fbd2",
       "isolated_user": false,
       "kind": "suite",
       "observed": 13,
@@ -2555,12 +2555,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2574,7 +2574,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:cc6f13313f853f6dcd4978552c7bb996dc4b20ad2a7c5ca57f14a5ebfb60256d",
+      "input_digest": "sha256:b2565d343b52fa93ab218d489a2cf355ce9b9ce884646d4d0203151ce42b44e0",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -2584,8 +2584,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2593,11 +2593,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "40a6540556364b8bb2ae95a411e1a403",
+      "invocation_id": "791d47fcacc2498d928154b8755bd87c",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -2613,12 +2613,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2632,7 +2632,7 @@
       "expected": 10,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:861327629994bb26177ad44044bc36c18d755352cab3092fb10d7ff32dfdcac2",
+      "input_digest": "sha256:b760426beb6bd34c240944cfb5a3a8d8fa98e7b6a88e0b36efdd1d0dd7e3c398",
       "input_identity": {
         "expect": 10,
         "fixture": "template",
@@ -2642,8 +2642,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2651,11 +2651,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "cb88aaec0e264b0594ef8a8ef6f408dd",
+      "invocation_id": "a4d8fbe2c4864dd487f67cbe8ca3ba48",
       "isolated_user": false,
       "kind": "suite",
       "observed": 10,
@@ -2671,12 +2671,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2690,7 +2690,7 @@
       "expected": 6,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:4589040d4921cf1c1f94addd6c676159cee9dccc4de79d2b06ffffce6f148124",
+      "input_digest": "sha256:ceecbff4b6c0b16d49fae5983963bc11216ebda2003d0fcc8f7d75d0df706627",
       "input_identity": {
         "expect": 6,
         "fixture": "template",
@@ -2700,8 +2700,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2709,11 +2709,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "4b09bb80a5a34232aabc03be75b31885",
+      "invocation_id": "136bc13a94ff4cd2b5078f0317b7bc5f",
       "isolated_user": false,
       "kind": "suite",
       "observed": 6,
@@ -2729,12 +2729,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2748,7 +2748,7 @@
       "expected": 17,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:ceaac6869886c67be361194b34f625d5f28a79658762a13d56c205d0a6093b23",
+      "input_digest": "sha256:6e68c3074949add3069b243060d28efd594918dc849f58f8d14d9b729ee8f1cb",
       "input_identity": {
         "expect": 17,
         "fixture": "template",
@@ -2758,8 +2758,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2767,11 +2767,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "074591ce7c8343c29a42fa7da9e78215",
+      "invocation_id": "5b65aabbf6e542429e99c24ce9ca14ad",
       "isolated_user": false,
       "kind": "suite",
       "observed": 17,
@@ -2787,12 +2787,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2806,7 +2806,7 @@
       "expected": 7,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:49c04fe0ef2a2c6d8743366bb903baa404889daac5781b41589e06f18faf848a",
+      "input_digest": "sha256:a7ff59e951b6f87c6236b34f165468641b0b7ab942d559cbd4fde86a5ec9a7c9",
       "input_identity": {
         "expect": 7,
         "fixture": "template",
@@ -2816,8 +2816,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2825,11 +2825,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "474d0abdd6694ddd8dd31d7006533a79",
+      "invocation_id": "bf0a9fd803ff440e8081cd5c64a67eda",
       "isolated_user": false,
       "kind": "extra",
       "observed": 7,
@@ -2845,12 +2845,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2864,7 +2864,7 @@
       "expected": 9,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:d54999451505a0dd24107df612c36e7d19298003296817d1900c0e2b54df2e6a",
+      "input_digest": "sha256:f9dac3bcd057935b64ff837bd4994c03e4e989e57110383071df2f0318485a2b",
       "input_identity": {
         "expect": 9,
         "fixture": "template",
@@ -2874,8 +2874,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2883,11 +2883,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "1bc91c1e7eb24f7c834be8b136126e17",
+      "invocation_id": "a94a130c99634a4d9bceabde2a122b4b",
       "isolated_user": false,
       "kind": "suite",
       "observed": 9,
@@ -2903,12 +2903,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2922,7 +2922,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:0b6255ba4d17a3103be96e8ae8a85384b133e68e1804fffa55561d31bbfd483f",
+      "input_digest": "sha256:b0239100b022ac1c8a88571baa4d26558772bb38c8547b75bfb00ef409f613d4",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -2932,8 +2932,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2941,11 +2941,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "d4d3d0f326484db3ac3dbf0f0cf117ca",
+      "invocation_id": "be99ec72787746a4943da58753973c0d",
       "isolated_user": false,
       "kind": "suite",
       "observed": 12,
@@ -2961,12 +2961,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -2980,7 +2980,7 @@
       "expected": 11,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:e63dafb023bc09aba568ef23318f393c18ddfd91b153322876e5ccbc44ea14bb",
+      "input_digest": "sha256:628b9ef9214ece097b288c935a7c9bab6a569b3d86b11d997e81a898a8c69351",
       "input_identity": {
         "expect": 11,
         "fixture": "template",
@@ -2990,8 +2990,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -2999,11 +2999,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "5343b47d970c4afb8a066ccfe60a11bc",
+      "invocation_id": "fb3a9b2aebcc43d4ac3351e946e1594c",
       "isolated_user": false,
       "kind": "suite",
       "observed": 11,
@@ -3019,12 +3019,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3038,7 +3038,7 @@
       "expected": 17,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:8d0afac1def03c165336246d67a43f6c6b149250cc1923fdc4ca8ed2150685bf",
+      "input_digest": "sha256:426ed2818003d0f8560fe1df79e59aa901c9724f687d6a6c19ccc6a8cc71f8d6",
       "input_identity": {
         "expect": 17,
         "fixture": "template",
@@ -3048,8 +3048,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3057,11 +3057,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "a04ce762e7984360a97ddfe2b0333c84",
+      "invocation_id": "27a4bc0637574d2984cfed47e7eac0c8",
       "isolated_user": false,
       "kind": "suite",
       "observed": 17,
@@ -3077,12 +3077,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3096,7 +3096,7 @@
       "expected": 18,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:c46a785a1684eb8e2a447eb26d003c71e1f0b2d24eff2d1c33bb543a06fe07f3",
+      "input_digest": "sha256:b7e065835ce1bfaf03ad7971ea3258d489096c4a94de5533ade5334072c05f2d",
       "input_identity": {
         "expect": 18,
         "fixture": "template",
@@ -3106,8 +3106,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3115,11 +3115,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "6be3edabcdd14b03a8561d75b57b73e2",
+      "invocation_id": "433858962fde49eeb5a86519e8ab59ff",
       "isolated_user": false,
       "kind": "suite",
       "observed": 18,
@@ -3135,12 +3135,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3154,7 +3154,7 @@
       "expected": 38,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:54c7827229f3777897c5cb53b6f56c896d6d132a3686fc5a90d0147cc3c880b8",
+      "input_digest": "sha256:8e2cc9a0d7d6d6f005f9b3f8958c70789f96f11d7fabdc05f1a98320b4ad3feb",
       "input_identity": {
         "expect": 38,
         "fixture": "template",
@@ -3164,8 +3164,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3173,11 +3173,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "2a3d50c4bdd84fadab7505d7a95d8abe",
+      "invocation_id": "63c8e7861d5a49d89de5cce3ae43301a",
       "isolated_user": false,
       "kind": "suite",
       "observed": 38,
@@ -3193,12 +3193,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3212,7 +3212,7 @@
       "expected": 22,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:08fba54a8ece3d6a045af5c81b521cabb969e97636f6ec9538705a671da1a442",
+      "input_digest": "sha256:5de71b8c7f12295a126de0bef873549a1f501ab9b760a129abae4629e126ff44",
       "input_identity": {
         "expect": 22,
         "fixture": "template",
@@ -3222,8 +3222,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3231,11 +3231,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "ba0848489c3f4559805c00eacb3a70cc",
+      "invocation_id": "403cdbaf47bf41c688b038341542c4e0",
       "isolated_user": false,
       "kind": "suite",
       "observed": 22,
@@ -3251,12 +3251,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3270,7 +3270,7 @@
       "expected": 29,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:6bdffeb6cff7ce67054a0c82a41271c06482ffb7058bcbedd2bff4548930bef5",
+      "input_digest": "sha256:838c8e1e6f36a2f6d182b6d8334efba2fd9fbf219ea8db52b2a477e8132fb169",
       "input_identity": {
         "expect": 29,
         "fixture": "template",
@@ -3280,8 +3280,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3289,11 +3289,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "6f397e2fb92849d5ad45a655f447f53d",
+      "invocation_id": "b9bf01b9c9754591b93da58f106950c3",
       "isolated_user": false,
       "kind": "suite",
       "observed": 29,
@@ -3309,12 +3309,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3328,7 +3328,7 @@
       "expected": 27,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:3a20fc3efd4730f296f7feb80e6e0402179642bbe77eaa069bfb5631a383b8d9",
+      "input_digest": "sha256:777c666f9363c638555fd099855ba5f9fc9bf373ace98ab58bc73b868628ea8f",
       "input_identity": {
         "expect": 27,
         "fixture": "template",
@@ -3338,8 +3338,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3347,11 +3347,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "beace27b8111431cb73c8fadf0439b39",
+      "invocation_id": "781134fe3c724b4e81c558f5175d7903",
       "isolated_user": false,
       "kind": "suite",
       "observed": 27,
@@ -3367,12 +3367,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3386,7 +3386,7 @@
       "expected": 31,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:f0f7d36603c8c288a17ac51d8e4f34614d327e4d4c3e594828ca885ca4c4155b",
+      "input_digest": "sha256:3b3b9e5d4e1601d13e606e26eb74ca63d25afb298fc60022191ca749e9f36420",
       "input_identity": {
         "expect": 31,
         "fixture": "template",
@@ -3396,8 +3396,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3405,11 +3405,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "b50d39138f9148b49c9cf646627924a4",
+      "invocation_id": "27f994441752487290f61ecb3ca60133",
       "isolated_user": false,
       "kind": "suite",
       "observed": 31,
@@ -3425,12 +3425,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3444,7 +3444,7 @@
       "expected": 13,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:e05b1fe1020cc5594576adaf14707d9411563e0b5549ae4464aa7e0c6e4da326",
+      "input_digest": "sha256:f783eb78c58a5b46a5477faa1c86b91a7e8ffd9618c2067369b07d7ca57ea4a3",
       "input_identity": {
         "expect": 13,
         "fixture": "template",
@@ -3454,8 +3454,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3463,11 +3463,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "caf69dc51f5f4696b28e53fceeb3e285",
+      "invocation_id": "01f2199dbfde4896bd006fc0d1b82500",
       "isolated_user": false,
       "kind": "suite",
       "observed": 13,
@@ -3483,12 +3483,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3502,7 +3502,7 @@
       "expected": 16,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:73dde99e5d662ab0d1eed69d3b5a3745682ec2338b7465e4cf03160be100134e",
+      "input_digest": "sha256:dccf860df79ff76f9938f01a6789b02745990e5d8d3353e479ba85248744a183",
       "input_identity": {
         "expect": 16,
         "fixture": "template",
@@ -3512,8 +3512,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3521,11 +3521,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "3adab7eefb60487e8017e15c7e7d0f3b",
+      "invocation_id": "8eb1a4a75ea44749ab484bc9c763cf7a",
       "isolated_user": false,
       "kind": "suite",
       "observed": 16,
@@ -3541,12 +3541,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3560,7 +3560,7 @@
       "expected": 19,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:84f930796a13ee00c03629765f8d2ccfd4dfa322379c68b0bdb014a473cd5586",
+      "input_digest": "sha256:20e7b4ed03150944c91c1b58a681c902fd0eb920fb83a43f540f32fc99f3ed35",
       "input_identity": {
         "expect": 19,
         "fixture": "template",
@@ -3570,8 +3570,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3579,11 +3579,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "bd4aa4ef875b471691ee4f729992200b",
+      "invocation_id": "b514ceec803b43b1a4e609669bbab3e4",
       "isolated_user": false,
       "kind": "suite",
       "observed": 19,
@@ -3599,12 +3599,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3618,7 +3618,7 @@
       "expected": 13,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:9cba07a8eb2d307e743a7bbfcbac003b48bc48649a5b98032e1159a5bd842a39",
+      "input_digest": "sha256:b70fcccc6dc66d932f7ea64165a60cc0125e6c1afdd611c2304b1827c53942c1",
       "input_identity": {
         "expect": 13,
         "fixture": "template",
@@ -3628,8 +3628,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3637,11 +3637,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "a7ae3eba37bd4486866fa26394b1d934",
+      "invocation_id": "afed4efa3d4249828d288bf21b27806b",
       "isolated_user": false,
       "kind": "suite",
       "observed": 13,
@@ -3657,12 +3657,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3676,7 +3676,7 @@
       "expected": 7,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:14db4d47132c048beac7f53a67ed84a93cfc928d3a95f1da90b0df179f53d7b8",
+      "input_digest": "sha256:a17bb7b50deb23de5c4a3de3cc44c970ea4f56292d433fd5f1bc3daa5825102e",
       "input_identity": {
         "expect": 7,
         "fixture": "template",
@@ -3686,8 +3686,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3695,11 +3695,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "f60e1f24af41400d882150be5cbeb4a9",
+      "invocation_id": "42ecbbdcd71a41d482e0c114c2fba835",
       "isolated_user": false,
       "kind": "suite",
       "observed": 7,
@@ -3715,12 +3715,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3734,7 +3734,7 @@
       "expected": 12,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:9915223f30a9899fc3adad9ae8ce76ccac3088413db754932e6c870086b84b08",
+      "input_digest": "sha256:ce7f6a7584f15ef560346dea3ca449d394f1febbf56333fbd899ac6df19fcbd5",
       "input_identity": {
         "expect": 12,
         "fixture": "template",
@@ -3744,8 +3744,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3753,11 +3753,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "f089aa92f02d4a198f41429766d05287",
+      "invocation_id": "b37f178a68924bd8b60fcff310bceb1e",
       "isolated_user": false,
       "kind": "suite",
       "observed": 12,
@@ -3773,12 +3773,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
@@ -3792,7 +3792,7 @@
       "expected": 13,
       "failures": [],
       "fixture": "template",
-      "input_digest": "sha256:fb590dff65a0f38ca4ca230e5178d1d29969cde575e41ec073a3d25c8cba60f4",
+      "input_digest": "sha256:76d9353fbf6ef6fc9dcff255d2d454158f43223e53b4a004ae92bec1adf4af21",
       "input_identity": {
         "expect": 13,
         "fixture": "template",
@@ -3802,8 +3802,8 @@
         "template": {
           "install": {
             "release_ref": "refs/tags/wf-v0.0.6",
-            "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-            "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+            "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+            "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
             "version": "0.0.6"
           },
           "source": "run-build"
@@ -3811,11 +3811,11 @@
       },
       "installation": {
         "release_ref": "refs/tags/wf-v0.0.6",
-        "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-        "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+        "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+        "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
         "version": "0.0.6"
       },
-      "invocation_id": "61b508b93cc74d9cb4e79e66356ed0b4",
+      "invocation_id": "d199887251954478b43bd9c6f1f00478",
       "isolated_user": false,
       "kind": "suite",
       "observed": 13,
@@ -3831,12 +3831,12 @@
       "template": {
         "install": {
           "release_ref": "refs/tags/wf-v0.0.6",
-          "rules_digest": "sha256:381eb93cf5ed152ab439973c32451a50b871aebbc6e1e2a5c652149946882bc7",
-          "source_commit": "cd6d126204ed54df7a2e1acf7cd52df19808daa9",
+          "rules_digest": "sha256:c0e2f07776960e433b1ed0e7ef3325238981b21c471e7d9579c49cb3a6bdebba",
+          "source_commit": "e326a918cac8edcfbaa180d35a1676778d9f3ff0",
           "version": "0.0.6"
         },
         "source": "run-build",
-        "tree_digest": "sha256:781702fbe7c0ace1e62fd29a60d2150d18581f6d91b0d4513d8b19ffcc5be3e8"
+        "tree_digest": "sha256:cb2680b9cf7a7bf3b9fc7fc2ab76e138e285e25e1978b96c608c2a0560a1f000"
       },
       "unit_execution_run_id": null,
       "unit_execution_state": "passed"
