@@ -92,7 +92,7 @@ pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合�
 3. 人按授权暂存精确路径并提交；
 4. 人创建 `refs/tags/wf-v0.x.y`，随后跑 `python3 scripts/verify-wf-release.py --version 0.x.y
    --ref refs/tags/wf-v0.x.y`：不通过则该 tag **不是**有效发行（pre-push 也会拒绝推送它）；
-5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <已检出发行目录> [--confirm]`（无平台参数：一次装齐全部支持平台）；
+5. 安装：`python3 <发行根>/install.py --target <abs> --release-ref refs/tags/wf-v0.x.y --source <发行检出目录> [--confirm]`（无平台参数：一次装齐全部支持平台）。`--source` 可以是**仓库子目录**：本仓库直接用 `docs/workflows/wf-release/`，只要该目录在含对应 tag 的 git 仓库内且自身干净；
 6. 升级：`python3 <目标>/.wf/bin/wf.py upgrade --release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z [--apply | --export-deviations --out <dir>]`——预览含全部路径动作、偏离清单与宿主 `hooks.json` 动作，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <项目相对路径>` / `--restore <项目相对路径>` 选择（路径与预览 `unresolved[].path` 逐字一致，同名技能副本因根不同而各自可处置）；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
    `--export-deviations --out <dir>` 是**只读回源**：导出全部本地偏离（含未接受项，清单标 `status=pending`；已接受项标 `accepted`）的补丁与 `manifest.json`，不取写权、不暂停任务、不应用升级；同版也允许导出。与 `--apply` 互斥。直接入口 `install.py` 同样适用这些组合校验。
 
