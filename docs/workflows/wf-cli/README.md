@@ -8,17 +8,56 @@ verifies and runs the matching release from the registered Forgejo repository.
 ## Install the command (no version parameter)
 
 ```bash
-curl -fsSL "https://forgejo.xzc.com/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -
+export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
+curl -fsSL "${WF_FORGEJO_BASE}/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -
 wf version
 ```
 
 The install command itself is the stable `install.py` asset of the **latest Forgejo release**
 (`releases/download/latest/install.py`); it asks the release API for that release, requires the
 `wf_cli-<version>-py3-none-any.whl` asset, and installs it with `uv` (or `pipx`). It never
-accepts a version or tag: the newest release is selected automatically. For a private repository,
-set `FORGEJO_TOKEN` in the environment; the token is read from the environment and sent only in the
-HTTP header, never passed as an argument. For a private repository the raw-script fetch itself
-may also need your HTTP credentials; that credential is not part of the install command.
+accepts a version or tag: the newest release is selected automatically.
+
+For a **private** repository, the raw `install.py` fetch also needs authentication. Use this
+token-aware bootstrap (token stays in the environment; no token in argv or URL):
+
+```bash
+export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
+export FORGEJO_TOKEN="..."
+
+python3 - <<'PY'
+import os, urllib.request
+base = os.environ["WF_FORGEJO_BASE"].rstrip("/")
+token = os.environ["FORGEJO_TOKEN"]
+url = f"{base}/xzc/ai-coding-toolkit/releases/download/latest/install.py"
+request = urllib.request.Request(url, headers={"Authorization": f"token {token}"})
+with urllib.request.urlopen(request) as response:
+    code = response.read()
+exec(compile(code, url, "exec"), {"__name__": "__main__"})
+PY
+
+wf version
+```
+
+Without `FORGEJO_TOKEN`, a private repository returns 404 for the asset URL (Forgejo hides the
+existence of private resources); it does not mean the `latest` route is missing.
+
+### Local Python installer
+
+From a checkout, the reusable local entry point is:
+
+```bash
+python3 scripts/install-wf.py
+```
+
+It runs the local `docs/workflows/wf-cli/install.py` bootstrap, so it does not need to download
+the bootstrap script itself. It resolves `WF_FORGEJO_BASE` / `FORGEJO_TOKEN` from the environment;
+on a TTY it prompts for missing values. `--base` can supply the base explicitly, and
+`--token-env` can point at another token environment variable; the token is never a CLI argument.
+
+Public repository: leave the token empty. Private repository: provide/paste the token; the
+bootstrap uses it for the release API and wheel download.
+
 
 The release asset is built from the release tree's version:
 

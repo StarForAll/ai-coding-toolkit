@@ -112,10 +112,29 @@ python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y  
    不要和 `release-wf.py` 同时跑。需要手动补发时仍可用
    `python3 scripts/build-wf-cli-wheel.py` 与
    `python3 scripts/attach-wf-cli-asset.py --create-release --tag wf-v0.x.y --wheel tmp/wf-cli-dist/wf_cli-0.x.y-py3-none-any.whl`。
-6. 安装系统命令（**不指定版本**）：
-   `curl -fsSL "https://forgejo.xzc.com/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -`
-   （或 `pipx` 等价方式）。安装命令本身取最新正式 release 的稳定 `install.py` 附件；bootstrap 查询同一最新正式 release，读取该 release 的 wheel 附件并安装。若 Web/API 地址/端口不同，用 `WF_FORGEJO_BASE` 指定真实基址；若 HTTP/API 不可达而只有 SSH 可用，改用 `bash scripts/install-wf-ssh.sh`（按 tag 日期取最新，无版本参数）；
-   私有仓库用环境变量 `FORGEJO_TOKEN` 传递 token，不把 token 写进命令。随后 `wf version` 核对；
+6. 安装系统命令（**不指定版本**）。公开仓库：
+   `curl -fsSL "${WF_FORGEJO_BASE}/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -`
+   私有仓库必须同时认证脚本下载（否则 Forgejo 对私有资源返回 404）：
+
+   ```bash
+   python3 - <<'PY'
+   import os, urllib.request
+   base = os.environ["WF_FORGEJO_BASE"].rstrip("/")
+   token = os.environ["FORGEJO_TOKEN"]
+   url = f"{base}/xzc/ai-coding-toolkit/releases/download/latest/install.py"
+   request = urllib.request.Request(url, headers={"Authorization": f"token {token}"})
+   with urllib.request.urlopen(request) as response:
+       code = response.read()
+   exec(compile(code, url, "exec"), {"__name__": "__main__"})
+   PY
+   ```
+
+   安装命令本身取最新正式 release 的稳定 `install.py` 附件；bootstrap 查询同一最新正式 release，
+   读取该 release 的 wheel 附件并安装。若 Web/API 地址/端口不同，用 `WF_FORGEJO_BASE` 指定真实基址；
+   本地 checkout 可直接运行 `python3 scripts/install-wf.py`：它读取/提示 `WF_FORGEJO_BASE`、
+   `FORGEJO_TOKEN`，调用本地 `docs/workflows/wf-cli/install.py`，公开仓库 token 可空，私有仓库需 token。
+   若 HTTP/API 不可达而只有 SSH 可用，改用 `bash scripts/install-wf-ssh.sh`（按 tag 日期取最新，
+   无版本参数）；随后 `wf version` 核对；
 7. 目标项目安装：在该项目根运行 `wf install`（预览）→ `wf install --confirm`（无平台参数：一次装齐全部支持平台）。`--python` 选定运行 wf 的解释器（绝对路径、>=3.11）：给定时写入本机用户级配置并按 global 确认，缺省用系统 `python3` 并按 system 确认；系统没有 `python3` 且未给该参数则拒绝安装。确认提示与写入在安装命令的终端里完成（人输入 yes），不需要再单独跑 `confirm-executor`。**不再给 `--release-ref`/`--source`，也不把本仓库路径当发行源**；命令按自身版本解析登记源 tag；
 8. 项目升级：在目标项目根运行 `wf upgrade`（预览）→ `wf upgrade --apply`。它取登记源默认分支**按 tag 创建时间最新**的发行，不支持指定版本；预览含全部路径动作、偏离清单与宿主 `hooks.json` 动作，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <项目相对路径>` / `--restore <项目相对路径>` 选择（路径与预览 `unresolved[].path` 逐字一致，同名技能副本因根不同而各自可处置）；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
    `wf upgrade --export-deviations --out <dir>` 是**只读回源**：导出全部本地偏离（含未接受项，清单标 `status=pending`；已接受项标 `accepted`）的补丁与 `manifest.json`，不取写权、不暂停任务、不应用升级；同版也允许导出。与 `--apply` 互斥。
