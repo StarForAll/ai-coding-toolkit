@@ -71,8 +71,8 @@ disable-model-invocation: false
   - `unresolved`：未放行（C3 未满足，阻断归档）；
   - `accepted-risk`：已由人裁放行（**只**解除 C3，不等于"已处置/已关闭"）；
   - `consumed`：放行已失效（报告曾恢复又被再次损坏；需要新的放行决定）。
-- `release_allowed` 取**当前** `complexity`：complex 的引用证据不可放行，light 的引用证据可放行。
-  因此 complex→light 降级会翻转同一份损坏证据的放行资格；不要凭记忆，读现值。
+- `release_allowed` 取**当前** complexity，complex→light 降级会翻转同一份损坏证据的放行资格——
+  读条目现值，不要凭记忆；取值公式与含义见 `wf-review-accept-unknown`「`release_allowed` 的取值含义」。
 
 ## 4. `rounds[]` 的 `inferred` 边界
 

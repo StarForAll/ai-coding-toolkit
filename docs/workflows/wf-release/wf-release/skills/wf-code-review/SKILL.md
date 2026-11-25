@@ -25,6 +25,7 @@ Check 的第 ④ 步（双轴内部审查）。结论写入 `check.internal_revi
 ## 不做
 
 - 不替代异种 CLI 审查（复杂任务仍需 `wf-review` 两个独立 reviewer）。
+  这不算违反：双轴结论写入 `check.internal_review` 是 Check 第 ④ 步的份内事，它补充而非替代独立 reviewer。
 - 不以「已审查」为由跳过必要验证。
 
 ## 纪律

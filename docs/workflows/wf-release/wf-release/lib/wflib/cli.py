@@ -2894,8 +2894,9 @@ COMMAND_HELP = {
                                             f"机械修订：{MECHANICAL_REVISION_CHOICES}（必填）",
                                   "生成代次": "inputs.generation 可显式覆盖；缺省取本会话运行态记录的代次"
                                             "（取得写权时写入）。过期会报 WF_GENERATION_STALE 并给 current_generation",
-                                  "plan-q 答复": "PRD 里每个 plan-q-<n> 要一条 choice=\"plan-q\" 且 subject 含该编号的答复"
-                                               "（旧夹具的 choice=\"是\" 已不再接受）",
+                                  "plan-q 答复": "PRD 里每个 plan-q-<n> 要一条 subject 含该编号的答复；"
+                                               "识别靠 subject 编号，答复项的 choice 任写"
+                                               "（未知 choice 校验不作用于 plan-q 答复项）",
                                   "reason": "理由（必填）",
                                   "plan": "可选：{complexity: light|complex, tdd: bool, downgrade: {reason, evidence}}——"
                                           "复杂分级必须由人在此确认，未登记的键会原样留痕进 plan.human_inputs"}},
@@ -2974,13 +2975,22 @@ COMMAND_HELP = {
     "spec-update": {"purpose": "spec 增改删/合并/停用，并同步三段索引",
                     "args": {"--task": "任务 id（必填）",
                              "--changes": "变更数组（必填；--changes-draft 时除外）"
-                                          "（字段是 operation/new_paths/old_paths/content；"
+                                          "（字段形状见下方 inputs；"
                                           "与 `task-knowledge --changes` 形状不同，不可互填）",
                              "--changes-draft": "只读生成 changes 骨架（打印目标路径与 TODO，不落盘）"},
                     "inputs": {"--changes[]": {"operation": "add|update|merge|rename|delete|disable",
                                                "new_paths": "新路径（数组或逗号/分号/空白分隔的字符串，单条可直写字符串）",
                                                "old_paths": "旧路径（同上：数组或分隔字符串）",
-                                               "content": "add/update 时的完整正文（含 frontmatter）"}},
+                                               "content": "add/update 时的完整正文（含 frontmatter）",
+                                               "before_digests": "可选：批准时各目标文件的内容摘要"
+                                                                 "（delete/disable/rename 对 old_paths、"
+                                                                 "其余对 new_paths 逐位核对，rename 与续做分支同核 source；"
+                                                                 "缺省跳过前像比对——批准与写入之间文件被改过会被覆盖）",
+                                               "after_digests": "可选：应用后的文件摘要"
+                                                                "（输入值不参与校验；一般留空由入口按实况回填记录）",
+                                               "reference_dispositions": "delete/disable 可选：已解除依赖的处置条目"
+                                                                         " [{task_id, path, released}]；活动任务仍引用目标时"
+                                                                         "被拦并给先解除/推迟/替代出口"}},
                     "example": "wf.py spec-update --task <id> --changes changes.json --json"},
     "review-launch": {"purpose": "发起一轮审查（默认要两份；实施 CLI 由 --implementation-cli 声明）",
                       "args": {"--task": "任务 id（必填）",
@@ -3188,8 +3198,8 @@ COMMAND_HELP = {
                         "args": {"--task": "必填：任务 id",
                                  "--evidence": "必填：复盘证据文件（入口只读其 conclusion 字段并记入复盘）"},
                         "example": "wf.py task-retrospect --task 2026-xxxx --evidence r.json --json"},
-    "review-accept-unknown": {"purpose": "审查环境不可用时的接受/撤销（人声明 + 码级留痕）",
-                              "args": {"--task": "必填：任务 id", "--file": "accept：不可用声明（必填）",
+    "review-accept-unknown": {"purpose": "不可核实证据（unverifiable）的人裁放行/撤销（批次全有或全无；码级留痕）",
+                              "args": {"--task": "必填：任务 id", "--file": "accept：放行决定文件（必填）",
                                        "--batch": "可选：批量接受", "--revoke": "可选：撤销已接受",
                                        "--round": "可选：目标轮次", "--slot": "可选：目标槽位",
                                        "--digest": "revoke：声明的原文摘要"},

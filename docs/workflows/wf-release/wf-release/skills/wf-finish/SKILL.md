@@ -23,6 +23,7 @@ user-invoked: true
   人的挑战：「你查了哪些标准就说没有？影响有多大？」
 - **未核实项**：哪些本机验不了、影响多大、能否收窄。收窄必须同时给**四项依据**：被收窄/去除的验收项 id、
   不可验证的客观原因、影响与被放弃的保障、补偿措施——缺一不予接受；`required` 只能收窄或异常归档。
+  收窄经 `wf verify resolve --kind narrow` 落档，人工核验证据走 `--kind inspection`。
 
 ## 步骤
 
@@ -36,13 +37,14 @@ user-invoked: true
    本 skill 只呈现事实，不宣告结论。
 1. 呈现给人：Check 结果与锚点、验收逐项结论、未核实项、复杂任务的审查结论（含每轮 `launch_scope` 的
    `selected/total/narrowed` 与判定 `scope.unselected`；发起前的人外发确认——choice=export——见
-   `wf-continue`「复杂任务审查」）、知识处置状态、待提交路径，以及当前生效的放行清单
+   `wf-continue`「复杂任务审查」）、材料身份状态（`review-status` facts 的 `materials.state`
+   与判定 facts 的 `materials_state`：非 `fixed` 的 pass 按弱证据对待——结论有效、证据强度如实报）、
+   知识处置状态、待提交路径，以及当前生效的放行清单
    （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先跑 `authorize record --draft` 取只读骨架）、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
    单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` 的 vendor 段；
    本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
-2. 人确认后，把「finish 调用证据 + 按精确路径的提交授权」写入决定文件数组
-   （拿不准结构时先跑 `archive --task <id> --draft`：入口按待提交路径生成决定文件草稿、
-   只打印不落盘，人把内容写成决定文件即授权）：
+2. 人确认后，先跑 `archive --task <id> --draft` 取决定文件草稿（入口按当前待提交路径生成、只打印不落盘），
+   按草稿把「finish 调用证据 + 按精确路径的提交授权」写成决定文件（不手写路径清单，人把内容写成决定文件即授权）：
    - 一条 `choice=finish` 的 Decision（subject 记本任务与“已了解结果与未核实项”）；
    - 若干 `choice=commit` 的 Decision，`subject` 列出本次授权提交的精确路径。
 3. `archive --task <id> --decision <decision.json>`。
@@ -65,4 +67,4 @@ user-invoked: true
 
 ## 证据文件纪律
 
-论述见 `wf-continue` 的「证据文件纪律」（唯一完整定义位）：可写的只有决定/`--review-notes`/`--changes`/基线提案/主会话复核五类；入口自产的结构不自建文件；命令输入结构问 `help <命令>`。
+论述见 `wf-continue` 的「证据文件纪律」（唯一完整定义位，不在本文件另留清单）：按"谁生成"判断——入口产的结构不自建文件；人/模型填写的输入以 `wf help <命令>` 的 `inputs` 与 `--draft` 骨架为准。

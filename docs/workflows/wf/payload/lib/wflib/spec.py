@@ -740,7 +740,11 @@ def validate_changes(root, changes, resume=False, current_task_id=None):
             if not before:
                 continue
             operation = change.get("operation")
-            targets = _path_list(change, "old_paths") if operation in ("delete", "disable") else _path_list(change, "new_paths")
+            # rename 的前像语义与续做分支（_resume_decision_rename：核 source）一致——
+            # 批准与改名之间被改的是源文件；核 target（改名前还不存在）必然误拒。
+            targets = (_path_list(change, "old_paths")
+                       if operation in ("delete", "disable", "rename")
+                       else _path_list(change, "new_paths"))
             for index, relative in enumerate(targets):
                 expected = before[index] if index < len(before) else None
                 if expected is None:

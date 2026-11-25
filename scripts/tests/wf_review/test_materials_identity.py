@@ -383,6 +383,34 @@ class StatusAnchorTest(MaterialsBindingHarness):
         self.assertEqual(slot["state"], "stale")
         self.assertEqual(slot["stale_cause"], "restored-historical")
 
+    def test_mixed_round_slot_hint_matches_round_exit(self):
+        """二轮 N-2 回归锁：混合轮的 restored 槽位提示不得再说"可直接判定"——
+        它必须与轮级 next_（cli.py 的 round_materials_basis 分支）指向同一处置。"""
+        self.task["reviews"]["launches"][0]["slots"] = [{"slot": "s1"}, {"slot": "s2"}]
+        path = self.write(body(self.identity))
+        target = self.task_dir / "review" / "round-1" / "review-pi.md"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        digest = records.file_digest_state(str(target))[0]
+        self.task["reviews"]["imported"] = [
+            {"round": 1, "slot": "s1", "agent": "pi",
+             "report_path": ".wf/tasks/t1/review/round-1/review-pi.md",
+             "report_digest": digest,
+             "anchor": {"check_id": "c1", "check_anchor": ANCHOR},
+             "materials": {"identity": "sha256:" + "a" * 64, "restored": True}},
+            {"round": 1, "slot": "s2", "agent": "codex",
+             "report_path": ".wf/tasks/t1/review/round-1/review-pi.md",
+             "report_digest": digest,
+             "anchor": {"check_id": "c1", "check_anchor": ANCHOR},
+             "materials": {"identity": "sha256:" + "b" * 64}}]
+        self.write_task()
+        with self.staged(), mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})):
+            status = review.status_of_round(self.ctx, self.task, 1)
+        restored_slot = next(slot for slot in status["slots"] if slot["slot"] == "s1")
+        self.assertEqual(restored_slot["stale_cause"], "restored-historical")
+        self.assertIn("混合基线", restored_slot["reason"])
+        self.assertNotIn("可直接判定", restored_slot["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

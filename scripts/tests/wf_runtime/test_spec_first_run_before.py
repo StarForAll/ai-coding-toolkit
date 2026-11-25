@@ -65,6 +65,20 @@ class SpecFirstRunBeforeImageTest(unittest.TestCase):
         with mock.patch.object(records, "file_digest", return_value=change["before_digests"][0]):
             self.assertTrue(spec_mod.validate_changes(root, [change], resume=False))
 
+    def test_rename_before_image_binds_source_side(self):
+        """二轮 N-3 回归锁：rename 的前像语义与续做分支（_resume_decision_rename 核 source）一致。
+        核 target（改名前还不存在）会让任何填了 before_digests 的 rename 首跑必然误拒。"""
+        root, path = _root_with_spec()
+        os.makedirs(os.path.join(root, ".wf", "spec", "sub"), exist_ok=True)
+        before = records.file_digest(path)
+        change = {"operation": "rename", "old_paths": [".wf/spec/x.md"],
+                  "new_paths": [".wf/spec/sub/y.md"], "before_digests": [before]}
+        self.assertTrue(spec_mod.validate_changes(root, [change], resume=False))
+        change_bad = dict(change, before_digests=["sha256:" + "0" * 64])
+        with self.assertRaises(spec_mod.SpecError) as caught:
+            spec_mod.validate_changes(root, [change_bad], resume=False)
+        self.assertIn("before-image", caught.exception.facts["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

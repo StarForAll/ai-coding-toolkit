@@ -1620,6 +1620,10 @@ def status_of_round(ctx, task, round_no=None):
         anchor, _parts = _current_anchor(ctx, task)
     except Exception:
         anchor = None
+    # 混合基线判据与 decide/check_next_hint 同一实现：逐槽位提示不得与轮级出口打架
+    # （restored 槽说"可直接判定"、轮级 next_ 说"撞混合基线"就是同一页两句话）。
+    current_materials_identity = round_materials_identity(ctx, task, round_no)
+    materials_basis = round_materials_basis(imported, current_materials_identity)
     slots = []
     for slot in declared:
         bound = assignment.get(slot) or {}
@@ -1661,15 +1665,19 @@ def status_of_round(ctx, task, round_no=None):
                 record["reason"] = "锚点已失效（对象/标准/内容变化）"
             elif ((entry.get("materials") or {}).get("identity")
                   and (entry.get("materials") or {}).get("identity")
-                  != round_materials_identity(ctx, task, round_no)):
+                  != current_materials_identity):
                 # 材料被重出/采纳后换了身份：报告读的那批字节已不可还原，和锚点失效同档
                 record["state"] = "stale"
                 record["anchor_checked"] = True
                 # restore 故意保留旧身份：它与"材料真被换了"是两件事，提示与出口都不同
                 if (entry.get("materials") or {}).get("restored"):
                     record["stale_cause"] = "restored-historical"
-                    record["reason"] = ("现场材料已不是该记录的原证据（身份取记录，属弱身份）："
-                                        "可直接判定；要恢复可核身份就放回原字节")
+                    if materials_basis["mixed"]:
+                        record["reason"] = ("本轮基线混合（还原条目 + 对不上当前材料的正常条目）："
+                                            "直接判定会撞混合基线，处置见轮级 next_")
+                    else:
+                        record["reason"] = ("现场材料已不是该记录的原证据（身份取记录，属弱身份）："
+                                            "可直接判定；要恢复可核身份就放回原字节")
                 else:
                     record["stale_cause"] = "materials"
                     record["reason"] = "本轮材料身份已变：报告对应的不是当前材料"
@@ -1757,7 +1765,7 @@ def status_of_round(ctx, task, round_no=None):
             "launch_scope": (launch or {}).get("scope"),
             # 材料身份强度与当前身份：`stale` 只说明某份报告对不上，这里给出根因与恢复方向。
             "materials": {"state": materials_identity_state(ctx, task_id, round_no)["state"],
-                          "identity": round_materials_identity(ctx, task, round_no)},
+                          "identity": current_materials_identity},
             "slots": slots, "anchor_current": anchor}
 
 

@@ -5301,6 +5301,13 @@ def _prd_digest_for_task(ctx, task_id):
 
 
 def cmd_task_rework(ctx, args):
+    """返工（机制稿 §6.2）：建 R 并让 T 挂起，R 独立批准/开工，不消费 T 的批准。
+
+    在 T 的动作里**一次固定完整候选**（R 继承 T 的原前置与 `rework_of=T`、T 的 `prerequisites`
+    增 R 且 `suspended=true`）；先预检目标碰撞与候选图，再落盘。同实例时在 `sequence_changes`
+    登记并让 `cursor.task_id` 临时定位 R（T 不自动 paused）；普通任务绑定则 T 显式暂停并释放写权，
+    由新会话绑定 R。
+    """
     if args.flag("--draft"):
         # 十六轮批V：返工决定草稿——subject 指向本任务，reason 由人写返工原因。
         task_id = args.value("--task")
@@ -5311,13 +5318,6 @@ def cmd_task_rework(ctx, args):
                  "choice": "rework",
                  "reason": "TODO（人填写：为什么返工、返工范围）"}
         return _decision_draft_result(ctx, task_id, [entry], command="task-rework")
-    """返工（机制稿 §6.2）：建 R 并让 T 挂起，R 独立批准/开工，不消费 T 的批准。
-
-    在 T 的动作里**一次固定完整候选**（R 继承 T 的原前置与 `rework_of=T`、T 的 `prerequisites`
-    增 R 且 `suspended=true`）；先预检目标碰撞与候选图，再落盘。同实例时在 `sequence_changes`
-    登记并让 `cursor.task_id` 临时定位 R（T 不自动 paused）；普通任务绑定则 T 显式暂停并释放写权，
-    由新会话绑定 R。
-    """
     from . import cli, lock
 
     task_id = args.value("--task")
