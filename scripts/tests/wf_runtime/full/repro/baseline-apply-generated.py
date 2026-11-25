@@ -44,10 +44,12 @@ def start_task(project, root, sid):
     for name in ("design.md", "implement.md"):
         open(os.path.join(task_dir, name), "w", encoding="utf-8").write(f"# {name}\n\n内容。\n")
     decision = os.path.join(root, "approve-plan.json")
-    json.dump([dict(F.decision(f"approve {task_id}", "approve",
-                              "sha256:" + hashlib.sha256(prd.encode()).hexdigest()),
-                     artifacts=H.plan_artifacts(project, f"approve {task_id}"))],
-              open(decision, "w", encoding="utf-8"), ensure_ascii=False)
+    _entry = dict(F.decision(f"approve {task_id}", "approve",
+                             "sha256:" + hashlib.sha256(prd.encode()).hexdigest()),
+                  artifacts=H.plan_artifacts(project, f"approve {task_id}"))
+    # 触碰 .wf/baseline.md 命中验收口径来源（条件③）→ 复杂；分级须由人的决定承载（0.0.2）
+    _entry["plan"] = {"complexity": "complex"}
+    json.dump([_entry], open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     rc, payload = H.cli(project, ["task-approve", "--task", task_id, "--decision", decision, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})
     if rc != 0:

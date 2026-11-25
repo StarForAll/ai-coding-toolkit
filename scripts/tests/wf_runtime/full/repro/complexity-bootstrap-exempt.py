@@ -26,7 +26,7 @@ BLOCK = {"schema_version": 1,
                             "cwd": ".", "input_refs": [], "required": True, "consume_at": "check"}]}
 
 
-def build(project, root, kind, title, block):
+def build(project, root, kind, title, block, plan=None):
     rc, payload = H.cli(project, ["task-new", "--kind", kind, "--title", title,
                                   "--template", os.path.join(project, ".wf/templates/task"), "--json"],
                         sid=SID)
@@ -37,12 +37,14 @@ def build(project, root, kind, title, block):
     prd = f"# {title}\n\n<!-- wf-plan:v1 -->\n```json\n{json.dumps(block, ensure_ascii=False, indent=2)}\n```\n"
     open(os.path.join(task_dir, "prd.md"), "w", encoding="utf-8").write(prd)
     decision = os.path.join(root, f"dec-{task_id}.json")
-    json.dump([{"source": "human:tester", "at": "2026-11-07T00:00:00.000000Z",
-                "subject": f"approve {task_id}",
-                "object_digest": "sha256:" + hashlib.sha256(prd.encode()).hexdigest(),
-                "artifacts": H.plan_artifacts(project, f"approve {task_id}"),
-                "choice": "approve", "reason": "用例"}], open(decision, "w", encoding="utf-8"),
-              ensure_ascii=False)
+    _entry = {"source": "human:tester", "at": "2026-11-07T00:00:00.000000Z",
+              "subject": f"approve {task_id}",
+              "object_digest": "sha256:" + hashlib.sha256(prd.encode()).hexdigest(),
+              "artifacts": H.plan_artifacts(project, f"approve {task_id}"),
+              "choice": "approve", "reason": "用例"}
+    if plan is not None:
+        _entry["plan"] = dict(plan)
+    json.dump([_entry], open(decision, "w", encoding="utf-8"), ensure_ascii=False)
     return H.cli(project, ["task-approve", "--task", task_id, "--decision", decision, "--json"],
                  sid=SID, inputs={"generation": H.generation(project)})
 
@@ -70,7 +72,8 @@ def check():
 
     # ② 普通任务触碰同一批路径 → 仍应判复杂（豁免不得外溢）
     root2, project2 = fresh(inject)
-    rc, payload = build(project2, root2, "ordinary", "改基线", BLOCK)
+    rc, payload = build(project2, root2, "ordinary", "改基线", BLOCK,
+                        plan={"complexity": "complex"})
     if (payload or {}).get("code") != "WF_TEMPLATE_INCOMPLETE":
         problems.append(f"普通任务触碰基线未被判复杂：{(payload or {}).get('code')}")
     if problems:

@@ -82,7 +82,7 @@ def check():
     # ① ②按事实核对：命中 .wf/lib/** 即按复杂，不能靠"不传条件"关掉
     root, project = _setup()
     task_id, task_dir, digest, sid1 = make_task(project, "改门禁", ["pkg/**", ".wf/lib/wflib/gates.py"])
-    rc, payload = approve(project, root, task_id, digest, sid=sid1)
+    rc, payload = approve(project, root, task_id, digest, plan={"complexity": "complex"}, sid=sid1)
     if (payload or {}).get("code") != "WF_TEMPLATE_INCOMPLETE":
         problems.append(f"②未按事实触发复杂：{(payload or {}).get('code')}")
     for name in ("design.md", "implement.md"):
