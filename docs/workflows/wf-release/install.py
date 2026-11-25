@@ -220,12 +220,10 @@ def resolve_tag(source, release_ref):
     return result.stdout.strip()
 
 
-def _worktree_clean(source):
-    """发行源必须是干净检出：脏检出（或被人重算过摘要的树）不得冒充 tag 内容（第二十六轮复审外部 1）。"""
+def _repo_root_and_rel(source):
+    """返回 (repo_top, rel)；source 不在 git 工作树内返回 (None, 原因)。"""
     import subprocess
 
-    # 只看**发行子树**：发行树可能位于一个本身有未提交改动的仓库里（作者仓库），
-    # 但发行目录自己的内容必须与提交一致，否则摘要校验相对工作树即无意义。
     top = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse", "--show-toplevel"], cwd=source,
                          capture_output=True, text=True, check=False)
     if top.returncode != 0:
@@ -234,6 +232,18 @@ def _worktree_clean(source):
     rel = os.path.relpath(os.path.realpath(source), repo_top)
     if rel.startswith(".."):
         return None, "source path is outside the git worktree"
+    return repo_top, rel
+
+
+def _worktree_clean(source):
+    """发行源必须是干净检出：脏检出（或被人重算过摘要的树）不得冒充 tag 内容（第二十六轮复审外部 1）。"""
+    import subprocess
+
+    # 只看**发行子树**：发行树可能位于一个本身有未提交改动的仓库里（作者仓库），
+    # 但发行目录自己的内容必须与提交一致，否则摘要校验相对工作树即无意义。
+    repo_top, rel = _repo_root_and_rel(source)
+    if repo_top is None:
+        return None, rel
     result = subprocess.run(["git", "-c", "safe.directory=*", "status", "--porcelain", "--", rel], cwd=repo_top,
                             capture_output=True, text=True, check=False)
     if result.returncode != 0:
@@ -245,11 +255,21 @@ def _worktree_clean(source):
 
 
 def _committed_bytes(source, commit, path):
-    """按 tag 提交读发行资产字节（设计稿 §7.2：提交哈希只用于核验内容）。失败返回 None。"""
+    """按 tag 提交读发行资产字节（设计稿 §7.2：提交哈希只用于核验内容）。失败返回 None。
+
+    `source` 是**发行检出目录**，可能位于仓库的子目录（作者仓库就是 `docs/workflows/wf-release/`）。
+    `git show <commit>:<path>` 的路径按仓库根解释，所以这里必须把 source 相对仓库根的前缀
+    拼在 `path` 前——否则子目录布局会被误报「missing in tag commit tree」，只能先另建一个
+    根级候选仓库才能安装（2026-11-25 安装步骤反人类的根因）。
+    """
     import subprocess
 
-    result = subprocess.run(["git", "-c", "safe.directory=*", "show", f"{commit}:{path}"], cwd=source,
-                            capture_output=True, check=False)
+    repo_top, rel = _repo_root_and_rel(source)
+    if repo_top is None:
+        return None
+    prefix = "" if rel in (".", "", os.sep) else rel.replace(os.sep, "/").rstrip("/") + "/"
+    result = subprocess.run(["git", "-c", "safe.directory=*", "show", f"{commit}:{prefix}{path}"],
+                            cwd=repo_top, capture_output=True, check=False)
     if result.returncode != 0:
         return None
     return result.stdout

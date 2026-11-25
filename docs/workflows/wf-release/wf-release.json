@@ -42,7 +42,7 @@
       "target_relative": ".codex/hooks/wf-session-identity.py"
     },
     {
-      "digest": "sha256:42c62ce370ce8a57c6852942a104293d98c65cc26d9015cfb2dd6f54589244d8",
+      "digest": "sha256:7faef46cbd10df2f2e554be5754e062cd653ad76bf6b81d2af6819c0013fd6f7",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:6bc19db99e5ebdef21e878035b1c733ad5a474199c437de40ccd5b97aab9b835",
+    "rules_digest": "sha256:7ddb24f8d95f8e77b88dae25e043c80be3a2ba125532b3fc388ee75fd85dcb6d",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.4"
+  "version": "0.0.5"
 }
