@@ -101,12 +101,13 @@ class SelfLocatedInstallTest(unittest.TestCase):
             source = REPO / "docs/workflows/wf-release"
             release = root / "docs/workflows/wf-release"
             shutil.copytree(source, release)
+            version = json.loads((release / "wf-release.json").read_text(encoding="utf-8"))["version"]
             _git(root, "init", "-q")
             _git(root, "config", "user.email", "t@t")
             _git(root, "config", "user.name", "t")
             _git(root, "add", "-A")
-            _git(root, "commit", "-qm", "release 0.0.8")
-            _git(root, "tag", "wf-v0.0.8")
+            _git(root, "commit", "-qm", f"release {version}")
+            _git(root, "tag", f"wf-v{version}")
             target = root / "project"
             target.mkdir()
             result = subprocess.run(
@@ -117,7 +118,7 @@ class SelfLocatedInstallTest(unittest.TestCase):
             payload = json.loads(result.stdout)
             self.assertTrue(payload["facts"]["preview"])
             self.assertTrue(payload["facts"]["platforms"])
-            self.assertIn("wf-v0.0.8", result.stdout)
+            self.assertIn(f"wf-v{version}", result.stdout)
 
 
 if __name__ == "__main__":

@@ -57,7 +57,7 @@ class BuildOrderingTest(unittest.TestCase):
     def test_guards_run_before_the_release_tree_is_removed(self):
         main_body = self.source.split("def main(argv=None):", 1)[1]
         readme_at = main_body.index("assert_readme_version(args.version)")
-        cli_at = main_body.index("assert_cli_packaging(args.version)")
+        cli_at = main_body.index("assert_cli_packaging(None)")
         tag_at = main_body.index("assert_version_not_tagged(args.version)")
         remove_at = main_body.index("shutil.rmtree(RELEASE_ROOT)")
         self.assertLess(readme_at, remove_at)

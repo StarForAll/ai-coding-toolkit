@@ -122,7 +122,7 @@ def preflight():
     return dev_manifest
 
 
-def assert_cli_packaging(version):
+def assert_cli_packaging(version=None):
     """系统级 wf 命令的版本与入口必须由同一发行清单解析（不维护第二版本源）。"""
     import tomllib
 
@@ -143,8 +143,12 @@ def assert_cli_packaging(version):
     expected_manifest = os.path.realpath(os.path.join(RELEASE_ROOT, "wf-release.json"))
     if manifest != expected_manifest:
         raise BuildError("wf-cli version path must point at the release manifest")
-    if not os.path.isfile(manifest):
-        # 发行树缺失时仍允许从源树重建：路径/入口/模式已核，生成后再核版本。
+    if not os.path.isfile(os.path.join(CLI_ROOT, "wf_cli", "main.py")):
+        raise BuildError("wf-cli package is missing wf_cli/main.py")
+    if not os.path.isfile(os.path.join(CLI_ROOT, "install.py")):
+        raise BuildError("wf-cli package is missing the versionless install.py bootstrap")
+    if version is None or not os.path.isfile(manifest):
+        # 静态检查可在删除旧发行树之前跑；版本匹配在重新生成清单之后核。
         return
     try:
         with open(manifest, "r", encoding="utf-8") as handle:
@@ -156,12 +160,8 @@ def assert_cli_packaging(version):
         declared = match.group("version") if match else None
     except IndexError:
         declared = None
-    if declared != version:
+    if version is not None and declared != version:
         raise BuildError(f"wf-cli version does not resolve to release version {version}")
-    if not os.path.isfile(os.path.join(CLI_ROOT, "wf_cli", "main.py")):
-        raise BuildError("wf-cli package is missing wf_cli/main.py")
-    if not os.path.isfile(os.path.join(CLI_ROOT, "install.py")):
-        raise BuildError("wf-cli package is missing the versionless install.py bootstrap")
 
 
 def build(version, destination_root, dev_manifest=None):
@@ -339,7 +339,7 @@ def main(argv=None):
                 # 也不在这里重建（比对通过即证明源树与发行树一致）。
                 print("OK  source→release verified（未重建；重建请去掉 --verify）")
             else:
-                assert_cli_packaging(args.version)
+                assert_cli_packaging(None)  # 静态检查先于删除旧发行树
                 assert_version_not_tagged(args.version)
                 dev_manifest = preflight()
                 if os.path.isdir(RELEASE_ROOT):

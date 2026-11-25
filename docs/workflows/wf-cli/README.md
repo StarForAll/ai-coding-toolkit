@@ -115,26 +115,41 @@ wf self-uninstall --apply  # remove the installed wf-cli tool
 The preview prints the exact `uv tool uninstall wf-cli` / `pipx uninstall wf-cli` command. Project
 removal remains `wf uninstall` inside the project and is a different operation.
 
-## Git hook / push wrapper
+## One-shot release
 
-A pre-push hook can verify the tag and build the wheel locally, but it **cannot** attach release
-assets: at pre-push time the tag does not exist on the Forgejo remote yet, and git has no
-post-push hook. Use the wrapper for the complete sequence:
+A pre-push-only flow cannot create the release: at pre-push time the tag does not exist on the
+Forgejo remote yet, and git has no post-push hook. Use the one-shot release script for the
+complete sequence:
 
 ```bash
 export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
 export FORGEJO_TOKEN="..."
-scripts/push-wf-tag.sh wf-v0.0.8 backup
+python3 scripts/release-wf.py backup
 ```
 
-- `.git/hooks/pre-push` / `scripts/git-hooks/pre-push` verifies the release and builds
-  `tmp/wf-cli-dist/` before the push;
-- the wrapper pushes the tag, then creates the release and attaches the wheel plus `install.py`;
-- if attachment fails, the wrapper reports the exact retry command. The tag is already pushed, so
-  do not recreate it.
+The worktree must be clean before it runs; the script refuses to sweep unrelated changes. The
+Python script reads the current version from the release manifest, chooses the next version,
+updates the README/release tree, builds and commits the release, creates the local tag, verifies
+the tag, builds the wheel, pushes the tag, and then creates the release and attaches the wheel plus
+`install.py`.
 
-A direct `git push backup wf-v0.0.8` runs the build/verify hook but leaves the release attachment
-for the post-push command printed by the hook.
+Version selection:
+
+- default: `x.x.y -> x.x.(y+1)`;
+- `--minor`: `x.x.y -> x.(x+1).0`;
+- `--major`: `x.x.y -> (x+1).0.0`.
+
+If the current manifest version has no local tag yet, the default branch releases that prepared
+version as-is instead of skipping it; `--minor`/`--major` always bump explicitly. It does not need
+a manual `git tag`; the wf-specific pre-push hook was removed and the remaining pre-push hook only
+checks plugin bundles.
+
+`FORGEJO_TOKEN` / `WF_FORGEJO_BASE` are read from the environment. If either is missing, the
+script prompts on a TTY; in a non-interactive process it fails instead of hanging. The token uses
+`getpass` and is never printed or passed as an argument.
+
+If attachment fails, the script reports the exact retry command. The tag is already pushed, so do
+not recreate it.
 
 ## Use it in a project
 

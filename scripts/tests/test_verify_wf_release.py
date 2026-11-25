@@ -249,23 +249,83 @@ class RealRepoGuardTest(unittest.TestCase):
         self.assertIn("出口", text)
 
 
-class PrePushHookTest(unittest.TestCase):
-    """pre-push 只对 `refs/tags/wf-v*` 的推送行调用发行核对。"""
+class ReleaseScriptTest(unittest.TestCase):
+    """wf 发行由一次性 Python 脚本完成；pre-push 只管插件构建，不处理 wf tag。"""
 
     def setUp(self):
+        import importlib.util
+        path = REPO / "scripts" / "release-wf.py"
+        spec = importlib.util.spec_from_file_location("release_wf", path)
+        self.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.module)
+        self.script = path.read_text(encoding="utf-8")
         self.hook = (REPO / "scripts" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
 
-    def test_hook_calls_verify_for_tag_pushes(self):
-        self.assertIn("refs/tags/wf-v*)", self.hook)
-        self.assertIn("scripts/verify-wf-release.py", self.hook)
-        self.assertIn("scripts/build-wf-cli-wheel.py", self.hook)
-        self.assertIn('tag_version=${tag_ref#refs/tags/wf-v}', self.hook)
-        self.assertIn('tag_name="wf-v$tag_version"', self.hook)
+    def test_version_bumps(self):
+        self.assertEqual(self.module.next_version("0.0.9", "patch"), "0.0.10")
+        self.assertEqual(self.module.next_version("0.0.9", "minor"), "0.1.0")
+        self.assertEqual(self.module.next_version("0.0.9", "major"), "1.0.0")
+        self.assertEqual(self.module.next_version("1.2.3", "patch"), "1.2.4")
 
-    def test_hook_does_not_run_verify_outside_tag_lines(self):
-        # 核对只挂在 tag 行收集到的变量上：普通分支推送不进这个分支
-        self.assertIn('if [ -n "$wf_tags" ]; then', self.hook)
-        self.assertNotIn('while read -r _local_ref', self.hook)
+    def test_script_does_verify_tag_push_and_attach(self):
+        for marker in ("build-wf-release.py", "verify-wf-release.py",
+                       "build-wf-cli-wheel.py", "git", "tag",
+                       "attach-wf-cli-asset.py", "release-wf"):
+            self.assertIn(marker, self.script)
+
+    def test_pending_version_is_not_skipped_by_default(self):
+        self.assertEqual(self.module.select_version("0.0.9", "patch",
+                                                    explicit=False, already_tagged=False), "0.0.9")
+        self.assertEqual(self.module.select_version("0.0.9", "patch",
+                                                    explicit=False, already_tagged=True), "0.0.10")
+        self.assertEqual(self.module.select_version("0.0.9", "minor",
+                                                    explicit=True, already_tagged=False), "0.1.0")
+
+    def test_update_docs_replaces_target_and_current_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            readme = Path(tmp) / "README.md"
+            cli = Path(tmp) / "CLI.md"
+            readme.write_text(
+                "| 目标版本 | `0.0.9`（只有人主动要求时才改）。**0.0.9**：说明。 |\n"
+                "当前 0.0.9 仍属预正式发行。\n", encoding="utf-8")
+            cli.write_text("python3 scripts/release-wf.py wf-v0.0.9 wf_cli-0.0.9\n",
+                           encoding="utf-8")
+            old_readme, old_cli = self.module.README, self.module.CLI_README
+            self.module.README, self.module.CLI_README = readme, cli
+            self.addCleanup(lambda: (setattr(self.module, "README", old_readme),
+                                     setattr(self.module, "CLI_README", old_cli)))
+            self.assertTrue(self.module.update_docs("0.0.9", "0.0.10"))
+            text = readme.read_text(encoding="utf-8")
+            self.assertIn("`0.0.10`", text)
+            self.assertIn("**0.0.10**", text)
+            self.assertIn("当前 0.0.10", text)
+            self.assertNotIn("0.0.9", text)
+            self.assertIn("wf-v0.0.10", cli.read_text(encoding="utf-8"))
+
+    def test_missing_environment_fails_when_non_interactive(self):
+        old_base = os.environ.pop("WF_FORGEJO_BASE", None)
+        old_token = os.environ.pop("FORGEJO_TOKEN", None)
+        self.addCleanup(lambda: (os.environ.__setitem__("WF_FORGEJO_BASE", old_base)
+                                 if old_base is not None else None,
+                                 os.environ.__setitem__("FORGEJO_TOKEN", old_token)
+                                 if old_token is not None else None))
+        with self.assertRaises(self.module.ReleaseError):
+            self.module.resolve_environment()
+
+    def test_script_reads_manifest_and_environment(self):
+        self.assertIn("wf-release.json", self.script)
+        self.assertIn("FORGEJO_TOKEN", self.script)
+        self.assertIn("WF_FORGEJO_BASE", self.script)
+        self.assertIn("getpass", self.script)
+
+    def test_script_compiles(self):
+        subprocess.run([sys.executable, "-m", "py_compile",
+                        str(REPO / "scripts" / "release-wf.py")], check=True)
+
+    def test_pre_push_no_longer_handles_wf_release(self):
+        self.assertNotIn("refs/tags/wf-v", self.hook)
+        self.assertNotIn("verify-wf-release.py", self.hook)
+        self.assertNotIn("build-wf-cli-wheel.py", self.hook)
 
 
 if __name__ == "__main__":

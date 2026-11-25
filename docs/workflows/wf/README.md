@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.0.8`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.8**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级、用 `wf self-uninstall`（预览 + `--apply`）卸载；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
+| 目标版本 | `0.0.9`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.9**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级、用 `wf self-uninstall`（预览 + `--apply`）卸载；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -26,6 +26,7 @@
 - `scripts/build-wf-release.py --version 0.x.y`：校验源树完整性 → 生成发行根与清单 → 打印哈希清单。
   `--verify` 重建到临时目录并与现有发行树逐字节比较；`--verify-token-parity` 用固定 `--nonce`
   比对 `repair.py` / `uninstall.py` / `install.py` 三份自含实现的令牌四步输出。
+- `scripts/release-wf.py`：一次性完成版本递增、发行校验、本地 tag、wheel 构建、tag push 与 release 附件上传。
 - `scripts/build-wf-cli-wheel.py`：按发行清单版本构建系统命令 wheel（`wf_cli-<version>-py3-none-any.whl`），
   作为 Forgejo release 附件；不进入项目发行清单。`scripts/attach-wf-cli-asset.py` 用环境变量 token
   把它附加到对应 release；同名同大小视为已附加，同名不同大小拒绝覆盖。
@@ -63,9 +64,10 @@
 打包入口另有两项机械守卫：`--version` 必须与本文「目标版本」一致（README 漂移即拒绝）；
 `refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
 
-**版本号只由人推进**：本仓库不按提交或轮次自动加版本（2026-11-24 人裁；当前 0.0.8 仍属预正式发行）。
-需要发新号时由人明确要求并同批改「目标版本」、`--version`、tag；自动化脚本只校验三者一致，不替你挑号。
-tag 只在人确认提交后创建，打包脚本不建 tag、不推送。
+**版本推进由人发起**：本仓库不按提交或轮次自动加版本（当前 0.0.9 仍属预正式发行）。
+`scripts/release-wf.py` 是发布入口：默认 patch +1，`--minor`/`--major` 由人选择递增级别；
+它更新「目标版本」与发行树、提交、建 tag、推送并发布。`scripts/build-wf-release.py` 只重建/校验，
+不建 tag、不推送；不要把它的 `--version` 当成自动版本决策。
 
 **义务的机械核对（2026-11-23 起，dogfood 五轮 b-P0）**：上面这条"三者同批"过去只写在本文里——
 实况是仓库长期只有 `wf-v0.1.0` 一个 tag，而本文却记载过 0.1.5→0.1.6 可用 upgrade 升级；安装器
@@ -77,10 +79,11 @@ python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y  
 
 核对项：tag 存在且解析到提交；源码树重建 == 工作树发行树；tag 提交内的发行树与工作树逐字节相同；tag 提交内 `docs/workflows/wf-cli/` 存在且版本动态解析到同一清单、入口为 `wf = wf_cli.main:entry`
 （含"只在工作树多出来的发行文件"）；清单 `version`；本文「目标版本」行；重算 `rules_digest`。
-tracked pre-push 钩子对 `refs/tags/wf-v*` 的推送自动跑同一脚本，不通过即拒绝推送该 tag
-（普通分支推送与"先提交后打 tag"的顺序不受影响）。脚本只报事实与出口，不创建、不修改、不删除 tag；它不检查 Forgejo release 附件，第 5 步负责把系统命令 wheel 附加到 release。
-**"忘记打 tag"也有提醒**：推送的提交若改动发行树、且发行树清单声明的版本没有对应 `wf-v*` tag，
-pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合法顺序）。
+`scripts/release-wf.py` 在本地创建 tag 前运行同一脚本；普通 pre-push 钩子不再处理 wf tag
+（普通分支推送与"先提交后打 tag"的顺序不受影响）。`verify-wf-release.py` 只报事实与出口，不创建、不修改、不删除 tag；它不检查 Forgejo release 附件，第 5 步负责把系统命令 wheel 附加到 release。
+**"忘记打 tag"不再由 git hook 拦**：普通推送不处理 wf tag；发布入口是
+`python3 scripts/release-wf.py`（先提交工作区，再一次性递增版本/打 tag/推送/上传）。
+如果只改发行树未发布，`verify-wf-release.py` 会报告 tag 不存在。
 
 **现有发行 tag 的事实（勿据旧文推测）**：已发行 tag 以 `git tag --list 'wf-v*'` 实况为准；
 `0.1.1`–`0.1.6` 是未打 tag 的开发版本，**既不是升级来源、也不能作为升级目标**——升级引用只认
@@ -95,16 +98,17 @@ pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合�
 
 ## 5. 首发与升级步骤（人执行）
 
-1. 同步版本（`dev-manifest.json` 与本文）；
-2. `python3 scripts/build-wf-release.py --version 0.x.y`，复核差异与哈希清单；
-3. 人按授权暂存精确路径并提交；
-4. 人创建 `refs/tags/wf-v0.x.y`，随后跑 `python3 scripts/verify-wf-release.py --version 0.x.y
-   --ref refs/tags/wf-v0.x.y`：不通过则该 tag **不是**有效发行（pre-push 也会拒绝推送它）；
-5. 构建系统命令 wheel 并保存到 Forgejo 的版本发布：
-   `python3 scripts/build-wf-cli-wheel.py` → 在 Forgejo 创建/更新 release `wf-v0.x.y`（指向该 tag，
-   不得是 draft/prerelease）→ `python3 scripts/attach-wf-cli-asset.py --tag wf-v0.x.y --wheel tmp/wf-cli-dist/wf_cli-0.x.y-py3-none-any.whl`
-   （脚本会同时附带 `install.py`；release 尚未创建时加 `--create-release`，tag 必须已存在）
-   （`FORGEJO_TOKEN` 只从环境变量读取；HTTP/API 不可达时用 `WF_FORGEJO_BASE` 指到真实 Web/API，或从能访问 Web 的机器用 Forgejo UI 上传）。wheel 版本、清单版本、tag 三者必须同批；tag 已存在时构建脚本要求 `HEAD == tag 提交` 且 `wf-cli`/发行树干净——**不要**把新工作树构建的 wheel 附加到旧 tag；新改动必须换新版本 tag。bootstrap 只认最新正式 release 的该附件；
+1. 确认 `dev-manifest.json` 仍是开发态占位符（`0.0.0-dev`），工作区已提交；
+2. 可先跑 `python3 scripts/build-wf-release.py --version 0.x.y --verify` 复核现有发行树；
+3. 保持工作区干净（一次性发布脚本拒绝脏工作区，不自动收编无关改动）。
+4. 运行 `python3 scripts/release-wf.py [--minor|--major] [remote]`：默认 patch `x.x.y -> x.x.(y+1)`，
+   `--minor` 为 `x.(x+1).0`，`--major` 为 `(x+1).0.0`；当前清单版本尚无本地 tag 时默认发布该版本。
+   脚本更新 README/发行树并提交、创建并校验本地 tag、构建 wheel、push tag，
+   再创建 release 并上传 wheel 与 `install.py`。
+5. 若 Forgejo Actions 已启用，可改用 tag push 的 [.forgejo/workflows/wf-release.yml](../../../.forgejo/workflows/wf-release.yml)；
+   不要和 `release-wf.py` 同时跑。需要手动补发时仍可用
+   `python3 scripts/build-wf-cli-wheel.py` 与
+   `python3 scripts/attach-wf-cli-asset.py --create-release --tag wf-v0.x.y --wheel tmp/wf-cli-dist/wf_cli-0.x.y-py3-none-any.whl`。
 6. 安装系统命令（**不指定版本**）：
    `curl -fsSL "https://forgejo.xzc.com/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -`
    （或 `pipx` 等价方式）。安装命令本身取最新正式 release 的稳定 `install.py` 附件；bootstrap 查询同一最新正式 release，读取该 release 的 wheel 附件并安装。若 Web/API 地址/端口不同，用 `WF_FORGEJO_BASE` 指定真实基址；若 HTTP/API 不可达而只有 SSH 可用，改用 `bash scripts/install-wf-ssh.sh`（按 tag 日期取最新，无版本参数）；
