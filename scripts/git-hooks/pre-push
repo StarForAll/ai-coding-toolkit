@@ -72,6 +72,16 @@ if [ -n "$wf_tags" ]; then
       echo "ERROR: pre-push: 发行 tag 必须与源码树、发行树与清单同批；修正后重新打 tag。" >&2
       exit 1
     fi
+    # 系统命令 wheel 只依赖本地 tag/发行清单，可以在 push 前构建；release 附件必须在
+    # 远端 tag 存在后上传，不能用 pre-push 伪造顺序（git 没有 post-push hook）。
+    if ! python3 scripts/build-wf-cli-wheel.py --version "$tag_version" --out tmp/wf-cli-dist; then
+      echo "ERROR: pre-push: 系统 wf wheel 构建失败；tag 未推送。" >&2
+      exit 1
+    fi
+    tag_name="wf-v$tag_version"
+    echo "pre-push: $tag_name 的系统命令附件已构建到 tmp/wf-cli-dist；push 后执行：" >&2
+    echo "pre-push:   python3 scripts/attach-wf-cli-asset.py --create-release --tag $tag_name --wheel tmp/wf-cli-dist/wf_cli-$tag_version-py3-none-any.whl" >&2
+    echo "pre-push: 或使用 scripts/push-wf-tag.sh $tag_name" >&2
   done <<EOF
 $wf_tags
 EOF

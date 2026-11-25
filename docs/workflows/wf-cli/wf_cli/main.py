@@ -37,6 +37,7 @@ COMMAND_HELP = {
     "repair": "wf repair [--project <abs>] [--apply] [--dispose <plan>] [--json]",
     "version": "wf version [--project <abs>] [--json]",
     "self-upgrade": "wf self-upgrade [--manager uv|pipx|pip] [--json]",
+    "self-uninstall": "wf self-uninstall [--manager uv|pipx|pip] [--apply] [--json]",
     "help": "wf help [<command>]",
 }
 
@@ -56,6 +57,8 @@ HELP = """wf — 系统级 wf 命令
       显示系统 wf 版本、登记发行源与项目已安装版本。
   wf self-upgrade [--manager uv|pipx|pip] [--json]
       升级系统 wf 命令本身到登记源最新发行（区别于项目内 `wf upgrade`）。
+  wf self-uninstall [--manager uv|pipx|pip] [--apply] [--json]
+      卸载系统 wf 命令本身；首跑只显示将要执行的管理器命令，加 --apply 执行。
   wf help [<command>]
 
 运行期命令（task-new、task-check、spec、review-* 等）：
@@ -120,6 +123,7 @@ def _parse_flags(command, argv):
         "repair": ({"--apply", "--json"}, {"--project", "--dispose"}),
         "version": ({"--json"}, {"--project"}),
         "self-upgrade": ({"--json"}, {"--manager"}),
+        "self-uninstall": ({"--json", "--apply"}, {"--manager"}),
     }[command]
     booleans, values = spec
     parsed = {"json": False}
@@ -332,6 +336,34 @@ def cmd_self_upgrade(argv, leading, exec_fn):
                   "运行 `wf version` 核对系统命令版本", json_mode)
 
 
+def cmd_self_uninstall(argv, leading, exec_fn):
+    parsed = _parse_flags("self-uninstall", argv)
+    json_mode = parsed["json"]
+    if parsed.get("help"):
+        sys.stdout.write(COMMAND_HELP["self-uninstall"] + "\n")
+        return 0
+    if leading:
+        return blocked("WF_USAGE_INVALID", "self-uninstall 卸载系统命令，不作用于项目",
+                       {"project": leading},
+                       "去掉 --project；项目卸载用 `wf uninstall`", json_mode)
+    manager = parsed.get("--manager")
+    # 预览只做管理器识别与命令展示；不调用 subprocess。
+    detected = selfupdate.manager_for(requested=manager)
+    if detected is None:
+        return blocked("WF_CAPABILITY_UNAVAILABLE", "无法识别系统 wf 的安装管理器", {},
+                       "用 --manager uv|pipx|pip 指定", json_mode)
+    command = selfupdate.uninstall_command(detected)
+    if not parsed.get("--apply"):
+        return passed("系统 wf 卸载预览（未执行）",
+                      {"manager": detected, "command": command},
+                      "确认后加 --apply 重跑", json_mode)
+    result = selfupdate.perform_uninstall(manager=detected)
+    return passed("系统 wf 已卸载（当前进程退出后命令消失）",
+                  {"manager": result["manager"], "command": result["command"],
+                   "output": result["output"][-800:]},
+                  "如仍存在命令，检查 uv/pipx 的 bin 目录", json_mode)
+
+
 def cmd_version(argv, leading, exec_fn):
     parsed = _parse_flags("version", argv)
     json_mode = parsed["json"]
@@ -396,6 +428,8 @@ def main(argv=None, exec_fn=None):
             return cmd_version(tail, leading, exec_fn)
         if head == "self-upgrade":
             return cmd_self_upgrade(tail, leading, exec_fn)
+        if head == "self-uninstall":
+            return cmd_self_uninstall(tail, leading, exec_fn)
         if head == "install":
             return cmd_install(tail, leading, exec_fn)
         if head == "upgrade":

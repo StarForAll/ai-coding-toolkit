@@ -125,6 +125,49 @@ def download_asset(url, destination, token=None, opener=urllib.request.urlopen, 
     return destination
 
 
+def uninstall_command(manager, executable=None, which=shutil.which):
+    if manager == "uv":
+        located = which("uv")
+        if not located:
+            raise SelfUpgradeError("WF_CAPABILITY_UNAVAILABLE", "找不到 uv，无法卸载系统 wf",
+                                   {"manager": "uv"}, "安装 uv 后重试；或用 --manager pipx")
+        return [located, "tool", "uninstall", "wf-cli"]
+    if manager == "pipx":
+        located = which("pipx")
+        if not located:
+            raise SelfUpgradeError("WF_CAPABILITY_UNAVAILABLE", "找不到 pipx，无法卸载系统 wf",
+                                   {"manager": "pipx"}, "安装 pipx 后重试；或用 --manager uv")
+        return [located, "uninstall", "wf-cli"]
+    if manager == "pip":
+        return [executable or sys.executable, "-m", "pip", "uninstall", "-y", "wf-cli"]
+    raise SelfUpgradeError("WF_USAGE_INVALID", "未知的安装管理器",
+                           {"manager": manager, "known": ["uv", "pipx", "pip"]},
+                           "用 --manager uv|pipx|pip 指定")
+
+
+def run_uninstall(manager, runner=subprocess.run, executable=None, which=shutil.which):
+    command = uninstall_command(manager, executable=executable, which=which)
+    result = runner(command, capture_output=True, text=True, check=False)
+    if result.returncode != 0:
+        raise SelfUpgradeError(
+            "WF_CAPABILITY_UNAVAILABLE", "系统 wf 卸载失败",
+            {"manager": manager, "exit": result.returncode,
+             "stderr": (result.stderr or "").strip()[-800:]},
+            "核对 uv/pipx 后重试；不从失败结果声称已卸载",
+        )
+    return (result.stdout or "").strip()
+
+
+def perform_uninstall(manager=None, executable=None, which=shutil.which, runner=subprocess.run):
+    manager = manager_for(executable=executable, requested=manager, which=which)
+    if manager is None:
+        raise SelfUpgradeError("WF_CAPABILITY_UNAVAILABLE", "无法识别系统 wf 的安装管理器",
+                               {"executable": executable or sys.executable},
+                               "用 --manager uv|pipx|pip 指定")
+    return {"manager": manager, "command": uninstall_command(manager, executable=executable, which=which),
+            "output": run_uninstall(manager, runner=runner, executable=executable, which=which)}
+
+
 def run_install(manager, target, runner=subprocess.run, executable=None, which=shutil.which):
     command = install_command(manager, target, executable=executable, which=which)
     result = runner(command, capture_output=True, text=True, check=False)

@@ -22,9 +22,9 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | 58b2607217c0eab441408db7bc3974ceb281f15f65d08cff866a15500d79f81d |
+| wf-framework-design.md | fcb19e64c69c6178648bcb76e798080696aa047b81539f35049b00e55749dfd0 |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
-| wf-framework-design.index.md | 59e6004e885e8dbf3b96eae211c1eab8cbb2022a5dc2cd71227c025a6aede026 |
+| wf-framework-design.index.md | af739c2f5080473cfcd96912ea288e0b336a9235a241c3165a5bad9931399533 |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |
 
 这些摘要只绑定审查输入，不是目标项目字段，也不要求把文档自身哈希写回自身。上位文件变化后按改变的句子及其中每个义务子句，分别核对输入、写入时点、记录载体、消费者与失败出口，并在任务修订记录列出对应关系，再评估本稿有效性；不以同一主题的一处说明代替整句义务落实。
@@ -852,7 +852,7 @@ task.archive 在本节前置中消费本文 §2.3 的 verification.resolve(finis
 | 最小互斥文件 | 项目根 `.wf-lock` | 运行态、只创建不删除，卸载/purge 保留忽略行 |
 | `.gitignore` 托管段 | 首行 `# wf-managed-v1` 至尾行 `# wf-managed-end` 界定的连续段，段内为框架运行态忽略行（含 `/.wf-lock` 保留行） | 发行资产约定：追加/升级/卸载按标记串定位整段处理，重复运行核对已有标记串、不重复追加；段外内容属用户，见本文 §10.2 的清单登记；安装/升级自检须核段内每条运行态路径的实际忽略生效（见本文 §10.4），不以标记存在代替；卸载移除整段后保留的 `/.wf-lock` 行为**段外裸行**（不带标记串），安装/升级/卸载核对时对段外内容严格等于 `/.wf-lock` 的行予以容忍、不重复追加，直到人工清理锁文件时一并移除 |
 | 系统级命令（发行工具，不投放项目） | 人本机 Python 工具环境（`uv tool` / `pipx`）；发行源缓存与按版本 worktree 在用户缓存目录 | 发行工具；随命令重新安装，不由项目升级/卸载覆盖，也不写入项目 Git |
-| 系统命令发行附件 | Forgejo release `wf-vX.Y.Z` 的稳定 `install.py` 与 `wf_cli-X.Y.Z-py3-none-any.whl` | 发行工具；bootstrap 用前者，`wf self-upgrade` 优先消费 wheel，缺失时从同一 tag 构建 |
+| 系统命令发行附件 | Forgejo release `wf-vX.Y.Z` 的稳定 `install.py` 与 `wf_cli-X.Y.Z-py3-none-any.whl` | 发行工具；bootstrap 用前者，`wf self-upgrade` 优先消费 wheel，缺失时从同一 tag 构建；`wf self-uninstall` 用当前管理器移除命令 |
 | 用户层配置和解释器确认集合 | `~/.wf/` | 人维护、非项目 Git、非发行资产，卸载项目不复制/删除 |
 | 本稿、设计稿与 charter | authoring 文档族 | 不投放目标项目 |
 

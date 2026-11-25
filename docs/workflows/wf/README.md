@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.0.8`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.8**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
+| 目标版本 | `0.0.8`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.8**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级、用 `wf self-uninstall`（预览 + `--apply`）卸载；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -104,7 +104,7 @@ pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合�
    `python3 scripts/build-wf-cli-wheel.py` → 在 Forgejo 创建/更新 release `wf-v0.x.y`（指向该 tag，
    不得是 draft/prerelease）→ `python3 scripts/attach-wf-cli-asset.py --tag wf-v0.x.y --wheel tmp/wf-cli-dist/wf_cli-0.x.y-py3-none-any.whl`
    （脚本会同时附带 `install.py`；release 尚未创建时加 `--create-release`，tag 必须已存在）
-   （`FORGEJO_TOKEN` 只从环境变量读取；HTTP/API 不可达时用 `WF_FORGEJO_BASE` 指到真实 Web/API，或从能访问 Web 的机器用 Forgejo UI 上传）。wheel 版本、清单版本、tag 三者必须同批；bootstrap 只认最新正式 release 的该附件；
+   （`FORGEJO_TOKEN` 只从环境变量读取；HTTP/API 不可达时用 `WF_FORGEJO_BASE` 指到真实 Web/API，或从能访问 Web 的机器用 Forgejo UI 上传）。wheel 版本、清单版本、tag 三者必须同批；tag 已存在时构建脚本要求 `HEAD == tag 提交` 且 `wf-cli`/发行树干净——**不要**把新工作树构建的 wheel 附加到旧 tag；新改动必须换新版本 tag。bootstrap 只认最新正式 release 的该附件；
 6. 安装系统命令（**不指定版本**）：
    `curl -fsSL "https://forgejo.xzc.com/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -`
    （或 `pipx` 等价方式）。安装命令本身取最新正式 release 的稳定 `install.py` 附件；bootstrap 查询同一最新正式 release，读取该 release 的 wheel 附件并安装。若 Web/API 地址/端口不同，用 `WF_FORGEJO_BASE` 指定真实基址；若 HTTP/API 不可达而只有 SSH 可用，改用 `bash scripts/install-wf-ssh.sh`（按 tag 日期取最新，无版本参数）；
@@ -112,7 +112,7 @@ pre-push 打印 WARN（只提示、不阻断——先推分支再打 tag 是合�
 7. 目标项目安装：在该项目根运行 `wf install`（预览）→ `wf install --confirm`（无平台参数：一次装齐全部支持平台）。`--python` 选定运行 wf 的解释器（绝对路径、>=3.11）：给定时写入本机用户级配置并按 global 确认，缺省用系统 `python3` 并按 system 确认；系统没有 `python3` 且未给该参数则拒绝安装。确认提示与写入在安装命令的终端里完成（人输入 yes），不需要再单独跑 `confirm-executor`。**不再给 `--release-ref`/`--source`，也不把本仓库路径当发行源**；命令按自身版本解析登记源 tag；
 8. 项目升级：在目标项目根运行 `wf upgrade`（预览）→ `wf upgrade --apply`。它取登记源默认分支**按 tag 创建时间最新**的发行，不支持指定版本；预览含全部路径动作、偏离清单与宿主 `hooks.json` 动作，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <项目相对路径>` / `--restore <项目相对路径>` 选择（路径与预览 `unresolved[].path` 逐字一致，同名技能副本因根不同而各自可处置）；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
    `wf upgrade --export-deviations --out <dir>` 是**只读回源**：导出全部本地偏离（含未接受项，清单标 `status=pending`；已接受项标 `accepted`）的补丁与 `manifest.json`，不取写权、不暂停任务、不应用升级；同版也允许导出。与 `--apply` 互斥。
-9. 系统命令升级（与项目升级分开）：`wf self-upgrade` 解析最新系统发行（优先取 release wheel 附件）并替换已安装命令；`wf upgrade` 只升级项目内资产。
+9. 系统命令升级/卸载（与项目操作分开）：`wf self-upgrade` 解析最新系统发行（优先取 release wheel 附件）并替换已安装命令；`wf self-uninstall` 预览 → `--apply` 移除系统命令本身；`wf upgrade` / `wf uninstall` 只作用于项目内资产。
 
 打包脚本不提交、不建 tag、不推送；系统 wf 命令只从登记源解析发行 tag，不把本机 checkout 当发行源。
 

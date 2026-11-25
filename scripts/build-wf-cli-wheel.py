@@ -39,11 +39,37 @@ def release_version():
     return value
 
 
+
+def assert_release_identity(version, repo_root=None):
+    """A wheel uploaded to wf-vX must be built from the commit that tag points at."""
+    import subprocess
+    root = Path(repo_root or REPO_ROOT)
+    tag = f"wf-v{version}"
+    tag_result = subprocess.run(["git", "-C", str(root), "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}"],
+                                capture_output=True, text=True, check=False)
+    if tag_result.returncode != 0:
+        return  # 尚未打 tag：允许开发期构建；release 附件必须在 tag 后构建
+    tag_commit = (tag_result.stdout or "").strip()
+    head_result = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"],
+                                 capture_output=True, text=True, check=False)
+    head = (head_result.stdout or "").strip()
+    if head_result.returncode != 0 or head != tag_commit:
+        raise BuildError(f"tag {tag} 指向 {tag_commit[:12]}，HEAD 是 {head[:12]}；"
+                         "发行资产必须从 tag 提交构建，不能把工作树内容附加到旧 tag")
+    dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain", "--",
+                            "docs/workflows/wf-cli", "docs/workflows/wf-release"],
+                           capture_output=True, text=True, check=False)
+    if dirty.returncode != 0 or (dirty.stdout or "").strip():
+        raise BuildError(f"tag {tag} 的 wf-cli/发行树有未提交改动；先提交或换新版本 tag：\n"
+                         + (dirty.stdout or "").strip())
+
+
 def build_wheel(out_dir, version=None):
     version = version or release_version()
     current = release_version()
     if version != current:
         raise BuildError(f"requested {version}, release manifest is {current}")
+    assert_release_identity(version)
     uv = shutil.which("uv")
     if not uv:
         raise BuildError("uv is required to build the wf-cli wheel")

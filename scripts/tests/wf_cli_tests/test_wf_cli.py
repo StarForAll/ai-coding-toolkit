@@ -228,6 +228,53 @@ class SelfUpgradeTest(unittest.TestCase):
         self.assertIn("已是最新", buffer.getvalue())
 
 
+class SelfUninstallTest(unittest.TestCase):
+    def test_uninstall_command_for_managers(self):
+        which = lambda name: "/usr/bin/" + name
+        self.assertEqual(wf_selfupdate.uninstall_command("uv", which=which),
+                         ["/usr/bin/uv", "tool", "uninstall", "wf-cli"])
+        self.assertEqual(wf_selfupdate.uninstall_command("pipx", which=which),
+                         ["/usr/bin/pipx", "uninstall", "wf-cli"])
+        self.assertEqual(wf_selfupdate.uninstall_command("pip", executable="/usr/bin/python3", which=which),
+                         ["/usr/bin/python3", "-m", "pip", "uninstall", "-y", "wf-cli"])
+
+    def test_apply_runs_the_manager_command(self):
+        calls = {}
+
+        def runner(command, **kwargs):
+            calls["command"] = command
+            class Result:
+                returncode = 0
+                stdout = "uninstalled"
+                stderr = ""
+            return Result()
+
+        result = wf_selfupdate.perform_uninstall(
+            manager="uv", runner=runner,
+            executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
+            which=lambda name: "/usr/bin/" + name,
+        )
+        self.assertEqual(result["manager"], "uv")
+        self.assertEqual(calls["command"], ["/usr/bin/uv", "tool", "uninstall", "wf-cli"])
+
+    def test_main_preview_does_not_uninstall_and_apply_does(self):
+        old = wf_main.selfupdate.perform_uninstall
+        called = []
+        wf_main.selfupdate.perform_uninstall = lambda *args, **kwargs: called.append(True) or {
+            "manager": "uv", "command": ["uv", "tool", "uninstall", "wf-cli"], "output": "uninstalled"}
+        self.addCleanup(lambda: setattr(wf_main.selfupdate, "perform_uninstall", old))
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = wf_main.main(["self-uninstall", "--manager", "uv", "--json"])
+        self.assertEqual(code, 0)
+        self.assertFalse(called)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = wf_main.main(["self-uninstall", "--manager", "uv", "--apply", "--json"])
+        self.assertEqual(code, 0)
+        self.assertTrue(called)
+
+
 class BootstrapTest(unittest.TestCase):
     def setUp(self):
         import importlib.util

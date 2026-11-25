@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -37,6 +38,24 @@ class BuildCliWheelTest(unittest.TestCase):
 
     def test_release_version_is_x_y_z(self):
         self.assertRegex(self.version, r"^\d+\.\d+\.\d+$")
+
+    def test_tagged_build_requires_clean_tree_at_tag_commit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs/workflows/wf-cli").mkdir(parents=True)
+            (root / "docs/workflows/wf-release").mkdir(parents=True)
+            (root / "docs/workflows/wf-cli/file.txt").write_text("clean\n", encoding="utf-8")
+            (root / "docs/workflows/wf-release/file.txt").write_text("clean\n", encoding="utf-8")
+            subprocess.run(["git", "-C", tmp, "init", "-q"], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.email", "t@e"], check=True)
+            subprocess.run(["git", "-C", tmp, "config", "user.name", "t"], check=True)
+            subprocess.run(["git", "-C", tmp, "add", "-A"], check=True)
+            subprocess.run(["git", "-C", tmp, "commit", "-qm", "release"], check=True)
+            subprocess.run(["git", "-C", tmp, "tag", "wf-v0.0.8"], check=True)
+            self.module.assert_release_identity("0.0.8", repo_root=tmp)
+            (root / "docs/workflows/wf-cli/file.txt").write_text("dirty\n", encoding="utf-8")
+            with self.assertRaises(self.module.BuildError):
+                self.module.assert_release_identity("0.0.8", repo_root=tmp)
 
 
 if __name__ == "__main__":

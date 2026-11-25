@@ -258,7 +258,9 @@ class PrePushHookTest(unittest.TestCase):
     def test_hook_calls_verify_for_tag_pushes(self):
         self.assertIn("refs/tags/wf-v*)", self.hook)
         self.assertIn("scripts/verify-wf-release.py", self.hook)
+        self.assertIn("scripts/build-wf-cli-wheel.py", self.hook)
         self.assertIn('tag_version=${tag_ref#refs/tags/wf-v}', self.hook)
+        self.assertIn('tag_name="wf-v$tag_version"', self.hook)
 
     def test_hook_does_not_run_verify_outside_tag_lines(self):
         # 核对只挂在 tag 行收集到的变量上：普通分支推送不进这个分支

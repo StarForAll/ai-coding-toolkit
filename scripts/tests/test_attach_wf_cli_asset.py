@@ -92,7 +92,7 @@ class AttachAssetTest(unittest.TestCase):
             if path.startswith("releases/tags/"):
                 raise self.module.AttachError("not found", missing=True)
             if path.startswith("git/refs/tags/"):
-                return {"object": {"sha": "a" * 40}}
+                return [{"ref": "refs/tags/wf-v0.0.8", "object": {"sha": "a" * 40}}]
             if path == "releases":
                 return {"id": 7, "assets": []}
             return {"browser_download_url": "https://x/uploaded"}
@@ -103,8 +103,12 @@ class AttachAssetTest(unittest.TestCase):
         result = self.module.attach("https://forgejo.example", "xzc/repo", "wf-v0.0.8",
                                     str(self.wheel), "token", create_missing=True)
         self.assertIn("uploaded", result)
-        self.assertTrue(any(path == "releases" and kwargs.get("method") == "POST"
-                            for path, kwargs in calls))
+        release_call = next((kwargs for path, kwargs in calls if path == "releases"), None)
+        self.assertIsNotNone(release_call)
+        import json
+        payload = json.loads(release_call["data"].decode("utf-8"))
+        self.assertEqual(payload["tag_name"], "wf-v0.0.8")
+        self.assertEqual(payload["target_commitish"], "a" * 40)
 
     def test_different_existing_asset_is_refused(self):
         def api(base, repo, path, token, **kwargs):

@@ -98,7 +98,11 @@ def create_release(base, repo, tag, token):
         ref = _api(base, repo, f"git/refs/tags/{urllib.parse.quote(tag, safe='')}", token)
     except AttachError as exc:
         raise AttachError(f"tag {tag} is not on Forgejo; 先创建/推送 tag 后重试") from exc
-    sha = ((ref.get("object") or {}).get("sha") if isinstance(ref, dict) else None) or ref.get("sha")
+    if isinstance(ref, list):
+        ref = ref[0] if ref else None
+    if not isinstance(ref, dict):
+        raise AttachError(f"tag {tag} has no resolvable commit")
+    sha = (ref.get("object") or {}).get("sha") or ref.get("sha")
     if not sha:
         raise AttachError(f"tag {tag} has no resolvable commit")
     payload = json.dumps({"tag_name": tag, "target_commitish": sha, "name": tag,

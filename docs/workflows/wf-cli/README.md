@@ -36,7 +36,10 @@ environment. It treats a same-size asset as already attached and refuses a same-
 different size instead of overwriting it.
 
 The wheel and the release manifest must have the same version; `scripts/build-wf-cli-wheel.py`
-checks that and the `verify-wf-release.py` gate checks the CLI package inside the tag. Pushing a
+checks that and the `verify-wf-release.py` gate checks the CLI package inside the tag. When
+`wf-v<version>` already exists, the builder also requires `HEAD == tag commit` and a clean
+`docs/workflows/wf-cli` / `docs/workflows/wf-release` worktree. Never attach a wheel built from a
+newer working tree to an old tag; bump the version and create a new tag instead. Pushing a
 `wf-v*` tag also runs `.forgejo/workflows/wf-release.yml`, which verifies the tag and attaches the
 wheel plus `install.py` to the Forgejo release automatically. The workflow uses `runs-on: docker`;
 replace that label if your Forgejo runner uses another label.
@@ -101,6 +104,37 @@ wf self-upgrade --json
 which upgrades the wf assets inside the current project. It downloads the same release wheel when
 present and falls back to building the command from the selected release tag if the asset is
 missing. Use `--manager uv|pipx|pip` only when automatic detection fails.
+
+To remove the system command itself (not a project install):
+
+```bash
+wf self-uninstall          # preview only
+wf self-uninstall --apply  # remove the installed wf-cli tool
+```
+
+The preview prints the exact `uv tool uninstall wf-cli` / `pipx uninstall wf-cli` command. Project
+removal remains `wf uninstall` inside the project and is a different operation.
+
+## Git hook / push wrapper
+
+A pre-push hook can verify the tag and build the wheel locally, but it **cannot** attach release
+assets: at pre-push time the tag does not exist on the Forgejo remote yet, and git has no
+post-push hook. Use the wrapper for the complete sequence:
+
+```bash
+export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
+export FORGEJO_TOKEN="..."
+scripts/push-wf-tag.sh wf-v0.0.8 backup
+```
+
+- `.git/hooks/pre-push` / `scripts/git-hooks/pre-push` verifies the release and builds
+  `tmp/wf-cli-dist/` before the push;
+- the wrapper pushes the tag, then creates the release and attaches the wheel plus `install.py`;
+- if attachment fails, the wrapper reports the exact retry command. The tag is already pushed, so
+  do not recreate it.
+
+A direct `git push backup wf-v0.0.8` runs the build/verify hook but leaves the release attachment
+for the post-push command printed by the hook.
 
 ## Use it in a project
 
