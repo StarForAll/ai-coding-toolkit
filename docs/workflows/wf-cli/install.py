@@ -24,7 +24,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DEFAULT_BASE = "https://forgejo.xzc.com"
+DEFAULT_BASE = os.environ.get("WF_FORGEJO_BASE") or "https://forgejo.xzc.com"
 DEFAULT_REPO = "xzc/ai-coding-toolkit"
 TAG_RE = re.compile(r"^wf-v(\d+)\.(\d+)\.(\d+)$")
 WHEEL_RE = re.compile(r"^wf[_-]cli-(\d+\.\d+\.\d+)-py3-none-any\.whl$")
@@ -52,12 +52,13 @@ def _json(url, token=None):
             payload = response.read()
     except urllib.error.HTTPError as exc:
         hint = ("私有仓库请在环境中设置 FORGEJO_TOKEN" if exc.code in (401, 403)
-                else "核对 Forgejo API 地址与网络")
+                else "核对 Forgejo HTTP/API（可用 WF_FORGEJO_BASE 指定）；若只有 SSH 可用，用 scripts/install-wf-ssh.sh")
         raise BootstrapError("WF_CAPABILITY_UNAVAILABLE", "无法读取 Forgejo 发行列表",
                              {"url": url, "status": exc.code}, hint) from exc
     except OSError as exc:
         raise BootstrapError("WF_CAPABILITY_UNAVAILABLE", "无法连接 Forgejo 发行列表",
-                             {"url": url, "detail": str(exc)}, "核对网络后重试") from exc
+                             {"url": url, "detail": str(exc)},
+                             "核对 Forgejo HTTP/API 与 WF_FORGEJO_BASE；若只有 SSH 可用，用 scripts/install-wf-ssh.sh") from exc
     try:
         return json.loads(payload.decode("utf-8"))
     except ValueError as exc:

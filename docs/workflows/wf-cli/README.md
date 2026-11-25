@@ -28,6 +28,9 @@ python3 scripts/attach-wf-cli-asset.py \
   --tag wf-v<version> --wheel tmp/wf-cli-dist/wf_cli-<version>-py3-none-any.whl
 ```
 
+If the tag exists but the Forgejo release has not been created yet, add `--create-release`; the
+script creates the release through the API and then attaches both assets. It never creates the tag.
+
 The attach script uploads both the wheel and `install.py`; `FORGEJO_TOKEN` is read from the
 environment. It treats a same-size asset as already attached and refuses a same-name asset with a
 different size instead of overwriting it.
@@ -52,6 +55,40 @@ workflow that needs an explicit secret:
    the `token` input only if you are not using the automatic token.
 
 Never put the token into a URL, command line, committed file, or workflow log.
+
+## When Forgejo HTTP/API is unavailable
+
+The release-based installer and `attach-wf-cli-asset.py` need the Forgejo **HTTP/API** endpoint.
+`ssh://git@forgejo.xzc.com` may work while `https://forgejo.xzc.com` is refused; check both:
+
+```bash
+curl -I --max-time 5 "https://forgejo.xzc.com"
+git ls-remote "ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git" HEAD
+```
+
+If web/API is on a different host, port or reverse proxy, set its base explicitly:
+
+```bash
+export WF_FORGEJO_BASE="https://your-forgejo-web-base"
+export WF_GIT_URL="ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git"  # optional
+```
+
+Then rerun `install.py` or `attach-wf-cli-asset.py` (both also accept `--base`). To find the
+instance's real address, check Forgejo's `[server] ROOT_URL` (for example
+`grep ROOT_URL /etc/forgejo/app.ini` on the host) or the browser URL you use to open the web UI.
+
+If only SSH is reachable and Actions/HTTP are unavailable from this machine:
+
+```bash
+bash scripts/install-wf-ssh.sh
+```
+
+It clones the registered repository over SSH, resolves the newest `wf-v*` tag by creation date,
+and installs that tag with uv/pipx; it takes no version argument. Release upload and release-asset
+installation still need the HTTP endpoint (web UI or a machine that can reach it). SSH alone
+cannot create or attach Forgejo release assets, and Forgejo Actions must be enabled for a tag push
+to build a release automatically.
+
 
 ## Upgrade the system command (distinct from project upgrade)
 

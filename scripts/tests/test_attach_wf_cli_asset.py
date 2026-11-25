@@ -84,6 +84,28 @@ class AttachAssetTest(unittest.TestCase):
         self.assertEqual(len(calls), 3)
         self.assertIn(b"install.py", calls[2][1]["data"])
 
+    def test_create_release_when_missing_and_tag_exists(self):
+        calls = []
+
+        def api(base, repo, path, token, **kwargs):
+            calls.append((path, kwargs))
+            if path.startswith("releases/tags/"):
+                raise self.module.AttachError("not found", missing=True)
+            if path.startswith("git/refs/tags/"):
+                return {"object": {"sha": "a" * 40}}
+            if path == "releases":
+                return {"id": 7, "assets": []}
+            return {"browser_download_url": "https://x/uploaded"}
+
+        old = self.module._api
+        self.module._api = api
+        self.addCleanup(lambda: setattr(self.module, "_api", old))
+        result = self.module.attach("https://forgejo.example", "xzc/repo", "wf-v0.0.8",
+                                    str(self.wheel), "token", create_missing=True)
+        self.assertIn("uploaded", result)
+        self.assertTrue(any(path == "releases" and kwargs.get("method") == "POST"
+                            for path, kwargs in calls))
+
     def test_different_existing_asset_is_refused(self):
         def api(base, repo, path, token, **kwargs):
             return {"id": 1, "assets": [{"name": self.wheel.name, "size": 99}]}

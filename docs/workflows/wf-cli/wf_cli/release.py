@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from .version import VERSION_RE, require_release_version, tag_name
 
-SOURCE_URL = "ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git"
+SOURCE_URL = os.environ.get("WF_GIT_URL") or "ssh://git@forgejo.xzc.com/xzc/ai-coding-toolkit.git"
 RELEASE_SUBDIR = "docs/workflows/wf-release"
 MANIFEST_REL = RELEASE_SUBDIR + "/wf-release.json"
 INSTALLER_REL = RELEASE_SUBDIR + "/install.py"
@@ -387,6 +387,9 @@ def release_asset_url(version, base):
 
 def http_base(url=None):
     """Derive the Forgejo web/API base from the registered git source URL."""
+    override = os.environ.get("WF_FORGEJO_BASE")
+    if override:
+        return override.rstrip("/")
     url = url or SOURCE_URL
     parsed = urllib.parse.urlparse(url)
     if parsed.scheme not in ("ssh", "git+ssh"):
