@@ -2889,12 +2889,10 @@ def main(argv=None):
                 "installed": True,
                 "exits": ["修正 ~/.wf/config.json 后重跑 confirm-executor --scope global"], }, args.json)
     confirm_rc, confirm_facts = confirm_executor(args.target, python_candidate, scope)
-    if confirm_rc != 0:
-        return blocked("WF_EXECUTOR_UNCONFIRMED",
-                       "文件已投放，但解释器确认未完成（确认须人在终端输入 yes）", {
-                           "confirmation": confirm_facts, "installed": True,
-                           "exits": [f"在终端运行：{python_candidate} .wf/bin/wf.py confirm-executor --scope {scope}",
-                                     "确认后重跑原安装命令（幂等补齐）或直接 /wf-start"], }, args.json)
+    confirm_line = (f"解释器确认：已完成（{python_candidate}，scope={scope}）" if confirm_rc == 0 else
+                    "解释器确认：未完成（非交互终端或未输入 yes）——为让脚本化安装仍可完成，"
+                    "投放照常保留；在终端运行 "
+                    f"{python_candidate} .wf/bin/wf.py confirm-executor --scope {scope} 后再 /wf-start")
     message = "\n".join([
         "OK  WF_OK",
         f"目标：{args.target}",
@@ -2903,8 +2901,9 @@ def main(argv=None):
         f"清单摘要：{manifest_digest}",
         f"规则摘要：{(manifest.get('compatibility') or {}).get('rules_digest')}",
         f"托管段：{gitignore.get('action')}",
-        f"解释器：{python_candidate}（scope={scope}，已写入本机确认记录）",
-        "下一步：/wf-start",
+        f"解释器：{python_candidate}（scope={scope}）",
+        confirm_line,
+        "下一步：" + ("/wf-start" if confirm_rc == 0 else "先完成解释器确认，再 /wf-start"),
     ])
     return ok(message, {"installation": installation, "gitignore": gitignore}, args.json)
 
