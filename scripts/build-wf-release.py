@@ -27,6 +27,8 @@ from wflib import records as wf_records  # noqa: E402
 
 RELEASE_ROOT = os.path.join(common.REPO_ROOT, "docs", "workflows", "wf-release")
 PAYLOAD_TREE = os.path.join(RELEASE_ROOT, "wf-release")
+CLI_ROOT = os.path.join(common.REPO_ROOT, "docs", "workflows", "wf-cli")
+CLI_PYPROJECT = os.path.join(CLI_ROOT, "pyproject.toml")
 
 
 class BuildError(Exception):
@@ -120,6 +122,48 @@ def preflight():
     return dev_manifest
 
 
+def assert_cli_packaging(version):
+    """系统级 wf 命令的版本与入口必须由同一发行清单解析（不维护第二版本源）。"""
+    import tomllib
+
+    try:
+        with open(CLI_PYPROJECT, "rb") as handle:
+            data = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        raise BuildError(f"cannot read wf-cli pyproject: {exc}") from exc
+    scripts = (data.get("project") or {}).get("scripts") or {}
+    if scripts.get("wf") != "wf_cli.main:entry":
+        raise BuildError("wf-cli pyproject must expose `wf = wf_cli.main:entry`")
+    tool = (data.get("tool") or {}).get("hatch", {}).get("version") or {}
+    rel = tool.get("path")
+    pattern = tool.get("pattern")
+    if not rel or not pattern:
+        raise BuildError("wf-cli version must be dynamic from the release manifest")
+    manifest = os.path.realpath(os.path.join(CLI_ROOT, rel))
+    expected_manifest = os.path.realpath(os.path.join(RELEASE_ROOT, "wf-release.json"))
+    if manifest != expected_manifest:
+        raise BuildError("wf-cli version path must point at the release manifest")
+    if not os.path.isfile(manifest):
+        # 发行树缺失时仍允许从源树重建：路径/入口/模式已核，生成后再核版本。
+        return
+    try:
+        with open(manifest, "r", encoding="utf-8") as handle:
+            text = handle.read()
+    except OSError as exc:
+        raise BuildError(f"cannot read wf-cli version source: {exc}") from exc
+    match = re.search(pattern, text)
+    try:
+        declared = match.group("version") if match else None
+    except IndexError:
+        declared = None
+    if declared != version:
+        raise BuildError(f"wf-cli version does not resolve to release version {version}")
+    if not os.path.isfile(os.path.join(CLI_ROOT, "wf_cli", "main.py")):
+        raise BuildError("wf-cli package is missing wf_cli/main.py")
+    if not os.path.isfile(os.path.join(CLI_ROOT, "install.py")):
+        raise BuildError("wf-cli package is missing the versionless install.py bootstrap")
+
+
 def build(version, destination_root, dev_manifest=None):
     dev_manifest = dev_manifest or preflight()
     _assert_version_consistency(dev_manifest, version)
@@ -204,6 +248,7 @@ def verify_byte_reproduction():
     if not version:
         raise BuildError("existing wf-release.json has no version")
     assert_readme_version(version)
+    assert_cli_packaging(version)
     temp_root = tempfile.mkdtemp(prefix="wf-release-verify-")
     try:
         rebuild_root = os.path.join(temp_root, "wf-release")
@@ -294,11 +339,13 @@ def main(argv=None):
                 # 也不在这里重建（比对通过即证明源树与发行树一致）。
                 print("OK  source→release verified（未重建；重建请去掉 --verify）")
             else:
+                assert_cli_packaging(args.version)
                 assert_version_not_tagged(args.version)
                 dev_manifest = preflight()
                 if os.path.isdir(RELEASE_ROOT):
                     shutil.rmtree(RELEASE_ROOT)
                 manifest, manifest_path = build(args.version, RELEASE_ROOT, dev_manifest)
+                assert_cli_packaging(args.version)
                 print_summary(manifest, manifest_path)
                 print("OK  release tree written（提交与 tag 由人执行）")
         if not (args.version or args.verify or args.verify_token_parity):

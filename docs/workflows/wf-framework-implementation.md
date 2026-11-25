@@ -143,6 +143,11 @@ docs/workflows/wf/
 ├── skills/{wf-start,wf-continue,wf-finish,wf-bootstrap,wf-spec-update,wf-review,wf-review-action,
 │           wf-grilling,wf-tdd,wf-diagnosing-bugs,wf-code-review}/SKILL.md
 └── dev-manifest.json        # 首轮开发态部署用：登记资产清单/版本/标记，字节哈希由部署工具现算（本文 §4.6）
+
+docs/workflows/wf-cli/         # 系统级 wf 命令发行包（不投放项目，见本文 §2.1）
+├── pyproject.toml             # 版本动态读取 ../wf-release/wf-release.json
+├── install.py                 # 无版本 bootstrap：取最新正式 release 的 wheel 附件
+└── wf_cli/*.py                # 仅标准库：发行缓存/worktree、项目定位、命令转交、自升级
 ```
 
 **打包发行树**（发行提交根的形态，安装器唯一输入）：
@@ -163,22 +168,33 @@ docs/workflows/wf/
 
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 是 authoring 开发工具，**不进入发行清单**（设计稿 §8.1 第 0 项把 authoring 脚本排除在目标发行集外）。
 
-**发行根安装入口**：正式安装由发行根的单文件 `install.py`（仅标准库、自包含）承接，因为安装发生时目标项目还没有 `.wf/bin/`。它不投放目标项目、不属于 `.wf/` 资产，因此不参与三方升级，也不出现在卸载清单里；但它是**发行资产**，按 `target_class=release_only` 登记进清单 `assets` 并计入 `rules_digest`（本文 §4.2）。每次安装/重装都从所选发行重取，安装结果记入 `.wf/install/installation.json`（`release_ref`、`source_commit`、`version`、`manifest_digest`、`platforms`、`roots`、`assets`、`decisions`；R93 起不再有 `session_profile`）。机制稿 §10.1 的落点表只登记 `.wf/` 内脚本，本条补的是该类资产的发行侧落点；它的资产类型判定与是否纳入发行清单见本文 §9.2 第 5 项。
+**发行根安装/升级入口**：正式安装与升级由发行根的单文件 `install.py`（仅标准库、自包含）承接，因为安装发生时目标项目还没有 `.wf/bin/`，升级时又必须用目标发行自带的安装器。系统级 `wf` 命令负责解析并拉起它；`install.py` 自定位发行根、按清单版本推导 tag。它不投放目标项目、不属于 `.wf/` 资产，因此不参与三方升级，也不出现在卸载清单里；但它是**发行资产**，按 `target_class=release_only` 登记进清单 `assets` 并计入 `rules_digest`（本文 §4.2）。每次安装/重装都从所选发行重取，安装结果记入 `.wf/install/installation.json`（`release_ref`、`source_commit`、`version`、`manifest_digest`、`platforms`、`roots`、`assets`、`decisions`；R93 起不再有 `session_profile`）。机制稿 §10.1 的落点表只登记 `.wf/` 内脚本，本条补的是该类资产的发行侧落点；它的资产类型判定与是否纳入发行清单见本文 §9.2 第 5 项。
 
 **发行说明（源树 `README.md`，authoring 文档，不投放）必须包含**：打包输入（源树路径与目标版本）、工具与运行环境（`scripts/build-wf-release.py`、`scripts/wf-dev-deploy.py`，仅标准库、在作者机运行、**不进发行清单**）、版本同步义务（源树 `dev-manifest.json`、清单 `version` 与 tag 三者同批改）、产物校验（同一源树应字节复现 `wf-release/` 与清单哈希）、首发与升级步骤（人提交、人建 tag；安装器只接受该 tag）。2026-11-02 人裁：这两个工具不随发行分发；若日后要求随发行分发，须先给清单新增一个「随发行但不投放」的 `target_class` 并同批修订机制稿 §10.2。
 
 ## 2. CLI 与子命令面
 
-### 2.1 两层入口
+### 2.1 三层入口
 
 | 层 | 文件 | 职责 | 依赖 |
 |---|---|---|---|
+| 系统命令 | `docs/workflows/wf-cli/`（安装为 `wf`） | 解析登记源发行 tag、维护发行缓存/worktree；`install`/`upgrade`/`uninstall`/`repair` 转交发行安装器或独立入口；`self-upgrade` 用发布附件替换自身；无版本 bootstrap 安装最新 release；其他子命令定位项目并转交引导层 | 仅标准库；不导入 `wflib`；不写项目数据 |
 | 引导层 | `.wf/bin/wf.py` | 定位目标项目根、分派 `repair`/`uninstall`、只读解析执行器并移交 | 仅标准库；**不导入** `wflib` |
 | 语义层 | `.wf/lib/wflib/cli.py`（由 `wflib/module_main.py` 拉起） | 解析请求信封、分派子命令、调用固定处理器、输出结果结构 | 仅标准库；不联网、不调用 MCP |
 
+系统命令固定顺序（对齐设计稿 §1.1 命令启动）：
+
+1. 前置 `--project <绝对路径>` 只作为全局定位；缺省时 `install` 用 cwd，其余命令从 cwd 向上找 `.wf/`。
+2. 系统命令自身的安装由最新正式 release 的稳定 `install.py` 附件承担：它查询同一最新 release，读取 `wf_cli-<version>-py3-none-any.whl` 附件并用 uv/pipx 安装；不接受版本参数。
+3. `install`：目标已有安装记录时只允许同版核对；否则解析命令自身版本对应的 `wf-vX.Y.Z`，刷新/校验登记源缓存并取得该版本 worktree，运行该发行根 `install.py`（自定位发行根与 tag）。
+4. `upgrade`：从登记源默认分支取按 tag 创建时间最新且清单版本与 tag 一致的发行；目标已是最新时只报告，否则运行最新发行根 `install.py --upgrade`。不接受版本/引用/本地检出根参数。
+5. `self-upgrade`：取最新正式 release，优先下载系统命令 wheel 附件并用当前安装管理器替换命令；附件缺失时从同一 tag 构建。与项目 `upgrade` 分离。
+6. `uninstall` / `repair`：优先转交已安装版本的独立单文件；缺文件时从安装记录版本对应的发行重取同一单文件。
+7. 其他子命令：定位项目并 `os.execve(sys.executable, [<项目>/.wf/bin/wf.py, *rest], env)`；项目脚本的布局/执行器解析保持不变。
+
 引导层固定顺序（对齐设计稿 §1.1 命令启动与机制稿 §8.2）：
 
-1. 由 `Path(__file__).resolve()` 上溯确定项目根，核对 `.wf/bin/wf.py` 与 `.wf/` 布局；布局或目标无法确认即阻断（`WF_CAPABILITY_UNAVAILABLE`，facts 记缺失项）。源码/重取恢复入口必须由人用 `--project <绝对路径>` 显式给目标，不把源码目录或 cwd 当目标。
+1. 由 `Path(__file__).resolve()` 上溯确定项目根，核对 `.wf/bin/wf.py` 与 `.wf/` 布局；布局或目标无法确认即阻断（`WF_CAPABILITY_UNAVAILABLE`，facts 记缺失项）。系统命令已把项目定位结果交给本脚本路径，本层不用 cwd 选择项目；源码/重取恢复入口仍用 `--project <绝对路径>` 显式给目标。
 2. `argv[1] ∈ {repair, uninstall}` → 直接 `os.execv(sys.executable, [sys.executable, <同目录>/repair.py|uninstall.py, *rest])`，不读项目配置、不导入运行时（坏配置仍可达，机制稿 §10.5）。
 3. `argv[1] == confirm-executor` → 由引导层自身在当前解释器内执行：只写 `~/.wf/interpreters.json`、只读项目配置、不写项目数据、不进项目锁，完成后退出。该分支必须在第 4 步之前，否则「未确认即停」会让确认动作本身不可达（机制稿 §8.2 要求该子命令由引导解释器拉起）。该子命令只接受**人在终端**执行：非 TTY 一律返回 `WF_SEMANTIC_DECISION` 且不写记录；写入前把完整元组打印到终端并要求输入确认词，已有相同元组时直接报告「已确认」不再提示（设计稿 §1.1，实测见任务记录 `validation.md` §21）。
 4. 只读 `.wf/project-config.json` 取 `python_executable`，缺失则读 `~/.wf/config.json` 同名键，再回落到 `python3`；按机制稿 §8.2 取候选存在/可执行/路径身份/`size`/`mtime_ns` 并与 `~/.wf/interpreters.json` 元组匹配。未匹配即输出 `WF_EXECUTOR_UNCONFIRMED` 并停（不在引导解释器继续判定，出口是第 3 步的 `confirm-executor`）。
@@ -269,9 +285,9 @@ docs/workflows/wf/
 | `spec-update` | `--task <id> --changes <path>`（可先 `--changes-draft`） | `spec.update` | 知识变更成组应用 | 机制稿 §3.1、§8.4 | 1 |
 | `definition` | `prepare --id <workflow-id>`（建立准备代次） \| `validate --id <workflow-id>`（只读校验） | `definition.prepare` / `definition.validate` | 准备定义 / 静态校验 | 机制稿 §3.1、§7.2 | 2（2026-11-12 已交付） |
 | `run` | `create --creation <path>`（建立实例代次并首次绑定） \| `advance --run <id> [--decision <path>]` \| `pause --run <id> --reason <text>` \| `resume --run <id> [--decision <path>]`（解除**实例**暂停；`--decision` 可选） \| `locate --run <id>`（只读） \| `finish --run <id> [--decision <path>]`（正常结束；有覆盖实例记录的 `commit` 授权才提交，否则停在 `persist_pending`） \| `terminate --run <id> --plan <path>`（批量处置计划，元素 `{object, decision_ref, reason}`；`decision_ref` 为内联 `Decision`，其 `choice` 声明处置：`放弃`/`abandon` 或 `保留`/`keep`——**这两个取值由本文定义**） | `run.advance` / `run.terminate`（`create` 由 writer 主记录承载首次创建与首次绑定、`pause`/`resume` 是该动作的受控字段写入、`locate` 是只读断言） | 实例创建、推进、暂停/恢复与终态 | 机制稿 §2.2（实例暂停/恢复）、机制稿 §7.3、机制稿 §7.4 | 2（2026-11-12 **已交付**：`create`/`locate`/`advance`/`pause`/`resume`/`terminate`/`finish` 全部可用） |
-| `upgrade` | `--apply`（预览 + 令牌） | `asset.apply` | 维护（机制稿 §10.3） | 全路径 | 3 |
-| `repair` | 转交 `repair.py`（预览 + 令牌）；第二形态 `--dispose <plan>` 做维护组处置回写（见本文 §4.6） | `repair.apply` | 受控修复（机制稿 §5.4） | 机制稿 §5.4 | 1（写权/绑定/锚点最小恢复）、3（全部资产修复） |
-| `uninstall` | 转交 `uninstall.py`（`--purge` 单独确认） | `uninstall.apply` | 退出（机制稿 §10.5） | 机制稿 §10.5 | 1（开发态退出）、3（purge 与发行清单） |
+| 系统级 `wf install` / `wf upgrade` | 见本文 §4.1.1；本层不注册 `upgrade` | `asset.apply`（外部承接标识 `upgrade`） | 维护（机制稿 §10.3） | 全路径 | 3 |
+| 系统级 `wf repair` | 转交已安装 `repair.py`（预览 + 令牌）；第二形态 `--dispose <plan>` 做维护组处置回写（见本文 §4.6） | `repair.apply` | 受控修复（机制稿 §5.4） | 机制稿 §5.4 | 1（写权/绑定/锚点最小恢复）、3（全部资产修复） |
+| 系统级 `wf uninstall` | 转交已安装 `uninstall.py`（`--purge` 单独确认） | `uninstall.apply` | 退出（机制稿 §10.5） | 机制稿 §10.5 | 1（开发态退出）、3（purge 与发行清单） |
 | `confirm-executor` | `--scope system\|global\|project` | 引导层例外（机制稿 §8.2） | 无（只写 `~/.wf/interpreters.json`） | — | 1 |
 | `version` | `[--json]` | 只读 | 无 | — | 1 |
 
@@ -640,11 +656,12 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 | 场景 | 调用形态 | 目标判定 | 失败 |
 |---|---|---|---|
+| 系统命令 | `wf [--project <绝对路径>] <子命令>` | `install` 用 cwd 或 `--project`；其余从 cwd 向上找 `.wf/`，`--project` 优先 | 找不到项目 → `WF_PATH_INVALID` |
 | installed（已安装） | `<python> /abs/path/<项目>/.wf/bin/wf.py <子命令>`（任意 cwd） | 由脚本真实位置解析项目根并核对 `.wf/bin` 布局 | 布局/目标无法确认 → `WF_CAPABILITY_UNAVAILABLE` |
 | 项目根内短称 | `<python> .wf/bin/wf.py <子命令>` | 同上（不依赖 cwd 选择项目） | 同上 |
 | 源码/重取入口 | `<python> <重取路径>/wf.py --project <目标绝对路径> <子命令>` | 只接受显式绝对路径；不把源码目录或 cwd 当目标 | 缺 `--project` → `WF_PATH_INVALID` |
 
-不做 PATH 安装、不做 shell shim（设计稿 §1.1）。引导层不判断业务门禁；判定全部在语义层（机制稿 §3、§11）。
+系统级 `wf` 是真实安装的命令入口，不是 shell shim；它只定位/转交，项目引导层不用 cwd 选择项目。引导层不判断业务门禁；判定全部在语义层（机制稿 §3、§11）。
 
 ### 3.2 执行器解析
 
@@ -658,7 +675,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 3.3 独立恢复入口的启动例外
 
-`.wf/bin/repair.py` 与 `.wf/bin/uninstall.py` 各自单文件、仅标准库、不导入 `wflib`，由系统或人显式选择的可用 Python 直接运行；该回退**只授权这两个入口**，不延伸到 `wf.py` 引导段之外的常规命令（设计稿 §1.1、机制稿 §10.5）。二者仍需最小互斥、人确认与预览令牌（`repair`、`uninstall --purge`），`uninstall` 默认模式按其预览确认要求取得明确人决定。
+`.wf/bin/repair.py` 与 `.wf/bin/uninstall.py` 各自单文件、仅标准库、不导入 `wflib`；系统级 `wf repair` / `wf uninstall` 优先转交已安装版本的单文件，缺文件时从安装记录版本对应的发行重取，再由系统或人显式选择的可用 Python 直接运行该单文件；该回退**只授权这两个入口**，不延伸到 `wf.py` 引导段之外的常规命令（设计稿 §1.1、机制稿 §10.5）。二者仍需最小互斥、人确认与预览令牌（`repair`、`uninstall --purge`），`uninstall` 默认模式按其预览确认要求取得明确人决定。
 
 ### 3.4 标准库与离网边界
 
@@ -676,23 +693,21 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 ### 4.1 版本与发行引用
 
 - 专用发行引用：`refs/tags/wf-v<major>.<minor>.<patch>`；正式发布前保持 `0.x.y`（机制稿 §10.2、`.trellis/spec/docs/index.md` 的预发布版本约束）。
-- 解析链：人给的 tag → 本地已检出仓库解析为 commit → 读该提交根的 `wf-release.json` → 核 `version` 与 tag 一致、每源路径在发行根内、资产哈希一致。裸 SHA、未登记引用、同版异内容一律拒绝（`WF_RELEASE_CONFLICT`）。
+- 解析链：系统命令解析登记源 tag（install 用命令自身版本；upgrade 用默认分支按 tag 创建时间最新且清单版本与 tag 一致）→ 发行缓存 worktree 解析为 commit → 读该提交根的 `wf-release.json` → 核 `version` 与 tag 一致、每源路径在发行根内、资产哈希一致。裸 SHA、未登记引用、同版异内容一律拒绝（`WF_RELEASE_CONFLICT`）。
 - 同版本不可变：同一 `version` 已见不同 commit 或不同清单即冲突；首次无既往观察时只核当前身份一致，不声称远端不可移动。
 
 ### 4.1.1 安装与升级的完整语法
 
-安装发生在目标项目还没有 `.wf/bin/` 的时候，因此用发行根的单文件入口；升级走已安装的引导脚本。两者都要求人给出确切的发行引用与本地已检出的发行目录（机制稿 §10.2 不在远端解析）：
+安装发生在目标项目还没有 `.wf/bin/` 的时候，因此由系统命令把发行根 `install.py` 作为子进程入口；升级由系统命令把最新发行根的同一入口以 `--upgrade` 拉起。用户只调用系统命令，不给发行引用或本地检出根：
 
 ```
-python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/wf-vX.Y.Z> \
-    --source <已检出的发行目录> [--confirm]
-
-<python> <目标>/.wf/bin/wf.py upgrade --release <发行检出根> \
-    --release-ref <refs/tags/wf-vX.Y.Z> [--apply | --export-deviations --out <目录>] \
-    [--keep <路径>] [--restore <路径>]
+wf install [--project <绝对路径>] [--confirm] [--python <绝对路径>] [--json]
+wf upgrade [--project <绝对路径>] [--apply | --export-deviations --out <目录>] \
+    [--keep <路径>] [--restore <路径>] [--json]
+wf self-upgrade [--manager uv|pipx|pip] [--json]
 ```
 
-`--target` 必填且为绝对路径（不把源码目录或 cwd 当目标）；`--release-ref` 只接受已登记发行引用，解析到 commit 后核 `wf-release.json` 与资产哈希；应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；**没有平台参数**（2026-11-23 人裁）：`PLATFORMS` 是唯一来源，一次装齐全部平台根与全部 hook 资产，同时写进 `installation.platforms`（记录是事实，不是人选的子集）；登记里出现未知参数按 `WF_USAGE_INVALID`（`--platform`/`--skill-root` 都属此类）；重跑同一条安装命令只做补齐/核对（见本文 §2.3 的 `verify_installed`）；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认首装预览（缺省时入口先出预览并要求交互确认）；升级不接受 `--confirm`（用 `--apply` + 预览令牌）。升级不需要信封（维护入口，见本文 §2.2）。
+系统命令解析发行 tag 并取得缓存 worktree；`wf self-upgrade` 单独解析系统命令 release 附件，不改变项目资产；发行安装器的 `--target` 仍必填且为绝对路径（由系统命令给出，不把源码目录或 cwd 当目标）。`install.py` 无内部 `--source`/`--release-ref` 时自定位所在发行根，并从 `wf-release.json.version` 推导 `refs/tags/wf-vX.Y.Z`；显式内部参数仅供恢复/测试，仍须解析到 commit 后核 `wf-release.json` 与资产哈希。应用阶段把该清单**原样写入** `.wf/install/release-manifest.json`，再与 `installation.json.manifest_digest` 比对（不一致即 `WF_PERSISTENCE_FAILED`）；**没有平台参数**（2026-11-23 人裁）：`PLATFORMS` 是唯一来源，一次装齐全部平台根与全部 hook 资产，同时写进 `installation.platforms`（记录是事实，不是人选的子集）；登记里出现未知参数按 `WF_USAGE_INVALID`（`--platform`/`--skill-root` 都属此类）；重跑同一条安装命令只做补齐/核对（见本文 §2.3 的 `verify_installed`）；运行时信封的 `host_id` 必须属于 `installation.platforms`，否则 `WF_IDENTITY_UNRESOLVED`（R93 起没有 `--host-id`、`--capability-evidence` 与 `session_profile`）；`--confirm` 表示人在终端确认首装预览（缺省时入口先出预览并要求交互确认）；升级不接受 `--confirm`（用 `--apply` + 预览令牌）。升级不需要信封（维护入口，见本文 §2.2）。**用户面不接受** `--release`/`--release-ref`/`--source`/`--target`；项目内 `.wf/bin/wf.py upgrade` 已改为指向系统命令的出口，不再转交本地发行目录。
 
 ### 4.2 `wf-release.json` 键表
 
@@ -767,7 +782,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 - 令牌只在同一交互进程内有效：重新预览即销毁旧 nonce，进程退出后必须重新预览；不写任何持久记录、不作跨会话凭据。
 - `repair.py`、`uninstall.py` 与 `install.py` 各实现一份（设计稿 §1.1 要求 repair/uninstall 单文件且不导入框架运行时；install.py 是发行根入口，同样不导入 `.wf/lib`）；三份的生成、比对、失效行为必须一致，由 **authoring 发布前检查** `scripts/build-wf-release.py --verify-token-parity` 比对（不属于安装期自检，也不是运行期能力）：脚本用显式注入的 `--nonce`（仅测试形态，运行路径不使用）对同一预览对象分别跑三份实现，比对「nonce → 预览摘要 → 校验结果 → 失效后再次校验」四步输出，不一致即拒绝打包。
 - `repair.py --dispose`（维护组处置回写）与 `--apply` 走同一套预览与令牌：先只读预览目标回执、当前写权状态与将写入的 `disposition`，再由人在同一终端输入令牌；回写只改该回执的 `disposition` 字段，不动 `holder`/`generation`/资产，互斥由同一最小锁保证，因此不要求写权空闲（2026-11-03 人裁落地，实测见任务记录 `validation.md` §17）。
-- 第三轮已交付的 `upgrade --apply` 由发行根 `install.py` 实现同一规则（不导入 `.wf/lib`；`wf.py upgrade` 只转交），算法仍是这一份说明，不另立格式；`--export-deviations` 是只读子操作，不取令牌。
+- 第三轮已交付的 `upgrade --apply` 由发行根 `install.py` 实现同一规则（不导入 `.wf/lib`；系统级 `wf upgrade` 只解析并转交），算法仍是这一份说明，不另立格式；`--export-deviations` 是只读子操作，不取令牌。
 
 ### 4.6 首轮开发态部署
 
@@ -867,7 +882,7 @@ python3 install.py --target <目标项目绝对路径> --release-ref <refs/tags/
 | D34 | 最终门禁与正常/异常完成边界 | `wflib/gates.py::final_gate`、`wflib/tasks.py::cmd_archive` | 跨轮 | `审查与正常完成（charter T4）`、`异常归档边界`、`规划授权` |
 | D35 | 每条门禁到验收场景的映射 | 本文 §7.2；`scripts/validate-wf-design.py` 的场景映射检查（机制稿侧） | 跨轮 | 全部场景行（映射面） |
 | D36 | 每个固定 required 步骤的执行/检查面 | `.wf/workflows/*.md` 的 enforcement 行、`wflib/gates.py::HANDLERS`（id → 处理器）、`wflib/tasks.py::cmd_task_retrospect`（`task.retrospect` 状态动作；写 `task.retrospective` 与 `task.retrospective-done` 的 completed 回执） | 跨轮 | `固定流转程序化` |
-| D37 | 最小安装/自检、完整安装/升级/退出 | `scripts/wf-dev-deploy.py`（开发态）、`payload/install.py`（**发行根首次安装入口，首轮已交付**：发行引用解析、清单与 `rules_digest` 重算、Trellis 线索预览、首装维护持有、托管段、投放后自检；`p5_f0` 实跑）、`.wf/bin/uninstall.py`（开发态退出）；`upgrade --apply`/`purge` 未交付 | 跨轮+第三轮（`install.py` 已计入首轮，见本文 §6.1） | `资产落点`、`Git 就绪`、`本地命令引导` |
+| D37 | 最小安装/自检、完整安装/升级/退出 | `scripts/wf-dev-deploy.py`（开发态）、`payload/install.py`（**发行根安装/升级入口**：自定位发行根与 tag、清单与 `rules_digest` 重算、Trellis 线索预览、首装维护持有、托管段、投放后自检；`p5_f0` 实跑）、`docs/workflows/wf-cli/`（**系统级 `wf` 入口**：登记源缓存/worktree、install/upgrade/uninstall/repair 转交、`self-upgrade`、无版本 bootstrap）、`scripts/build-wf-cli-wheel.py`（发行附件构建）、`scripts/attach-wf-cli-asset.py`（附件上传）、`.wf/bin/uninstall.py`（开发态退出）；`upgrade --apply`/`purge` 未交付 | 跨轮+第三轮（`install.py` 已计入首轮，见本文 §6.1） | `资产落点`、`Git 就绪`、`本地命令引导` |
 | D38 | 机制/实现分工、使用速查与后续验证责任 | 本文 §0、本文 §8 | 跨轮 | `固定流转程序化`、`本地命令引导` |
 
 ### 6.3 首轮下限对齐（设计稿 §8.1）
@@ -926,7 +941,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 | G13 | `wflib/cli.py::cmd_enable`（Trellis 互斥核对）、`wflib/scope.py`、`.wf/bin/uninstall.py` | `共存与重装`、`Trellis 互斥`、`紧急变更边界` | F2 |
 | G14 | `wflib/tasks.py::cmd_task_abandon`（首轮单任务）、`task-rework`/`task-replace`（第二轮） | `返工接续`、`异常归档边界`、`放弃改动处置` | F1/F2 |
 | G15 | `wflib/spec.py`、`wflib/curation.py`、`wflib/gates.py::final_gate` | `extracted 生命周期`、`spec 正向积累`、`spec 跨任务复用`、`知识删除与依赖解除`、`策展引用统计`、`读取留痕完整性`、`无 MCP 全流程` | F0/F1 |
-| G16 | `wflib/config.py`、`wflib/assets.py`、`wf.py upgrade`（第三轮） | `升级三方判断`、`流程与配置`、`发行身份` | F1/F2 |
+| G16 | `wflib/config.py`、`wflib/assets.py`、`docs/workflows/wf-cli/`（发行解析/入口）、`payload/install.py --upgrade` | `升级三方判断`、`流程与配置`、`发行身份` | F1/F2 |
 | G17 | `.wf/bin/wf.py` 引导段、`wflib/config.py`、`wflib/maintenance.py` | `Python 执行器`、`本地命令引导`、`执行器配置可信`、`执行器确认绑定`、`确认记录身份`、`项目标识生命周期` | F0/F1 |
 | G18 | `wflib/spec.py`（预算）、`wflib/codes.py`、`wflib/gates.py` | `spec 预算`、`固定流转程序化`、`判定物与原因码` | F1 |
 | G19 | `wflib/review.py`、`<skill 根>/wf-review`、`wf-review-action` | `审查与正常完成（charter T4）`、`审查 CLI 身份确认`、`审查适配副本` | F2 |
@@ -963,7 +978,7 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 
 | 时刻 | 入口 | 人工动作/令牌 | 阻断出口（原因码 → 出口） |
 |---|---|---|---|
-| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> [--confirm]`（先出预览）；正式发行 `python3 install.py --target <abs> --release-ref <refs/tags/wf-vX.Y.Z> --source <发行目录>`（均无平台参数：一次装齐全部支持平台）（首轮已交付；升级/导出入口已随 0.1.5 交付） | 给目标绝对路径与发行引用；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核正确发行引用；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
+| 首次投放（开发态/正式发行） | 开发态 `python3 scripts/wf-dev-deploy.py --target <abs> [--confirm]`（先出预览）；正式发行在目标项目运行系统级 `wf install`（预览）→ `wf install --confirm`（均无平台参数：一次装齐全部支持平台） | 系统 wf 版本与目标路径；确认预览与投放根；Trellis 资产风险确认 | `WF_ASSET_DECISION` → 保留/移走/改名；`WF_RELEASE_CONFLICT` → 核系统 wf 版本/登记源；`WF_TARGET_COLLISION` → 保留双方并确认目标 |
 | 首次解释器确认 | `<python> .wf/bin/wf.py confirm-executor --scope system\|global\|project`（终端，人执行） | 人在终端执行，入口探测 `--version` | `WF_EXECUTOR_UNCONFIRMED` → 确认当前解释器 / 换已批准解释器 / 回到未设置 |
 | 开始会话 | 宿主 skill `wf-start`（唯一启用方式） | 人显式调用 | `WF_FLOW_CONFLICT` → 清理 Trellis 来源后换新会话；`WF_IDENTITY_UNRESOLVED` → 核实宿主身份或改用受支持宿主（wf 签发路径属第二轮，首轮不可选）；`WF_WRITER_BUSY` → 等待或已确认交接 |
 | 选择对象 | `wf-start` → `wf.py task-new`（普通任务）/ `run create`（第二轮） | 人选对象；实例另需确认版本/输入/展开规则 | `WF_BINDING_MISMATCH` → 原对象结束后新会话选择；`WF_DEPENDENCY_UNMET` → 等前置或人确认返工/重连；`WF_APPROVAL_MISSING` → 先批准规划 |
@@ -979,8 +994,8 @@ G 编号沿用机制稿 §12.2（该表已给门禁与场景行的对应），�
 | 完成门禁与归档 | 人调用 `wf-finish` → `wf.py archive --task <id> --decision <path>` | 人了解结果与未核实项后调用 finish；该 Decision 记调用证据与按精确路径的提交授权 | `WF_COMMIT_NOT_AUTHORIZED` → 等人处理；`WF_SEMANTIC_DECISION` → 裁定未决项；`WF_WORKSPACE_UNRESOLVED` → 处置工作区 |
 | 日常收工 | `wf-continue` → `wf.py stop --decision <path>` | 人给**一个**去向（提交 / 保留 WIP / 反向修正 / 具名承接），`subject` 列出覆盖路径或承接对象；提交与反向修正的授权写在同一 Decision 数组里 | `WF_WORKSPACE_UNRESOLVED` → 落实际处置后再释放；`WF_WIP_UNRESOLVED` → 同对象恢复或处置 |
 | 未完成收工就关闭 | 新会话先人直调 `.wf/bin/repair.py`（预览 + 令牌），再 `wf-start` | 人确认旧写者已停止、核对 Git/产物/WIP、输入令牌 | `WF_HISTORY_UNRESOLVED` → 只读核原文/Git 后 repair；`WF_GENERATION_STALE` → 停止写并重核 |
-| 升级（0.1.6 已交付） | `wf.py upgrade --release <发行检出根> --release-ref <refs/tags/wf-vX.Y.Z> [--apply]`；冲突逐路径 `--keep/--restore <路径>`（`--keep` 仅可选资产） | 预览 + 终端令牌；另有提交授权 | `WF_PREVIEW_STALE` → 重新预览；`WF_ASSET_DECISION` → 逐项选保留/恢复/合并；`WF_SEMANTIC_DECISION` → 先暂停任务/处置 WIP/释放写权；必需资产保留删除 → 改 `--restore` 或改清单 |
-| 本地偏离回源（只读） | `wf.py upgrade --release <发行检出根> --release-ref <ref> --export-deviations --out <目录>`（或 `install.py --upgrade ... --export-deviations`） | **不需要**令牌/写权/暂停任务；人确认回源范围 | 非空 `--out`/符号链接/部分写失败 → `WF_ASSET_DECISION`/`WF_PATH_INVALID`/`WF_PERSISTENCE_FAILED`；`pending` 项不等于已接受偏离 |
+| 升级（0.1.6 已交付；入口已改系统命令） | `wf upgrade`（取登记源默认分支最新发行）[`--apply`]；冲突逐路径 `--keep/--restore <路径>`（`--keep` 仅可选资产） | 预览 + 终端令牌；另有提交授权 | `WF_PREVIEW_STALE` → 重新预览；`WF_ASSET_DECISION` → 逐项选保留/恢复/合并；`WF_SEMANTIC_DECISION` → 先暂停任务/处置 WIP/释放写权；必需资产保留删除 → 改 `--restore` 或改清单 |
+| 本地偏离回源（只读） | `wf upgrade --export-deviations --out <目录>`（系统命令解析最新发行后由发行根 `install.py --upgrade` 执行） | **不需要**令牌/写权/暂停任务；人确认回源范围 | 非空 `--out`/符号链接/部分写失败 → `WF_ASSET_DECISION`/`WF_PATH_INVALID`/`WF_PERSISTENCE_FAILED`；`pending` 项不等于已接受偏离 |
 | 受控修复 | `.wf/bin/repair.py`（人直调；`--dispose <plan>` 处置维护组） | 预览 + 终端令牌；确认旧写者停止 | `WF_RECORD_INVALID` → 保留原文并按人指定事实重建；`WF_HISTORY_UNRESOLVED` → 只读核对 |
 | 卸载（0.1.6 已交付） | `.wf/bin/uninstall.py`（`--purge` 另确认） | 预览 + 确认；确认无 wf 进程后手工清理 `.wf-lock` 与 `/.wf-lock` 忽略行 | `WF_ASSET_DECISION` → 逐项选保留/移走/删除；`WF_WRITER_BUSY` → 先核实旧写者 |
 | 巡检 | `wf.py inspect`（人发起，或每 10 个正常归档的整数倍） | 无 | 只读报告三类结果；要修复则另取授权 |

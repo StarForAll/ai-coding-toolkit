@@ -20,3 +20,5 @@
 **0.0.6**：安装命令自带解释器选择与确认——`--python` 缺省系统 `python3`（没有则拒绝安装），安装成功后由同一条命令转交 `confirm-executor`（人输入 yes），`--python` 写入本机用户级配置并按 global 确认；安装/升级 tag 校验支持 source 在仓库子目录（0.0.5 已改，0.0.6 起文档与示例直接使用）。
 
 **0.0.7**：`wf help` 的 48 个命令示例与安装/升级示例统一给取值加引号（单/双均可）；`wf help` 无参输出增 `quoting` 约定；`session-flow` 运行约定第 7 条把「命令取值一律加引号」写成唯一论述位，skills 以指针继承；测试的示例解析改用 `shlex.split` 与 shell 语义一致。
+
+**0.0.8**：wf 改为系统级命令分发——`docs/workflows/wf-cli/` 以登记 Forgejo 发行 tag 安装为 `wf`，`wf install` 按命令自身版本、`wf upgrade` 取默认分支按 tag 创建时间最新的发行，`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`；用户面移除 `--release`/`--release-ref`/`--source`，发行安装器自定位发行根并按清单版本推导 tag，项目内 `wf.py upgrade` 只给系统命令出口。系统命令安装改为无版本 bootstrap（取 Forgejo 最新正式 release 的稳定 `install.py` 附件，再由它取同一 release 的 `wf_cli-<version>-py3-none-any.whl`），新增 `wf self-upgrade` 升级系统命令本身（与项目 `wf upgrade` 分离），release 必须保存该 wheel 附件。

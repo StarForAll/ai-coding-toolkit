@@ -21,7 +21,7 @@
       "target_relative": ".wf/bin/uninstall.py"
     },
     {
-      "digest": "sha256:42d48c5ed04a811329dc696f03137131a8b06eaf6bfeb118c47aff76122b5325",
+      "digest": "sha256:4d8a1624af7ead44be8947d72fd08abe18a000f593f842c84b2142e08fa54439",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -42,7 +42,7 @@
       "target_relative": ".codex/hooks/wf-session-identity.py"
     },
     {
-      "digest": "sha256:dbdc34a7f55308ae537547093eb0fdac8c298c6e53b6f7384a37e67d01489df7",
+      "digest": "sha256:fcde8488469072f043b1738ff057fb0d5f61c768ef312d70c7e7bc3389fb7832",
       "executable": true,
       "file_kind": "file",
       "kind": "installer",
@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:aac4aca888655defb50210722f8fc99fbf64dd629fbdc4e7749bde7777371708",
+      "digest": "sha256:c2a39bc09fa83f04ec0ad93f69e699ef534199e75bdc24f2bf2d44619bd0a9a9",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -162,7 +162,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:5a01799fabe035bb016f48da1e20edcf0c10b1734587c153758c03b05250fc1d",
+      "digest": "sha256:b7229c08ad3fd33fd0a9ec2cda1f2c97df598e0d522c16f66ba67baa6f5e25a3",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -552,7 +552,7 @@
       "target_relative": ".wf/templates/user-workflow.md"
     },
     {
-      "digest": "sha256:86ba4f9e53d69b6461e1b24e57e8034f76cf9b31aecbf42344aa7d0a807cfe19",
+      "digest": "sha256:d6c0f862949680b1848c94bb5c7de2c62b744c2e09ee6bae5c865243b85121c0",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -572,7 +572,7 @@
       "target_relative": ".wf/workflows/knowledge-flow.md"
     },
     {
-      "digest": "sha256:0efadaa6472f3bf92257fe26a9480bdacab27e50b827a4230d795c6e7e4c3ae7",
+      "digest": "sha256:7f1ec2b53ad9dff8e3738f90c5dd5645f0a5f5a02ad518f5de6fcf8d717676b9",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -592,7 +592,7 @@
       "target_relative": ".wf/workflows/review-flow.md"
     },
     {
-      "digest": "sha256:d1d40de7ee136f94280ef251d6dde58563420e323c8339286a46a2570ddd843a",
+      "digest": "sha256:5b9ed7a0eaf05be591e31db1abc03c51e05ab8a7209d67b6c515d7f7f6f1ea40",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -632,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:12ec0d518a7fd127a63d39acef95d7cf212d4376164ee7c9c570d9f9187d0b5b",
+      "digest": "sha256:641853a4726f849d5e9b9be8fcdb99c3cd03ec2a0bdef80450fb3399b2f6bb81",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:b51a231307874d8522c0f01ad166fa952c44db62c3c2d0cf12d5ce8658a2c059",
+    "rules_digest": "sha256:d03fc837a29b488ef24ab68aab096bd165b70c0f457a65967fefa8952e1f5c73",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.7"
+  "version": "0.0.8"
 }

@@ -1,0 +1,48 @@
+name: wf release
+
+on:
+  push:
+    tags:
+      - "wf-v*"
+
+jobs:
+  release:
+    runs-on: docker
+    steps:
+      - name: Check out repository
+        uses: https://data.forgejo.org/actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: https://data.forgejo.org/actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Verify release identity
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#wf-v}"
+          test "$version" != "$GITHUB_REF_NAME"
+          python3 scripts/build-wf-release.py --version "$version" --verify
+
+      - name: Build system command wheel and bootstrap
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade uv
+          version="${GITHUB_REF_NAME#wf-v}"
+          python3 scripts/build-wf-cli-wheel.py --version "$version" --out dist/wf-cli
+          rm -f dist/wf-cli/*.tar.gz
+
+      - name: Upload release assets
+        uses: https://data.forgejo.org/actions/forgejo-release@98265452477dafb3f0f27ba9c462c90b18cb44fd # v2.13.4
+        with:
+          direction: upload
+          url: ${{ env.GITHUB_SERVER_URL }}
+          repo: ${{ env.GITHUB_REPOSITORY }}
+          tag: ${{ env.GITHUB_REF_NAME }}
+          token: ${{ env.GITHUB_TOKEN }}
+          title: ${{ env.GITHUB_REF_NAME }}
+          release-dir: dist/wf-cli
+          release-notes: "wf ${{ env.GITHUB_REF_NAME }} — system command wheel and install.py"
+          override: true

@@ -110,6 +110,8 @@ CONTROL_STEP_COMMANDS = {
 
 # 由引导层转交、不在语义层 COMMANDS 表中的独立入口
 BOOTSTRAP_ENTRIES = ("repair", "uninstall")
+# 由系统级 wf 命令承接、不在项目运行时 COMMANDS 表中的入口（安装/升级应用）
+EXTERNAL_HANDLERS = ("upgrade",)
 
 # 交付轮次（2026-11-05 人裁 B）：步骤 → 交付轮次；未列出的即首轮交付。
 # 判据：清单声明"本轮已交付"的步骤，其承接命令不得是能力不可用桩；
@@ -282,7 +284,7 @@ def support_report(manifest, commands, bootstrap_entries=()):
     清单声明 `delivery_round <= manifest.delivery_round` 的步骤，其承接命令不得是
     "能力不可用"桩；声明为后续轮次的步骤只报告覆盖情况，不阻断启用。
     """
-    available = set(commands) | set(bootstrap_entries)
+    available = set(commands) | set(bootstrap_entries) | set(EXTERNAL_HANDLERS)
     stub_rounds = _stub_rounds(commands)
     problems = []
     current_round = manifest.get("delivery_round")

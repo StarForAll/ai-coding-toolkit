@@ -42,6 +42,7 @@ Reusable assets accumulated from AI-assisted programming work: specs, templates,
 |------|------|
 | `scripts/` | Repository maintenance scripts (`validate-skills.sh`) |
 | `docs/` | Notes and design documents, including 3 workflows under `docs/workflows/**` |
+| `docs/workflows/wf-cli/` | System-level `wf` command distribution package (installed from the registered Forgejo tag; never deployed to target projects) |
 | `reference-data/` | Empty directory reserved for future use |
 | `tmp/` | Temporary workflow data, ignored by `.gitignore` |
 | `.trellis/` | Trellis workspace: workflow, tasks, workspace, scripts, spec, library-lock |

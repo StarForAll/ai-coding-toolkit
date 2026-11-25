@@ -88,5 +88,37 @@ class SourceLayoutTest(unittest.TestCase):
         self.assertEqual(problems[0]["reason"], "missing in tag commit tree")
 
 
+class SelfLocatedInstallTest(unittest.TestCase):
+    """系统 wf 命令只传 --target；安装器自定位发行根并从清单版本推导 tag。"""
+
+    def test_installer_preview_without_source_or_release_ref(self):
+        import json
+        import shutil
+        import sys
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = REPO / "docs/workflows/wf-release"
+            release = root / "docs/workflows/wf-release"
+            shutil.copytree(source, release)
+            _git(root, "init", "-q")
+            _git(root, "config", "user.email", "t@t")
+            _git(root, "config", "user.name", "t")
+            _git(root, "add", "-A")
+            _git(root, "commit", "-qm", "release 0.0.8")
+            _git(root, "tag", "wf-v0.0.8")
+            target = root / "project"
+            target.mkdir()
+            result = subprocess.run(
+                [sys.executable, str(release / "install.py"), "--target", str(target), "--json"],
+                capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["facts"]["preview"])
+            self.assertTrue(payload["facts"]["platforms"])
+            self.assertIn("wf-v0.0.8", result.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

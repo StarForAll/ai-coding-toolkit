@@ -13,9 +13,11 @@
 2. `release_tree_matches_source` 源码树 → 重建发行树 == 工作树发行树（复用 builder `--verify`）；
 3. `tag_tree_matches_worktree`   tag 提交内 `docs/workflows/wf-release/**` 的 blob 与工作树逐字节一致，
                                  且工作树没有该提交缺少的发行文件（多出来的文件就是"没进 tag 的发行"）；
-4. `manifest_version`           tag 提交内 `wf-release.json.version == --version`；
-5. `readme_version`             tag 提交内 `docs/workflows/wf/README.md` 的「目标版本」行 == --version；
-6. `rules_digest`               按同一算法重算 `compatibility.rules_digest` 并与声明值相同。
+4. `cli_package`                tag 提交内 `docs/workflows/wf-cli/` 存在、入口为 `wf_cli.main:entry`，
+                                 版本动态读取的清单与 tag 版本一致；
+5. `manifest_version`           tag 提交内 `wf-release.json.version == --version`；
+6. `readme_version`             tag 提交内 `docs/workflows/wf/README.md` 的「目标版本」行 == --version；
+7. `rules_digest`               按同一算法重算 `compatibility.rules_digest` 并与声明值相同。
 
 用法：
     python3 scripts/verify-wf-release.py --version 0.1.7 --ref refs/tags/wf-v0.1.7 [--json]
@@ -39,6 +41,10 @@ TARGET_VERSION_RE = re.compile(r"\|\s*目标版本\s*\|\s*`([0-9]+\.[0-9]+\.[0-9
 RELEASE_PREFIX = "docs/workflows/wf-release/"
 README_PATH = "docs/workflows/wf/README.md"
 MANIFEST_PATH = RELEASE_PREFIX + "wf-release.json"
+CLI_PREFIX = "docs/workflows/wf-cli/"
+CLI_PYPROJECT = CLI_PREFIX + "pyproject.toml"
+CLI_MAIN = CLI_PREFIX + "wf_cli/main.py"
+CLI_BOOTSTRAP = CLI_PREFIX + "install.py"
 
 
 class VerifyError(Exception):
@@ -136,6 +142,63 @@ def check_tag_tree(repo, commit, version):
                        "不手改发行树来迎合旧 tag，也不把未提交的发行树当作已发行"])}
 
 
+def check_cli_package(repo, commit, version):
+    """系统级 wf 命令随同一发行 tag 交付，且版本动态解析到该 tag 的清单。"""
+    import posixpath
+    import tomllib
+
+    try:
+        data = tomllib.loads(_blob(repo, commit, CLI_PYPROJECT).decode("utf-8"))
+    except (VerifyError, ValueError, tomllib.TOMLDecodeError) as exc:
+        return {"name": "cli_package", "ok": False,
+                "facts": {"path": CLI_PYPROJECT, "detail": str(exc)},
+                "exits": ["发行 tag 必须包含 docs/workflows/wf-cli/pyproject.toml"]}
+    scripts = (data.get("project") or {}).get("scripts") or {}
+    if scripts.get("wf") != "wf_cli.main:entry":
+        return {"name": "cli_package", "ok": False,
+                "facts": {"scripts": scripts},
+                "exits": ["wf-cli 必须暴露 wf = wf_cli.main:entry"]}
+    tool = (data.get("tool") or {}).get("hatch", {}).get("version") or {}
+    rel = tool.get("path")
+    pattern = tool.get("pattern")
+    if not rel or not pattern:
+        return {"name": "cli_package", "ok": False,
+                "facts": {"tool": tool},
+                "exits": ["wf-cli 版本必须动态读取发行清单"]}
+    target = posixpath.normpath(CLI_PREFIX + rel)
+    if not target.startswith(RELEASE_PREFIX):
+        return {"name": "cli_package", "ok": False,
+                "facts": {"path": rel, "resolved": target},
+                "exits": ["wf-cli 版本路径必须指向发行清单"]}
+    try:
+        text = _blob(repo, commit, target).decode("utf-8")
+    except VerifyError as exc:
+        return {"name": "cli_package", "ok": False,
+                "facts": {"path": target, "detail": str(exc)},
+                "exits": ["发行 tag 必须包含 wf-cli 读取的发行清单"]}
+    match = re.search(pattern, text)
+    try:
+        declared = match.group("version") if match else None
+    except IndexError:
+        declared = None
+    main_ok = True
+    bootstrap_ok = True
+    try:
+        _blob(repo, commit, CLI_MAIN)
+    except VerifyError:
+        main_ok = False
+    try:
+        _blob(repo, commit, CLI_BOOTSTRAP)
+    except VerifyError:
+        bootstrap_ok = False
+    ok = declared == version and main_ok and bootstrap_ok
+    return {"name": "cli_package", "ok": ok,
+            "facts": {"declared": declared, "requested": version,
+                      "main": main_ok, "bootstrap": bootstrap_ok},
+            "exits": ([] if ok else
+                      ["wf-cli 的版本/入口必须与发行 tag 同批：重建发行后提交包目录再打 tag"])}
+
+
 def check_manifest_version(repo, commit, version):
     try:
         manifest = json.loads(_blob(repo, commit, MANIFEST_PATH).decode("utf-8"))
@@ -204,6 +267,7 @@ def verify(repo, version, ref, source_check=None):
     checks.append((source_check or check_release_tree_matches_source)(repo, version))
     if commit:
         checks.append(check_tag_tree(repo, commit, version))
+        checks.append(check_cli_package(repo, commit, version))
         checks.append(check_manifest_version(repo, commit, version))
         checks.append(check_readme_version(repo, commit, version))
         checks.append(check_rules_digest(repo, commit))

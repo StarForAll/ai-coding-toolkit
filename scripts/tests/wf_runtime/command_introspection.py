@@ -10,8 +10,9 @@
 1. **一层同模块助手**：真实函数把参数判断下沉到同模块私有助手时（如
    `runs.validate` → `_require_workflow_id(args)`、`cli.cmd_writer_handover` →
    `_handover_begin(ctx, args)`），跟随一层——不再要求每个命令都亲口读 flag；
-2. **引导层**：`confirm-executor` / `upgrade` 在本层是转交桩，参数由 `.wf/bin/wf.py`
-   真读；`EXTRA_SOURCES` 显式登记这些命令的补充来源（不做通用猜测）。
+2. **引导层**：`confirm-executor` 在本层是转交桩，参数由 `.wf/bin/wf.py` 真读；
+   `EXTRA_SOURCES` 显式登记这些命令的补充来源（不做通用猜测）。升级由系统级 `wf` 命令承接，
+   本层不注册 `upgrade`。
 
 `FLAG_READ_RE` 之外的取值形态（拼装后的动态名）无法静态提取——调用方必须显式
 allowlist 并写明理由，不允许把"提取不到"当成"没消费"。
@@ -33,7 +34,6 @@ PAYLOAD = Path(__file__).resolve().parents[3] / "docs" / "workflows" / "wf" / "p
 # 本层为转交桩、参数由引导层读取的命令（显式登记，不做通用猜测）。
 EXTRA_SOURCES = {
     "confirm-executor": ["bin/wf.py"],
-    "upgrade": ["bin/wf.py"],
 }
 
 # 参数不在 `args.value("--x")` 形态里被读取的命令——必须写明为什么提取不到，
@@ -41,7 +41,6 @@ EXTRA_SOURCES = {
 NON_STANDARD_READERS = {
     "confirm-executor": "参数由引导层 bin/wf.py 的 parse_scope(argv) 手解，不经 Args；"
                         "本层是 WF_CAPABILITY_UNAVAILABLE 转交桩",
-    "upgrade": "参数由引导层 bin/wf.py 的 value_flags/布尔集手工转交 install.py，不经 Args",
 }
 
 

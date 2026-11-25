@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""install.py — 发行根安装入口（实现稿 §1.5、§4.1.1、机制稿 §10.2/§10.4）。
+"""install.py — 发行根安装/升级入口（实现稿 §1.5、§4.1.1、机制稿 §10.2/§10.4）。
 
 单文件、仅标准库、自包含：安装发生时目标项目还没有 `.wf/bin/`，不能导入 wflib。
 它不投放目标项目，按 `target_class=release_only` 计入 rules_digest。
+用户入口是系统级 `wf` 命令；本文件默认自定位到所在发行根，并从清单版本推导发行 tag。
 """
 
 from __future__ import annotations
@@ -644,6 +645,7 @@ def runtime_support(target):
         " for name, handler in cli.COMMANDS.items()};"
         "print(json.dumps({'supported': sorted(gates.supported_keys()),"
         " 'handlers': gates.HANDLERS, 'commands': sorted(cli.COMMANDS),"
+        " 'external_handlers': list(getattr(gates, 'EXTERNAL_HANDLERS', ())),"
         " 'delivery_round': getattr(gates, 'CURRENT_DELIVERY_ROUND', None),"
         " 'stub_rounds': {name: rnd for name, rnd in stubs.items() if isinstance(rnd, int)}}))"
     )
@@ -791,6 +793,7 @@ def self_check(target, manifest, skill_roots, installation=None, intentional_mis
         if supported - declared:
             problems.append({"required_steps": sorted(supported - declared), "reason": "handler not declared"})
         commands = set(support.get("commands") or [])
+        external = set(support.get("external_handlers") or [])
         bootstrap = {name for name in ("repair", "uninstall")
                      if os.path.isfile(os.path.join(target, ".wf/bin", f"{name}.py"))}
         for step in manifest.get("required_steps") or []:
@@ -800,7 +803,7 @@ def self_check(target, manifest, skill_roots, installation=None, intentional_mis
             handler = support.get("handlers", {}).get(step_id)
             if handler is None:
                 problems.append({"required_step": step_id, "reason": "no fixed handler entry"})
-            elif handler not in commands | bootstrap:
+            elif handler not in commands | bootstrap | external:
                 problems.append({"required_step": step_id, "reason": f"handler entry missing: {handler}"})
         # 交付轮次可达（2026-11-05）：声明的当前交付集内，承接命令不得是能力不可用桩。
         current_round = manifest.get("delivery_round")
@@ -1290,7 +1293,7 @@ def verify_installed(args, manifest, skill_roots, branch_findings=None):
                     "目标装的是另一个版本：重跑安装只补本发行的缺失，跨版本请走升级",
                     {"installed_version": recorded_version,
                      "release_version": manifest.get("version"),
-                     "exits": ["按升级流程处理：install.py --upgrade（先看预览，再 --apply）"]}, args.json)
+                     "exits": ["按升级流程处理：系统 wf 命令 `wf upgrade`（先看预览，再 --apply）"]}, args.json)
             writes, plan_problems = plan_writes(args.target, skill_roots, manifest)
             if plan_problems:
                 return blocked("WF_ASSET_DECISION",
@@ -1327,7 +1330,7 @@ def verify_installed(args, manifest, skill_roots, branch_findings=None):
                     "WF_ASSET_DECISION",
                     "目标已安装，但落点内容与本发行不一致：这里不覆盖用户改动，改动请走升级（三方匹配）",
                     dict(facts_base, drifted=drifted[:20],
-                         exits=["按升级流程处理：install.py --upgrade（先看预览，再 --apply）",
+                         exits=["按升级流程处理：系统 wf 命令 `wf upgrade`（先看预览，再 --apply）",
                                 "只想确认现场：运行 .wf/bin/repair.py 核对"]), args.json)
             if pending or hook_repairs or stale_metadata:
                 repaired_facts, abort = _repair_missing(args, manifest, writes, pending,
@@ -2037,7 +2040,7 @@ def upgrade_flag_problems(args):
 
 
 def run_upgrade(args, manifest, commit):
-    """W4-1：`install.py --upgrade`（三方升级主入口）。"""
+    """`install.py --upgrade`（三方升级主入口；系统 wf upgrade 调用）。"""
     target = os.path.abspath(args.target)
     source = os.path.abspath(args.source)
     installation_path = os.path.join(target, ".wf", "install", "installation.json")
@@ -2456,7 +2459,7 @@ class _InstalledMeanwhile(Exception):
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
-    # W4-1：parity 自检必须在 argparse 三必填之前（parity 调用不带 --target/--release-ref/--source，
+    # parity 自检必须在 argparse 必填之前（parity 调用不带 --target，也不带内部发行参数，
     # 先过 required 校验会被拒掉）——与 repair/uninstall 的前置分支同型。
     if "--token-parity-check" in argv:
         # parity 调用可带 --nonce <value>（与 repair/uninstall 的比对输入一致）
@@ -2466,11 +2469,12 @@ def main(argv=None):
             if index + 1 < len(argv):
                 nonce = argv[index + 1]
         return token_parity_check(nonce=nonce)
-    parser = argparse.ArgumentParser(description="wf 发行根安装入口")
+    parser = argparse.ArgumentParser(description="wf 发行根安装入口（发行内部；用户入口是系统 wf 命令）")
     parser.add_argument("--target", required=True)
-    parser.add_argument("--release-ref", required=True)
-    parser.add_argument("--source", required=True,
-                        help="发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/ 子树）")
+    parser.add_argument("--release-ref", default=None,
+                        help="内部：发行引用；缺省按发行清单 version 推导 refs/tags/wf-vX.Y.Z")
+    parser.add_argument("--source", default=None,
+                        help="内部：发行根；缺省用本安装入口所在目录（自定位）")
 
     parser.add_argument("--confirm", action="store_true")
     parser.add_argument("--python", default=None,
@@ -2500,7 +2504,7 @@ def main(argv=None):
             "known": ["--target", "--release-ref", "--source", "--confirm",
                       "--strict-source", "--upgrade", "--apply", "--export-deviations",
                       "--out", "--keep", "--restore", "--python", "--json"],
-            "exits": ["按 wf help upgrade / install.py --help 修正参数后重试",
+            "exits": ["按系统 wf 命令的 help 修正参数后重试",
                       "未知参数不继续投放或升级"],
         }, args.json)
 
@@ -2527,33 +2531,38 @@ def main(argv=None):
         return blocked("WF_USAGE_INVALID", "升级参数组合非法", {
             "problems": problems,
             "known": ["--upgrade", "--apply", "--export-deviations", "--out", "--keep", "--restore"],
-            "exits": ["按 wf help upgrade 修正参数后再运行",
+            "exits": ["按系统 wf 命令的 `wf upgrade` 修正参数后再运行",
                       "--export-deviations 与 --apply 互斥；导出不写安装记录",
                       "不使用 --upgrade 时不要传升级专用参数"],
         }, args.json)
 
     if not os.path.isabs(args.target) or not os.path.isdir(args.target):
         return blocked("WF_PATH_INVALID", "--target 必须是已存在的绝对目录", {"target": args.target}, args.json)
-    source = os.path.abspath(args.source)
+    source = os.path.abspath(args.source) if args.source else os.path.dirname(os.path.realpath(__file__))
     if not os.path.isdir(os.path.join(source, "wf-release")):
-        return blocked("WF_PATH_INVALID", "--source 必须是已检出的发行目录（含 wf-release/）", {"source": source},
+        return blocked("WF_PATH_INVALID", "发行根必须含 wf-release/ 子树",
+                       {"source": source, "detail": "安装入口须位于发行根，或用内部 --source 显式指定"},
                        args.json)
     try:
         manifest, manifest_path = load_manifest(source)
     except ValueError as exc:
         return blocked("WF_RELEASE_CONFLICT", str(exc), {"source": source}, args.json)
-    match = REF_RE.match(args.release_ref)
+    release_ref = args.release_ref or f"refs/tags/wf-v{manifest.get('version')}"
+    match = REF_RE.match(release_ref)
     if not match:
         return blocked("WF_RELEASE_CONFLICT", "只接受已登记发行引用 refs/tags/wf-vX.Y.Z",
-                       {"release_ref": args.release_ref}, args.json)
+                       {"release_ref": release_ref}, args.json)
     tag_version = ".".join(match.groups())
     if str(manifest.get("version")) != tag_version:
         return blocked("WF_RELEASE_CONFLICT", "清单 version 与 tag 不一致",
                        {"version": manifest.get("version"), "tag": tag_version}, args.json)
-    commit = resolve_tag(source, args.release_ref)
+    commit = resolve_tag(source, release_ref)
     if not commit:
-        return blocked("WF_RELEASE_CONFLICT", "本地发行仓库无法解析该引用", {"release_ref": args.release_ref},
+        return blocked("WF_RELEASE_CONFLICT", "本地发行仓库无法解析该引用", {"release_ref": release_ref},
                        args.json)
+    # 后续升级与安装记录统一使用解析出的发行身份；不把"缺省"写成安装事实。
+    args.release_ref = release_ref
+    args.source = source
     clean, dirty = _worktree_clean(source)
     source_dirty = bool(dirty) if clean is not None else None
     if getattr(args, "strict_source", False) and not clean:
@@ -2569,8 +2578,8 @@ def main(argv=None):
         return blocked("WF_ASSET_DECISION", "发行清单缺 gitignore_managed（托管段唯一来源）",
                        {"manifest": manifest_path}, args.json)
     if getattr(args, "upgrade", False):
-        # W4-1：升级模式（含 --export-deviations 只读导出）。--source 必须是发行检出根
-        # （load_manifest 要求 wf-release.json 直在 source 下，写成 <检出>/wf-release 即 WF_PATH_INVALID）。
+        # 升级模式（含 --export-deviations 只读导出）。系统 wf 命令把目标发行安装器作为
+        # 入口运行；无内部 --source 时 source 就是本入口所在发行根（自定位）。
         return run_upgrade(args, manifest, commit)
 
     # 安装面向**全部支持平台**（`PLATFORMS` 是唯一来源；新增平台重跑即补齐）。

@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import datetime
-import difflib
 import json
 import os
 import re
@@ -520,81 +519,17 @@ def main(argv):
     if error:
         return fail(error[1], {"detail": error[0]}, "用 --project <绝对路径> 显式给目标，或按恢复说明重取入口", json_mode)
     if rest and rest[0] == "upgrade":
-        # W4-1/W4-2：升级转交引导层。这里只做**参数收集与拼写校验**，判定仍在 install.py：
-        # 已知参数原样转交（含 --json/--export-deviations/--out/--keep/--restore），
-        # 未知参数立即 WF_USAGE_INVALID——旧实现把未识别参数静默吞掉，AI 无法判断是否生效。
-        opts = rest[1:]
-        value_flags = {"--release", "--release-ref", "--out", "--keep", "--restore"}
-        flag_flags = {"--apply", "--export-deviations", "--json"}
-        values = {}
-        forwarded = []
-        unknown = None
-        index = 0
-        while index < len(opts):
-            token = opts[index]
-            name, inline = token, None
-            if token.startswith("--") and "=" in token:
-                name, inline = token.split("=", 1)
-            if name in value_flags:
-                if inline is not None:
-                    value = inline
-                    index += 1
-                else:
-                    if index + 1 >= len(opts) or opts[index + 1].startswith("--"):
-                        return fail(
-                            "WF_USAGE_INVALID",
-                            {"missing_value": name, "known_flags": sorted(value_flags | flag_flags)},
-                            "按 wf help upgrade 修正参数；值参数缺值时不继续转交",
-                            json_mode,
-                        )
-                    value = opts[index + 1]
-                    index += 2
-                values[name] = value
-                if name not in ("--release", "--release-ref"):
-                    forwarded.extend([name, value])
-            elif name in flag_flags and inline is None:
-                forwarded.append(name)
-                index += 1
-            else:
-                unknown = token
-                break
-        if unknown is not None:
-            known = sorted(value_flags | flag_flags)
-            near = difflib.get_close_matches(unknown.split("=", 1)[0], known, n=1, cutoff=0.6)
-            return fail(
-                "WF_USAGE_INVALID",
-                {"unknown": unknown, "known_flags": known,
-                 "nearest": near[0] if near else None},
-                "wf upgrade 只接受 --release/--release-ref/--apply/--export-deviations/--out/"
-                "--keep/--restore/--json；按 wf help upgrade 修正拼写，不用未登记参数试探",
-                json_mode,
-            )
-        release_root = values.get("--release")
-        release_ref = values.get("--release-ref")
-        if not release_root or not release_ref:
-            return fail(
-                "WF_USAGE_INVALID",
-                {"missing": [name for name, value in (("--release", release_root),
-                                                      ("--release-ref", release_ref)) if not value]},
-                "wf upgrade 需要三要素：--release <发行检出根> --release-ref refs/tags/wf-vX.Y.Z"
-                " [--apply | --export-deviations --out <目录>]；"
-                "或直接运行 <检出根>/install.py --upgrade --target <项目> --release-ref <ref> --source <检出根>",
-                json_mode,
-            )
-        installer = os.path.join(release_root, "install.py")
-        if not os.path.isfile(installer):
-            return fail(
-                "WF_CAPABILITY_UNAVAILABLE",
-                {"missing": f"{release_root}/install.py"},
-                "发行检出根不含 install.py：核实 --release 指向的是发行检出根"
-                "（其下直接有 install.py、wf-release.json 与 wf-release/）",
-                json_mode,
-            )
-        env = dict(os.environ)
-        env["WF_PROJECT_ROOT"] = root
-        transfer = [sys.executable, installer, "--upgrade", "--target", root,
-                   "--release-ref", release_ref, "--source", release_root] + forwarded
-        os.execve(sys.executable, transfer, env)
+        # 升级由系统级 wf 命令承接：本层不再接受发行检出根/发行引用，也不转交安装器。
+        # 保留这条显式出口而不是让未知子命令落到运行时，避免旧调用者误把本地路径当入口。
+        return fail(
+            "WF_USAGE_INVALID",
+            {"detail": "升级不由项目内引导层承接",
+             "replacement": "wf upgrade",
+             "retired": ["--release", "--release-ref", "--source"]},
+            "在项目内运行系统级 `wf upgrade`（或 `wf --project <绝对路径> upgrade`）；"
+            "升级到登记源默认分支的最新发行，不再接受发行路径/引用参数",
+            json_mode,
+        )
     if rest and rest[0] in ("repair", "uninstall"):
         script = os.path.join(root, ".wf", "bin", f"{rest[0]}.py")
         if not os.path.isfile(script):

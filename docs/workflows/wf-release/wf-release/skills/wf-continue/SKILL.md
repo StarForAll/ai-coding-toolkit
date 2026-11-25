@@ -80,13 +80,12 @@ disable-model-invocation: false
   会使当前 Check 失效（`WF_CHECK_STALE`——锚点的 `control_plane_digest` 随 vendor 内容
   变化），这是预期后果、不是误报；drift 的 `d:control_plane_paths` 会列出变化的框架
   文件清单。当前任务只记录“发现框架缺陷”的归属与边界。回源仓库立项的修复在源仓库
-  按补丁/记录立项：在源仓库检出可用发行引用后，运行
-  `wf.py upgrade --release <检出根> --release-ref refs/tags/wf-vX.Y.Z --export-deviations --out <目录>`
-  （或直接 `<检出根>/install.py --upgrade ... --export-deviations --out <目录>`）只读导出
-  本地偏离补丁与 `manifest.json`；**不取写权、不暂停任务、不改安装记录**，未接受项标
+  按补丁/记录立项：运行系统级 `wf upgrade --export-deviations --out <目录>`（在项目内或
+  `wf --project <绝对路径> upgrade --export-deviations --out <目录>`）只读导出本地偏离补丁与
+  `manifest.json`；导出基线是登记源的最新发行，**不取写权、不暂停任务、不改安装记录**，未接受项标
   `status=pending`。导出后仍由人把补丁带入源仓库、按作者仓库流程修复并发版；源仓库修复
-  发版后再 `wf.py upgrade ... --apply` 升级回目标项目并重跑 Check——现场改 `.wf` 的旧
-  Check 失效是预期。手工 `git diff` 只在源提交不可解析等导出不可用情形作兜底。
+  发版后再 `wf upgrade --apply` 升级回目标项目并重跑 Check——现场改 `.wf` 的旧
+  Check 失效是预期。手工 `git diff` 只在导出不可用情形作兜底。
   不要把导出当成“已接受偏离”或“已回源”。这不算违反：只读 `.wf` 状态、读取/导出安装记录；
   改 `.wf/**` 才需要归属确认与回源。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；

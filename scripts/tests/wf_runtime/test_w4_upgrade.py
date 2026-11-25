@@ -8,7 +8,7 @@
 - --token-parity-check 先于 argparse；parity 三方一致；重跑预览即销毁（非 TTY 拒）；
 - applied_pending_commit；installation.json assets 写入侧字段；
 - --export-deviations（O 可取回/不可取回/无偏离/非空拒/部分失败如实报告）；
-- wf.py 转交与 cli 转交报错、help 注册表 48/48 双向断言不动。
+- wf.py 升级改为系统命令出口、运行期 help 不再注册 upgrade。
 """
 
 import importlib.util
@@ -988,8 +988,8 @@ class ExportPatchHeaderTest(unittest.TestCase):
             self.assertEqual(manifest["deviations"][0]["source_path"], "wf-release/lib/wflib/scope.py")
 
 
-class WfPyForwardingTest(unittest.TestCase):
-    """引导层必须把 install.py 支持的升级参数原样转交，且不吞未知参数。"""
+class WfPyUpgradeRedirectTest(unittest.TestCase):
+    """项目引导层不再承接升级：任何 --release/--release-ref 都不转交安装器。"""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -1015,49 +1015,29 @@ class WfPyForwardingTest(unittest.TestCase):
              *extra],
             capture_output=True, text=True, timeout=60)
 
-    def test_known_flags_are_forwarded_verbatim(self):
-        out = self.root / "out"
-        result = self._run("--export-deviations", "--out", str(out),
-                           "--keep", "a", "--restore", "b", "--json")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        argv = json.loads(self.marker.read_text(encoding="utf-8"))
-        self.assertIn("--export-deviations", argv)
-        self.assertIn("--out", argv)
-        self.assertIn(str(out), argv)
-        self.assertIn("--keep", argv)
-        self.assertIn("a", argv)
-        self.assertIn("--restore", argv)
-        self.assertIn("b", argv)
-        self.assertIn("--json", argv)
-        self.assertIn("refs/tags/wf-v0.1.6", argv)
-        self.assertNotIn("--release", argv)          # 引导层自用，不转交 install.py
-
-    def test_unknown_flag_is_rejected_not_swallowed(self):
-        result = self._run("--json", "--frobnicate")
-        self.assertNotEqual(result.returncode, 0)
+    def test_local_upgrade_redirects_without_touching_installer(self):
+        result = self._run("--json")
+        self.assertEqual(result.returncode, 1)
         payload = json.loads(result.stdout)
         self.assertEqual(payload["code"], "WF_USAGE_INVALID")
-        self.assertEqual(payload["facts"]["unknown"], "--frobnicate")
+        self.assertEqual(payload["facts"]["replacement"], "wf upgrade")
+        self.assertIn("--release-ref", payload["facts"]["retired"])
         self.assertFalse(self.marker.exists())       # 未转交、未执行安装器
 
 
 class TransferSurfaceTest(unittest.TestCase):
-    def test_cli_upgrade_stub_reports_transfer(self):
+    def test_cli_does_not_register_local_upgrade(self):
         from wflib import cli
 
-        self.assertIn("upgrade", cli.COMMANDS)                     # 48/48 注册保留
-        handler = cli.COMMANDS["upgrade"]
-        ctx = type("Ctx", (), {"root": "/tmp/x"})()
-        args = type("Args", (), {"argv": []})()
-        with self.assertRaises(cli.CliError) as caught:
-            handler(ctx, args)
-        self.assertEqual(caught.exception.code, "WF_CAPABILITY_UNAVAILABLE")
-        self.assertIn("引导层转交", json.dumps(caught.exception.facts, ensure_ascii=False))
+        self.assertNotIn("upgrade", cli.COMMANDS)
+        self.assertNotIn("upgrade", cli.COMMAND_HELP)
+        self.assertNotIn("upgrade", cli.COMMAND_FLAGS)
 
-    def test_wf_py_upgrade_missing_args_reports_three_elements(self):
+    def test_wf_py_upgrade_reports_system_command_exit(self):
         source = (PAYLOAD / "bin/wf.py").read_text(encoding="utf-8")
-        self.assertIn("需要三要素", source)
-        self.assertIn("os.execve", source)
+        self.assertIn("wf upgrade", source)
+        self.assertIn("WF_USAGE_INVALID", source)
+        self.assertNotIn("install.py", source)
 
     def test_install_direct_unknown_flag_is_structured_usage_error(self):
         import contextlib

@@ -54,6 +54,15 @@ MANIFEST = {
 MANIFEST["compatibility"]["rules_digest"] = wf_assets.compute_rules_digest(MANIFEST)
 
 README_TEXT = "# wf 模块源树\n\n| 项 | 值 |\n|---|---|\n| 目标版本 | `%s` |\n" % VERSION
+CLI_PYPROJECT_TEXT = r"""[project]
+name = "wf-cli"
+dynamic = ["version"]
+[project.scripts]
+wf = "wf_cli.main:entry"
+[tool.hatch.version]
+path = "../wf-release/wf-release.json"
+pattern = '"version"\s*:\s*"(?P<version>[0-9]+\.[0-9]+\.[0-9]+)"'
+"""
 
 
 class GitCase(unittest.TestCase):
@@ -85,6 +94,9 @@ class GitCase(unittest.TestCase):
                    json.dumps(manifest if manifest is not None else MANIFEST,
                               ensure_ascii=False, indent=2, sort_keys=True) + "\n")
         self.write("docs/workflows/wf-release/wf-release/bin/wf.py", "print('wf')\n")
+        self.write("docs/workflows/wf-cli/pyproject.toml", CLI_PYPROJECT_TEXT)
+        self.write("docs/workflows/wf-cli/wf_cli/main.py", "def entry():\n    return 0\n")
+        self.write("docs/workflows/wf-cli/install.py", "print('bootstrap')\n")
         self.write("docs/workflows/wf/README.md",
                    readme if readme is not None else README_TEXT)
 
@@ -134,6 +146,18 @@ class PassingCase(GitCase):
         self.assertFalse(self.check(result, "ref_matches_version")["ok"])
         result = self.verify(ref="refs/heads/wf-v0.1.7")
         self.assertFalse(self.check(result, "ref_shape")["ok"])
+
+
+class CliPackageCase(GitCase):
+    def test_missing_cli_entry_is_reported(self):
+        os.remove(self.root / "docs/workflows/wf-cli/wf_cli/main.py")
+        self.commit("remove cli entry")
+        self.tag()
+        result = self.verify()
+        item = self.check(result, "cli_package")
+        self.assertFalse(item["ok"])
+        self.assertFalse(item["facts"]["main"])
+        self.assertTrue(item["facts"]["bootstrap"])
 
 
 class TreeDriftCase(GitCase):

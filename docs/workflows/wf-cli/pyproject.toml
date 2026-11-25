@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "wf-cli"
+dynamic = ["version"]
+description = "System-wide wf maintenance CLI: install, upgrade, uninstall and repair the wf workflow in a project"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+readme = "README.md"
+
+[project.scripts]
+wf = "wf_cli.main:entry"
+
+[tool.hatch.version]
+# 版本唯一源仍是发行清单：CLI 与它安装的发行集必须同版。
+path = "../wf-release/wf-release.json"
+pattern = '"version"\s*:\s*"(?P<version>[0-9]+\.[0-9]+\.[0-9]+)"'
+
+[tool.hatch.build.targets.wheel]
+packages = ["wf_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "wf_cli",
+  "README.md",
+  "pyproject.toml",
+]

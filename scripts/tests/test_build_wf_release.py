@@ -57,10 +57,16 @@ class BuildOrderingTest(unittest.TestCase):
     def test_guards_run_before_the_release_tree_is_removed(self):
         main_body = self.source.split("def main(argv=None):", 1)[1]
         readme_at = main_body.index("assert_readme_version(args.version)")
+        cli_at = main_body.index("assert_cli_packaging(args.version)")
         tag_at = main_body.index("assert_version_not_tagged(args.version)")
         remove_at = main_body.index("shutil.rmtree(RELEASE_ROOT)")
         self.assertLess(readme_at, remove_at)
+        self.assertLess(cli_at, remove_at)
         self.assertLess(tag_at, remove_at)
+
+    def test_cli_package_resolves_current_release_version(self):
+        # CLI 版本动态读取发行清单；打包时这个路径/正则必须仍能解析到同一版本。
+        MODULE.assert_cli_packaging(MODULE.readme_target_version())
 
 
 if __name__ == "__main__":

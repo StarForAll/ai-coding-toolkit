@@ -42,6 +42,7 @@
 |------|------|
 | `scripts/` | 仓库维护脚本（`validate-skills.sh`） |
 | `docs/` | 笔记、设计文档，含 3 套工作流（`docs/workflows/**/`） |
+| `docs/workflows/wf-cli/` | 系统级 `wf` 命令发行包（从登记 Forgejo tag 安装；不投放目标项目） |
 | `reference-data/` | 空目录，待用 |
 | `tmp/` | 临时流程数据，已在 `.gitignore` 中忽略 |
 | `.trellis/` | Trellis 工作空间：workflow、tasks、workspace、scripts、spec、library-lock |

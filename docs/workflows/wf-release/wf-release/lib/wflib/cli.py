@@ -1416,23 +1416,6 @@ def _pin_identity(ctx, session_key, facts):
     store.save_attachment(ctx.root, session_key, attachment)
 
 
-def _transfer_stub():
-    """W4-1/W4-2：upgrade 经引导层转交，不经本层用法校验（help 一致性保留该注册条目）。"""
-    def _handler(ctx, args):
-        raise CliError(
-            "WF_CAPABILITY_UNAVAILABLE",
-            {"reason": "upgrade 经引导层转交：本层不实现升级判定",
-             "transfer": ".wf/bin/wf.py upgrade --release <检出根> --release-ref <ref> "
-                         "[--apply | --export-deviations --out <目录>] [--keep <路径>] [--restore <路径>]",
-             "direct": "<检出根>/install.py --upgrade --target <项目> "
-                      "--release-ref refs/tags/wf-vX.Y.Z --source <检出根> [--apply | --export-deviations --out <目录>]"},
-            next_="终端直接运行 wf.py upgrade（引导层转交）或 install.py --upgrade；"
-                  "应用升级须交互终端预览令牌，模型不代跑；--export-deviations 是只读导出，不取令牌、"
-                  "不暂停任务、不改安装记录（未接受偏离也导出并标 pending）",
-        )
-    return _handler
-
-
 def _enable_guards(ctx, session_like):
     """启用前置（唯一实现）：Trellis 互斥 + 平台可用性。**只读，两个启用入口共用**。
 
@@ -3132,7 +3115,7 @@ COMMAND_HELP = {
                                "--plan-draft": "只读生成处置数组骨架（当前未关闭 blocking 逐条占位，只打印不落盘）"},
                       "example": "wf.py review-decide --task \"<id>\" --main-review \"main-review.json\" "
                                  "--gap-acceptance \"gap.json\" --json"},
-    # ---- 2026-11-21（五轮审查 P0-1）：help 覆盖补全至全命令面（48/48）----
+    # ---- 2026-11-21（五轮审查 P0-1）：help 覆盖补全至全命令面（47/47；upgrade 已移到系统命令）----
     # 参数面以各 handler 实际消费为准；子命令以 dispatch 分支为准。
     "enable": {"purpose": "启用本会话：身份确认 + 激活登记 + 回显绑定对象与代次",
                "args": {"--identity": "可选，仅接受 host（显式确认以宿主标识为准）",
@@ -3189,18 +3172,6 @@ COMMAND_HELP = {
                                  "--to": "begin：接收会话标识（必填）",
                                  "--decision": "accept：交接确认决定（必填）"},
                         "example": "wf.py writer-handover accept --decision \"h.json\" --json"},
-    "upgrade": {"purpose": "三方升级 / 只读导出本地偏离（经引导层转交 install.py --upgrade；本层不判定）",
-               "args": {"--release": "发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/）",
-                        "--release-ref": "发行引用 refs/tags/wf-vX.Y.Z",
-                        "--apply": "应用预览（交互终端输入预览指纹；同一进程完成；与导出互斥）",
-                        "--export-deviations": "只读导出本地偏离补丁与清单（不取写权、不暂停任务、不应用升级）",
-                        "--out": "导出目录（必须在项目树外；不存在则创建，已存在必须为空）",
-                        "--keep": "升级冲突：保留本地（**项目相对路径**，与 preview 的 "
-                                  "unresolved[].path 逐字一致，可重复；仅应用模式；仅可选资产，"
-                                  "必需资产保留删除会被拒）",
-                        "--restore": "升级冲突：恢复发行内容（**项目相对路径**，同上；仅应用模式）"},
-               "example": "wf.py upgrade --release \"/path/to/wf-checkout\" --release-ref \"refs/tags/wf-v0.0.6\" --apply",
-               "example_export": "wf.py upgrade --release \"/path/to/wf-checkout\" --release-ref \"refs/tags/wf-v0.0.6\" --export-deviations --out \"/tmp/wf-deviations\" --json"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
                    "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
                    "example": "wf.py task-pause --task \"2026-xxxx\" --reason \"等人答复\" --json"},
@@ -4090,7 +4061,6 @@ COMMANDS = {
     "verify": cmd_verify,
     "definition": _runs_command("definition"),
     "run": _runs_command("run"),
-    "upgrade": _transfer_stub(),
 }
 
 
@@ -4172,9 +4142,6 @@ COMMAND_FLAGS = {
     "task-retrospect": {"--task", "--evidence"},
     "task-rework": {"--task", "--decision", "--draft"},
     "task-start": {"--task", "--workspace-exclusion"},
-    # W4-1/W4-2：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
-    "upgrade": {"--apply", "--release", "--release-ref", "--export-deviations",
-                "--out", "--keep", "--restore"},
     "verify": {"--task", "--id", "--kind", "--reason", "--impact", "--compensation",
                "--evidence", "--by"},
     "help": set(),
@@ -4199,7 +4166,7 @@ COMMAND_SUB_FLAGS = {
 
 # 布尔旗标注册表（十一轮 a P1-1 重构）：**按命令**登记（--check 在 project 是布尔、
 # 在 task-curate 取值——全局名单无法表达）；未列出的该命令 flag 一律要求紧跟值。
-# 来源：各 handler 的 args.flag(...) 静态提取；upgrade 是能力桩不读 args，按 help 示例登记。
+# 来源：各 handler 的 args.flag(...) 静态提取；升级由系统级 wf 命令承接，本层不注册 upgrade。
 GLOBAL_BOOL_FLAGS = frozenset({"--json", "--envelope-last"})
 COMMAND_BOOL_FLAGS = {
     "project": {"--check"},
@@ -4224,8 +4191,6 @@ COMMAND_BOOL_FLAGS = {
     "task-replace": {"--preview"},
     "baseline-apply": {"--preview"},
     "run": {"--preview"},
-    # W4-1：upgrade 经引导层转交、不经本层用法校验——条目为 help 一致性保留
-    "upgrade": {"--apply", "--export-deviations"},
 }
 
 COMMAND_SUBS = {
