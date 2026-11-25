@@ -3963,9 +3963,8 @@ def cmd_review_status(ctx, args):
             if gate["complexity"] == "light":
                 # 与 wf-review「轻量任务不发起审查」同口径：这里不给"临时加一轮"的出口，
                 # 因为审查强度由分级决定——实际需要异种审查，说明分级不成立（回 Plan 重新分级）。
-                next_ = ("轻量任务不设外部审查轮（结论以 task-check 的双轴内部审查为准）；"
-                         "若实际需要异种审查，说明分级不成立：回 Plan 由人提高复杂度并重新批准后"
-                         "再按复杂任务发起")
+                next_ = ("轻量任务没有必需的外部审查轮（结论以 task-check 的双轴内部审查为准）；"
+                         "需要额外意见时可直接 review-launch（可选，不改变分级与完成条件）")
             else:
                 # 尚未发起任何审查轮：此时"等 reviewer 产出"永远等不到，正确动作是先发起。
                 next_ = ("本轮尚未发起审查：复杂任务 Check pass 后先 review-launch（取人外发确认与实施 CLI），"

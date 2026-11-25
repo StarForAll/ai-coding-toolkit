@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:8d4101aa0c08f2e27521062292d8d40320b40003274caa8bb1080a9a5b96a845",
+      "digest": "sha256:88daccb02f9c402ad4749a9106669b2653d22b51c6c76adcadabf0444df90b70",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -262,7 +262,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:cf1e34a982efd9dce37a754a89ccfc257dd7209928baf55617418795555ced3b",
+      "digest": "sha256:ecca5ff6553b158bc0d53f0005a289d10e9b80d6ad6cd6ac25aef5c51badefe7",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -342,7 +342,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:fc8b508e12777afc0ec21ee52654bb0c727f4e9b6aad18826e2e473fba3fe348",
+      "digest": "sha256:ac247d95f38cc740bb7aeb724a9cffd42d7852da3c02d812e0205706f39d0d67",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -632,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:d4d236056f271fc983f3f74f3ebc4787c889b66fee39bf88d1a510ad16f5fb1b",
+      "digest": "sha256:e46b3982828db9970b41a903587a919e17b698eb217afea400e1aea7cf7ed421",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -702,7 +702,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:dc37e31ed29a28ef71b809a8d9abb596053474247fa696f54726b829767bee62",
+      "digest": "sha256:17f861fa8c9c9ab823e026f8f377b80aec1559f0e4efe7e446c9e2ce47e0c4c6",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:7b7c2a572e7beb31fefc1f57e087d6003194c54c987c569624258ddf2ec4d204",
+    "rules_digest": "sha256:466f7039288e225c7362ea1eec6145ecf0a495f7b4c26c47ae29db2ec9d1be39",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.2"
+  "version": "0.0.3"
 }

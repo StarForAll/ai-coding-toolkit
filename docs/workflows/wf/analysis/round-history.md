@@ -10,3 +10,5 @@
 **第四轮独立复审（2026-11-25）**：`task-approve --draft` 输出 `complexity_proposal`（四项条件与提议）与生效 `tdd`，并把两值写进 approve 条目的 `plan` 骨架；正式批准在决定与 inputs 都未给 complexity 时把 `confirmed_source` 记 `proposed` 并给出可见提示（不再冒充 `inputs`）；`review-status` 按「对象终态 / 外部审查是否必需」投影 `entry_gate`，已归档对象不再被劝去 `review-launch`，`review-launch` 对归档对象报终态事实（此前误报「规划批准已失效」）；pass 结果的 `exit` 置 null（与机制稿 §11.1「exit 是失败/待决出口」一致）；草稿在项目配置/请求 TDD 取值非法时只报事实、不阻断骨架；轻量任务不再被给"临时加审查轮"的出口（与 wf-review 同口径）；`.wf/spec/` 顶层`index.md` 与两份 checklist 不再被当作规则加载（出厂模板不再自带 3 条 frontmatter 问题）；`review-context` 首次物化后按真实状态回显 `materials_check`；
 
 **0.0.2**：复杂分级没有人的批准决定承载时，`task-approve` 直接以 `WF_SEMANTIC_DECISION` 拒绝（出口：`--draft` 骨架已预填 `plan.complexity`，或手写决定补该键；请求 inputs 只作提议）；TDD 未写入决定仍按项目默认/发行缺省并给出「未由人确认」提示。
+
+**0.0.3**：复杂分级的人签判据/文案收敛为 `tasks.complex_needs_human_decision()` 单一实现（批准入口与归档门禁共用）；TDD 只由决定 `plan.tdd` 或项目/发行缺省取值，`inputs.tdd` 不再生效（模型不得自行开启 TDD）；轻量任务的外部审查改为可选工具（`wf-review` 与 `review-status` 同口径）；`AGENTS.md` 不再复述版本号，以 README 目标版本行为唯一事实；README 目标版本单元收敛并由 `test_readme_version_cell` 锁上限。

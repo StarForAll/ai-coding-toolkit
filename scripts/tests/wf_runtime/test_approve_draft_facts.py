@@ -191,14 +191,15 @@ class ApproveDraftFactsTest(unittest.TestCase):
         self.assertTrue(any("plan.complexity" in exit_ for exit_ in caught.exception.facts["exits"]))
 
     def test_inputs_source_is_recorded_and_flagged(self):
-        """inputs 只作提议：分级来源如实记 `inputs`，TDD 同样要提示"未由人确认"。"""
-        self.ctx.inputs.return_value = {"complexity": "light", "tdd": False}
+        """inputs 只作提议：分级来源如实记 `inputs`；TDD 不生效，按缺省并提示未确认。"""
+        self.ctx.inputs.return_value = {"complexity": "light", "tdd": True}
         result = self.approve(self._decision(with_plan=False))
         self.assertEqual(result["code"], "WF_OK")
         plan = records.load_json(self.task_dir / "task.json")["plan"]
         self.assertEqual(plan["confirmed_source"], "inputs")
+        # 模型不能靠 inputs 自行开启 TDD（设计稿 §4.3）；缺省仍是关闭
         self.assertEqual(plan["tdd"], False)
-        self.assertTrue(any("请求 inputs" in warning for warning in result["warnings"]))
+        self.assertTrue(any("TDD 未由人确认" in warning for warning in result["warnings"]))
 
 
 if __name__ == "__main__":

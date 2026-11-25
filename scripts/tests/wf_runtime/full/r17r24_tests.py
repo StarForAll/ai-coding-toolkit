@@ -82,10 +82,12 @@ def make_task(title, touch, sid="sess-U1", prd_extra=None):
 def approve(task_id, digest, gen, sid="sess-U1", extra=None):
     inputs = {"generation": gen, "complexity": "light",
               "downgrade": {"reason": "单文件", "evidence": "不碰治理面"}}
-    if extra:
-        inputs.update(extra)
+    entry = dec(f"approve {task_id}", "approve", digest)
+    # TDD 只由人的决定承载（设计稿 §4.3：模型不自行开启）；inputs.tdd 不生效
+    if extra and "tdd" in extra:
+        entry["plan"] = {"tdd": extra["tdd"]}
     rc, payload, out = wf(["task-approve", "--task", task_id, "--decision",
-                           dfile(wfdrive.temp(f"r17_{task_id}_a.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"],
+                           dfile(wfdrive.temp(f"r17_{task_id}_a.json"), [entry]), "--json"],
                           inputs, sid)
     if rc != 0:
         print(f"approve 原文({task_id}):", (out or "")[:400])

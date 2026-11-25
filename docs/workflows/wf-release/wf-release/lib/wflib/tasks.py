@@ -1716,25 +1716,23 @@ def _complexity_proposal(ctx, task, block, extra_conditions=None):
     return proposed, reasons
 
 
-def _resolve_tdd(ctx, plan_decision, inputs):
-    """TDD 生效值与来源（唯一实现：草稿与正式批准共用；机制稿 §2.3）。
+def _resolve_tdd(ctx, plan_decision):
+    """TDD 生效值与来源（唯一实现：草稿与正式批准共用；机制稿 §2.3、设计稿 §4.3）。
 
-    顺序：决定 `plan.tdd` → 请求 `inputs.tdd` → 项目配置 `tdd_default` → 发行缺省。
-    返回 `(value, source)`，source 取 `decision|inputs|project-default|built-in-default`。
+    顺序：决定 `plan.tdd` → 项目配置 `tdd_default` → 发行缺省。请求 `inputs.tdd` 只是提议，
+    **不生效**——否则模型可以自行开启 TDD（多出 red→绿证据义务）而不经人确认。
+    返回 `(value, source)`，source 取 `decision|project-default|built-in-default`。
     """
-    inputs = inputs or {}
     value, source = None, None
     if isinstance(plan_decision, dict) and plan_decision.get("tdd") is not None:
         value, source = plan_decision.get("tdd"), "decision"
-    elif inputs.get("tdd") is not None:
-        value, source = inputs.get("tdd"), "inputs"
     else:
         project_config, config_problems = config.load_project_config(ctx.root, allow_missing=True)
         value, tdd_problem = config.value_of(project_config, config_problems, "tdd_default")
         if tdd_problem:
             raise TaskError("WF_SEMANTIC_DECISION",
                             {"reason": tdd_problem, "key": "tdd_default"},
-                            next_="修正 project-config.json 的该键，或显式传 inputs.tdd")
+                            next_="修正 project-config.json 的该键，或在决定的 plan.tdd 写明取值")
         if value is None:
             value, source = config.DEFAULTS["tdd_default"], "built-in-default"
         else:
@@ -1767,10 +1765,9 @@ def _approval_warnings(complexity, confirmed_source, tdd, tdd_source):
     if confirmed_source == "proposed":
         warnings.append(f"分级未由人确认：本次记录来源为 proposed（机器提议，值 {complexity}）；"
                         "要按人确认的分级记账，请在决定的 `plan.complexity` 写明")
-    if tdd_source in ("project-default", "built-in-default", "inputs"):
-        # inputs 也是提议（机制稿 §2.3）：它记来源但不等于人的确认，尤其不许模型据此自行开启 TDD
-        origin = {"project-default": "项目配置", "built-in-default": "发行缺省",
-                  "inputs": "请求 inputs（提议）"}[tdd_source]
+    if tdd_source in ("project-default", "built-in-default"):
+        # TDD 只由决定 plan.tdd 或项目/发行缺省取值；缺省是设计允许的，但不是人的明确选择
+        origin = {"project-default": "项目配置", "built-in-default": "发行缺省"}[tdd_source]
         warnings.append(f"TDD 未由人确认：按{origin}取 {str(tdd).lower()}；"
                         "要定这个值请在决定的 plan.tdd 写明")
     return warnings or None
@@ -1839,7 +1836,7 @@ def cmd_task_approve(ctx, args):
         # 问题进 facts（与 pending_plan_questions 同性质），由人先修配置/输入再批准；
         # 正式批准仍按严格解析 raise（那里坏值就是拒绝理由）。
         try:
-            tdd_value, tdd_source = _resolve_tdd(ctx, None, _request_inputs)
+            tdd_value, tdd_source = _resolve_tdd(ctx, None)
             tdd_problem = None
         except TaskError as exc:
             if exc.code not in ("WF_SEMANTIC_DECISION", "WF_PATH_INVALID"):
@@ -2066,7 +2063,7 @@ def cmd_task_approve(ctx, args):
                             next_="补齐 design.md / implement.md 并填写必填占位后重新批准")
         # TDD 生效值：决定 → 请求 inputs → 项目配置 → 发行缺省（唯一实现在 _resolve_tdd，
         # 草稿与正式批准共用，避免"草稿显示一个值、正式记另一个值"）。
-        tdd, tdd_source = _resolve_tdd(ctx, plan_decision, inputs)
+        tdd, tdd_source = _resolve_tdd(ctx, plan_decision)
         version = compute_plan_version(ctx.root, task, block, complexity, reasons, tdd)
         if downgrade_entry is not None:
             reasons = reasons + [downgrade_entry]

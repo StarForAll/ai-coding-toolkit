@@ -22,7 +22,7 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | 42a89cb9f819b8015ed4e4ee9e634c3ee8ea643d6f3129affa2f1d3e4d906a9c |
+| wf-framework-design.md | 45dac02a3e24bb18549f8498b3141e66d7b884d08aa669bd843a715081dead96 |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
 | wf-framework-design.index.md | 6e33b952a0d3bc1c8e42711e67f830b04280399085f1807769af1562c750dafc |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |
@@ -242,7 +242,7 @@ PRD 是规划内容来源：正文写目标、范围、方案说明与不做项�
 
 invocation 取 `{kind: argv, argv: [字符串…]}` 或 `{kind: manual, criterion: 非空验收说明}`。前者是固定参数数组，不作输入插值或 shell 求值；项目既有脚本可作为获批 argv 调用。cwd 为 `.` 或项目内安全路径；input_refs 的全部引用类型、允许场景及秘密引用规则统一见本文 §7.1，普通任务只使用其中标明适用普通任务的类型。manual 供文档等人工可观察验收，其实际人判进入检查证据，不伪造 exit_code。开工时必须立即可运行的检查由 consume_at=start 指定；新测试设施可在规划中给出确定的未来路径/调用并标 check，消费前仍须核实。验收项允许 verification_ids 为空，但须由本任务 check.acceptance_results 中的实际人判证据覆盖，不能从空数组推出验收通过。
 
-批准入口先读取 PRD 块和所需规划文件，核 schema、唯一 id、全部 glob、验收引用与验证声明，再提出复杂度/TDD 并交人同批确认（`task-approve --draft` 输出 `complexity_proposal` 与生效 `tdd`，并把两值写进 approve 条目的 `plan` 骨架，复杂提议时同时报 design/implement 缺口；正式批准在决定与 inputs 都没有 complexity 时把 `confirmed_source` 记 `proposed` 并给出可见提示）。分级的人确认只由决定 `plan` 承载：复杂分级未写入决定时，批准入口直接以 `WF_SEMANTIC_DECISION` 拒绝（出口：`--draft` 骨架已预填 `plan.complexity`，或手写补该键；请求 `inputs` 只作提议）；轻量分级在四项条件全为 false 时按机器提议成立并记 `proposed`；TDD 未写入决定时按项目默认/发行缺省，取值来源不是决定时给出"未由人确认"的提示（设计稿 §4.4）。`plan.version=H("wf-plan-v1", C({artifact_digests, plan_block, complexity, complexity_reasons, tdd}))`（五个键的逐键取值、排序与降级条目的排除见本文 §1.1 的哈希域登记表），artifact_digests 包含 PRD 整文件及适用的 design/implement，且不包含带有本 version 的控制记录。确认时重读输入；发生变化就返回重新核对，不保存过时批准。批准成功保存可读快照、提取值和 Decision。普通任务 Plan 期的 grilling 类待决问题由规划材料按本文 §1.3 的固定格式承载：每个待决问题编号 `plan-q-<n>` 并附推荐答案，措辞使“是”即接受推荐项；人一轮内批量作答后，由批准/开工入口将答复写入 execution.human_decisions（对齐设计稿 §4.3 grilling 行的完成信号），未答的问题不写入 Decision。首次开工和回 Plan 后再入 Execute 都重新提取当前 PRD，与当前有效批准逐项核对后保存 entry_snapshot，再迁移阶段；只有首次开工同时固定 baseline_head。批准入口不能提前替代开工时点的这次核对。
+批准入口先读取 PRD 块和所需规划文件，核 schema、唯一 id、全部 glob、验收引用与验证声明，再提出复杂度/TDD 并交人同批确认（`task-approve --draft` 输出 `complexity_proposal` 与生效 `tdd`，并把两值写进 approve 条目的 `plan` 骨架，复杂提议时同时报 design/implement 缺口；正式批准在决定与 inputs 都没有 complexity 时把 `confirmed_source` 记 `proposed` 并给出可见提示）。分级的人确认只由决定 `plan` 承载：复杂分级未写入决定时，批准入口直接以 `WF_SEMANTIC_DECISION` 拒绝（出口：`--draft` 骨架已预填 `plan.complexity`，或手写补该键；请求 `inputs` 只作提议）；轻量分级在四项条件全为 false 时按机器提议成立并记 `proposed`；TDD 只由决定 `plan.tdd` 或项目/发行缺省取值；请求 `inputs.tdd` 只作提议、**不生效**（模型不得自行开启 TDD），缺省取值给出"未由人确认"的提示（设计稿 §4.3、设计稿 §4.4）。`plan.version=H("wf-plan-v1", C({artifact_digests, plan_block, complexity, complexity_reasons, tdd}))`（五个键的逐键取值、排序与降级条目的排除见本文 §1.1 的哈希域登记表），artifact_digests 包含 PRD 整文件及适用的 design/implement，且不包含带有本 version 的控制记录。确认时重读输入；发生变化就返回重新核对，不保存过时批准。批准成功保存可读快照、提取值和 Decision。普通任务 Plan 期的 grilling 类待决问题由规划材料按本文 §1.3 的固定格式承载：每个待决问题编号 `plan-q-<n>` 并附推荐答案，措辞使“是”即接受推荐项；人一轮内批量作答后，由批准/开工入口将答复写入 execution.human_decisions（对齐设计稿 §4.3 grilling 行的完成信号），未答的问题不写入 Decision。首次开工和回 Plan 后再入 Execute 都重新提取当前 PRD，与当前有效批准逐项核对后保存 entry_snapshot，再迁移阶段；只有首次开工同时固定 baseline_head。批准入口不能提前替代开工时点的这次核对。
 
 PRD 改动不会自动扩充 plan.touch_paths；plan 被手改也不能反向授权 PRD。两侧不一致时，机械修订可经 equivalences 衔接并由入口重取同义快照；影响范围、验收、调用或取舍的变化回 Plan 重批。在此之前执行以最近有效批准为边界，但不允许带失配继续开工、Check 或 Finish。
 

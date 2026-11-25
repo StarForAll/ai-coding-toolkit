@@ -82,9 +82,9 @@ class RoundEntryGateTest(unittest.TestCase):
 
     def test_light_task_is_not_told_external_review_is_required(self):
         result = self.status_next(self.write_task("in_progress", "light"))
-        self.assertIn("轻量任务不设外部审查轮", result["next"])
-        # 不给"临时加一轮"的出口：审查强度由分级决定（与 wf-review 同口径）
-        self.assertNotIn("再 review-launch", result["next"])
+        self.assertIn("轻量任务没有必需的外部审查轮", result["next"])
+        # 外部审查对轻量任务是可选工具，不写成禁止、也不写成必需
+        self.assertIn("可直接 review-launch", result["next"])
 
     def test_complex_task_still_gets_launch(self):
         result = self.status_next(self.write_task("in_progress", "complex"))
