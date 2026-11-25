@@ -16,3 +16,5 @@
 **0.0.4**：TDD 缺省值按 `tdd_source` 记录、不要求额外人签（设计稿 TDD 段同步：要记成人的选择就写 `plan.tdd`）；轻量任务自愿外部审查的后果写全——一轮发起后未关闭 blocking 进归档门禁，fail 须逐条关闭；`task-approve` 帮助的 `plan` 说明与示例不再鼓励照抄 `tdd`。
 
 **0.0.5**：`install.py` 的 tag 校验把 source 相对仓库根的前缀拼入 `git show <commit>:<path>`，发行树位于仓库子目录（作者仓库 `docs/workflows/wf-release/`）时可直接安装/升级；根级候选仓库布局继续可用。新增 `test_install_source_layout` 锁定两种布局。
+
+**0.0.6**：安装命令自带解释器选择与确认——`--python` 缺省系统 `python3`（没有则拒绝安装），安装成功后由同一条命令转交 `confirm-executor`（人输入 yes），`--python` 写入本机用户级配置并按 global 确认；安装/升级 tag 校验支持 source 在仓库子目录（0.0.5 已改，0.0.6 起文档与示例直接使用）。

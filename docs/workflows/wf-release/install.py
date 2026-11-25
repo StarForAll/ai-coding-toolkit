@@ -207,6 +207,70 @@ def load_manifest(source):
         return json.load(handle), path
 
 
+def global_config_path():
+    return os.path.join(os.path.expanduser("~"), ".wf", "config.json")
+
+
+def probe_python_version(path):
+    """返回 "Python 3.x.y" 或 None；只用于安装期人面预检。"""
+    try:
+        result = subprocess.run([path, "--version"], capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    text = (result.stdout or result.stderr or "").strip()
+    if result.returncode != 0:
+        return None
+    return text or None
+
+
+def python_candidate_problems(path):
+    """安装期解释器候选的预检：存在、可执行、CPython>=3.11。返回问题文本或 None。"""
+    if not os.path.isabs(path):
+        return "解释器路径必须是绝对路径"
+    if not os.path.isfile(path) or not os.access(path, os.X_OK):
+        return "不是可执行文件"
+    version = probe_python_version(path)
+    match = re.match(r"Python\s+(\d+)\.(\d+)", version or "")
+    if not match:
+        return "探测不到 Python 版本"
+    major, minor = int(match.group(1)), int(match.group(2))
+    if major != 3 or minor < 11:
+        return f"需要 Python >= 3.11（实际 {version}）"
+    return None
+
+
+def write_global_executor(path):
+    """把安装时人选的解释器写入本机用户级配置（保留其它键）。返回问题文本或 None。"""
+    config = global_config_path()
+    directory = os.path.dirname(config)
+    os.makedirs(directory, exist_ok=True)
+    data = {}
+    if os.path.exists(config):
+        try:
+            with open(config, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (OSError, ValueError) as exc:
+            return f"全局配置不可读/不是合法 JSON：{exc}"
+        if not isinstance(data, dict):
+            return "全局配置不是 JSON 对象"
+    data["python_executable"] = path
+    temporary = config + ".tmp-install"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+    os.replace(temporary, config)
+    return None
+
+
+def confirm_executor(target, candidate, scope):
+    """在安装进程的终端里转交 bootstrap 的确认动作：提示与写入都只由那一个实现做。"""
+    command = [candidate, os.path.join(target, ".wf/bin/wf.py"), "confirm-executor", "--scope", scope]
+    try:
+        result = subprocess.run(command)
+    except OSError as exc:
+        return None, {"reason": f"无法启动解释器确认：{exc}", "command": command}
+    return result.returncode, {"scope": scope, "candidate": candidate, "rc": result.returncode}
+
+
 def resolve_tag(source, release_ref):
     match = REF_RE.match(release_ref)
     if not match:
@@ -2409,6 +2473,10 @@ def main(argv=None):
                         help="发行检出根（其下直接有 install.py、wf-release.json 与 wf-release/ 子树）")
 
     parser.add_argument("--confirm", action="store_true")
+    parser.add_argument("--python", default=None,
+                        help="安装时确定用于运行 wf 的 Python 解释器（绝对路径，>=3.11）；"
+                             "缺省用系统 python3，系统没有则拒绝安装。安装成功后由同一条命令"
+                             "在终端完成解释器确认（人输入 yes），不再单独跑 confirm-executor")
     parser.add_argument("--strict-source", dest="strict_source", action="store_true",
                         help="发行子树必须与提交一致（脏检出即拒绝）；发行作者仓库通常不带此参数")
     parser.add_argument("--upgrade", action="store_true",
@@ -2430,10 +2498,28 @@ def main(argv=None):
             "unknown": unknown,
             "known": ["--target", "--release-ref", "--source", "--confirm",
                       "--strict-source", "--upgrade", "--apply", "--export-deviations",
-                      "--out", "--keep", "--restore", "--json"],
+                      "--out", "--keep", "--restore", "--python", "--json"],
             "exits": ["按 wf help upgrade / install.py --help 修正参数后重试",
                       "未知参数不继续投放或升级"],
         }, args.json)
+
+    if args.python and args.upgrade:
+        return blocked("WF_USAGE_INVALID", "--python 只用于首装", {
+            "exits": ["升级沿用已确认的执行器；要换解释器先改配置并用 confirm-executor 重新确认",
+                      "去掉 --python 后重试"],
+            "known": ["--python"], }, args.json)
+    python_candidate = None
+    if not args.upgrade:
+        python_candidate = os.path.abspath(args.python) if args.python else shutil.which("python3")
+        if not python_candidate:
+            return blocked("WF_EXECUTOR_UNCONFIRMED", "系统没有 python3，且未指定 --python", {
+                "exits": ["用 --python <绝对路径> 指定一个已核实可用的 Python 3.11+ 解释器",
+                          "或先在本机安装/暴露系统 python3 后重试"], }, args.json)
+        problem = python_candidate_problems(python_candidate)
+        if problem:
+            return blocked("WF_EXECUTOR_UNCONFIRMED", f"解释器候选不可用：{problem}", {
+                "candidate": python_candidate,
+                "exits": ["换成已核实可用的 Python 3.11+ 解释器后重试"], }, args.json)
 
     problems = upgrade_flag_problems(args)
     if problems:
@@ -2533,6 +2619,7 @@ def main(argv=None):
             f"发行引用：{args.release_ref} → {commit}",
             f"版本：{manifest.get('version')}",
             f"规则摘要：{(manifest.get('compatibility') or {}).get('rules_digest')}",
+            f"解释器：{python_candidate}（确认后写入本机记录）",
             "投放文件：",
         ]
         for base, asset, relative in writes:
@@ -2791,6 +2878,23 @@ def main(argv=None):
         # 锁内已确认存在安装记录（并发安装刚完成）：交回补齐/核对分支，
         # 不改既有安装身份、不覆盖记录（2026-11-23 七轮复审 a-2）。
         return verify_installed(args, manifest, skill_roots, branch_findings)
+    # 解释器确认由这条安装命令一并完成：--python 提供时写本机用户级配置并按 global 确认，
+    # 缺省按 system 确认系统 python3。提示与写入仍只在 bootstrap 的 confirm-executor 一处。
+    scope = "global" if args.python else "system"
+    if args.python:
+        problem = write_global_executor(python_candidate)
+        if problem:
+            return blocked("WF_EXECUTOR_UNCONFIRMED", "全局配置无法写入人选解释器", {
+                "candidate": python_candidate, "reason": problem,
+                "installed": True,
+                "exits": ["修正 ~/.wf/config.json 后重跑 confirm-executor --scope global"], }, args.json)
+    confirm_rc, confirm_facts = confirm_executor(args.target, python_candidate, scope)
+    if confirm_rc != 0:
+        return blocked("WF_EXECUTOR_UNCONFIRMED",
+                       "文件已投放，但解释器确认未完成（确认须人在终端输入 yes）", {
+                           "confirmation": confirm_facts, "installed": True,
+                           "exits": [f"在终端运行：{python_candidate} .wf/bin/wf.py confirm-executor --scope {scope}",
+                                     "确认后重跑原安装命令（幂等补齐）或直接 /wf-start"], }, args.json)
     message = "\n".join([
         "OK  WF_OK",
         f"目标：{args.target}",
@@ -2799,7 +2903,8 @@ def main(argv=None):
         f"清单摘要：{manifest_digest}",
         f"规则摘要：{(manifest.get('compatibility') or {}).get('rules_digest')}",
         f"托管段：{gitignore.get('action')}",
-        "下一步：人执行 wf.py confirm-executor --scope system，然后 /wf-start",
+        f"解释器：{python_candidate}（scope={scope}，已写入本机确认记录）",
+        "下一步：/wf-start",
     ])
     return ok(message, {"installation": installation, "gitignore": gitignore}, args.json)
 
