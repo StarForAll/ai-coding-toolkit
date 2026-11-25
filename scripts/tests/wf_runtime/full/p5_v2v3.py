@@ -49,12 +49,17 @@ def new_task(title, touch_paths, sid="sess-C", argv=("print(1)",)):
     return task_id, gen, digest
 
 
-def approve(task_id, digest, gen, sid="sess-C"):
+def approve(task_id, digest, gen, sid="sess-C", plan=None):
     at = "2026-11-03T04:00:00.000000Z"
     path = wfdrive.temp(f"decision_{task_id}.json")
-    json.dump([{"source": f"human ({sid})", "at": at, "object_digest": digest,
-                "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
-                "subject": f"approve {task_id}", "choice": "approve", "reason": "用例"}], open(path, "w"), ensure_ascii=False)
+    entry = {"source": f"human ({sid})", "at": at, "object_digest": digest,
+             "artifacts": wfdrive.plan_artifacts(f"approve {task_id}"),
+             "subject": f"approve {task_id}", "choice": "approve", "reason": "用例"}
+    # 分级由人的决定承载（0.0.2 起复杂分级缺 plan.complexity 即拒）；
+    # V3 任务触碰 .wf/workflows/** 属契约面，必须显式 human-complex；V2 走轻量提议即可。
+    if plan:
+        entry["plan"] = dict(plan)
+    json.dump([entry], open(path, "w"), ensure_ascii=False)
     return wf(["task-approve", "--task", task_id, "--decision", path, "--json"], {"generation": gen}, sid)
 
 
@@ -104,7 +109,7 @@ rec("V2", "归档提交不重复", "同一任务仅一条 archive 提交", f"cou
 # ---------- V3(b)：重叠任务被维护组挡住 ----------
 task_v3, gen_v3, digest_v3 = new_task("V3 重叠维护组用例", [".wf/workflows/task-flow.md", ".wf/v3.txt"],
                                       sid="sess-D")
-rc, payload, _ = approve(task_v3, digest_v3, gen_v3, sid="sess-D")
+rc, payload, _ = approve(task_v3, digest_v3, gen_v3, sid="sess-D", plan={"complexity": "complex"})
 rec("V3", "创建并批准重叠任务", "pass", (payload or {}).get("code"), rc == 0)
 rc, payload, _ = wf(["task-start", "--task", task_v3, "--json"], {"generation": gen_v3}, sid="sess-D")
 rec("V3", "重叠任务开工", "blocked WF_WIP_UNRESOLVED",

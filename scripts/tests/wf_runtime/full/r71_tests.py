@@ -63,8 +63,10 @@ def build_task(title, sid, complexity="complex"):
     open(os.path.join(directory, "prd.md"), "w", encoding="utf-8").write(prd)
     for name in ("design.md", "implement.md"):
         open(os.path.join(directory, name), "w").write(f"# {name}\n\n内容。\n")
-    json.dump([dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())],
-              open(wfdrive.temp("r71_a.json"), "w"))
+    _approve = dec(f"approve {task_id}", "approve", "sha256:" + hashlib.sha256(prd.encode()).hexdigest())
+    # 分级由人的决定承载（0.0.2 起复杂分级缺 plan.complexity 即拒）
+    _approve["plan"] = {"complexity": complexity}
+    json.dump([_approve], open(wfdrive.temp("r71_a.json"), "w"))
     inputs = {"generation": genv, "complexity": complexity}
     if complexity == "light":
         inputs["downgrade"] = {"reason": "单文件", "evidence": "不碰治理面"}

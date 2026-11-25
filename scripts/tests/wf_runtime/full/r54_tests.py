@@ -49,11 +49,14 @@ def make_task(title, touch, sid="sess-Y1"):
     return task_id, gen, directory, "sha256:" + hashlib.sha256(prd.encode()).hexdigest()
 
 
-def approve(task_id, digest, gen, inputs_extra, sid="sess-Y1"):
+def approve(task_id, digest, gen, inputs_extra, sid="sess-Y1", plan=None):
     inputs = {"generation": gen}
     inputs.update(inputs_extra)
+    item = dec(f"approve {task_id}", "approve", digest)
+    # 分级由人的决定承载（0.0.2 起复杂分级缺 plan.complexity 即拒）
+    item["plan"] = dict(plan or {})
     return wf(["task-approve", "--task", task_id, "--decision",
-               dfile(wfdrive.temp(f"r54_{task_id}.json"), [dec(f"approve {task_id}", "approve", digest)]), "--json"], inputs, sid)
+               dfile(wfdrive.temp(f"r54_{task_id}.json"), [item]), "--json"], inputs, sid)
 
 
 def plan_of(task_id):
@@ -68,7 +71,7 @@ os.makedirs(os.path.join(F, "pkg"), exist_ok=True)
 clean()
 task1, gen1, dir1, d1 = make_task("R54 contract", ["pkg/**", ".wf/lib/wflib/gates.py"], "sess-Y1")
 # 2026-11-07：②③④ 改为按事实核对，不再由 inputs 声明；触碰面命中 .wf/lib/** 即②成立
-rc, payload, _ = approve(task1, d1, gen1, {})
+rc, payload, _ = approve(task1, d1, gen1, {}, plan={"complexity": "complex"})
 rec("R54 contract=true 未指定分级 → 要求复杂产物", "WF_TEMPLATE_INCOMPLETE",
     (payload or {}).get("code"), (payload or {}).get("code") == "WF_TEMPLATE_INCOMPLETE")
 rec("R54 报告按 complex 要求", "facts.complexity=complex",
@@ -78,7 +81,8 @@ rec("R54 报告按 complex 要求", "facts.complexity=complex",
 # ② 补齐产物 → 通过且分级为 complex
 open(os.path.join(dir1, "design.md"), "w").write("# 设计\n\n## 契约\n\n签名不变。\n")
 open(os.path.join(dir1, "implement.md"), "w").write("# 执行\n\n先测试后实现。\n")
-rc, payload, _ = approve(task1, d1, gen1, {"complexity_conditions": {"contract": {"value": "true", "fact": "changes public API contract"}}})
+rc, payload, _ = approve(task1, d1, gen1, {"complexity_conditions": {"contract": {"value": "true", "fact": "changes public API contract"}}},
+                          plan={"complexity": "complex"})
 rec("R54 补齐后通过", "WF_OK", (payload or {}).get("code"), rc == 0)
 plan = plan_of(task1)
 rec("R54 分级落为 complex", "plan.complexity=complex", plan.get("plan", {}).get("complexity"),
@@ -111,7 +115,8 @@ task2, gen2, dir2, d2 = make_task("R54 降级", ["pkg/**", ".wf/baseline.md"], "
 
 # ④ 条件为 true 但人工显式 light 且给理由证据 → 允许降级
 rc, payload, _ = approve(task2, d2, gen2, {"complexity": "light",
-                                           "downgrade": {"reason": "只改 spec 索引一条", "evidence": "无验收口径变化"}}, "sess-Y2")
+                                           "downgrade": {"reason": "只改 spec 索引一条", "evidence": "无验收口径变化"}},
+                          "sess-Y2", plan={"complexity": "light"})
 rec("R54 有理由可降级为 light", "WF_OK", (payload or {}).get("code"), rc == 0)
 plan2 = plan_of(task2)
 downgraded = [r for r in plan2.get("plan", {}).get("complexity_reasons") or [] if r.get("downgrade")]
@@ -124,7 +129,8 @@ wf(["task-pause", "--task", task2, "--reason", "R54 收尾", "--json"],
 wf(["writer", "release", "--json"],
    {"generation": json.load(open(os.path.join(F, ".wf/writer.json"), encoding="utf-8")).get("generation")}, "sess-Y2")
 task3, gen3, dir3, d3 = make_task("R54 无理由降级", ["pkg/**", ".wf/baseline.md"], "sess-Y3")
-rc, payload, _ = approve(task3, d3, gen3, {"complexity": "light"}, "sess-Y3")
+rc, payload, _ = approve(task3, d3, gen3, {"complexity": "light"}, "sess-Y3",
+                          plan={"complexity": "light"})
 rec("R54 无理由降级被拒", "WF_SEMANTIC_DECISION", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_SEMANTIC_DECISION")
 
