@@ -18,12 +18,16 @@ user-invoked: true
 - **影响面**：缺口影响谁、什么后果、能否回退；建议（补计划 / 接受 / 异常归档）。
   **`required` 验收项不得以"接受风险"结案**——只能按下面"收窄"或异常归档。人的挑战：「这个缺口影响谁？接受之后出问题谁负责？」
 - **规模**：这次改了多少（新增/删除/移动、净增删、扩面条目、与批准面偏离）。框架给"自上次人确认以来的累计量
-  vs 本项目历史最大"的事实，**不设阈值**；首任务收工必确认一次。人的挑战：「这次一共动了多少？为什么不需要我看？」
+  vs 本项目历史最大"的事实，**不设阈值**；首任务收工必确认一次（人看过 `[规模]` 行并给出原话，
+  跑 `wf sampling confirm --task <id> --quote "<人的原话>"` 写入本次确认值，成为后续 `history_max`
+  的输入；不确认则预览会持续提示）。人的挑战：「这次一共动了多少？为什么不需要我看？」
 - **计划没覆盖的缺口**：检索了哪些验收项与 spec 规则、为什么认为没覆盖、影响多大、建议补计划还是接受。
   人的挑战：「你查了哪些标准就说没有？影响有多大？」
 - **未核实项**：哪些本机验不了、影响多大、能否收窄。收窄必须同时给**四项依据**：被收窄/去除的验收项 id、
   不可验证的客观原因、影响与被放弃的保障、补偿措施——缺一不予接受；`required` 只能收窄或异常归档。
   收窄经 `wf verify resolve --kind narrow` 落档，人工核验证据走 `--kind inspection`。
+  **手工验证（`kind=manual`）不是收窄**：按 `wf-continue` 的 Check 行补人判决定文件（`choice=passed` +
+  `content_digest`），缺它该项 `not_run`；空 `verification_ids` 的直接验收缺 `content_digest` 时该项 `pending`。
 
 ## 步骤
 
@@ -42,7 +46,8 @@ user-invoked: true
    知识处置状态、待提交路径，以及当前生效的放行清单
    （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先跑 `authorize record --draft` 取只读骨架）、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
    单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` 的 vendor 段；
-   本任务声称修框架时按独立维护任务处理，不在收尾里吞掉。
+   本任务声称修框架时按 `wf-continue` 的 vendor 段定去向（回源仓库立项/另开任务/保持现场），
+   不在收尾里吞掉，也不混入业务提交。
 2. 人确认后，先跑 `archive --task <id> --draft` 取决定文件草稿（入口按当前待提交路径生成、只打印不落盘），
    按草稿把「finish 调用证据 + 按精确路径的提交授权」写成决定文件（不手写路径清单，人把内容写成决定文件即授权）：
    - 一条 `choice=finish` 的 Decision（subject 记本任务与“已了解结果与未核实项”）；
@@ -54,7 +59,9 @@ user-invoked: true
 
 - `WF_COMMIT_NOT_AUTHORIZED`：等人处理，不自行提交。
 - `WF_WORKSPACE_UNRESOLVED` / `WF_SCOPE_UNRESOLVED`：逐路径处置或回 Plan 重批。
-- `WF_REVIEW_INVALID` / `WF_SEMANTIC_DECISION`：复杂任务缺真实审查、或主会话复核缺失/不合规；先补复核/补审，确无审查环境则按异常退出处置（不降级归档）。
+- `WF_REVIEW_INVALID` / `WF_SEMANTIC_DECISION`：按 `facts` 判断来源——复杂任务缺真实审查/主会话复核不合规、
+  知识处置缺失、复盘未覆盖触发事实等都会用这两个码；先按 facts 补齐对应项，审查环境确不可用才按异常退出
+  处置（不降级归档）。
 
 ## 工作习惯（2026-11-08 起）
 

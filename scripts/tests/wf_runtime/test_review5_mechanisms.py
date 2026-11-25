@@ -929,6 +929,35 @@ class ManualDecisionContentBindingTest(unittest.TestCase):
             "choice": "passed", "subject": "v1", "plan_version": 3, "source": "human"}])
         self.assertEqual(entry["status"], "not_run")
 
+    def test_direct_acceptance_pending_reports_content_mismatch(self):
+        from wflib import check
+
+        task = {"plan": {"version": "v1", "approved_version": "v1",
+                         "approval": {"object_digest": "sha256:prd"},
+                         "acceptance": [{"id": "a1"}]}}
+        decisions = [{"choice": "passed", "subject": "a1", "plan_version": "v1",
+                      "content_digest": "sha256:old", "source": "human"}]
+        results = check._acceptance_results(None, task, [], decisions,
+                                            "sha256:anchor", "sha256:new")
+        self.assertEqual(results[0]["conclusion"], "pending")
+        self.assertEqual(results[0]["stale_decision"]["current_content_digest"], "sha256:new")
+
+    def test_mechanical_revision_uses_normalized_plan_version(self):
+        """机械修订后 manual/直接人判仍按归一批准版本覆盖（不是 raw plan.version）。"""
+        from wflib import check
+
+        task = {"plan": {
+            "version": "v2", "approved_version": "v1",
+            "equivalences": [{"old_version": "v1", "new_version": "v2",
+                              "decision": {"choice": "机械修订"}}],
+            "approval": {"object_digest": "sha256:prd"},
+            "acceptance": [{"id": "a1"}]}}
+        decisions = [{"choice": "passed", "subject": "a1", "plan_version": "v1",
+                      "content_digest": "sha256:content", "source": "human"}]
+        results = check._acceptance_results(None, task, [], decisions,
+                                            "sha256:anchor", "sha256:content")
+        self.assertEqual(results[0]["conclusion"], "passed")
+
 
 class MechanicalRevisionDigestTest(unittest.TestCase):
     """十轮复审 b-1（机械修订）：草稿预填的 object_digest 必须在入口被核对。"""

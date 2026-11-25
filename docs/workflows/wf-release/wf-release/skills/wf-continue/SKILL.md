@@ -21,7 +21,7 @@ disable-model-invocation: false
 | 已批准，未开工 | `task-start --task <id>` |
 | in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先按快照、提交和 WIP 证据判它是本任务交付还是外来——外来走排除声明，是本任务交付就继续；只有证据冲突、或必须决定接管/排除/提交时才问人，判断口径见下节「实施期要自己判的几件事」）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
-| in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘） |
+| in_progress/check | `task-check --task <id> [--decision …] [--review-notes …]`；双轴结论形状拿不准时先跑 `task-check --review-notes-draft --task <id>`（只打印路径与 TODO，不落盘）。`--decision` 承载**人工验收**（`kind=manual` 或空 `verification_ids` 的直接验收）与重复调试落账。人工验收/直接验收：`choice=passed|failed`（要通过须 `passed`）、`subject` 以整词含目标 id、`object_digest` 取规划批准的对象摘要（或给 `plan_version` = `status --json` 的 `facts.task.plan_version`）、`content_digest` = `status --json` 的 `facts.delivery.content_digest`（人看到的交付内容变了旧结论不沿用；缺该值：manual 项 `not_run`、直接验收 `pending`）。重复调试按 `wf help task-check` 的 subject 形状：声明无 choice，裁定 `choice=同一问题|不同问题`，不要套用验收字段 |
 | 需要记录知识处置（Check/归档前） | `task-knowledge --task <id> --decision no-update|updated [--changes <文件>]`；spec 变更走 `wf-spec-update` skill（`spec-update --task <id> --changes <文件>`），先看后改 |
 | 复盘触发（入口 facts 的触发集合非空） | `task-retrospect --task <id> --evidence <文件>`（结论写在 evidence 的 `conclusion`）；触发项与证据缺口由入口 facts 给出，不自行缩减 |
 | 需要返工或替换 | `task-rework --task <id> --decision <文件>`（建 R、挂起 T、继承前置）；替换用 `task-replace --task <id> --decision <文件> [--preview]`；先读 `task-flow` 的返工/替换段 |
@@ -37,7 +37,7 @@ disable-model-invocation: false
 | 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance --run <id> [--decision <path>]` 推进；`run pause --run <id> --reason <text>` 受控暂停；只读回读用 `run locate --run <id>` |
 | 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |
 | 收工 | `stop --decision <path>`（一个去向：commit/keep/reverse/transfer）；先看后定用 `stop --preview`（免决定只读） |
-| 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]`。提交范围含删除时另需 K6 第 2 类确认：**删除前** `authorize record` 一条 `choice=delete`（paths 覆盖被删路径——摘要绑定被删时的内容；先删后 record 绑不上、会被拒） |
+| 放弃 | `task-abandon --task <id> --decision <path> [--disposition <path>]`（**有未提交改动时必需**，逐项覆盖 `preview.uncommitted`）。提交范围含删除时另需 K6 第 2 类确认：**删除前** `authorize record` 一条 `choice=delete`（paths 覆盖被删路径——摘要绑定被删时的内容；先删后 record 绑不上、会被拒） |
 | `status=archived` 但记录仍在活动区（归档中断：终态已写、目录未移） | 若写权已被释放，先 `writer acquire`（不收 --task，对象来自会话绑定）；再**重入 `archive --task <id> --decision <同一决定>` 续做**。该入口会补做目录移动，不另开恢复命令 |
 | 归档成功但回显 `write_release.released=false` | 按回显事实重跑 `writer release`（对象已终态，`ensure_releasable` 放行）；正常归档成功时入口已自动释放 |
 
@@ -136,7 +136,7 @@ disable-model-invocation: false
 人签字前可用 `review-launch --preview` 只读核对本轮路径清单与日志文件摘要，
 但不必每轮重看（内容变化的约束是范围规则，不是这份签字）。
 然后：`review-launch --task <id> --implementation-cli <cli>`（请求文件可选，入口按当前对象生成） → 人按回显文本在 reviewer CLI 里调用 `wf-review`
-→ `review-import`（**一次调用导入本轮全部已完成报告**；有失败槽位按回显 `import_errors` 逐个处置） → `review-decide --main-review-draft <file>` → 主会话填写五轴复核 → `review-decide --main-review <file>`。
+→ `review-import --round <n>`（**一次调用导入本轮全部已完成报告**；有失败槽位按回显 `import_errors` 逐个处置） → `review-decide --round <n> --main-review-draft <file>` → 主会话填写五轴复核 → `review-decide --round <n> --main-review <file>`（轮次显式给：缺省取最大发起轮，恢复较早一轮会导错——见 `wf-review-action` 第 1 步）。
 报告是辅助证据，主会话必须在判定前完成自己的逐轴复核；报告未覆盖的轴，主会话能核实就自己补，补不了才交人接受缺口。
 单 reviewer 判定需人签残余风险接受（`review-decide --single-reviewer-acceptance`，留痕降级、不默认；
 骨架用 `--single-reviewer-acceptance-draft` 生成）；完整口径见 `wf-review` 适用面。

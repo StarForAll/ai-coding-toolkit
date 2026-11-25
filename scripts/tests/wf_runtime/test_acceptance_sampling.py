@@ -17,7 +17,57 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
-from wflib import judgments, review, sampling  # noqa: E402
+from wflib import attestation, authorize, judgments, review, sampling, scale  # noqa: E402
+
+
+class QuoteMaskTest(unittest.TestCase):
+    """人的原话入库必须是遮罩+截断摘要（授权/抽样/规模确认共用一处）。"""
+
+    def test_mask_quote_redacts_and_truncates(self):
+        text = authorize.mask_quote("Authorization: Bearer sk-live-AAAABBBB " + "x" * 600)
+        self.assertNotIn("sk-live-AAAABBBB", text)
+        self.assertIn("…<truncated>", text)
+
+    def test_sampling_reviewed_masks_quote(self):
+        task = {}
+        state = sampling.mark_reviewed(task, quote="token = sk-live-AAAABBBB", attestation={})
+        self.assertNotIn("sk-live-AAAABBBB", state["quote"])
+
+    def test_scale_record_masks_quote(self):
+        task = {}
+        payload = scale.record(task, {"net": 1, "files": 1}, quote="password = hunter2")
+        self.assertNotIn("hunter2", payload["quote"])
+
+    def test_attestation_stamp_masks_quote(self):
+        stamped = attestation.stamp({"by": "human:x", "at": "2026-11-25T00:00:00Z",
+                                     "quote": "token = sk-live-AAAABBBB", "source": "user-declared"},
+                                    "sha256:" + "a" * 64)
+        self.assertNotIn("sk-live-AAAABBBB", stamped["quote"])
+        self.assertEqual(stamped["attestation_digest"], "sha256:" + "a" * 64)
+
+    def test_review_acceptance_quotes_are_masked(self):
+        decision = {"by": "human:x", "at": "2026-11-25T00:00:00Z",
+                    "quote": "token = sk-live-AAAABBBB", "source": "user-declared",
+                    "residual_risk": "r", "round": 1, "task": "t1"}
+        record, problems = review.single_reviewer_acceptance(decision, 1, "t1")
+        self.assertEqual(problems, [])
+        self.assertNotIn("sk-live-AAAABBBB", record["quote"])
+        gap, problems = review.gap_acceptance({"by": "human:x", "at": "2026-11-25T00:00:00Z",
+                                               "quote": "token = sk-live-AAAABBBB",
+                                               "source": "user-declared", "round": 1,
+                                               "task": "t1", "axes": ["range"]},
+                                              ["range"], 1, "t1")
+        self.assertEqual(problems, [])
+        self.assertNotIn("sk-live-AAAABBBB", gap["quote"])
+
+    def test_evaluate_attestation_is_committed(self):
+        task = {}
+        state = sampling.record_result(
+            task, [{"class": "c", "event": "e"}],
+            {"c:e": "ok", "__attestation__": {"by": "human:x",
+                                               "attestation_digest": "sha256:" + "b" * 64}})
+        self.assertEqual(state["evaluate_attestation"]["attestation_digest"],
+                         "sha256:" + "b" * 64)
 
 
 class FakeCtx:

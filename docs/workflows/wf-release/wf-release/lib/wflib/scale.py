@@ -128,9 +128,12 @@ def describe(current, historical_max):
 
 def record(task, current, *, by="human", quote=None):
     """人确认规模时把累计量记进任务记录（committed），成为后续任务的"历史最大"输入。"""
+    from . import authorize as authorize_mod
+
     payload = dict(task.get("cumulative") or {})
     payload.update({"confirmed_net": current.get("net"), "confirmed_files": current.get("files"),
                     "added": current.get("added"), "deleted": current.get("deleted"),
-                    "base": current.get("base"), "at": records.now_str(), "by": by, "quote": quote})
+                    "base": current.get("base"), "at": records.now_str(), "by": by,
+                    "quote": authorize_mod.mask_quote(quote)})
     task["cumulative"] = payload
     return payload

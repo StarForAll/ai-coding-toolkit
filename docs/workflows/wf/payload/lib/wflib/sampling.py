@@ -193,7 +193,7 @@ def freeze(task, skeleton, seed=None):
 
 
 def frozen(task):
-    """抽样状态（**唯一形状**就在这里）：`{seed, events, frozen_at, picks, results, reviewed_by_human}`。
+    """抽样状态（**唯一形状**就在这里）：`{seed, events, frozen_at, picks, results, evaluate_attestation, reviewed_by_human}`。
 
     门禁与 CLI 一律经 `selection()` / 本函数读取，不各自拼键路径——这是 P1 死锁的根因
     （门禁读 `sampling.frozen.picks`，而记录里根本没有 `frozen` 这层）。
@@ -287,6 +287,11 @@ def record_result(task, picks, evaluations=None):
             entry["evaluated"] = False
         results.append(entry)
     state["results"] = results
+    # 人确认摘要随评估事实入库（此前 `evaluations["__attestation__"]` 被静默丢弃，
+    # "人确认"事后无法核对；契约见 attestation.py 的 docstring）。
+    attestation = evaluations.get("__attestation__")
+    if isinstance(attestation, dict) and attestation:
+        state["evaluate_attestation"] = attestation
     task["sampling"] = state
     return state
 
@@ -384,8 +389,11 @@ def mark_reviewed(task, *, by="human", quote=None, attestation=None):
     必须带**人给出的确认摘要**（乙口径）：没有它，"人已看过"就只是 AI 的自述。
     框架仍不机械检测人是否真看了（不追踪停留/翻页），但能核"这话出自人给的确认文件"。
     """
+    from . import authorize as authorize_mod
+
     state = dict(frozen(task))
-    state["reviewed_by_human"] = {"at": records.now_str(), "by": by, "quote": quote,
+    state["reviewed_by_human"] = {"at": records.now_str(), "by": by,
+                                  "quote": authorize_mod.mask_quote(quote),
                                   "attestation": attestation or {}}
     task["sampling"] = state
     return state["reviewed_by_human"]

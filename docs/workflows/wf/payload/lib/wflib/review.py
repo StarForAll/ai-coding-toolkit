@@ -1506,6 +1506,13 @@ GAP_ACCEPTANCE_DOMAIN = "wf-gap-acceptance-v1"
 SINGLE_REVIEWER_ACCEPTANCE_DOMAIN = "wf-single-reviewer-acceptance-v1"
 
 
+def _masked_quote(value):
+    """人确认原话的人读形态（遮罩+截断）：与 authorize/sampling/scale 同源。"""
+    from . import authorize as authorize_mod
+
+    return authorize_mod.mask_quote(value)
+
+
 def single_reviewer_acceptance(decision, round_no, task_id=None):
     """W2-3（三轮裁决④）：人签残余风险接受的单校验点，gap_acceptance 同型。
 
@@ -1546,7 +1553,7 @@ def single_reviewer_acceptance(decision, round_no, task_id=None):
                         "round": int(round_no)})
     return {"round": int(round_no), "residual_risk": decision.get("residual_risk"),
             "by": decision.get("by"), "at": decision.get("at"),
-            "quote": decision.get("quote"), "source": decision.get("source"),
+            "quote": _masked_quote(decision.get("quote")), "source": decision.get("source"),
             "attestation_digest": digest}, []
 
 
@@ -1591,7 +1598,7 @@ def gap_acceptance(decision, uncovered, round_no, task_id=None):
                                                "axes": sorted(uncovered)})
     return {"round": int(round_no), "axes": sorted(uncovered),
             "by": decision.get("by"), "at": decision.get("at"),
-            "quote": decision.get("quote"), "source": decision.get("source"),
+            "quote": _masked_quote(decision.get("quote")), "source": decision.get("source"),
             "attestation_digest": digest}, []
 
 
@@ -1624,6 +1631,8 @@ def status_of_round(ctx, task, round_no=None):
     # （restored 槽说"可直接判定"、轮级 next_ 说"撞混合基线"就是同一页两句话）。
     current_materials_identity = round_materials_identity(ctx, task, round_no)
     materials_basis = round_materials_basis(imported, current_materials_identity)
+    material_state = materials_identity_state(ctx, task_id, round_no)
+    history_round = round_is_history(imported)
     slots = []
     for slot in declared:
         bound = assignment.get(slot) or {}
@@ -1672,15 +1681,41 @@ def status_of_round(ctx, task, round_no=None):
                 # restore 故意保留旧身份：它与"材料真被换了"是两件事，提示与出口都不同
                 if (entry.get("materials") or {}).get("restored"):
                     record["stale_cause"] = "restored-historical"
-                    if materials_basis["mixed"]:
+                    if material_state["state"] == "drift" and not history_round:
+                        record["reason"] = ("本轮有 live 报告绑定现场材料，drift 会阻断整轮判定："
+                                            "处置见轮级 next_（先放回原字节/重建材料）")
+                    elif material_state["state"] in ("legacy", "legacy_adopted"):
+                        record["reason"] = ("当前无材料身份（目录仍在、缺 manifest 或按现场字节采纳）："
+                                            "重跑 review-context 采纳现场字节（现场字节未改过时身份会复现，"
+                                            "原报告继续有效；改过才需重写/新轮）后仍可直接判定")
+                    elif material_state["state"] == "unmaterialized" and material_state.get("present"):
+                        record["reason"] = ("本轮材料包不完整（缺必需文件）：删除 materials/ 下全部内容后"
+                                            "重跑 review-context 重建；不要按旧包采纳")
+                    elif current_materials_identity is None:
+                        record["reason"] = ("本轮材料目录已不在（当前无材料身份，记录里的旧身份属弱证据）："
+                                            "重跑 review-context 重建材料（同 Check 身份会复现）后仍可直接判定；"
+                                            "若还有槽位未到，等齐后再判定")
+                    elif materials_basis["mixed"]:
                         record["reason"] = ("本轮基线混合（还原条目 + 对不上当前材料的正常条目）："
                                             "直接判定会撞混合基线，处置见轮级 next_")
                     else:
                         record["reason"] = ("现场材料已不是该记录的原证据（身份取记录，属弱身份）："
-                                            "可直接判定；要恢复可核身份就放回原字节")
+                                            "该记录可直接判定；若无其他槽位未到，可直接 review-decide，"
+                                            "否则等齐后再判定；要恢复可核身份就放回原字节")
                 else:
                     record["stale_cause"] = "materials"
-                    record["reason"] = "本轮材料身份已变：报告对应的不是当前材料"
+                    if material_state["state"] in ("legacy", "legacy_adopted"):
+                        record["reason"] = ("当前无材料身份（目录仍在、缺 manifest 或按现场字节采纳）："
+                                            "重跑 review-context 采纳现场字节（现场字节未改过时身份会复现，"
+                                            "原报告继续有效；改过才需重写/新轮）")
+                    elif material_state["state"] == "unmaterialized" and material_state.get("present"):
+                        record["reason"] = ("本轮材料包不完整（缺必需文件）：删除 materials/ 下全部内容后"
+                                            "重跑 review-context 重建；不要按旧包采纳")
+                    elif current_materials_identity is None:
+                        record["reason"] = ("本轮材料目录已不在：重跑 review-context 重建（同 Check 身份会复现，"
+                                            "现场字节未改过时原报告继续有效）后判定；字节改过才需重写报告/开新一轮")
+                    else:
+                        record["reason"] = "本轮材料身份已变：报告对应的不是当前材料"
             else:
                 record["state"] = "imported"
                 record["anchor_checked"] = True
@@ -1764,8 +1799,9 @@ def status_of_round(ctx, task, round_no=None):
             "single_reviewer": single_reviewer,
             "launch_scope": (launch or {}).get("scope"),
             # 材料身份强度与当前身份：`stale` 只说明某份报告对不上，这里给出根因与恢复方向。
-            "materials": {"state": materials_identity_state(ctx, task_id, round_no)["state"],
-                          "identity": current_materials_identity},
+            "materials": {"state": material_state["state"],
+                          "identity": current_materials_identity,
+                          "present": material_state.get("present") or []},
             "slots": slots, "anchor_current": anchor}
 
 
@@ -3010,6 +3046,9 @@ def redact_patch(text):
 
 MATERIALS_PROTOCOL = "wf-materials-v1"
 MANIFEST_NAME = "materials-manifest.json"
+# 一次物化必然写出的顶层材料文件（`check-logs/` 是可选子目录）。旧版逐文件直写留下的
+# 半包可能缺其中任意一个；缺件包不是"reviewer 读过的材料"，不能被 legacy 采纳。
+MATERIAL_FILES = ("diff.patch", "prd.md", "check.json", "status.json", "tests.json")
 
 
 def load_materials_manifest(materials_dir):
@@ -3135,7 +3174,11 @@ def materials_identity_state(ctx, task_id, round_no):
     materials = os.path.join(round_dir(ctx, task_id, round_no), "materials")
     present = []
     if os.path.isdir(materials):
-        present = sorted(name for name in os.listdir(materials) if name != MANIFEST_NAME)
+        # `present` 的语义是"当前材料文件名"：子目录（如 `check-logs/`）不是材料文件。
+        # 此前把目录名也算成"有材料"，会让"删内容文件+manifest 后重跑"这条出口
+        # 落进 legacy 采纳，产出一个缺 diff/prd/check/tests 的半包却报成功。
+        present = sorted(name for name in os.listdir(materials)
+                         if name != MANIFEST_NAME and os.path.isfile(os.path.join(materials, name)))
     manifest = load_materials_manifest(materials)
     if manifest is not None:
         drift = verify_materials_manifest(manifest, materials)
@@ -3147,8 +3190,30 @@ def materials_identity_state(ctx, task_id, round_no):
         weak = bool((manifest.get("facts") or {}).get("legacy_materials"))
         return {"state": "legacy_adopted" if weak else "fixed", "materials": materials,
                 "manifest": manifest, "drift": [], "present": present}
-    return {"state": "legacy" if present else "unmaterialized", "materials": materials,
+    if not present:
+        return {"state": "unmaterialized", "materials": materials, "manifest": None,
+                "drift": [], "present": present}
+    incomplete = [name for name in MATERIAL_FILES if name not in present]
+    if incomplete:
+        # 旧版逐文件直写的半包（缺必需文件）不是可采纳的"现场字节"：它的内容不构成
+        # 一套材料，采纳只会让 reviewer 读到缺件包。按未物化处理，由调用方重建或给出出口。
+        return {"state": "unmaterialized", "materials": materials, "manifest": None,
+                "drift": [], "present": present, "incomplete": incomplete}
+    return {"state": "legacy", "materials": materials,
             "manifest": None, "drift": [], "present": present}
+
+
+def round_is_history(entries):
+    """本轮导入记录是否"没有现场身份可言"（decide 的 drift 豁免判据，唯一实现）。
+
+    restore 记录的身份来自记录、纯旧记录压根没有身份；两者都不该被现场漂移挡住。
+    只要有任一条带现场身份的 live 报告，drift 就必须拒——不能用"存在还原条目"代理。
+    """
+    items = [entry for entry in entries or [] if isinstance(entry, dict)]
+    return bool(items) and all(
+        (entry.get("materials") or {}).get("restored")
+        or not (entry.get("materials") or {}).get("identity")
+        for entry in items)
 
 
 def round_materials_basis(entries, current_identity):
@@ -3161,7 +3226,12 @@ def round_materials_basis(entries, current_identity):
     for entry in entries or []:
         materials = entry.get("materials") or {}
         identity = materials.get("identity")
-        if not identity or not current_identity or identity == current_identity:
+        if not identity:
+            continue
+        # 当前没有材料身份（目录被清/丢失）时，**有绑定身份的报告**同样是对不上的现场：
+        # 它等不来新材料，恢复只能重出材料或开新一轮。此前这里直接跳过，status 会回落成
+        # "材料未齐，等 reviewer 产出"——一个永远等不到的出口。
+        if current_identity is not None and identity == current_identity:
             continue
         (restored if materials.get("restored") else live).append(entry)
     return {"restored": restored, "live_mismatch": live,
@@ -3484,11 +3554,32 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
                                             or sorted(prior.get("adopted_files") or [])),
                           "adopted_at": prior.get("adopted_at") or records.now_str(),
                           "note": "材料无核对身份（按现场字节采纳，未证明未被改动）"}
+        prior_check_id = (material_state["manifest"] or {}).get("check_id")
+        if not prior_check_id:
+            # 采纳旧包时优先沿用导入记录里的被审 check_id：材料字节没变、只是 manifest
+            # 丢了时，同锚点重跑 Check（新 id）不应把旧报告的身份改掉。
+            _imported_round = [entry for entry in (record.get("reviews") or {}).get("imported") or []
+                               if isinstance(entry, dict)
+                               and int(entry.get("round") or 0) == int(round_no)]
+            _check_ids = {(entry.get("anchor") or {}).get("check_id") for entry in _imported_round
+                          if (entry.get("anchor") or {}).get("check_id")}
+            if len(_check_ids) == 1:
+                prior_check_id = next(iter(_check_ids))
         manifest = write_materials_manifest(
-            materials,
-            (material_state["manifest"] or {}).get("check_id") or current_check_id,
-            anchor, material_facts)
+            materials, prior_check_id or current_check_id, anchor, material_facts)
     else:
+        # 未物化（含"删内容文件+manifest"后的恢复形态）：目录里可能只剩 `check-logs/`
+        # 这类子目录，或一份缺必需文件的旧半包。子目录是残留、重建；缺件旧包不静默采纳、
+        # 也不静默删除证据——给"删全部内容重建"与"放回完整备份"两个出口。
+        if os.path.isdir(materials):
+            if material_state.get("present"):
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "本轮材料包不完整（缺必需文件），不按旧包采纳",
+                    "missing": material_state.get("incomplete") or [],
+                    "present": material_state["present"],
+                    "exits": ["删除 materials/ 下全部内容后重跑 review-context（按当前 Check 重建）",
+                              "有完整备份时把原字节放回材料目录（原报告继续有效）"]})
+            shutil.rmtree(materials, ignore_errors=True)
         staging = _material_staging_dir(directory)
         try:
             material_facts = write_materials(ctx, record, round_no, anchor, staging,
@@ -4305,7 +4396,8 @@ def acceptance_echo(task):
     """当前生效的放行清单（status 与 archive 强制回显的同一形状）。"""
     return [{"round": item.get("round"), "slot": item.get("slot"),
              "report_digest": item.get("report_digest"), "by": item.get("by"),
-             "at": item.get("at"), "quote": item.get("quote"), "batch": item.get("batch")}
+             "at": item.get("at"), "quote": _masked_quote(item.get("quote")),
+             "batch": item.get("batch")}
             for item in active_acceptances(task)]
 
 
@@ -4596,7 +4688,8 @@ def merge_acceptances(kept, accepted, batch_id, now):
                             "batch": existing.get("batch")})
             continue
         kept.append({"batch": batch_id, "round": key[0], "slot": key[1], "report_digest": key[2],
-                     "quote": item.get("quote"), "by": item.get("by"), "at": item.get("at"),
+                     "quote": _masked_quote(item.get("quote")), "by": item.get("by"),
+                     "at": item.get("at"),
                      "source": item.get("source"), "waive_unknown_findings": True,
                      "accepted_at": now, "revoked": False, "consumed": False})
         added.append({"round": key[0], "slot": key[1], "report_digest": key[2], "batch": batch_id})
@@ -4819,10 +4912,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             # restore 记录的身份来自记录、纯旧记录压根没有身份。两种都不该被现场漂移挡住。
             _round_entries = [entry for entry in reviews.get("imported") or []
                               if isinstance(entry, dict) and int(entry.get("round") or 0) == int(round_no)]
-            history_round = bool(_round_entries) and all(
-                (entry.get("materials") or {}).get("restored")
-                or not (entry.get("materials") or {}).get("identity")
-                for entry in _round_entries)
+            history_round = round_is_history(_round_entries)
             if material_state["state"] == "drift" and not history_round:
                 raise ReviewError("WF_REVIEW_INVALID", {
                     "reason": "本轮材料在物化后被改动，不能据此产结论",
@@ -5120,7 +5210,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     "degraded": "single-provider",
                     "single_reviewer_accepted": {
                         "attestation_digest": single_acceptance["attestation_digest"],
-                        "quote_summary": str(single_acceptance.get("quote") or "")[:80],
+                        "quote_summary": _masked_quote(single_acceptance.get("quote"))[:80],
                         "by": single_acceptance.get("by"), "round": int(round_no)}}
             imported_slots = [normalize_agent(entry.get("slot")) for entry in imported]
             missing_slots = ([] if discovered_mode
@@ -5518,7 +5608,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                 "材料在物化后被改动；本轮的结论按**记录给出的身份**成立"
                                 "（纯旧记录没有身份时见 unbound），现场字节只作参考"
                                 "（要恢复可核身份就放回原字节）" if drift else
-                                "本轮没有材料目录：报告读到的材料已不可还原"))
+                                "本轮没有可用材料包（目录不在或不完整）：报告读到的材料已不可还原"))
         # 判定引用的材料身份：本轮 manifest（轮次材料一经物化即固定）的摘要——
         # "判定通过时 reviewer 读到的是哪份 check.json/日志"由此可还原，不靠时间推断。
         # `state` 同时如实暴露身份强度：legacy=无身份记录（按现场采纳）、unmaterialized=无材料。

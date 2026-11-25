@@ -9,6 +9,7 @@
 3. 只在 unmaterialized 发布：fixed 重入不重写 manifest（generated_at 不变）。
 """
 
+import shutil
 import sys
 import tempfile
 import unittest
@@ -97,9 +98,9 @@ class AtomicPublishTest(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             self._context(write_side_effect=_boom)
-        # prepare 起手的 makedirs 会留下空目录；空目录等同 unmaterialized，但绝不许有内容
-        self.assertEqual(sorted(p.name for p in self._materials_dir().iterdir()), [],
-                         "失败的物化不得留下半包（无 manifest 的内容文件）")
+        # 未物化分支先清掉本次 makedirs 留下的空目录；失败后连空目录都不留（无半包）
+        self.assertFalse(self._materials_dir().exists(),
+                         "失败的物化不得留下材料目录（更不许有半包内容）")
         self.assertEqual(self._staging_dirs(), [], "异常路径必须清掉本次 staging")
         self.assertEqual(review.materials_identity_state(self._ctx(), self.task_id, 1)["state"],
                          "unmaterialized")
@@ -112,6 +113,56 @@ class AtomicPublishTest(unittest.TestCase):
         self.assertTrue((self._materials_dir() / "materials-manifest.json").is_file())
         self.assertEqual(review.materials_identity_state(self._ctx(), self.task_id, 1)["state"],
                          "fixed")
+
+    def test_leftover_subdir_does_not_count_as_material_files(self):
+        """`present` 是"材料文件名"：只剩 `check-logs/` 子目录不等于还有材料。"""
+        materials = self._materials_dir()
+        (materials / "check-logs").mkdir(parents=True)
+        records.atomic_write(materials / "check-logs" / "cmd1.log", "x\n")
+        state = review.materials_identity_state(self._ctx(), self.task_id, 1)
+        self.assertEqual(state["state"], "unmaterialized")
+        self.assertEqual(state["present"], [])
+
+    def test_recovery_outlet_with_leftover_logs_rebuilds_complete_package(self):
+        """出口②（删内容文件+manifest 后重跑）不得产出半包：残留子目录按未物化清掉重建。"""
+        self._context()
+        materials = self._materials_dir()
+        (materials / "check-logs").mkdir(exist_ok=True)
+        records.atomic_write(materials / "check-logs" / "cmd1.log", "x\n")
+        for path in list(materials.iterdir()):
+            if path.is_file():
+                path.unlink()
+        result = self._context()
+        self.assertTrue((materials / "materials-manifest.json").is_file())
+        self.assertTrue((materials / "diff.patch").is_file())
+        self.assertFalse((materials / "check-logs").exists(), "残留子目录必须随重建清掉")
+        self.assertEqual(review.materials_identity_state(self._ctx(), self.task_id, 1)["state"],
+                         "fixed")
+        self.assertEqual(result["facts"]["materials_check"]["state"], "unmaterialized")
+
+    def test_incomplete_legacy_package_is_not_adopted(self):
+        """缺必需文件的旧半包不是"现场字节"：拒绝采纳并给删除/放回出口。"""
+        materials = self._materials_dir()
+        materials.mkdir(parents=True)
+        records.atomic_write(materials / "diff.patch", "half\n")
+        state = review.materials_identity_state(self._ctx(), self.task_id, 1)
+        self.assertEqual(state["state"], "unmaterialized")
+        self.assertIn("prd.md", state["incomplete"])
+        with self.assertRaises(review.ReviewError) as caught:
+            self._context()
+        self.assertEqual(caught.exception.code, "WF_REVIEW_INVALID")
+        self.assertIn("prd.md", caught.exception.facts["missing"])
+        self.assertEqual((materials / "diff.patch").read_text(encoding="utf-8"), "half\n",
+                         "缺件包不静默删除证据")
+
+    def test_rebuild_after_delete_reproduces_identity(self):
+        """材料目录被清后重建会逐字节复现身份：原报告仍有效，不需要重写/开新一轮。"""
+        self._context()
+        before = review.round_materials_identity(self._ctx(), self.task, 1)
+        shutil.rmtree(self._materials_dir())
+        self._context()
+        after = review.round_materials_identity(self._ctx(), self.task, 1)
+        self.assertEqual(after, before)
 
     def test_fixed_reentry_keeps_manifest_bytes(self):
         self._context()

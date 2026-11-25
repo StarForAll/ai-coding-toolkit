@@ -51,6 +51,28 @@ class DebugRulingCoverageTest(unittest.TestCase):
         self.assertEqual(gates.debug_pending(task_with(2), 3)["pending"], [])
 
 
+class RulingDomainAndReachTest(unittest.TestCase):
+    """门禁只认裁定域取值、且只按已到场倍数取覆盖上界（2026-11-25 独立审查 M-2）。
+
+    此前任意 choice（如一条 plan-q 答复）只要 subject 前缀对得上就被当成裁定，
+    任意高位倍数即可静音归档阻断；未来倍数也能提前覆盖尚未发生的失败。
+    """
+
+    def test_non_ruling_choice_does_not_clear_pending(self):
+        info = gates.debug_pending(task_with(9, [(3, "plan-q")]), 3)
+        self.assertEqual([item["multiple"] for item in info["pending"]], [3])
+        self.assertEqual(info["rulings"], {})
+
+    def test_future_multiple_does_not_clear_pending(self):
+        info = gates.debug_pending(task_with(9, [(99, "同一问题")]), 3)
+        self.assertEqual([item["multiple"] for item in info["pending"]], [3])
+        self.assertEqual(info["pending"][0]["covers"], [1, 2, 3])
+
+    def test_reached_multiple_still_covers(self):
+        info = gates.debug_pending(task_with(9, [(3, "同一问题")]), 3)
+        self.assertEqual(info["pending"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
 

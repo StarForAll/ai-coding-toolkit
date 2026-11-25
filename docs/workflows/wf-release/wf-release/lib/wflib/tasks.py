@@ -2003,6 +2003,16 @@ def cmd_task_approve(ctx, args):
         human = execution.setdefault("human_decisions", [])
         for decision in decisions:
             if decision is not approval:
+                # 保留 subject 只经专用通道入账：`task-check --decision` 会核倍数已到场与
+                # choice 域；通用批准路径原样 append 会把任意 subject 变成裁定/声明，
+                # 例如一条 plan-q 答复写成 `debug-ruling-<vid>-99` 即可静音归档阻断。
+                subject = str(decision.get("subject") or "")
+                if subject.startswith(("debug-ruling-", "debug-declaration:")):
+                    raise TaskError("WF_SEMANTIC_DECISION", {
+                        "reason": "debug ruling/declaration decisions must go through task-check --decision",
+                        "subject": subject,
+                        "exits": ["改用 task-check --decision 提交裁定/声明（入口核倍数与 choice 域）",
+                                  "若是普通答复，把 subject 改回 plan-q-<n> / 任务主题"]})
                 human.append(decision)
         task, action = _start_task_action(
             ctx, path, task, "task.transition", holder,
@@ -3014,6 +3024,15 @@ def check_next_hint(task, check, ctx=None):
         _materials_unknown = False
         _materials_drift = False
         _materials_mixed = False
+        _materials_current_missing = False
+        _materials_history = False
+        _materials_legacy = False
+        _materials_present = False
+        _materials_waiting = False
+        _open_launch = (next((item for item in ((task.get("reviews") or {}).get("launches") or [])
+                              if isinstance(item, dict)
+                              and int(item.get("round") or 0) == _open_round), None)
+                        if _open_round is not None else None)
         if _open_round is not None:
             try:
                 from . import review as _review_mod_materials
@@ -3021,6 +3040,7 @@ def check_next_hint(task, check, ctx=None):
                 _imported = [item for item in ((task.get("reviews") or {}).get("imported") or [])
                              if isinstance(item, dict) and int(item.get("round") or 0) == _open_round]
                 _now = _review_mod_materials.round_materials_identity(ctx, task, _open_round)
+                _materials_current_missing = _now is None
                 # 判据取自 `materials_identity_state`（与 review-context/decide 同源）：
                 # drift 态下 `review-context` 会拒，不能指引"先取材料"；还原记录的身份来自
                 # 记录本身，不算"材料被换过"。
@@ -3030,17 +3050,59 @@ def check_next_hint(task, check, ctx=None):
                 _basis = _review_mod_materials.round_materials_basis(_imported, _now)
                 _materials_stale = _materials_drift or _basis["stale"]
                 _materials_mixed = _basis["mixed"]
+                _materials_history = _review_mod_materials.round_is_history(_imported)
+                _materials_legacy = _state["state"] in ("legacy", "legacy_adopted")
+                _materials_present = bool(_state.get("present"))
+                _materials_waiting = bool(_open_launch is not None and
+                                          len(_imported) < len(_open_launch.get("slots") or []))
             except Exception:      # noqa: BLE001 — 只读投影失败：不明说失配，但让下一跳先看状态
                 _materials_stale = False
                 _materials_unknown = True
-        if _open_round is not None and _materials_mixed:
+        if _open_round is not None and _materials_current_missing and (_materials_stale or _materials_mixed):
+            # `write_materials` 是确定性的：同 Check 重建会逐字节复现身份，原报告继续有效；
+            # 只有 Check 已换 id 或交付面/规格已变才需要重写/开新一轮。
+            if _materials_legacy:
+                hint = (f"第 {_open_round} 轮审查在途，当前无材料身份（目录仍在、缺 manifest 或按现场字节采纳）："
+                        "重跑 review-context 采纳现场字节（现场字节未改过时身份会复现，原报告继续有效；"
+                        "采纳沿用导入记录的被审 check_id；字节改过才需重写/新轮）后 review-decide")
+            elif _materials_present:
+                hint = (f"第 {_open_round} 轮审查在途，但本轮材料包不完整（缺必需文件）："
+                        "删 materials/ 下全部内容后重跑 review-context 重建（同 Check 身份会复现），"
+                        "再 review-decide；不要按旧包采纳")
+            else:
+                hint = (f"第 {_open_round} 轮审查在途，但本轮材料目录已不在（当前无材料身份）："
+                        "重跑 review-context 重建材料（同 Check 身份会逐字节复现，原报告继续有效），"
+                        "再 review-decide；只有 Check 已重跑换 id 或交付面/规格已变才需重写/开新一轮")
+            if _materials_waiting:
+                hint += "；还有槽位未到，等齐后再判定"
+        elif _open_round is not None and _materials_current_missing and _materials_history:
+            hint = (f"第 {_open_round} 轮审查在途，材料目录已不在，但报告都是还原记录/无现场身份的历史证据："
+                    "重跑 review-context 重建材料（同 Check 身份会复现），再 review-decide；"
+                    "有槽位未到先等齐、有报告待导入先 review-import")
+        elif _open_round is not None and _materials_drift and not _materials_history:
+            if not _imported:
+                hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift），但本轮还没有导入报告："
+                        "有备份就把原字节放回材料目录并重跑 review-context；没有备份则删材料内容与 "
+                        "manifest 后重建（同 Check 身份会复现），再让 reviewer 继续/写报告；"
+                        "直接 review-decide 会被拒")
+            else:
+                hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift）且有 live 报告："
+                        "有备份就把原字节放回材料目录并重跑 review-context；没有备份则删材料内容与 "
+                        "manifest 后重建（同 Check 身份会复现，原报告继续有效），再 review-decide；"
+                        "只有 Check 已重跑换 id 或交付面/规格已变才需重写/开新一轮")
+        elif _open_round is not None and _materials_drift:
+            if _materials_waiting:
+                hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift），报告都是还原/无身份的历史证据，"
+                        "但还有槽位未到：等齐后再 review-decide；若还有报告待导入，先恢复材料再导入")
+            else:
+                hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift），但报告都是还原/无身份的历史证据："
+                        "可直接 review-decide；若还有报告待导入，先把原字节放回材料目录并重跑 "
+                        "review-context 再导入")
+            hint += ("；要恢复可核身份也走同一恢复动作——此时先取材料会撞 drift 校验")
+        elif _open_round is not None and _materials_mixed:
             hint = (f"第 {_open_round} 轮审查在途，且还原记录与现场材料混在一轮："
                     "把正常条目也按 `--restore` 重导（标成历史证据），或按新材料重写并开新一轮；"
                     "直接判定会撞混合基线")
-        elif _open_round is not None and _materials_drift:
-            hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift）："
-                    "还原记录可直接 review-decide；要恢复可核身份就把原字节放回材料目录"
-                    "再重跑 review-context——此时先取材料会撞 drift 校验")
         elif _open_round is not None and _materials_stale:
             hint = (f"第 {_open_round} 轮审查在途，但材料已被换过（导入记录与当前材料身份不符）："
                     "同轮不能重导——有备份就把原字节放回材料目录并重跑 review-context，"
@@ -3050,6 +3112,13 @@ def check_next_hint(task, check, ctx=None):
                     "继续这一轮——review-context 取材料（本轮材料按首轮物化固定，"
                     "不随 Check 重跑改写）→ 人跑 reviewer → 导入 → 判定；"
                     "不要重新 review-launch")
+            _impl = {_review_mod_materials.review_cli((_open_launch or {}).get("implementation_cli"))}
+            _impl.discard(None)
+            _reviewers = {_review_mod_materials.normalize_agent(item.get("agent") or item.get("slot"))
+                          for item in _imported}
+            if _impl & _reviewers:
+                hint = (f"第 {_open_round} 轮材料已到齐，但审查 CLI 与实施 CLI 重叠："
+                        "先换异种 reviewer/补报告，再判定；资格事实见 review-status")
             if _materials_unknown:
                 hint += "（材料身份没核成：先看 `review-status` 再决定是否继续）"
             if _binding and open_blocking:
@@ -3466,7 +3535,7 @@ def _apply_abandon(ctx, task_id, task, path, decisions, disposition, holder):
         raise TaskError("WF_PATH_INVALID",
                         {"reason": '--disposition 须为对象 {"changes": [...]} 或数组 [...]',
                          "got": type(disposition).__name__,
-                         "example": {"changes": [{"path": "x", "action": "deleted"}]}})
+                         "example": {"changes": [{"object": "<路径或 glob>", "reason": "去向理由"}]}})
     # 空处置（工作树干净 / 无必须处置项）应放行，而不是卡在预览态：
     # 「没给处置」与「处置为空」是两回事，前者要预览、后者是有效结论。
     needs_disposition = bool(preview.get("uncommitted")) or bool(preview.get("required_disposition_for"))

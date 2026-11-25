@@ -650,7 +650,9 @@ def validate_check_result(task, check):
                     problems.append({"field": f"commands[{vid}].decision",
                                      "reason": "manual decision is not 'passed'",
                                      "choice": decision.get("choice")})
-                if not _decision_covers(decision, str(vid), plan, plan.get("version")):
+                from . import tasks as _tasks_mod
+                if not _decision_covers(decision, str(vid), plan,
+                                        _tasks_mod.normalized_plan_version(task)):
                     problems.append({"field": f"commands[{vid}].decision",
                                      "reason": "manual decision does not cover this verification",
                                      "subject": decision.get("subject"),
@@ -818,7 +820,7 @@ def _manual_command(verification, decisions, anchor, plan, plan_version, content
                  if _decision_covers(decision, verification_id, plan, plan_version)]
         if stale:
             entry["summary"] = ("manual decision exists but is not bound to current content "
-                                "(object_digest mismatch)")
+                                "(content_digest mismatch)")
             entry["stale_decision"] = {
                 "content_digest": (stale[-1] or {}).get("content_digest"),
                 "current_content_digest": content_digest,
@@ -879,8 +881,11 @@ def _external_checked(item, decisions, task):
 
 
 def _acceptance_results(ctx, task, commands, decisions, anchor, content_digest=None):
+    from . import tasks as tasks_mod
+
     plan = task.get("plan") or {}
-    plan_version = plan.get("version")
+    # 与锚点/回执同源：机械修订沿等价链归一到既有批准版本，不拿 raw plan.version 比。
+    plan_version = tasks_mod.normalized_plan_version(task)
     acceptance = plan.get("acceptance") or []
     results = []
     for item in acceptance:
@@ -926,15 +931,23 @@ def _acceptance_results(ctx, task, commands, decisions, anchor, content_digest=N
                 }
             )
         else:
-            results.append(
-                {
-                    "acceptance_id": item.get("id"),
-                    "verification_ids": [],
-                    "decision": None,
-                    "conclusion": "pending",
-                    "evidence_refs": [],
+            entry = {
+                "acceptance_id": item.get("id"),
+                "verification_ids": [],
+                "decision": None,
+                "conclusion": "pending",
+                "evidence_refs": [],
+            }
+            # 与 manual 同型：已绑定规划但内容摘要不符时给出字段级事实，不把"决定写错"
+            # 报成"人没给决定"。
+            stale = [decision for decision in decisions or []
+                     if _decision_covers(decision, str(item.get("id")), plan, plan_version)]
+            if stale:
+                entry["stale_decision"] = {
+                    "content_digest": (stale[-1] or {}).get("content_digest"),
+                    "current_content_digest": content_digest,
                 }
-            )
+            results.append(entry)
     return results
 
 
@@ -1025,8 +1038,10 @@ def _spec_coverage(ctx, task, decisions):
         if (today - stamp).days > days:
             needs.append({"path": path, "reason": "expired", "verified_at": str(verified), "days": days})
 
+    from . import tasks as _tasks_mod
+
     plan = task.get("plan") or {}
-    version = plan.get("version")
+    version = _tasks_mod.normalized_plan_version(task)
     unresolved = [item for item in needs
                   if not any(_decision_covers(decision, item["path"], plan, version)
                              and decisions_mod.canonical("acceptance_conclusion", decision.get("choice")) == "passed"
@@ -1233,8 +1248,9 @@ def run_check_execute(ctx, task, state):
         # consume_at 只决定「声明与就绪的核对时点」，不豁免必需业务验证在 Check 中执行（机制稿 §3.5）
         invocation = verification.get("invocation") or {}
         if invocation.get("kind") == "manual":
+            from . import tasks as tasks_mod
             commands.append(_manual_command(verification, decisions, anchor, plan,
-                                            plan.get("version"),
+                                            tasks_mod.normalized_plan_version(task),
                                             (state.get("parts") or {}).get("content_digest")))
         else:
             commands.append(_run_argv(ctx, task, verification, log_dir))

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from . import actions, codes, fingerprint, records, scope
+from . import actions, codes, decisions, fingerprint, records, scope
 from .paths import join
 
 TASK_KINDS = ("ordinary", "initialize", "bootstrap")
@@ -182,23 +182,28 @@ def debug_pending(task, threshold=None):
         subject = str(decision.get("subject", ""))
         if not subject.startswith("debug-ruling-"):
             continue
-        rulings_raw[subject] = decision.get("choice")
+        choice = decision.get("choice")
+        # 门禁是唯一消费点：这里只认**裁定域**的取值。此前任意 choice（如 plan-q 答复）
+        # 只要 subject 前缀对得上就被当成裁定，任意高位倍数即可静音归档阻断。
+        if not decisions.accepts("debug_ruling", choice):
+            continue
+        rulings_raw[subject] = choice
         key = parse_debug_ruling(subject)
         if key is not None:
-            rulings[key] = decision.get("choice")
+            rulings[key] = choice
     # 一次裁定覆盖**它之前的所有倍数**：根因判断是对"到目前为止这条验证为什么反复失败"的回答，
     # 后来的裁定天然包含更早的。存档仍按 subject 精确记 (verification_id, multiple)，
     # 计数与去重不变——只是不再要求为每个已越过的倍数各签一条。
-    ruled_upto = {}
-    for (verification_id, multiple) in rulings:
-        ruled_upto[verification_id] = max(ruled_upto.get(verification_id, 0), multiple)
+    # **倍数已到场**同样是门禁判据：还没发生的倍数不能提前覆盖（写入口会拒，但
+    # 通用决定入账路径可以塞进来）；门禁只按"当前已跨过的倍数"取覆盖上界。
     pending = []
     totals = {}
     for verification_id in sorted(verification_ids):
         merged = merged_failures(task, verification_id)
         totals[verification_id] = merged
         multiples = merged // threshold if threshold else 0
-        covered = ruled_upto.get(verification_id, 0)
+        covered = max([multiple for (vid, multiple) in rulings
+                       if vid == verification_id and multiple <= multiples] or [0])
         if multiples > covered:
             pending.append({"verification_id": verification_id, "multiple": multiples,
                             "covers": list(range(covered + 1, multiples + 1)),

@@ -412,5 +412,37 @@ class StatusAnchorTest(MaterialsBindingHarness):
         self.assertNotIn("可直接判定", restored_slot["reason"])
 
 
+class RoundIsHistoryTest(unittest.TestCase):
+    def test_only_all_restored_or_unbound_counts_as_history(self):
+        self.assertTrue(review.round_is_history([{"materials": {"restored": True}},
+                                                 {"materials": {}}]))
+        self.assertFalse(review.round_is_history([{"materials": {"identity": "sha256:x"}}]))
+        self.assertFalse(review.round_is_history([]))
+
+
+class MaterialsBasisWithoutCurrentTest(unittest.TestCase):
+    """当前轮没有材料身份（目录被清/丢失）时，**绑定了身份的报告**同样是对不上的现场。
+
+    此前 `round_materials_basis` 在 `current_identity is None` 时直接跳过全部条目，
+    status 会回落成"材料未齐，等 reviewer 产出"——一个永远等不到的出口。
+    """
+
+    def test_bound_entries_are_live_mismatch_without_current_identity(self):
+        entries = [{"slot": "s1", "materials": {"identity": "sha256:" + "a" * 64}},
+                   {"slot": "s2", "materials": {"identity": "sha256:" + "b" * 64,
+                                                "restored": True}}]
+        basis = review.round_materials_basis(entries, None)
+        self.assertEqual([item["slot"] for item in basis["live_mismatch"]], ["s1"])
+        self.assertEqual([item["slot"] for item in basis["restored"]], ["s2"])
+        self.assertTrue(basis["stale"])
+
+    def test_matching_current_identity_is_not_stale(self):
+        identity = "sha256:" + "c" * 64
+        basis = review.round_materials_basis([{"slot": "s1",
+                                               "materials": {"identity": identity}}], identity)
+        self.assertEqual(basis["live_mismatch"], [])
+        self.assertFalse(basis["stale"])
+
+
 if __name__ == "__main__":
     unittest.main()

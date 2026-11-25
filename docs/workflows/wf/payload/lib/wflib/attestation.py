@@ -57,8 +57,13 @@ def load(path, *, action):
 
 
 def stamp(payload, digest):
-    """把"人给出的事实"压成可入库的字段（摘要随事实走，事后可审计）。"""
+    """把"人给出的事实"压成可入库的字段（摘要随事实走，事后可审计）。
+
+    `quote` 与其它 committed 原话同口径：只存遮罩+截断摘要；原文由 digest 固定。
+    """
+    from . import authorize as authorize_mod
+
     payload = payload or {}
     return {"by": payload.get("by"), "at": payload.get("at"),
-            "quote": payload.get("quote"), "source": payload.get("source"),
-            "attestation_digest": digest}
+            "quote": authorize_mod.mask_quote(payload.get("quote")),
+            "source": payload.get("source"), "attestation_digest": digest}

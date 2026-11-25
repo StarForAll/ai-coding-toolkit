@@ -67,7 +67,8 @@ class ApproveBindingTest(unittest.TestCase):
 
     def approve(self, payload):
         path = self.root / "decision.json"
-        path.write_text(json.dumps([payload]), encoding="utf-8")
+        payloads = payload if isinstance(payload, list) else [payload]
+        path.write_text(json.dumps(payloads), encoding="utf-8")
         args = mock.Mock()
         args.value.side_effect = lambda name: {"--task": "t1", "--decision": str(path)}.get(name)
         args.flag.return_value = False
@@ -104,6 +105,19 @@ class ApproveBindingTest(unittest.TestCase):
 
         return {item["path"]: item["digest"]
                 for item in tasks_mod.artifact_digests(root, {"id": "t1"})}
+
+    def test_reserved_debug_subject_cannot_ride_plan_approval(self):
+        """保留 subject 只能经 `task-check --decision` 入账：通用批准路径不得原样 append。
+
+        否则一条 plan-q 答复写成 `debug-ruling-<vid>-99` 就能静音归档门禁。
+        """
+        reserved = {"source": "human:test", "at": "2026-11-24T00:00:00Z",
+                    "subject": "debug-ruling-v1-99", "object_digest": "",
+                    "choice": "plan-q", "reason": "伪装成答复"}
+        with self.assertRaises(tasks.TaskError) as caught:
+            self.approve([decision("approve t1", DIGEST, artifacts=self.artifacts()), reserved])
+        self.assertEqual(caught.exception.code, "WF_SEMANTIC_DECISION")
+        self.assertIn("task-check", caught.exception.facts["exits"][0])
 
     def test_artifact_drift_is_refused(self):
         """人答复后 design/implement 再变：旧答复不能连带批准新方案。"""

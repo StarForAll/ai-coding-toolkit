@@ -28,6 +28,20 @@ ANCHOR = "sha256:" + "c" * 64
 COVERED = ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"]
 
 
+def _complete_materials(diff_text):
+    """staging 写出一套**完整**材料：缺必需文件的旧包按新语义不再是可采纳的 legacy，
+    夹具必须取自真实物化形状（`write_materials` 总是写全五个顶层文件）。"""
+    def _write(*args, **kwargs):
+        staging = Path(args[4])
+        records.atomic_write(staging / "diff.patch", diff_text)
+        records.atomic_write(staging / "prd.md", "# prd\n")
+        records.write_json(staging / "check.json", {"check": {"id": "c1"}})
+        records.write_json(staging / "status.json", {"problems": []})
+        records.write_json(staging / "tests.json", {"commands": []})
+        return {}
+    return _write
+
+
 class MaterialFixedTest(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -150,10 +164,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review.scope_mod, "delivery_set",
                                   return_value=self._delivery()), \
                 mock.patch.object(review, "write_materials",
-                                  side_effect=lambda *_a, **_kw: (
-                                      records.atomic_write(
-                                          Path(_a[4]) / "diff.patch", "read\n"),
-                                      {})[1]):
+                                  side_effect=_complete_materials("read\n")):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         manifest_path = self._materials_dir() / "materials-manifest.json"
         manifest_path.unlink()                        # 身份丢失（官方采纳出口）
@@ -240,10 +251,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review.scope_mod, "delivery_set",
                                   return_value=self._delivery()), \
                 mock.patch.object(review, "write_materials",
-                                  side_effect=lambda *_a, **_kw: (
-                                      records.atomic_write(
-                                          Path(_a[4]) / "diff.patch", "reviewer-read\n"),
-                                      {})[1]):
+                                  side_effect=_complete_materials("reviewer-read\n")):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         (self._materials_dir() / "materials-manifest.json").write_text("{broken", encoding="utf-8")
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \
@@ -264,10 +272,7 @@ class MaterialFixedTest(unittest.TestCase):
                 mock.patch.object(review.scope_mod, "delivery_set",
                                   return_value=self._delivery()), \
                 mock.patch.object(review, "write_materials",
-                                  side_effect=lambda *_a, **_kw: (
-                                      records.atomic_write(
-                                          Path(_a[4]) / "diff.patch", "reviewer-read\n"),
-                                      {})[1]):
+                                  side_effect=_complete_materials("reviewer-read\n")):
             review.context(self._ctx(), self.task, 1, as_value="pi")
         (self._materials_dir() / "materials-manifest.json").unlink()
         with mock.patch.object(review, "_current_anchor", return_value=(ANCHOR, {})), \

@@ -961,12 +961,15 @@ def cmd_status(ctx, args):
                     "suspended": task.get("suspended"),
                     "terminal": task.get("terminal"),
                     "title": task.get("title"),
+                    # 人工验收决定可用它绑定规划版本（等价链归一后的值，不是 plan.version 原文）。
+                    "plan_version": tasks_mod.normalized_plan_version(task),
                 }
                 # ⑥：修复态事实集（纯派生，不落盘）+ 当前生效的放行清单（强制回显）
                 from . import review as review_mod
 
                 # 手工验证/收尾确认要绑定"人看到的交付内容"：这里给出与 Check 同源的
-                # 内容摘要（`object_digest` 写它）。只读事实，不参与判定。
+                # 内容摘要（`content_digest` 写它；`object_digest` 是规划批准摘要，两者不能混用）。
+                # 只读事实，不参与判定。
                 try:
                     from . import check as check_mod, fingerprint as fingerprint_mod
 
@@ -1488,8 +1491,24 @@ def _renew_activation(ctx, key, attachment):
     return attachment, True
 
 
-def _session_like(provider, identity):
-    return {"provider": provider, "identity": dict(identity or {}), "source": "auto"}
+def _session_like(provider, identity, source="auto"):
+    """按**真实来源**合成会话形状：`source=auto` 是自动身份模式的判据，不能被显式信封借用。
+
+    显式 `provider=wf` 信封没有本地证据（机制稿 §1.4），`check_platforms` 只在
+    `source=auto` 时放行；这里曾把入参无条件标成 auto，等于把该拒绝通道改成恒真。
+    """
+    return {"provider": provider, "identity": dict(identity or {}), "source": source}
+
+
+def _enable_guard_session(explicit, base):
+    """启用前置的会话形状：来源必须是**真实**的，显式信封与自动派生共用这一判据。
+
+    显式信封（`explicit is not None`）没有本地证据，按 `explicit` 送检；附件/自动派生
+    才是 `auto`。此前调用点把两者都合成 `auto`，使 `provider=wf` 的显式信封在
+    启用前置里被当成自动身份模式放行。
+    """
+    return _session_like(base.get("provider"), base.get("identity"),
+                         source=("explicit" if explicit is not None else "auto"))
 
 
 def _anchor_conflict(ctx, key):
@@ -1561,7 +1580,7 @@ def cmd_enable(ctx, args):
         base = explicit or (resolution or {}).get("attachment") or {}
         session_key = (session_mod.session_key(explicit) if explicit is not None
                        else (resolution or {}).get("key"))
-        guards = _enable_guards(ctx, _session_like(base.get("provider"), base.get("identity")))
+        guards = _enable_guards(ctx, _enable_guard_session(explicit, base))
         conflict = _anchor_conflict(ctx, session_key)
         if conflict and choice is None:
             raise CliError(
@@ -2914,13 +2933,29 @@ COMMAND_HELP = {
         "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
         "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）",
                  "--review-notes-draft": "只读生成双轴审查结论骨架（打印目标路径与 TODO，不落盘、不要求写权）",
-                 "--decision": "可选：决定文件（数组，每条仍须满足 Decision 六字段）。除人工验收决定外还承载重复调试两处落账——"
+                 "--decision": "可选：决定文件（数组，每条仍须满足 Decision 六字段）。**人工验收**（`kind=manual` 或空 `verification_ids` 的直接验收）"
+                               "每条给 `choice=passed|failed`、`subject` **以整词**含该验证项 id、"
+                               "`object_digest` 取规划批准的对象摘要（或给 `plan_version` = `status --json` 的 `facts.task.plan_version`）、"
+                               "`content_digest` = `status --json` 的 `facts.delivery.content_digest`"
+                               "（人看到的交付内容变了，旧结论不沿用；缺 `content_digest`：manual 项 `not_run`、直接验收 `pending`）。"
+                               "除人工验收外还承载重复调试两处落账——"
                                "声明 subject `debug-declaration:<verification_id>:count=<n>[:dedupe=<check_id>/<vid>,…][:evidence=<ref>,…]`、"
                                "裁定 subject `debug-ruling-<verification_id>-<multiple>`（choice=同一问题/不同问题，主会话按根因裁定，依据与证据入 reason；"
                                "未跨阈值倍数前无需裁定）",
                  "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
-                                      "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}}},
+                                      "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}},
+                   "--decision": {
+                       "manual": {"choice": "passed|failed", "subject": "以整词含该验证项 id",
+                                  "object_digest": "规划批准的对象摘要",
+                                  "plan_version": "status --json 的 facts.task.plan_version（等价链归一后的值）",
+                                  "content_digest": "status --json 的 facts.delivery.content_digest"},
+                       "acceptance-direct": {"choice": "passed|failed", "subject": "以整词含验收项 id",
+                                             "object_digest": "规划批准的对象摘要",
+                                             "plan_version": "status --json 的 facts.task.plan_version（归一后的值）",
+                                             "content_digest": "status --json 的 facts.delivery.content_digest"},
+                       "debug-declaration": "subject 形状见 --decision args",
+                       "debug-ruling": "subject 形状见 --decision args"}},
         "example": "wf.py task-check --task <id> --review-notes notes.json --json",
     },
     "task-knowledge": {"purpose": "记录知识处置（可判无更新）",
@@ -2967,11 +3002,16 @@ COMMAND_HELP = {
                        "args": {"--task": "任务 id（必填）",
                                 "--preview": "只读：按 --files 生成提案摘要供人批准，不落盘",
                                 "--files": "逗号分隔的路径（推荐：由入口读工作树生成提案）",
-                                "--decision": "人的批准决定文件（与 --files 一起用）",
-                                "--proposal": "既有格式的提案 JSON（可选，兼容）"},
+                                "--decision": "人的批准决定文件（与 --files 一起用；"
+                                              "`object_digest` 写 `--preview` 的 `proposal_digest`）",
+                                "--proposal": "既有格式的提案 JSON（可选，兼容；必须自带 approval 且 "
+                                              "object_digest=提案摘要——正常流程用 --files + --preview/--decision 由入口生成）"},
                        "inputs": {"--proposal": {"files": "[{path, before, content}]",
-                                                 "approval": "{choice, subject} 人的批准引用"}},
-                       "example": "wf.py baseline-apply --task <id> --proposal proposal.json --json"},
+                                                 "approval": "{choice, subject} 人的批准引用"},
+                                  "--decision": {"choice": "approve|批准",
+                                                 "subject": "人的批准线索（含任务/提案标识）",
+                                                 "object_digest": "= --preview 的 proposal_digest"}},
+                       "example": "wf.py baseline-apply --task <id> --files .wf/baseline.md,.wf/spec/index.md --preview --json"},
     "spec-update": {"purpose": "spec 增改删/合并/停用，并同步三段索引",
                     "args": {"--task": "任务 id（必填）",
                              "--changes": "变更数组（必填；--changes-draft 时除外）"
@@ -3004,7 +3044,7 @@ COMMAND_HELP = {
                           "reviewers": "可选：要几份审查（默认 2）"}},
                       "example": "wf.py review-launch --task <id> --implementation-cli codex --json"},
     "review-context": {"purpose": "reviewer 侧唯一入口：占位 + 物化材料 + 给出报告路径",
-                       "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省＝当前轮）",
+                       "args": {"--task": "任务 id（必填）", "--round": "轮次（缺省取最大已发起轮；恢复较早一轮时显式给）",
                                 "--reset": "清掉本 agent 本轮的占位/报告",
                                 "--as": "本次审查的 CLI（自动身份模式必填）"},
                        "example": "wf.py review-context --task <id> --round 1 --as pi --json"},
@@ -3043,8 +3083,8 @@ COMMAND_HELP = {
                            "--task": "任务 id（必填）",
                            "--freeze": "pick：首次选样前冻结事件集与种子（写任务记录）",
                            "--file": "evaluate：评估 JSON（必填）",
-                           "--attestation": "evaluate：人确认凭证（可选）",
-                           "--quote": "reviewed：人的声明原文（遮罩摘要入库）"},
+                           "--attestation": "evaluate/reviewed：人确认文件（该两子命令必填；含 by/at/quote/source）",
+                           "--quote": "confirm：人的确认原文（遮罩摘要入库；reviewed 的原话取自确认文件）"},
                   "example": "wf.py sampling pick --task 2026-xxxx --freeze --json"},
     "judgments": {"purpose": "判断清单：add 追加一条（append-only）/ show 渲染收工预览",
                   "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）",
@@ -3074,7 +3114,7 @@ COMMAND_HELP = {
     "review-decide": {"purpose": "判定本轮审查（人数/异种按报告文件名；实施 CLI 取 launch 时人声明的值）。"
                                  "报告带 `materials.identity`，结论只对它绑定的那批材料成立：与当前不符即拒",
 
-                      "args": {"--task": "任务 id（必填）", "--round": "缺省＝当前轮",
+                      "args": {"--task": "任务 id（必填）", "--round": "缺省取最大已发起轮（恢复较早一轮时显式给）",
                                "--main-review": "主会话五轴复核文件（产生 verdict 时必填；也可与 --register-only 登记 main findings）",
                                "--main-review-draft": "按本轮已导入报告生成主会话复核待填骨架后退出",
                                "--plan": "逐条 finding 处置", "--unavailable": "不可用声明（与 --plan 互斥）",
@@ -3191,7 +3231,12 @@ COMMAND_HELP = {
                                "--purpose '本轮适用' --json"},
     "task-abandon": {"purpose": "异常归档（放弃）：逐项去向 + 停止决定",
                      "args": {"--task": "必填：任务 id", "--decision": "必填：停止决定",
-                              "--disposition": "可选：逐项去向计划"},
+                              "--disposition": "有未提交改动或需逐项处置时必填：逐项去向计划"
+                                               "（形状见下方 inputs）"},
+                     "inputs": {"--disposition": {"changes": [
+                         {"object": "覆盖 preview.uncommitted 的路径或 glob（逐项都要覆盖）",
+                          "decision_ref": "可选：字符串引用（不是 Decision 对象）；随处置留痕，不参与门禁",
+                          "reason": "可选：去向理由（随处置留痕）"}]}},
                      "example": "wf.py task-abandon --task 2026-xxxx --decision stop.json "
                                 "--disposition disp.json --json"},
     "task-retrospect": {"purpose": "复盘结论留痕（覆盖触发事实集合）",
@@ -3569,7 +3614,8 @@ def cmd_sampling(ctx, args):
             state = sampling_mod.frozen(task)
     return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                        next_="人只评抽到的这两条（结论对/错 × 依据充分/不充分）；用 --evaluate 落结果",
+                        next_="人只评抽到的这两条（结论对/错 × 依据充分/不充分）；用 "
+                              "`sampling evaluate --task <id> --file <评估.json> --attestation <人确认文件>` 落结果",
                         facts={"seed": state.get("seed"), "selection": picks,
                                "backfill": sampling_mod.backfill_status(
                                    (picks or {}).get("picks") or [], task.get("judgments") or []),
@@ -3811,44 +3857,123 @@ def cmd_review_status(ctx, args):
     uncovered = list(coverage.get("uncovered") or [])
     accepted = set(coverage.get("accepted") or [])
     result_record = (task.get("reviews") or {}).get("result") or {}
-    if facts.get("ready_to_import"):
-        next_ = (f"报告已写完待导入（{', '.join(facts['ready_to_import'])}）："
+    _round_imported = [item for item in (task.get("reviews") or {}).get("imported") or []
+                       if isinstance(item, dict) and int(item.get("round") or 0) == facts["round"]]
+    _materials_identity = review_mod.round_materials_identity(ctx, task, facts["round"])
+    # 基线口径与 decide/check_next_hint 同一实现（review.round_materials_basis）
+    _basis = review_mod.round_materials_basis(_round_imported, _materials_identity)
+    material_stale = [str(item.get("slot")) for item in _basis["live_mismatch"]]
+    restored_only = [str(item.get("slot")) for item in _basis["restored"]]
+    mixed = _basis["mixed"]
+    pending_import = list(facts.get("ready_to_import") or [])
+    import_note = (("；另有报告已写完待导入（%s）：导入不改变上述基线问题，按上面处置"
+                    % ", ".join(pending_import)) if pending_import else "")
+    materials_state = (facts.get("materials") or {}).get("state")
+    materials_present = list((facts.get("materials") or {}).get("present") or [])
+    waiting = sorted(set(facts["missing"]) | set(facts["writing"]) | set(facts["staged_unknown"]))
+    # decide 的 drift 豁免判据（唯一实现）：全部 restored 或无身份才是历史轮。
+    history_round = review_mod.round_is_history(_round_imported)
+    if result_record.get("round") == facts["round"]:
+        # 已判定轮优先：资格/材料分支对已判轮只会给出不可修复或重复轮次的出口。
+        if result_record.get("verdict") == "fail":
+            next_ = ("本轮已 fail：先核实是否误报/漏处置；误报可在本轮用 --plan + --main-review "
+                     "同轮重判，已实质修复则重跑 Check 后发新轮")
+            if materials_state == "drift" or _materials_identity is None:
+                next_ += ("；同轮重判前必须先把原字节放回材料目录（drift）或恢复材料（缺失），"
+                          "否则只能开新一轮")
+        else:
+            next_ = "本轮已产生判定；如需改结论请开新一轮（review-launch），不覆盖已判轮次"
+    elif materials_state == "drift" and (pending_import or not history_round):
+        # 材料在物化后被改动：live 报告必被 decide 拒；有报告待导入时 import 也会拒。
+        next_ = ("本轮材料在物化后被改动（drift）：有备份就把原字节放回材料目录并重跑"
+                 "review-context；没有备份则删 materials/ 下内容与 manifest 后重跑 review-context "
+                 "重建（同 Check 身份会逐字节复现，原报告继续有效），再 review-decide；"
+                 + ("待导入报告（%s）也要等材料重建后再 review-import；" % ", ".join(pending_import)
+                    if pending_import else "")
+                 + "只有 Check 已重跑换 id 或交付面/规格已变才需重写报告/开新一轮；"
+                 "直接 review-decide 会被拒")
+    elif materials_state == "drift" and history_round:
+        # 全部 restored/无身份：drift 不阻断 decide；仍可放回原字节恢复可核身份。
+        if waiting:
+            next_ = ("本轮材料在物化后被改动（drift），报告都是还原记录/无现场身份的历史证据，"
+                     "但还有槽位未到（%s）：等齐后再 review-decide" % ", ".join(waiting))
+        else:
+            next_ = ("本轮材料在物化后被改动（drift），但报告都是还原记录/无现场身份的历史证据："
+                     "可直接 review-decide")
+        next_ += "；要恢复可核身份就把原字节放回材料目录并重跑 review-context"
+    elif materials_state == "unmaterialized" and materials_present:
+        next_ = ("本轮材料包不完整（缺必需文件）：删除 materials/ 下全部内容后重跑 review-context "
+                 "按当前 Check 重建（同 Check 身份会复现）；不要按旧包采纳")
+        if pending_import:
+            next_ += "，重建后先 review-import（%s）" % ", ".join(pending_import)
+        if waiting:
+            next_ += "，等槽位到齐（%s）" % ", ".join(waiting)
+        next_ += "，再 review-decide" + import_note
+    elif _materials_identity is None and (material_stale or restored_only):
+        # 当前轮没有材料身份，但报告绑着身份（含 restore）：材料目录被清/丢失或只剩旧包。
+        if materials_state in ("legacy", "legacy_adopted"):
+            next_ = ("当前无材料身份（目录仍在、缺 manifest 或按现场字节采纳）：重跑 review-context "
+                     "采纳现场字节（现场字节未改过时身份会复现，原报告继续有效；采纳沿用导入记录的"
+                     "被审 check_id；字节改过才需重写/新轮）")
+            if pending_import:
+                next_ += "，先 review-import（%s）" % ", ".join(pending_import)
+            if waiting:
+                next_ += "，等槽位到齐（%s）" % ", ".join(waiting)
+            next_ += ("，再 review-decide" if (pending_import or waiting) else "后直接 review-decide")
+            next_ += "；有备份也可放回原字节" + import_note
+        elif material_stale:
+            next_ = ("本轮材料目录已不在（当前无材料身份，报告仍绑定原身份）：有备份就把原字节"
+                     "放回材料目录；没有备份则重跑 review-context 重建（同 Check 身份会逐字节复现，"
+                     "原报告继续有效），再 review-decide；只有 Check 已重跑换 id 或交付面/规格已变"
+                     "才需按新材料重写报告/开新一轮" + import_note)
+        else:
+            next_ = ("本轮材料目录已不在（当前无材料身份，报告含按记录还原的历史证据）："
+                     "重跑 review-context 按当前 Check 重建材料（同 Check 身份会复现）")
+            if pending_import:
+                next_ += "，先 review-import（%s）" % ", ".join(pending_import)
+            if waiting:
+                next_ += "，等槽位到齐（%s）" % ", ".join(waiting)
+            next_ += ("，再 review-decide（还原记录仍有效）" if (pending_import or waiting)
+                      else "后直接 review-decide（还原记录仍有效）")
+            next_ += "；有原字节也可放回材料目录" + import_note
+    elif mixed:
+        next_ = (f"本轮既有还原记录（{', '.join(restored_only)}）也有对不上当前材料的正常条目"
+                 f"（{', '.join(material_stale)}）：把后者也按 `--restore` 重导，"
+                 "或按新材料重写并开新一轮；直接判定会撞混合基线" + import_note)
+    elif material_stale:
+        next_ = (f"材料身份已变（{', '.join(material_stale)}）：同轮不能重导——"
+                 "有备份就把原字节放回材料目录并重跑 review-context；"
+                 "没有备份则按新材料重写报告并开新一轮" + import_note)
+    elif pending_import:
+        next_ = (f"报告已写完待导入（{', '.join(pending_import)}）："
                  "先 review-import；其余槽位可继续写，不必等齐再导入")
     elif not facts["material_ready"]:
-        # 材料身份失配与"报告还没交"是两回事：前者等不来新报告（同轮摘要锁），
-        # 必须给恢复原材料或另开一轮的出口，否则恢复会话会白等一轮。
-        # 基线口径与 decide/check_next_hint 同一实现（review.round_materials_basis）
-        _round_imported = [item for item in (task.get("reviews") or {}).get("imported") or []
-                           if isinstance(item, dict) and int(item.get("round") or 0) == facts["round"]]
-        _basis = review_mod.round_materials_basis(
-            _round_imported, review_mod.round_materials_identity(ctx, task, facts["round"]))
-        material_stale = [str(item.get("slot")) for item in _basis["live_mismatch"]]
-        restored_only = [str(item.get("slot")) for item in _basis["restored"]]
-        mixed = _basis["mixed"]
-        if mixed:
-            next_ = (f"本轮既有还原记录（{', '.join(restored_only)}）也有对不上当前材料的正常条目"
-                     f"（{', '.join(material_stale)}）：把后者也按 `--restore` 重导，"
-                     "或按新材料重写并开新一轮；直接判定会撞混合基线")
-        elif material_stale:
-            next_ = (f"材料身份已变（{', '.join(material_stale)}）：同轮不能重导——"
-                     "有备份就把原字节放回材料目录并重跑 review-context；"
-                     "没有备份则按新材料重写报告并开新一轮")
-        elif restored_only and not facts.get("ready_to_import"):
-            # 还原记录的身份来自记录本身：可直接判定，不必等也不必开新轮
-            next_ = (f"本轮报告按记录还原（{', '.join(restored_only)}），可直接 review-decide；"
-                     "要恢复可核身份再放回原字节并重跑 review-context")
+        if facts["round"] < 1:
+            # 尚未发起任何审查轮：此时"等 reviewer 产出"永远等不到，正确动作是先发起。
+            next_ = ("本轮尚未发起审查：复杂任务 Check pass 后先 review-launch（取人外发确认与实施 CLI），"
+                     "再让 reviewer 取材料写报告")
+        elif not facts.get("required"):
+            # 已发起但旧 launch 没有声明槽位：不能再说"尚未发起"，也不能让 AI 重复 launch。
+            next_ = ("本轮已发起但未声明槽位（旧 launch 兼容）：先 review-context 取材料，"
+                     "再由 reviewer 写报告后 review-import；不要重复 review-launch")
+        elif restored_only and waiting:
+            next_ = (f"本轮报告按记录还原（{', '.join(restored_only)}），但还有槽位未到"
+                     f"（{', '.join(waiting)}）：等这些报告到齐后直接 review-decide，"
+                     "不必重导还原项")
+        elif restored_only:
+            # 还原记录的身份来自记录本身：可直接判定，不必等也不必开新轮；但主会话复核仍是前置。
+            if facts.get("main_review_ready"):
+                next_ = (f"本轮报告按记录还原（{', '.join(restored_only)}），可直接 review-decide；"
+                         "要恢复可核身份再放回原字节并重跑 review-context")
+            else:
+                next_ = (f"本轮报告按记录还原（{', '.join(restored_only)}），材料齐；"
+                         "先生成并填写主会话复核（review-decide --main-review-draft <file>），再 review-decide")
         else:
             next_ = (f"材料未齐（已到 {facts['arrived']}/{facts['required']}）："
                      "等 reviewer 产出后 review-import")
     elif facts["eligibility"]["problems"]:
         next_ = ("材料已齐，但判定资格不足："
                  + "；".join(item["reason"] for item in facts["eligibility"]["problems"]))
-    elif result_record.get("round") == facts["round"]:
-        if result_record.get("verdict") == "fail":
-            next_ = ("本轮已 fail：先核实是否误报/漏处置；误报可在本轮用 --plan + --main-review "
-                     "同轮重判，已实质修复则重跑 Check 后发新轮")
-        else:
-            next_ = "本轮已产生判定；如需改结论请开新一轮（review-launch），不覆盖已判轮次"
     elif not facts.get("main_review_ready"):
         next_ = ("材料已齐、资格检查通过：先生成并填写主会话复核"
                  "（review-decide --main-review-draft <file>），再带 --main-review 判定；"
@@ -4184,6 +4309,11 @@ def validate_usage(command, rest):
 
 
 def dispatch(ctx, argv):
+    # `--help` / `-h` 是第一次接触入口的通用写法：此前落进 "unknown subcommand"
+    # （dogfood 会话 4 实录），AI 要先吃一次失败再改用 `wf.py help`。别名到同一命令，
+    # 不新增输出面；带命令名时仍可 `--help <命令>`。
+    if argv and argv[0] in ("--help", "-h"):
+        argv = ["help"] + list(argv[1:])
     if not argv:
         raise CliError("WF_USAGE_INVALID", {"reason": "missing subcommand", "commands": sorted(COMMANDS)})
     command = argv[0]

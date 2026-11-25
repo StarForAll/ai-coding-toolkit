@@ -187,6 +187,10 @@ class DecideAllBlockingTest(unittest.TestCase):
         materials.mkdir(parents=True, exist_ok=True)
         (materials / "diff.patch").write_text("original\n", encoding="utf-8")
         (materials / "check.json").write_text("{}\n", encoding="utf-8")
+        # 真实物化总是写全五个顶层文件；缺件包按新语义不是可采纳的 legacy。
+        (materials / "prd.md").write_text("# prd\n", encoding="utf-8")
+        (materials / "status.json").write_text("{}\n", encoding="utf-8")
+        (materials / "tests.json").write_text("{}\n", encoding="utf-8")
         manifest = review.write_materials_manifest(materials, "c2", ANCHOR, {})
         if tamper:
             (materials / "diff.patch").write_text("tampered\n", encoding="utf-8")

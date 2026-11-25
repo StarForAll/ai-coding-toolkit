@@ -19,12 +19,14 @@ REPO = Path(__file__).resolve().parents[3]
 PAYLOAD = REPO / "docs" / "workflows" / "wf" / "payload"
 sys.path.insert(0, str(PAYLOAD / "lib"))
 
-from wflib import review, tasks  # noqa: E402
+from wflib import cli, review, tasks  # noqa: E402
 
 DESIGN = (REPO / "docs" / "workflows" / "wf-framework-design.md").read_text(encoding="utf-8")
 SKILL_REVIEW = (REPO / "docs" / "workflows" / "wf" / "skills" / "wf-review" / "SKILL.md").read_text(
     encoding="utf-8")
 SKILL_CONTINUE = (REPO / "docs" / "workflows" / "wf" / "skills" / "wf-continue" / "SKILL.md").read_text(
+    encoding="utf-8")
+SKILL_FINISH = (REPO / "docs" / "workflows" / "wf" / "skills" / "wf-finish" / "SKILL.md").read_text(
     encoding="utf-8")
 
 
@@ -75,6 +77,53 @@ class DecisionTranscriptionTest(unittest.TestCase):
         next_text = str(payload.get("next") or "")
         self.assertIn("按人的明确答复填写", next_text)
         self.assertIn("不得推测或替人选择", next_text)
+
+
+class GuidanceLandingTest(unittest.TestCase):
+    """人签清单里的 manual 项、收工规模确认、审查链轮次都要有**落点**。
+
+    这不是措辞偏好：每条都有行为对应物（manual 决定必须带 `content_digest`、
+    `sampling confirm` 是规模确认的唯一写入路径、`review-import/decide --round`
+    决定读哪一轮）。缺落点时 AI 只能在失败后读源码猜。
+    """
+
+    def test_manual_verification_has_a_field_and_a_source(self):
+        self.assertIn("kind=manual", SKILL_CONTINUE)
+        self.assertIn("content_digest", SKILL_CONTINUE)
+        self.assertIn("delivery.content_digest", SKILL_CONTINUE)
+        help_text = str(cli.COMMAND_HELP["task-check"]["args"]["--decision"])
+        self.assertIn("content_digest", help_text)
+        self.assertIn("manual", help_text)
+        self.assertIn("kind=manual", SKILL_FINISH)
+
+    def test_scale_confirmation_names_the_write_command(self):
+        self.assertIn("wf sampling confirm --task <id>", SKILL_FINISH)
+
+    def test_review_chain_names_the_round_explicitly(self):
+        self.assertIn("review-import --round <n>", SKILL_CONTINUE)
+        self.assertIn("review-decide --round <n>", SKILL_CONTINUE)
+
+    def test_task_abandon_disposition_is_conditionally_required(self):
+        text = str(cli.COMMAND_HELP["task-abandon"]["args"]["--disposition"])
+        self.assertIn("必填", text)
+        self.assertIn("changes", cli.COMMAND_HELP["task-abandon"]["inputs"]["--disposition"])
+
+    def test_sampling_help_separates_attestation_and_quote(self):
+        args = cli.COMMAND_HELP["sampling"]["args"]
+        self.assertIn("必填", args["--attestation"])
+        self.assertIn("evaluate/reviewed", args["--attestation"])
+        self.assertIn("confirm", args["--quote"])
+        self.assertNotIn("reviewed/confirm", args["--quote"])
+
+    def test_manual_plan_version_names_its_source(self):
+        self.assertIn("facts.task.plan_version", str(cli.COMMAND_HELP["task-check"]))
+
+    def test_direct_acceptance_has_a_shape_and_landing(self):
+        self.assertIn("空 `verification_ids`", SKILL_CONTINUE)
+        self.assertIn("空 `verification_ids`", SKILL_FINISH)
+        inputs = str(cli.COMMAND_HELP["task-check"]["inputs"])
+        self.assertIn("acceptance-direct", inputs)
+        self.assertIn("content_digest", inputs)
 
 
 if __name__ == "__main__":

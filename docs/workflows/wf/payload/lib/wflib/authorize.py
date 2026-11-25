@@ -42,6 +42,20 @@ KEEP_SCALAR_KEYS = (
 QUOTE_KEYS = ("quote",)
 QUOTE_MAX_CHARS = 500
 
+
+def mask_quote(value):
+    """人的原话入库形态（遮罩 + 截断）：授权、抽样与规模确认共用一处。
+
+    机制稿 §1.3 对"人的原话"的要求是遮罩+截断摘要；`authorize` 与 `sampling`
+    都存人的 quote，不能只有一处做遮罩。
+    """
+    from . import check as check_mod
+
+    text = check_mod.redact_text(str(value or ""))
+    if len(text) > QUOTE_MAX_CHARS:
+        return text[:QUOTE_MAX_CHARS] + "…<truncated>"
+    return text
+
 # 外发授权绑定的材料类集合（机制稿 §9.1：diff / 需求 / 测试结果三类）
 EXPORT_MATERIALS = ("diff", "requirement", "test_results")
 
@@ -63,10 +77,7 @@ def _kept_value(key, value):
     from . import check as check_mod
 
     if key in QUOTE_KEYS:
-        text = check_mod.redact_text(str(value or ""))
-        if len(text) > QUOTE_MAX_CHARS:
-            return text[:QUOTE_MAX_CHARS] + "…<truncated>"
-        return text
+        return mask_quote(value)
     if isinstance(value, bool) or value is None:
         return value
     if isinstance(value, (int, float)):

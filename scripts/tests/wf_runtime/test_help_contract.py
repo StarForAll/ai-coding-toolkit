@@ -228,6 +228,25 @@ class DeadValueTest(unittest.TestCase):
         self.assertFalse(problems, "; ".join(sorted(set(problems))))
 
 
+class HelpAliasTest(unittest.TestCase):
+    """`--help`/`-h` 是首次接触入口的通用写法：不得落进 `unknown subcommand`。
+
+    dogfood 会话 4 实录：AI 第一条命令就是 `wf.py --help`，得到用法错误后才改用
+    `wf.py help`——多一次失败试错，且错误出口把 `--help` 写成"未知子命令"。
+    """
+
+    def test_help_flags_alias_the_help_command(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = cli.Context(tmp, [])
+            for flag in ("--help", "-h"):
+                with self.subTest(flag=flag):
+                    payload = cli.dispatch(ctx, [flag])
+                    self.assertEqual(payload["code"], "WF_OK")
+                    self.assertIn("status", payload["facts"]["commands"])
+            payload = cli.dispatch(ctx, ["--help", "task-check"])
+            self.assertEqual(payload["facts"]["command"], "task-check")
+
+
 def textwrap_dedent(text):
     import textwrap
 
