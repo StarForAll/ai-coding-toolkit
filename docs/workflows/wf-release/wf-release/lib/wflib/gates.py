@@ -1117,9 +1117,11 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
     # 降级条目的齐全性在归档门禁核（不分轻量/复杂），不受 review-passed 的 complex 条件裁剪
     plan_now = task.get("plan") or {}
     # 人工载体：复杂分级必须是**人确认**的（决定文件 plan 块），不能由请求自报（设计稿 §4.3/§4.4）
-    if plan_now.get("complexity") == "complex" and plan_now.get("confirmed_source") != "decision":
+    from . import tasks as tasks_mod
+
+    if tasks_mod.complex_needs_human_decision(plan_now):
         return False, "WF_SEMANTIC_DECISION", {
-            "reason": "complex 分级须由人在批准决定中确认（decision.plan.complexity）",
+            "reason": tasks_mod.COMPLEX_DECISION_REASON,
             "confirmed_source": plan_now.get("confirmed_source"),
             "human_inputs": plan_now.get("human_inputs"),
         }

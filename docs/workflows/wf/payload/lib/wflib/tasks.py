@@ -1744,6 +1744,16 @@ def _resolve_tdd(ctx, plan_decision, inputs):
     return value, source
 
 
+# 复杂分级的人签判据与文案（唯一实现；批准入口与归档门禁共用，纵深防御不另写一套措辞）。
+COMPLEX_DECISION_REASON = "complex 分级须由人在批准决定中确认（decision.plan.complexity）"
+
+
+def complex_needs_human_decision(plan):
+    """True 表示复杂分级没有人的批准决定承载（决定 plan 或旧记录都可能触发）。"""
+    plan = plan or {}
+    return plan.get("complexity") == "complex" and plan.get("confirmed_source") != "decision"
+
+
 def _approval_warnings(complexity, confirmed_source, tdd, tdd_source):
     """批准结果的可见提示（唯一实现）：把"没有人确认过"的地方说在前面。
 
@@ -1757,8 +1767,11 @@ def _approval_warnings(complexity, confirmed_source, tdd, tdd_source):
     if confirmed_source == "proposed":
         warnings.append(f"分级未由人确认：本次记录来源为 proposed（机器提议，值 {complexity}）；"
                         "要按人确认的分级记账，请在决定的 `plan.complexity` 写明")
-    if tdd_source in ("project-default", "built-in-default"):
-        warnings.append(f"TDD 未由人确认：按 {tdd_source} 取 {str(tdd).lower()}；"
+    if tdd_source in ("project-default", "built-in-default", "inputs"):
+        # inputs 也是提议（机制稿 §2.3）：它记来源但不等于人的确认，尤其不许模型据此自行开启 TDD
+        origin = {"project-default": "项目配置", "built-in-default": "发行缺省",
+                  "inputs": "请求 inputs（提议）"}[tdd_source]
+        warnings.append(f"TDD 未由人确认：按{origin}取 {str(tdd).lower()}；"
                         "要定这个值请在决定的 plan.tdd 写明")
     return warnings or None
 
@@ -2026,7 +2039,7 @@ def cmd_task_approve(ctx, args):
         # 机器提议更不是确认。只提示"归档会被拒"会让 AI 干完活才撞墙，这里在批准时即拒。
         if complexity == "complex" and confirmed_source != "decision":
             raise TaskError("WF_SEMANTIC_DECISION", {
-                "reason": "complex 分级须由人在批准决定中确认（decision.plan.complexity）",
+                "reason": COMPLEX_DECISION_REASON,
                 "complexity": complexity, "confirmed_source": confirmed_source,
                 "complexity_reasons": reasons,
                 "expected": {"plan": {"complexity": "complex"}},

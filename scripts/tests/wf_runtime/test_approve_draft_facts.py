@@ -190,14 +190,15 @@ class ApproveDraftFactsTest(unittest.TestCase):
         self.assertEqual(caught.exception.facts["confirmed_source"], "inputs")
         self.assertTrue(any("plan.complexity" in exit_ for exit_ in caught.exception.facts["exits"]))
 
-    def test_inputs_source_is_recorded_when_request_carries_it(self):
-        # inputs 里的 TDD 同样只算提议；带上它只为让本用例聚焦"分级来源"（不带则会有 TDD 提示）
+    def test_inputs_source_is_recorded_and_flagged(self):
+        """inputs 只作提议：分级来源如实记 `inputs`，TDD 同样要提示"未由人确认"。"""
         self.ctx.inputs.return_value = {"complexity": "light", "tdd": False}
         result = self.approve(self._decision(with_plan=False))
         self.assertEqual(result["code"], "WF_OK")
         plan = records.load_json(self.task_dir / "task.json")["plan"]
         self.assertEqual(plan["confirmed_source"], "inputs")
-        self.assertEqual(result["warnings"], [])
+        self.assertEqual(plan["tdd"], False)
+        self.assertTrue(any("请求 inputs" in warning for warning in result["warnings"]))
 
 
 if __name__ == "__main__":
