@@ -5,6 +5,10 @@ Default: patch bump x.x.y -> x.x.(y+1). ``--minor`` bumps x.(x+1).0; ``--major``
 If the current manifest version has no local tag yet, that prepared version is released as-is
 (so a pending release is not skipped); once it is tagged, the next invocation bumps.
 
+After a successful release Forgejo keeps only the newest three wf-v* tags; older remote tags are
+deleted. Local old tags are kept unless ``--prune-local-tags`` is given. ``--prune-tags`` performs
+the retention pass without publishing.
+
 The script reads FORGEJO_TOKEN and WF_FORGEJO_BASE from the environment. If either is absent it
 prompts interactively; in a non-interactive process it fails instead of hanging. The token is read
 with getpass and is never printed or passed as an argument.
@@ -29,6 +33,8 @@ CLI_README = REPO_ROOT / "docs" / "workflows" / "wf-cli" / "README.md"
 RELEASE_ROOT = REPO_ROOT / "docs" / "workflows" / "wf-release"
 MANIFEST = RELEASE_ROOT / "wf-release.json"
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+TAG_RE = re.compile(r"^wf-v(\d+)\.(\d+)\.(\d+)$")
+KEEP_TAGS = 3
 TARGET_ROW_RE = re.compile(r"^(\|\s*目标版本\s*\|.*)$", re.MULTILINE)
 
 
@@ -91,6 +97,60 @@ def head_commit():
     if result.returncode != 0:
         raise ReleaseError("无法读取 HEAD")
     return (result.stdout or "").strip()
+
+
+def tag_key(tag):
+    match = TAG_RE.match(tag or "")
+    if not match:
+        raise ReleaseError(f"非法 wf tag：{tag!r}")
+    return tuple(int(part) for part in match.groups())
+
+
+def prune_candidates(tags, *, keep=KEEP_TAGS, protect=()):
+    """Return tags outside the newest `keep` versions; `protect` tags are never returned."""
+    protected = set(protect)
+    ordered = sorted({tag for tag in tags if TAG_RE.match(tag or "")},
+                     key=tag_key, reverse=True)
+    return [tag for tag in ordered[keep:] if tag not in protected]
+
+
+def remote_tags():
+    result = git("ls-remote", "--tags", "--refs", FORGEJO_REMOTE, "refs/tags/wf-v*", capture=True)
+    if result.returncode != 0:
+        raise ReleaseError("无法读取 Forgejo 远端 tag 列表")
+    tags = []
+    for line in (result.stdout or "").splitlines():
+        fields = line.split("\t")
+        if len(fields) == 2 and fields[1].startswith("refs/tags/"):
+            tags.append(fields[1][len("refs/tags/"):])
+    return tags
+
+
+def local_tags():
+    result = git("tag", "--list", "wf-v*", capture=True)
+    if result.returncode != 0:
+        raise ReleaseError("无法读取本地 wf tag 列表")
+    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+
+
+def prune_remote_tags(current_tag, env):
+    old = prune_candidates(remote_tags(), protect={current_tag})
+    for tag in old:
+        print(f"release-wf: prune Forgejo tag {tag}", file=sys.stderr)
+        result = git("push", FORGEJO_REMOTE, f":refs/tags/{tag}", env=env)
+        if result.returncode != 0:
+            raise ReleaseError(f"删除 Forgejo 旧 tag {tag} 失败；release 已完成，按需重试")
+    return old
+
+
+def prune_local_tags(current_tag):
+    old = prune_candidates(local_tags(), protect={current_tag})
+    for tag in old:
+        print(f"release-wf: prune local tag {tag}", file=sys.stderr)
+        result = git("tag", "-d", tag, capture=True)
+        if result.returncode != 0:
+            raise ReleaseError(f"删除本地旧 tag {tag} 失败")
+    return old
 
 
 def current_branch():
@@ -187,9 +247,25 @@ def main(argv=None):
                        help="常规版本 x.x.y -> x.(x+1).0（默认是小版本 +1）")
     group.add_argument("--major", action="store_true",
                        help="正式版本 x.x.y -> (x+1).0.0")
+    parser.add_argument("--prune-local-tags", action="store_true",
+                        help="同时删除本地超过最新 3 个的 wf tag（默认保留本地 tag）")
+    parser.add_argument("--prune-tags", action="store_true",
+                        help="只清理旧 tag（Forgejo 保留最新 3 个），不发布")
     args = parser.parse_args(argv)
 
     try:
+        if args.prune_tags and (args.minor or args.major):
+            raise ReleaseError("--prune-tags 不能和 --minor/--major 同时使用")
+        if args.prune_tags:
+            current_tag = f"wf-v{current_version()}"
+            protect = current_tag if tag_commit(current_tag) else None
+            removed = prune_remote_tags(protect, dict(os.environ))
+            if args.prune_local_tags:
+                prune_local_tags(protect)
+            print(f"OK  Forgejo 保留最新 {KEEP_TAGS} 个 wf tag"
+                  + (f"，删除远端 {len(removed)} 个" if removed else ""))
+            return 0
+
         status = git("status", "--porcelain", capture=True)
         if status.returncode != 0:
             raise ReleaseError("无法读取 Git 状态")
@@ -254,12 +330,17 @@ def main(argv=None):
                 raise ReleaseError(
                     f"tag 已推送，但 release 附件失败；重试：python3 scripts/attach-wf-cli-asset.py "
                     f"--create-release --tag {tag} --wheel {wheel_path}")
+
+            prune_remote_tags(tag, env)
+            if args.prune_local_tags:
+                prune_local_tags(tag)
         finally:
             if created_tag and not pushed:
                 git("tag", "-d", tag, capture=True)
 
         print(f"OK  {tag} 已发布：tag、release wheel 与 install.py 均完成")
-        print("项目分支已推送到所有 git remote；tag 只推送了 Forgejo。")
+        print("项目分支已推送到所有 git remote；tag 只推送了 Forgejo；"
+              f"Forgejo 保留最新 {KEEP_TAGS} 个 wf tag。")
         print(f"安装：curl -fsSL \"${{WF_FORGEJO_BASE}}/xzc/ai-coding-toolkit/"
               f"releases/download/latest/install.py\" | python3 -")
         return 0

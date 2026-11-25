@@ -145,6 +145,16 @@ version as-is instead of skipping it; `--minor`/`--major` always bump explicitly
 a manual `git tag`; the wf-specific pre-push hook was removed and the remaining pre-push hook only
 checks plugin bundles.
 
+Tag retention: after a successful release, Forgejo keeps only the newest three `wf-v*` tags;
+older remote tags are deleted (mandatory). Local old tags are kept by default; add
+`--prune-local-tags` to delete them too. The comparison is semantic version order, not creation
+time. To enforce retention immediately without publishing:
+
+```bash
+python3 scripts/release-wf.py --prune-tags
+python3 scripts/release-wf.py --prune-tags --prune-local-tags  # also local
+```
+
 `FORGEJO_TOKEN` / `WF_FORGEJO_BASE` are read from the environment. If either is missing, the
 script prompts on a TTY; in a non-interactive process it fails instead of hanging. The token uses
 `getpass` and is never printed or passed as an argument.
