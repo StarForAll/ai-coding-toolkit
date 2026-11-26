@@ -110,6 +110,32 @@ class AttachAssetTest(unittest.TestCase):
         self.assertEqual(payload["tag_name"], "wf-v0.0.8")
         self.assertEqual(payload["target_commitish"], "a" * 40)
 
+    def test_shared_api_error_maps_to_attach_error_with_missing_flag(self):
+        def api(base, repo, path, token, **kwargs):
+            raise self.module.forgejo_api.ForgejoApiError("release/tag not found: x", status=404,
+                                                          missing=True)
+
+        old = self.module.forgejo_api.api
+        self.module.forgejo_api.api = api
+        self.addCleanup(lambda: setattr(self.module.forgejo_api, "api", old))
+        with self.assertRaises(self.module.AttachError) as caught:
+            self.module._api("https://forgejo.example", "xzc/repo", "releases/tags/wf-v0.0.8",
+                             "token")
+        self.assertTrue(caught.exception.missing)
+        self.assertIn("not found", str(caught.exception))
+
+    def test_non_missing_api_error_is_not_reported_as_missing(self):
+        def api(base, repo, path, token, **kwargs):
+            raise self.module.forgejo_api.ForgejoApiError("forgejo api failed: status=500",
+                                                         status=500)
+
+        old = self.module.forgejo_api.api
+        self.module.forgejo_api.api = api
+        self.addCleanup(lambda: setattr(self.module.forgejo_api, "api", old))
+        with self.assertRaises(self.module.AttachError) as caught:
+            self.module._api("https://forgejo.example", "xzc/repo", "releases", "token")
+        self.assertFalse(caught.exception.missing)
+
     def test_different_existing_asset_is_refused(self):
         def api(base, repo, path, token, **kwargs):
             return {"id": 1, "assets": [{"name": self.wheel.name, "size": 99}]}

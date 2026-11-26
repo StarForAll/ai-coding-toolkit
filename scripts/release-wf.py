@@ -5,9 +5,11 @@ Default: patch bump x.x.y -> x.x.(y+1). ``--minor`` bumps x.(x+1).0; ``--major``
 If the current manifest version has no local tag yet, that prepared version is released as-is
 (so a pending release is not skipped); once it is tagged, the next invocation bumps.
 
-After a successful release Forgejo keeps only the newest three wf-v* tags; older remote tags are
-deleted. Local old tags are kept unless ``--prune-local-tags`` is given. ``--prune-tags`` is an
-explicit add-on to the normal release flow, not a standalone cleanup mode.
+After a successful release Forgejo keeps only the newest three wf-v* releases: historical releases
+(with their wheel/install.py assets) are deleted first, then the older remote tags. A tag and its
+release are two separate Forgejo objects, so pruning only tags leaves the release pages behind.
+Local old tags are kept unless ``--prune-local-tags`` is given. ``--prune-tags`` is an explicit
+add-on to the normal release flow, not a standalone cleanup mode.
 
 The script reads FORGEJO_TOKEN and WF_FORGEJO_BASE from the environment. If either is absent it
 prompts interactively; in a non-interactive process it fails instead of hanging. The token is read
@@ -142,6 +144,30 @@ def local_tags():
     return order_tags([line.strip() for line in (result.stdout or "").splitlines() if line.strip()])
 
 
+def prune_remote_releases(current_tag, env):
+    """删除超出最新 KEEP_TAGS 个的历史 release（tag 与 release 是两类对象，只删 tag 会留下 release 页与附件）。
+
+    先于 tag 清理执行：反过来先删 tag、再删 release 失败一次，就会留下"tag 已删、release 还在"
+    的孤儿页，而这正是本步骤要消除的形态。
+    """
+    result = run([sys.executable, "scripts/prune-wf-releases.py", "--keep", str(KEEP_TAGS),
+                  "--protect", current_tag, "--json"], capture=True, env=env)
+    retry = f"python3 scripts/prune-wf-releases.py --keep {KEEP_TAGS} --protect {current_tag}"
+    if result.returncode != 0:
+        detail = ((result.stdout or "") + (result.stderr or "")).strip().splitlines()
+        raise ReleaseError("清理 Forgejo 历史 release 失败；release 已完成，重试：" + retry
+                           + (f"（{detail[-1]}）" if detail else ""))
+    try:
+        payload = json.loads((result.stdout or "").strip().splitlines()[-1])
+    except (ValueError, IndexError) as exc:
+        raise ReleaseError("清理 Forgejo 历史 release 的输出不可解析；release 已完成，重试："
+                           + retry) from exc
+    pruned = [str(tag) for tag in payload.get("deleted") or []]
+    for tag in pruned:
+        print(f"release-wf: prune Forgejo release {tag}", file=sys.stderr)
+    return pruned
+
+
 def prune_remote_tags(current_tag, env):
     old = prune_candidates(remote_tags(), protect={current_tag})
     for tag in old:
@@ -259,7 +285,7 @@ def main(argv=None):
     parser.add_argument("--prune-local-tags", action="store_true",
                         help="同时删除本地超过最新 3 个的 wf tag（默认保留本地 tag）")
     parser.add_argument("--prune-tags", action="store_true",
-                        help="发布后清理 Forgejo 旧 tag（默认发布已执行；显式开关保留）")
+                        help="发布后清理 Forgejo 旧 tag 与其 release（默认发布已执行；显式开关保留）")
     args = parser.parse_args(argv)
 
     try:
@@ -328,6 +354,7 @@ def main(argv=None):
                     f"tag 已推送，但 release 附件失败；重试：python3 scripts/attach-wf-cli-asset.py "
                     f"--create-release --tag {tag} --wheel {wheel_path}")
 
+            prune_remote_releases(tag, env)
             prune_remote_tags(tag, env)
             if args.prune_local_tags:
                 prune_local_tags(tag)
@@ -336,10 +363,10 @@ def main(argv=None):
                 git("tag", "-d", tag, capture=True)
 
         print(f"OK  {tag} 已发布：tag、release wheel 与 install.py 均完成")
-        print("项目分支已推送到所有 git remote；tag 只推送了 Forgejo；"
-              f"Forgejo 保留最新 {KEEP_TAGS} 个 wf tag。")
-        print(f"安装：curl -fsSL \"${{WF_FORGEJO_BASE}}/xzc/ai-coding-toolkit/"
-              f"releases/download/latest/install.py\" | python3 -")
+        print("项目分支已推送到所有 git remote；tag/release 只走 Forgejo；"
+              f"Forgejo 保留最新 {KEEP_TAGS} 个 wf tag 与对应的 release。")
+        print("首次安装系统 wf 命令（不指定版本）：python3 scripts/install-wf.py"
+              "（读取/提示 WF_FORGEJO_BASE、FORGEJO_TOKEN；公开仓库 token 可空）")
         return 0
     except ReleaseError as exc:
         sys.stderr.write(f"BLOCKED  {exc}\n")

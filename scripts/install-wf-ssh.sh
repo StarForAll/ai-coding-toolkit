@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install the system wf command from the newest wf-v* tag over SSH.
 #
-# This is the fallback when Forgejo Actions / HTTP release downloads are unavailable but git over
+# This is the fallback when the Forgejo HTTP/API (release assets) is unavailable but git over
 # SSH works. It resolves the newest tag by tag/commit date (not by semver maximum), then installs
 # the wf-cli package from that tag. It does not accept a version argument.
 set -euo pipefail

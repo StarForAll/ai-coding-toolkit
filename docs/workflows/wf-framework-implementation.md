@@ -194,7 +194,7 @@ docs/workflows/wf-cli/         # 系统级 wf 命令发行包（不投放项目�
 
 引导层固定顺序（对齐设计稿 §1.1 命令启动与机制稿 §8.2）：
 
-1. 由 `Path(__file__).resolve()` 上溯确定项目根，核对 `.wf/bin/wf.py` 与 `.wf/` 布局；布局或目标无法确认即阻断（`WF_CAPABILITY_UNAVAILABLE`，facts 记缺失项）。系统命令已把项目定位结果交给本脚本路径，本层不用 cwd 选择项目；源码/重取恢复入口仍用 `--project <绝对路径>` 显式给目标。
+1. 由 `Path(__file__).resolve()` 上溯确定项目根，核对 `.wf/bin/wf.py` 与 `.wf/` 布局；位置无法确认（重取/复制出来的入口）时缺省取 cwd 再核同一布局，仍不成立才阻断（`WF_CAPABILITY_UNAVAILABLE`，facts 记缺失项）。系统命令已把项目定位结果交给本脚本路径，所以脚本自身位置优先于 cwd；源码/重取恢复入口可给 `--project <绝对路径>` 显式覆盖缺省。
 2. `argv[1] ∈ {repair, uninstall}` → 直接 `os.execv(sys.executable, [sys.executable, <同目录>/repair.py|uninstall.py, *rest])`，不读项目配置、不导入运行时（坏配置仍可达，机制稿 §10.5）。
 3. `argv[1] == confirm-executor` → 由引导层自身在当前解释器内执行：只写 `~/.wf/interpreters.json`、只读项目配置、不写项目数据、不进项目锁，完成后退出。该分支必须在第 4 步之前，否则「未确认即停」会让确认动作本身不可达（机制稿 §8.2 要求该子命令由引导解释器拉起）。该子命令只接受**人在终端**执行：非 TTY 一律返回 `WF_SEMANTIC_DECISION` 且不写记录；写入前把完整元组打印到终端并要求输入确认词，已有相同元组时直接报告「已确认」不再提示（设计稿 §1.1，实测见任务记录 `validation.md` §21）。
 4. 只读 `.wf/project-config.json` 取 `python_executable`，缺失则读 `~/.wf/config.json` 同名键，再回落到 `python3`；按机制稿 §8.2 取候选存在/可执行/路径身份/`size`/`mtime_ns` 并与 `~/.wf/interpreters.json` 元组匹配。未匹配即输出 `WF_EXECUTOR_UNCONFIRMED` 并停（不在引导解释器继续判定，出口是第 3 步的 `confirm-executor`）。
@@ -657,11 +657,11 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 | 场景 | 调用形态 | 目标判定 | 失败 |
 |---|---|---|---|
 | 系统命令 | `wf [--project <绝对路径>] <子命令>` | `install` 用 cwd 或 `--project`；其余从 cwd 向上找 `.wf/`，`--project` 优先 | 找不到项目 → `WF_PATH_INVALID` |
-| installed（已安装） | `<python> /abs/path/<项目>/.wf/bin/wf.py <子命令>`（任意 cwd） | 由脚本真实位置解析项目根并核对 `.wf/bin` 布局 | 布局/目标无法确认 → `WF_CAPABILITY_UNAVAILABLE` |
-| 项目根内短称 | `<python> .wf/bin/wf.py <子命令>` | 同上（不依赖 cwd 选择项目） | 同上 |
-| 源码/重取入口 | `<python> <重取路径>/wf.py --project <目标绝对路径> <子命令>` | 只接受显式绝对路径；不把源码目录或 cwd 当目标 | 缺 `--project` → `WF_PATH_INVALID` |
+| installed（已安装） | `<python> /abs/path/<项目>/.wf/bin/wf.py [--project <绝对路径>] <子命令>`（任意 cwd） | 由脚本真实位置解析项目根并核对 `.wf/bin` 布局；位置无法确认时缺省取 cwd | 布局/目标无法确认 → `WF_CAPABILITY_UNAVAILABLE` |
+| 项目根内短称 | `<python> .wf/bin/wf.py <子命令>` | 同上（脚本位置优先，缺省不依赖 cwd 选择项目） | 同上 |
+| 源码/重取入口 | `<python> <重取路径>/wf.py [--project <目标绝对路径>] <子命令>` | `--project` 可选：缺省取 cwd 并核 `.wf/` 布局，`--project` 优先；源码目录从不被当成目标 | cwd 不是 wf 项目 → `WF_CAPABILITY_UNAVAILABLE` |
 
-系统级 `wf` 是真实安装的命令入口，不是 shell shim；它只定位/转交，项目引导层不用 cwd 选择项目。引导层不判断业务门禁；判定全部在语义层（机制稿 §3、§11）。
+系统级 `wf` 是真实安装的命令入口，不是 shell shim；它只定位/转交。项目引导层优先用脚本安装位置选择项目，位置无法确认时缺省用当前目录（两种缺省都要核 `.wf/` 布局，不跨父目录搜索）。引导层不判断业务门禁；判定全部在语义层（机制稿 §3、§11）。
 
 ### 3.2 执行器解析
 
@@ -675,7 +675,7 @@ Check 的固定五步里有四类事实脚本无法自造，各自的入口如�
 
 ### 3.3 独立恢复入口的启动例外
 
-`.wf/bin/repair.py` 与 `.wf/bin/uninstall.py` 各自单文件、仅标准库、不导入 `wflib`；系统级 `wf repair` / `wf uninstall` 优先转交已安装版本的单文件，缺文件时从安装记录版本对应的发行重取，再由系统或人显式选择的可用 Python 直接运行该单文件；该回退**只授权这两个入口**，不延伸到 `wf.py` 引导段之外的常规命令（设计稿 §1.1、机制稿 §10.5）。二者仍需最小互斥、人确认与预览令牌（`repair`、`uninstall --purge`），`uninstall` 默认模式按其预览确认要求取得明确人决定。
+`.wf/bin/repair.py` 与 `.wf/bin/uninstall.py` 各自单文件、仅标准库、不导入 `wflib`；系统级 `wf repair` / `wf uninstall` 优先转交已安装版本的单文件，缺文件时从安装记录版本对应的发行重取，再由系统或人显式选择的可用 Python 直接运行该单文件；该回退**只授权这两个入口**，不延伸到 `wf.py` 引导段之外的常规命令（设计稿 §1.1、机制稿 §10.5）。两个单文件的 `--project` 可选：缺省取引导层转交的 `WF_PROJECT_ROOT`，再缺省取当前目录（都要核 `.wf/` 与安装记录）。二者仍需最小互斥、人确认与预览令牌（`repair`、`uninstall --purge`），`uninstall` 默认模式按其预览确认要求取得明确人决定。
 
 ### 3.4 标准库与离网边界
 

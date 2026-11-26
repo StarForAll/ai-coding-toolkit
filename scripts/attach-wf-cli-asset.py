@@ -14,13 +14,17 @@ import json
 import os
 import re
 import sys
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path
 
-DEFAULT_BASE = os.environ.get("WF_FORGEJO_BASE") or "https://forgejo.xzc.com"
-DEFAULT_REPO = "xzc/ai-coding-toolkit"
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import forgejo_api  # noqa: E402
+
+DEFAULT_BASE = forgejo_api.DEFAULT_BASE
+DEFAULT_REPO = forgejo_api.DEFAULT_REPO
+
+
 class AttachError(Exception):
     def __init__(self, message, *, missing=False):
         super().__init__(message)
@@ -28,25 +32,12 @@ class AttachError(Exception):
 
 
 def _api(base, repo, path, token, *, data=None, content_type=None, method=None):
-    url = f"{base.rstrip('/')}/api/v1/repos/{repo}/{path.lstrip('/')}"
-    headers = {"Accept": "application/json"}
-    if token:
-        headers["Authorization"] = "token " + token
-    if content_type:
-        headers["Content-Type"] = content_type
-    request = urllib.request.Request(url, data=data, headers=headers, method=method)
+    """共享客户端只有一种错误类型；这里转换成本脚本的 `AttachError`（保留 `missing` 语义）。"""
     try:
-        with urllib.request.urlopen(request, timeout=120) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            raise AttachError(f"release/tag not found: {url}", missing=True) from exc
-        raise AttachError(f"forgejo api failed: status={exc.code} url={url}") from exc
-    except OSError as exc:
-        raise AttachError(
-            f"forgejo api unavailable: {url}: {exc}；"
-            "核对 WF_FORGEJO_BASE/VPN；若只有 SSH 可用，改用 scripts/install-wf-ssh.sh"
-        ) from exc
+        return forgejo_api.api(base, repo, path, token, data=data,
+                               content_type=content_type, method=method)
+    except forgejo_api.ForgejoApiError as exc:
+        raise AttachError(str(exc), missing=exc.missing) from exc
 
 
 def multipart(name, filename, payload):

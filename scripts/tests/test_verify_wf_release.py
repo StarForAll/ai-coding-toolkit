@@ -334,6 +334,21 @@ class ReleaseScriptTest(unittest.TestCase):
         self.assertNotIn("if args.prune_tags:", self.script)
         self.assertNotIn("只清理旧 tag", self.script)
 
+    def test_historical_releases_are_pruned_before_tags(self):
+        # tag 与 release 是 Forgejo 上两类对象：只删 tag 会留下 release 页与附件，
+        # 所以发布成功后先删历史 release，再删旧 tag。
+        self.assertIn("prune-wf-releases.py", self.script)
+        body = self.script.split("def main(argv=None):", 1)[1]
+        self.assertLess(body.index("prune_remote_releases(tag, env)"),
+                        body.index("prune_remote_tags(tag, env)"))
+        self.assertIn('"--keep", str(KEEP_TAGS)', self.script)
+        self.assertIn('"--protect", current_tag', self.script)
+
+    def test_first_install_hint_is_the_local_python_entry(self):
+        # 收尾提示曾指向 releases/download/latest/install.py；当前首次安装入口是本地脚本
+        self.assertIn("python3 scripts/install-wf.py", self.script)
+        self.assertNotIn("releases/download/latest", self.script)
+
     def test_pre_push_no_longer_handles_wf_release(self):
         self.assertNotIn("refs/tags/wf-v", self.hook)
         self.assertNotIn("verify-wf-release.py", self.hook)

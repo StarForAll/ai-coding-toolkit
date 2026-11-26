@@ -358,8 +358,9 @@ def dispose_flow(root, plan_path, apply_now, nonce, json_mode):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="wf 受控修复（独立单文件入口）")
-    parser.add_argument("--project", required=False)
+    parser = argparse.ArgumentParser(description="wf 受控修复（独立单文件入口；缺省取当前目录为项目根）")
+    parser.add_argument("--project", required=False,
+                        help="项目根绝对路径（可选）；缺省取 WF_PROJECT_ROOT，再缺省取当前目录")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--nonce", default=None, help="仅测试形态：注入固定预览指纹")
     parser.add_argument("--dispose", default=None, help="维护组处置计划（预览 → 短指纹 → 回写）")
@@ -369,9 +370,11 @@ def main(argv=None):
 
     if args.token_parity_check:
         return token_parity_check(args.nonce)
-    root = args.project or os.environ.get("WF_PROJECT_ROOT")
-    if not root or not os.path.isabs(root) or not os.path.isdir(root):
-        return blocker("WF_PATH_INVALID", "必须用 --project <绝对路径> 显式给目标", {"project": root}, args.json)
+    root = args.project or os.environ.get("WF_PROJECT_ROOT") or os.getcwd()
+    if not os.path.isabs(root) or not os.path.isdir(root):
+        return blocker("WF_PATH_INVALID",
+                       "项目根不可确认：--project 可选，缺省用当前目录；给定时须为已存在的绝对路径",
+                       {"project": root, "cwd": os.getcwd()}, args.json)
     if not os.path.isdir(os.path.join(root, ".wf")):
         return blocker("WF_CAPABILITY_UNAVAILABLE", "目标不是 wf 项目（缺 .wf/）", {"target": root}, args.json)
 

@@ -7,57 +7,63 @@ verifies and runs the matching release from the registered Forgejo repository.
 
 ## Install the command (no version parameter)
 
+From a checkout, the first-install entry is the local Python script:
+
 ```bash
 export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
-curl -fsSL "${WF_FORGEJO_BASE}/xzc/ai-coding-toolkit/releases/download/latest/install.py" | python3 -
+python3 scripts/install-wf.py
 wf version
 ```
 
-The install command itself is the stable `install.py` asset of the **latest Forgejo release**
-(`releases/download/latest/install.py`); it asks the release API for that release, requires the
-`wf_cli-<version>-py3-none-any.whl` asset, and installs it with `uv` (or `pipx`). It never
-accepts a version or tag: the newest release is selected automatically.
+It runs the local `docs/workflows/wf-cli/install.py` bootstrap, so it does not need to download
+the bootstrap script itself. That bootstrap asks the release API for the **newest published
+release** of the registered repository, requires the `wf_cli-<version>-py3-none-any.whl` asset of
+that release, and installs it with `uv` (or `pipx`). No version or tag is accepted anywhere in this
+path: the newest release is selected automatically.
 
-For a **private** repository, the raw `install.py` fetch also needs authentication. Use this
-token-aware bootstrap (token stays in the environment; no token in argv or URL):
+`install-wf.py` resolves `WF_FORGEJO_BASE` / `FORGEJO_TOKEN` from the environment; on a TTY it
+prompts for missing values. `--base` can supply the base explicitly, and `--token-env` can point at
+another token environment variable; the token is never a CLI argument.
+
+Public repository: leave the token empty. Private repository: provide/paste the token; the
+bootstrap uses it for the release API and wheel download.
+
+### Without a checkout
+
+The same bootstrap is the stable `install.py` asset of every release, and the raw copy on the
+default branch is runnable too:
+
+```bash
+export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
+curl -fsSL "${WF_FORGEJO_BASE}/xzc/ai-coding-toolkit/raw/branch/main/docs/workflows/wf-cli/install.py" | python3 -
+wf version
+```
+
+For a **private** repository that fetch also needs authentication (token stays in the environment;
+no token in argv or URL):
 
 ```bash
 export WF_FORGEJO_BASE="https://forgejo.xzc.com:13785"
 export FORGEJO_TOKEN="..."
 
-python3 - <<'PY'
+python3 - <<'PYTHON'
 import os, urllib.request
 base = os.environ["WF_FORGEJO_BASE"].rstrip("/")
 token = os.environ["FORGEJO_TOKEN"]
-url = f"{base}/xzc/ai-coding-toolkit/releases/download/latest/install.py"
+url = f"{base}/xzc/ai-coding-toolkit/raw/branch/main/docs/workflows/wf-cli/install.py"
 request = urllib.request.Request(url, headers={"Authorization": f"token {token}"})
 with urllib.request.urlopen(request) as response:
     code = response.read()
 exec(compile(code, url, "exec"), {"__name__": "__main__"})
-PY
+PYTHON
 
 wf version
 ```
 
 Without `FORGEJO_TOKEN`, a private repository returns 404 for the asset URL (Forgejo hides the
-existence of private resources); it does not mean the `latest` route is missing.
+existence of private resources); it does not mean the route is missing.
 
-### Local Python installer
-
-From a checkout, the reusable local entry point is:
-
-```bash
-python3 scripts/install-wf.py
-```
-
-It runs the local `docs/workflows/wf-cli/install.py` bootstrap, so it does not need to download
-the bootstrap script itself. It resolves `WF_FORGEJO_BASE` / `FORGEJO_TOKEN` from the environment;
-on a TTY it prompts for missing values. `--base` can supply the base explicitly, and
-`--token-env` can point at another token environment variable; the token is never a CLI argument.
-
-Public repository: leave the token empty. Private repository: provide/paste the token; the
-bootstrap uses it for the release API and wheel download.
-
+### Build the release asset
 
 The release asset is built from the release tree's version:
 
@@ -78,23 +84,19 @@ The wheel and the release manifest must have the same version; `scripts/build-wf
 checks that and the `verify-wf-release.py` gate checks the CLI package inside the tag. When
 `wf-v<version>` already exists, the builder also requires `HEAD == tag commit` and a clean
 `docs/workflows/wf-cli` / `docs/workflows/wf-release` worktree. Never attach a wheel built from a
-newer working tree to an old tag; bump the version and create a new tag instead. Pushing a
-`wf-v*` tag also runs `.forgejo/workflows/wf-release.yml`, which verifies the tag and attaches the
-wheel plus `install.py` to the Forgejo release automatically. The workflow uses `runs-on: docker`;
-replace that label if your Forgejo runner uses another label.
+newer working tree to an old tag; bump the version and create a new tag instead. Forgejo Actions is
+not available on this instance (there is no `.forgejo/workflows/`), so the release is created by
+`scripts/release-wf.py` only — pushing a `wf-v*` tag does not build or attach anything.
 
 ## Forgejo token
 
-The tag-push workflow uses Forgejo's automatic per-workflow token; for a non-PR workflow it has
-write permission to the repository, so no secret is required. If you use a token locally or in a
-workflow that needs an explicit secret:
+Local release tooling needs a token with write access; `scripts/attach-wf-cli-asset.py`,
+`scripts/prune-wf-releases.py` and `scripts/install-wf.py` all read it from an environment variable:
 
 1. In Forgejo open **Settings → Applications → Generate New Token**.
 2. Give it a name such as `wf-release` and scopes `read:repository` plus `write:repository`.
 3. Copy the value once into a password manager or environment variable; it cannot be shown again.
 4. Locally: `export FORGEJO_TOKEN="..."` (the scripts read the environment, never an argument).
-5. In CI: repository **Settings → Actions → Secrets → New secret** `FORGEJO_TOKEN`, then pass it as
-   the `token` input only if you are not using the automatic token.
 
 Never put the token into a URL, command line, committed file, or workflow log.
 
@@ -119,7 +121,7 @@ Then rerun `install.py` or `attach-wf-cli-asset.py` (both also accept `--base`).
 instance's real address, check Forgejo's `[server] ROOT_URL` (for example
 `grep ROOT_URL /etc/forgejo/app.ini` on the host) or the browser URL you use to open the web UI.
 
-If only SSH is reachable and Actions/HTTP are unavailable from this machine:
+If only SSH is reachable and the HTTP API is unavailable from this machine:
 
 ```bash
 bash scripts/install-wf-ssh.sh
@@ -128,8 +130,8 @@ bash scripts/install-wf-ssh.sh
 It clones the registered repository over SSH, resolves the newest `wf-v*` tag by creation date,
 and installs that tag with uv/pipx; it takes no version argument. Release upload and release-asset
 installation still need the HTTP endpoint (web UI or a machine that can reach it). SSH alone
-cannot create or attach Forgejo release assets, and Forgejo Actions must be enabled for a tag push
-to build a release automatically.
+cannot create or attach Forgejo release assets, so a tag push builds nothing: releases are created
+by `scripts/release-wf.py` on a machine that can reach the API.
 
 
 ## Upgrade the system command (distinct from project upgrade)
@@ -171,7 +173,9 @@ Python script reads the current version from the release manifest, chooses the n
 updates the README/release tree, builds and commits the release, creates the local tag, verifies
 the tag, builds the wheel, pushes the project branch to **all configured git remotes**, then pushes
 the tag to the Forgejo remote and creates the release with the wheel plus `install.py`. Tags never
-go to the non-Forgejo remotes.
+go to the non-Forgejo remotes. After a successful release it deletes the Forgejo releases (and then
+the tags) beyond the newest three, so the release list stays as small as the tag list; run
+`python3 scripts/prune-wf-releases.py --keep 3 --protect wf-v<version>` to clean history standalone.
 
 Version selection:
 
@@ -184,12 +188,15 @@ version as-is instead of skipping it; `--minor`/`--major` always bump explicitly
 a manual `git tag`; the wf-specific pre-push hook was removed and the remaining pre-push hook only
 checks plugin bundles.
 
-Tag retention: after a successful release, Forgejo keeps only the newest three `wf-v*` tags;
-older remote tags are deleted (mandatory). Local old tags are kept by default; add
-`--prune-local-tags` to delete them too. The comparison is tag creation time (`creatordate`),
-matching release selection, not semantic version order. `--prune-tags` is an add-on to the normal release flow, not a standalone cleanup command;
-remote pruning already runs after every successful release, and the flag only makes that intent
-explicit. It never replaces version bump/build/tag/push/attach.
+Retention: after a successful release, Forgejo keeps only the newest three `wf-v*` **releases**;
+the historical releases are deleted first — with their `wf_cli-*.whl` and `install.py` assets — and
+then the older remote tags are deleted (mandatory). A tag and its release are two separate Forgejo
+objects, so pruning only tags leaves the `/releases` pages behind. Local old tags are kept by
+default; add `--prune-local-tags` to delete them too. The comparison is creation time
+(`creatordate` / release `created_at`), matching release selection, not semantic version order.
+`--prune-tags` is an add-on to the normal release flow, not a standalone cleanup command; remote
+pruning already runs after every successful release, and the flag only makes that intent explicit.
+It never replaces version bump/build/tag/push/attach.
 
 `FORGEJO_TOKEN` / `WF_FORGEJO_BASE` are read from the environment. If either is missing, the
 script prompts on a TTY; in a non-interactive process it fails instead of hanging. The token uses
@@ -210,12 +217,18 @@ wf upgrade          # preview of the newest project release
 wf upgrade --apply  # apply after the terminal preview token
 
 wf uninstall        # forwards to the installed independent uninstall entry
-wf repair           # forwards to the installed independent repair entry
+wf repair           # repairs a leftover write record (writer.json → idle)
 ```
 
+`--project` is optional for every command: run inside the project and the current directory is
+used (`install` uses it directly, the other commands walk up to the nearest `.wf/`); pass
+`--project <absolute-path>` only when you are outside the target project. The installed
+independent `repair.py` / `uninstall.py` entries accept the same contract — `--project`, then
+`WF_PROJECT_ROOT`, then the current directory — so they stay runnable from the project root when
+the runtime or its configuration is broken.
+
 Running `wf` inside a project also forwards ordinary runtime commands to `.wf/bin/wf.py`, so
-`task-new`, `task-check`, `spec`, `review-*`, etc. no longer need a project-local path. Use
-`wf --project <absolute-path> <command>` outside the project root.
+`task-new`, `task-check`, `spec`, `review-*`, etc. no longer need a project-local path.
 
 ## Release contract
 
@@ -229,6 +242,12 @@ Running `wf` inside a project also forwards ordinary runtime commands to `.wf/bi
   to it; there is no version/ref parameter.
 - `wf self-upgrade` resolves the newest system command release and replaces the installed command;
   it is not the project upgrade command.
+- Forgejo keeps only the newest three `wf-v*` releases and their tags. A release is a separate
+  object from its tag, so `scripts/release-wf.py` deletes the historical releases (with their
+  assets) before deleting the old tags; `scripts/prune-wf-releases.py` does the same cleanup alone.
+- `wf repair` repairs leftover write state only: it resets `.wf/writer.json` to idle (generation
+  + 1, maintenance receipts kept) and `--dispose <plan>` writes one receipt's disposition. It
+  never rewrites business records or skill assets.
 - `--release-ref`, `--source`, `--release` and `--target` are retired for users: the release
   identity comes from the system command and the registered source, never from a local checkout.
 - `install.py` remains the release-internal entry; it self-locates its release root and derives

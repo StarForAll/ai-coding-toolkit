@@ -41,8 +41,9 @@ class Project:
 def normalize_project(path):
     """Return an existing absolute directory; never guess from a relative value."""
     if not path or not os.path.isabs(path):
-        raise ProjectError("WF_PATH_INVALID", "--project 必须是已存在的绝对路径",
-                           {"project": path}, "用项目根绝对路径重试；不从 cwd 猜相对值")
+        # --project 本身可选（缺省取当前目录）；给了相对值不按 cwd 展开
+        raise ProjectError("WF_PATH_INVALID", "--project 给定时必须是绝对路径",
+                           {"project": path}, "给项目根绝对路径，或省略 --project 用当前目录")
     real = os.path.realpath(path)
     if not os.path.isdir(real):
         raise ProjectError("WF_PATH_INVALID", "--project 指向的目录不存在",
@@ -61,7 +62,7 @@ def discover_project(start=None):
     current = os.path.realpath(start or os.getcwd())
     if not os.path.isdir(current):
         raise ProjectError("WF_PATH_INVALID", "起始目录不存在", {"start": current},
-                           "在项目目录内运行，或给出 --project 绝对路径")
+                           "在项目目录内运行（缺省用当前目录），或用 --project 指定目标")
     while True:
         if is_project(current):
             return current
@@ -98,7 +99,8 @@ def open_project(path=None, *, require=False):
             if require:
                 raise ProjectError("WF_PATH_INVALID", "不在 wf 项目内",
                                    {"cwd": os.getcwd()},
-                                   "在项目根运行，或给出 --project <绝对路径>")
+                                   "在项目内运行（--project 可选，缺省用当前目录），"
+                                   "或用 --project <绝对路径> 指定目标")
             return None
     installation = load_installation(root)
     return Project(root=root, installation=installation)

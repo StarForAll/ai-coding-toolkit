@@ -104,6 +104,8 @@ def check_release_tree_matches_source(repo, version):
             "detail": (result.stdout or result.stderr or "").strip()[-800:] if not ok else None,
             "exits": ([] if ok else
                       [f"按同版源树重建：python3 scripts/build-wf-release.py --version {version}",
+                       "tag wf-v%s 已存在时同版重建会被拒绝：此时按人发起的版本推进走 "
+                       "python3 scripts/release-wf.py（它重建发行树并打新 tag）" % version,
                        "重建后复核差异，不手改发行树"])}
 
 

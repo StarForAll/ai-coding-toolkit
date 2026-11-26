@@ -412,6 +412,20 @@ class CliDispatchTest(GitFixture):
             code = wf_main.main(argv, exec_fn=self._exec)
         return code, buffer.getvalue()
 
+    def _in_project(self, path):
+        """临时把 cwd 切到目标目录（命令缺省用当前目录定位项目）。"""
+        previous = os.getcwd()
+
+        @contextlib.contextmanager
+        def _swap():
+            os.chdir(path)
+            try:
+                yield
+            finally:
+                os.chdir(previous)
+
+        return _swap()
+
     def _install_record(self, version="0.0.8"):
         _write(self.project / ".wf/install/installation.json",
                json.dumps(dict(INSTALLATION, version=version), ensure_ascii=False, indent=2) + "\n")
@@ -508,6 +522,65 @@ class CliDispatchTest(GitFixture):
         payload = json.loads(out)
         self.assertEqual(payload["facts"]["version"], "0.0.8")
         self.assertEqual(payload["facts"]["installed"], "0.0.7")
+
+    def test_project_flag_is_optional_from_inside_the_project(self):
+        # `--project` 可选：缺省取当前目录（向上找 .wf/），维护命令照样拿到同一个项目根。
+        _write(self.project / ".wf/bin/uninstall.py", "print('uninstall')\n")
+        _write(self.project / ".wf/bin/wf.py", "print('wf')\n")
+        self._install_record("0.0.8")
+        with self._in_project(self.project):
+            code, out = self._run(["version", "--json"])
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["facts"]["project"],
+                             str(self.project.resolve()))
+            code, _out = self._run(["uninstall", "--json"])
+            self.assertEqual(code, 0)
+            _path, argv, _env = self.exec_calls[0]
+            self.assertIn(str(self.project.resolve()), argv)
+            code, _out = self._run(["task-new", "--title", "x", "--json"])
+            self.assertEqual(code, 0)
+
+    def test_missing_project_reports_optional_flag_exit(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        with self._in_project(outside):
+            code, out = self._run(["repair", "--json"])
+        self.assertEqual(code, 1)
+        payload = json.loads(out)
+        self.assertEqual(payload["code"], "WF_PATH_INVALID")
+        self.assertIn("--project", payload["next"])
+
+
+class HelpTextTest(unittest.TestCase):
+    """`wf help` 必须是唯一一份说明来源：用法与作用不能各写一处。"""
+
+    def setUp(self):
+        self.commands = wf_main.COMMAND_HELP
+        self.descriptions = wf_main.COMMAND_DESC
+
+    def test_every_command_has_a_description(self):
+        self.assertEqual(sorted(self.commands), sorted(self.descriptions))
+
+    def test_overview_is_rendered_from_the_single_source(self):
+        for name, description in self.descriptions.items():
+            self.assertIn(description, wf_main.HELP, name)
+
+    def test_repair_help_states_what_is_repaired(self):
+        text = wf_main.command_text("repair")
+        self.assertIn(self.commands["repair"], text)
+        self.assertIn("writer.json", text)
+        self.assertIn("维护回执", text)
+        self.assertIn("--dispose", text)
+        self.assertNotIn("nonexistent-marker", text)
+
+    def test_overview_states_the_optional_project_flag(self):
+        self.assertIn("--project 可选，缺省用当前目录", wf_main.HELP)
+
+    def test_help_subcommand_prints_the_same_text_for_a_command(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            wf_main.main(["help", "repair"], exec_fn=lambda *_a: 0)
+        self.assertEqual(buffer.getvalue(), wf_main.command_text("repair"))
 
 
 if __name__ == "__main__":

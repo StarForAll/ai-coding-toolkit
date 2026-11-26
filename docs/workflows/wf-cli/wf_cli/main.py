@@ -30,48 +30,79 @@ RETIRED = {
 }
 
 COMMAND_HELP = {
-    "install": "wf install [--project <abs>] [--confirm] [--python <abs>] [--json]",
-    "upgrade": "wf upgrade [--project <abs>] [--apply | --export-deviations --out <dir>] "
-               "[--keep <path> ...] [--restore <path> ...] [--json]",
-    "uninstall": "wf uninstall [--project <abs>] [--purge] [--apply] [--json]",
-    "repair": "wf repair [--project <abs>] [--apply] [--dispose <plan>] [--json]",
-    "version": "wf version [--project <abs>] [--json]",
+    "install": "wf install [--project <绝对路径>] [--confirm] [--python <绝对路径>] [--json]",
+    "upgrade": "wf upgrade [--project <绝对路径>] [--apply | --export-deviations --out <目录>] "
+               "[--keep <项目相对路径> ...] [--restore <项目相对路径> ...] [--json]",
+    "uninstall": "wf uninstall [--project <绝对路径>] [--purge] [--apply] [--json]",
+    "repair": "wf repair [--project <绝对路径>] [--apply] [--dispose <处置计划>] [--json]",
+    "version": "wf version [--project <绝对路径>] [--json]",
     "self-upgrade": "wf self-upgrade [--manager uv|pipx|pip] [--json]",
     "self-uninstall": "wf self-uninstall [--manager uv|pipx|pip] [--apply] [--json]",
-    "help": "wf help [<command>]",
+    "help": "wf help [<命令>]",
 }
+
+# 每个命令的说明只登记一次：总览与 `wf help <命令>` / `<命令> --help` 都从这里取值，
+# 否则"用法一处、作用一处"必然漂移（`wf repair` 曾只剩转交说明，看不出它到底修什么）。
+COMMAND_DESC = {
+    "install": "在尚无 .wf/ 的项目中安装系统 wf 命令自身版本对应的发行；首跑只预览，确认后加 "
+               "--confirm。--python 选定运行 wf 的解释器（>=3.11 绝对路径，写入本机用户级配置）。",
+    "upgrade": "把项目资产升级到登记发行源默认分支上的最新发行（按 tag 创建时间取最新，"
+               "不指定版本、不指定本地发行目录）：首跑只预览，--apply 后在终端输入预览指纹执行；"
+               "--export-deviations 是只读回源，导出本地偏离清单与补丁。",
+    "uninstall": "转交已安装版本的独立卸载入口 .wf/bin/uninstall.py（缺该单文件时从对应发行重取同一文件）："
+                 "预览将删除的资产，默认保留项目数据；--apply 输入预览指纹后执行。",
+    "repair": "转交已安装版本的独立修复入口 .wf/bin/repair.py（缺该单文件时从对应发行重取同一文件）："
+              "修复被中断或残留的写入记录——把 .wf/writer.json 复位为空闲（代次 +1、保留维护回执），"
+              "不动业务记录与 skill 资产；--dispose <处置计划> 只回写指定维护回执的处置字段。"
+              "首跑只预览，--apply 输入预览指纹才执行；旧写者进程仍存活时拒绝。",
+    "version": "显示系统 wf 版本、登记发行源与当前项目已安装的版本。",
+    "self-upgrade": "升级系统 wf 命令本身到登记源最新发行（区别于项目内 wf upgrade）。",
+    "self-uninstall": "卸载系统 wf 命令本身；首跑只显示将要执行的管理器命令，加 --apply 执行。",
+    "help": "显示总览；wf help <命令> 给出该命令的用法与说明。",
+}
+
+# 模板里的占位名不能用连字符，这里按「命令名 → 下划线形式」派生；缺一项即 KeyError（不静默留空）
+_HELP_FIELDS = {name.replace("-", "_"): description
+                for name, description in COMMAND_DESC.items()}
 
 HELP = """wf — 系统级 wf 命令
 
 用法：
   wf install  [--project <绝对路径>] [--confirm] [--python <绝对路径>] [--json]
-      在尚无 .wf/ 的项目中安装系统 wf 命令对应的发行版本。首跑只预览；确认后加 --confirm。
+      {install}
   wf upgrade  [--project <绝对路径>] [--apply | --export-deviations --out <目录>]
               [--keep <项目相对路径> ...] [--restore <项目相对路径> ...] [--json]
-      升级到登记发行源默认分支上的最新发行；不指定版本、不指定本地发行目录。
+      {upgrade}
   wf uninstall [--project <绝对路径>] [--purge] [--apply] [--json]
-      转交已安装版本的独立卸载入口；缺该入口时从对应发行重取同一单文件。
+      {uninstall}
   wf repair    [--project <绝对路径>] [--apply] [--dispose <处置计划>] [--json]
-      转交已安装版本的独立 repair 入口；缺该入口时从对应发行重取同一单文件。
+      {repair}
   wf version   [--project <绝对路径>] [--json]
-      显示系统 wf 版本、登记发行源与项目已安装版本。
+      {version}
   wf self-upgrade [--manager uv|pipx|pip] [--json]
-      升级系统 wf 命令本身到登记源最新发行（区别于项目内 `wf upgrade`）。
+      {self_upgrade}
   wf self-uninstall [--manager uv|pipx|pip] [--apply] [--json]
-      卸载系统 wf 命令本身；首跑只显示将要执行的管理器命令，加 --apply 执行。
-  wf help [<command>]
+      {self_uninstall}
+  wf help [<命令>]
+      {help}
 
 运行期命令（task-new、task-check、spec、review-* 等）：
   wf [--project <绝对路径>] <命令> [参数]
-      在项目内自动定位 .wf/ 并转交 .wf/bin/wf.py；不在项目根时用前置 --project。
+      在项目内自动定位 .wf/ 并转交 .wf/bin/wf.py；--project 可选，缺省用当前目录（向上找 .wf/）。
 
 发行规则：
-  - 系统命令由 docs/workflows/wf-cli/install.py 取最新正式 release 的 wheel 附件安装，不指定版本。
+  - 系统命令用 `python3 scripts/install-wf.py`（或 release 的 `install.py` 附件）取最新正式
+    release 的 wheel 附件安装，不指定版本。
   - 项目 install 使用系统 wf 命令自身版本对应的发行 tag。
   - 项目 upgrade 使用登记源默认分支上的最新发行 tag（按 tag 创建时间取最新，不按版本号猜）。
   - self-upgrade 升级系统命令本身；与项目 upgrade 分离。
   - 不再接受 --release、--release-ref、--source、--target；不使用本机 checkout 充当发行源。
-"""
+""".format(**_HELP_FIELDS)
+
+
+def command_text(command):
+    """单个命令的帮助正文：用法 + 说明（总览与 help 子命令共用这一份）。"""
+    return f"{COMMAND_HELP[command]}\n      {COMMAND_DESC[command]}\n"
 
 
 class UsageError(Exception):
@@ -228,7 +259,7 @@ def cmd_install(argv, leading, exec_fn):
     parsed = _parse_flags("install", argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP["install"] + "\n")
+        sys.stdout.write(command_text("install"))
         return 0
     target = _project_value(parsed, leading) or os.getcwd()
     project = open_project(target)
@@ -254,7 +285,7 @@ def cmd_upgrade(argv, leading, exec_fn):
     parsed = _parse_flags("upgrade", argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP["upgrade"] + "\n")
+        sys.stdout.write(command_text("upgrade"))
         return 0
     project = open_project(_project_value(parsed, leading), require=True)
     if project.installation is None:
@@ -286,7 +317,7 @@ def _independent(kind, argv, leading, exec_fn):
     parsed = _parse_flags(kind, argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP[kind] + "\n")
+        sys.stdout.write(command_text(kind))
         return 0
     project = open_project(_project_value(parsed, leading), require=True)
     local_script = os.path.join(project.root, ".wf", "bin", f"{kind}.py")
@@ -317,7 +348,7 @@ def cmd_self_upgrade(argv, leading, exec_fn):
     parsed = _parse_flags("self-upgrade", argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP["self-upgrade"] + "\n")
+        sys.stdout.write(command_text("self-upgrade"))
         return 0
     if leading:
         return blocked("WF_USAGE_INVALID", "self-upgrade 升级系统命令，不作用于项目",
@@ -340,7 +371,7 @@ def cmd_self_uninstall(argv, leading, exec_fn):
     parsed = _parse_flags("self-uninstall", argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP["self-uninstall"] + "\n")
+        sys.stdout.write(command_text("self-uninstall"))
         return 0
     if leading:
         return blocked("WF_USAGE_INVALID", "self-uninstall 卸载系统命令，不作用于项目",
@@ -368,7 +399,7 @@ def cmd_version(argv, leading, exec_fn):
     parsed = _parse_flags("version", argv)
     json_mode = parsed["json"]
     if parsed.get("help"):
-        sys.stdout.write(COMMAND_HELP["version"] + "\n")
+        sys.stdout.write(command_text("version"))
         return 0
     version = require_release_version(cli_version())
     explicit = _project_value(parsed, leading)
@@ -389,7 +420,7 @@ def _forward_help(argv, leading, exec_fn):
         sys.stdout.write(HELP + "\n")
         return 0
     if argv[0] in COMMAND_HELP:
-        sys.stdout.write(COMMAND_HELP[argv[0]] + "\n")
+        sys.stdout.write(command_text(argv[0]))
         return 0
     project = open_project(leading, require=True)
     command = commands.bootstrap_command(project.root, ["help", *argv])
