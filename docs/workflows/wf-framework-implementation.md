@@ -188,7 +188,7 @@ docs/workflows/wf-cli/         # 系统级 wf 命令发行包（不投放项目�
 2. 系统命令自身的安装由最新正式 release 的稳定 `install.py` 附件承担：它查询同一最新 release，读取 `wf_cli-<version>-py3-none-any.whl` 附件并用 uv/pipx 安装；不接受版本参数。
 3. `install`：目标已有安装记录时只允许同版核对；否则解析命令自身版本对应的 `wf-vX.Y.Z`，刷新/校验登记源缓存并取得该版本 worktree，运行该发行根 `install.py`（自定位发行根与 tag）。
 4. `upgrade`：从登记源默认分支取按 tag 创建时间最新且清单版本与 tag 一致的发行；目标已是最新时只报告，否则运行最新发行根 `install.py --upgrade`。不接受版本/引用/本地检出根参数。
-5. `self-upgrade`：取最新正式 release，优先下载系统命令 wheel 附件并用当前安装管理器替换命令；附件缺失时从同一 tag 构建。与项目 `upgrade` 分离。`self-uninstall` 用同一管理器移除系统命令，预览 + `--apply`。
+5. `self-upgrade`：取最新正式 release，优先下载系统命令 wheel 附件并用当前安装管理器替换命令；附件缺失时从同一 tag 构建。资产基址与安装共用同一事实：`WF_FORGEJO_BASE` → 本机安装记录 `~/.wf/system-command.json`（安装入口写、自升级读）→ 登记实例缺省基址（含 Web 端口）；不从 git 源地址推 HTTP 基址（端口不同，2026-11-26 实测因此拿到连不上的地址）。附件未取用（404 缺失 / 连接失败）一律按降级报告，写明按 tag 从 git 构建、被拒绝的地址与原因。与项目 `upgrade` 分离。`self-uninstall` 用同一管理器移除系统命令，预览 + `--apply`。
 6. `uninstall` / `repair`：优先转交已安装版本的独立单文件；缺文件时从安装记录版本对应的发行重取同一单文件。
 7. 其他子命令：定位项目并 `os.execve(sys.executable, [<项目>/.wf/bin/wf.py, *rest], env)`；项目脚本的布局/执行器解析保持不变。
 

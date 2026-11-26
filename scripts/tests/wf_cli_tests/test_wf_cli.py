@@ -149,6 +149,7 @@ class SelfUpgradeTest(unittest.TestCase):
             download=download, runner=runner,
             executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
             which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda *args, **kwargs: None,
         )
         self.assertEqual(facts["target_kind"], "wheel")
         self.assertIn("wf_cli-0.0.9-py3-none-any.whl", calls["url"])
@@ -176,8 +177,14 @@ class SelfUpgradeTest(unittest.TestCase):
             download=lambda *args: None, runner=runner,
             executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
             which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda *args, **kwargs: None,
         )
         self.assertEqual(facts["target_kind"], "git")
+        self.assertEqual(facts["asset_state"], "missing")
+        self.assertNotIn("asset_error", facts)
+        self.assertTrue(facts["asset_missing"].endswith("wf_cli-0.0.9-py3-none-any.whl"))
+        # 私有仓库没导出 token 时资产必然 404：结论里要说出这个原因，而不是只说"附件缺失"
+        self.assertEqual(facts["asset_missing_hint"], "私有仓库需要在环境中提供 FORGEJO_TOKEN")
         self.assertTrue(any("wf-v0.0.9#subdirectory=docs/workflows/wf-cli" in item
                             for item in calls["command"]))
 
@@ -549,6 +556,269 @@ class CliDispatchTest(GitFixture):
         payload = json.loads(out)
         self.assertEqual(payload["code"], "WF_PATH_INVALID")
         self.assertIn("--project", payload["next"])
+
+
+class AssetBaseTest(unittest.TestCase):
+    """资产基址的单一事实：安装与自升级取同一个 URL 来源。
+
+    2026-11-26 实测：`wf self-upgrade` 用从 git 源地址推出的 `https://forgejo.xzc.com/...`
+    （缺 `:13785`）下载 wheel → Connection refused，随后静默降级成 git 安装并只打印 OK。
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        self._env = mock.patch.dict(os.environ, {"HOME": str(self.home)})
+        self._env.start()
+        self.addCleanup(self._env.stop)
+        for name in ("WF_FORGEJO_BASE", "WF_GIT_URL"):
+            patcher = mock.patch.dict(os.environ)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+            os.environ.pop(name, None)
+
+    def test_default_base_carries_the_registered_web_port(self):
+        self.assertEqual(wf_release.http_base(), wf_release.DEFAULT_HTTP_BASE)
+        self.assertTrue(wf_release.DEFAULT_HTTP_BASE.endswith(":13785"))
+
+    def test_asset_url_is_under_the_instance_root(self):
+        # 实例根 + 仓库段 + 发行附件名；安装时 bootstrap 取到的正是这一形状的地址
+        url = wf_release.release_asset_url("0.0.15", wf_release.DEFAULT_HTTP_BASE)
+        self.assertEqual(
+            url,
+            "https://forgejo.xzc.com:13785/xzc/ai-coding-toolkit/releases/download/"
+            "wf-v0.0.15/wf_cli-0.0.15-py3-none-any.whl")
+
+    def test_git_source_host_is_never_used_to_guess_the_http_base(self):
+        os.environ["WF_GIT_URL"] = "ssh://git@forgejo.example:13768/xzc/repo.git"
+        self.assertEqual(wf_release.http_base(), wf_release.DEFAULT_HTTP_BASE)
+
+    def test_environment_override_wins(self):
+        os.environ["WF_FORGEJO_BASE"] = "https://forgejo.example:8443/"
+        self.assertEqual(wf_release.http_base(), "https://forgejo.example:8443")
+
+    def test_install_record_is_reused_by_the_upgrade(self):
+        record_path = wf_release.install_record_path()
+        wf_release.write_install_record("https://forgejo.example:13785", repo="xzc/repo",
+                                        path=record_path)
+        self.assertEqual(Path(record_path).parent, self.home / ".wf")
+        self.assertEqual(wf_release.http_base(), "https://forgejo.example:13785")
+        payload = json.loads(Path(record_path).read_text(encoding="utf-8"))
+        self.assertEqual(payload["schema_version"], wf_release.INSTALL_RECORD_SCHEMA)
+        self.assertNotIn("tag", payload, "记录不承载发行身份：版本/tag 会过期")
+        self.assertEqual(Path(record_path).stat().st_mode & 0o777, 0o600)
+
+    def test_corrupt_record_is_reported_and_not_used(self):
+        record_path = Path(wf_release.install_record_path())
+        record_path.parent.mkdir(parents=True)
+        record_path.write_text("{not json", encoding="utf-8")
+        record, problem = wf_release.read_install_record()
+        self.assertIsNone(record)
+        self.assertIn("已忽略", problem)
+        self.assertEqual(wf_release.http_base(), wf_release.DEFAULT_HTTP_BASE)
+
+    def test_bootstrap_and_package_agree_on_record_path_and_schema(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("wf_cli_bootstrap",
+                                                      CLI_DIR / "install.py")
+        bootstrap = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bootstrap)
+        self.assertEqual(tuple(bootstrap.INSTALL_RECORD_REL), wf_release.INSTALL_RECORD_REL)
+        self.assertEqual(bootstrap.INSTALL_RECORD_SCHEMA, wf_release.INSTALL_RECORD_SCHEMA)
+        self.assertEqual(bootstrap.DEFAULT_BASE, wf_release.DEFAULT_HTTP_BASE)
+
+        recorded = {}
+
+        def fake_now():
+            return None
+
+        bootstrap_record = bootstrap.write_install_record("https://forgejo.example:13785",
+                                                          "xzc/repo")
+        package_record = Path(self._tmp.name) / "package-record.json"
+        wf_release.write_install_record("https://forgejo.example:13785", repo="xzc/repo",
+                                        path=package_record)
+        recorded["bootstrap"] = json.loads(Path(bootstrap_record).read_text(encoding="utf-8"))
+        recorded["package"] = json.loads(package_record.read_text(encoding="utf-8"))
+        for payload in recorded.values():
+            self.assertEqual(sorted(payload),
+                             ["http_base", "repo", "schema_version", "written_at"])
+
+
+    def test_bootstrap_writes_the_record_the_upgrade_reads(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("wf_cli_bootstrap_run",
+                                                      CLI_DIR / "install.py")
+        bootstrap = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bootstrap)
+        release = ("2026-11-26T00:00:00Z", "wf-v0.0.15", "0.0.15", {})
+        patches = {
+            "latest_release": lambda *args, **kwargs: release,
+            "wheel_asset": lambda *args, **kwargs: ("https://forgejo.example:13785/a.whl",
+                                                    "wf-v0.0.15", "0.0.15", "a.whl"),
+            "download": lambda url, destination, token: Path(destination).write_bytes(b"wheel"),
+            "manager_for": lambda requested=None, which=None: "uv",
+            "install": lambda manager, wheel: "installed",
+        }
+        for name, value in patches.items():
+            old = getattr(bootstrap, name)
+            setattr(bootstrap, name, value)
+            self.addCleanup(lambda name=name, old=old: setattr(bootstrap, name, old))
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = bootstrap.main(["--base", "https://forgejo.example:13785"])
+        output = buffer.getvalue()
+        self.assertEqual(code, 0, output)
+        record, problem = wf_release.read_install_record()
+        self.assertIsNone(problem)
+        self.assertEqual(record["http_base"], "https://forgejo.example:13785")
+        self.assertIn("资产基址已记录", output)
+        # 自升级读同一条记录 → 得到安装实际用过的基址
+        self.assertEqual(wf_release.http_base(), "https://forgejo.example:13785")
+
+
+class SelfUpgradeReportTest(unittest.TestCase):
+    """自升级的成功口径：用 wheel 就是 wheel，降级成 git 必须写明降级与原因。"""
+
+    def release(self, version="0.0.15"):
+        return Release(version=version, tag="wf-v" + version, commit="c" * 40, repo="/repo")
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.home = Path(self._tmp.name)
+        env = mock.patch.dict(os.environ, {"HOME": str(self.home)})
+        env.start()
+        self.addCleanup(env.stop)
+        os.environ.pop("WF_FORGEJO_BASE", None)
+        old = wf_selfupdate.validate_cli_tag
+        wf_selfupdate.validate_cli_tag = lambda *args: True
+        self.addCleanup(lambda: setattr(wf_selfupdate, "validate_cli_tag", old))
+
+    def _runner(self):
+        calls = {}
+
+        def runner(command, **kwargs):
+            calls["command"] = command
+
+            class Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+            return Result()
+
+        return runner, calls
+
+    def test_unreachable_asset_is_reported_as_degradation(self):
+        runner, calls = self._runner()
+
+        def download(url, destination, token):
+            raise wf_selfupdate.SelfUpgradeError(
+                "WF_CAPABILITY_UNAVAILABLE", "无法连接系统 wf 发行资产",
+                {"url": url, "detail": "<urlopen error [Errno 111] Connection refused>"})
+
+        record_calls = []
+        facts = wf_selfupdate.perform(
+            "0.0.14", self.release(), manager="uv", token=None,
+            download=download, runner=runner,
+            executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
+            which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda base, **kwargs: record_calls.append(base),
+        )
+        self.assertEqual(facts["target_kind"], "git")
+        self.assertEqual(facts["asset_state"], "unreachable")
+        self.assertEqual(facts["asset_base"], wf_release.DEFAULT_HTTP_BASE)
+        self.assertEqual(facts["asset_base_source"], "default")
+        self.assertIn("asset_error", facts)
+        self.assertEqual(record_calls, [], "降级没证明基址可用，不写安装记录")
+        self.assertTrue(any("wf-v0.0.15#subdirectory=docs/workflows/wf-cli" in item
+                            for item in calls["command"]))
+
+        # 命令层的输出：写明降级、给出的地址与原因，而不是一句 OK
+        old_version, old_latest = wf_main.cli_version, wf_main.latest_release
+        wf_main.cli_version = lambda: "0.0.14"
+        wf_main.latest_release = lambda: self.release()
+        old_perform = wf_main.selfupdate.perform
+        wf_main.selfupdate.perform = lambda *args, **kwargs: facts
+        self.addCleanup(lambda: setattr(wf_main, "cli_version", old_version))
+        self.addCleanup(lambda: setattr(wf_main, "latest_release", old_latest))
+        self.addCleanup(lambda: setattr(wf_main.selfupdate, "perform", old_perform))
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = wf_main.main(["self-upgrade"])
+        text = buffer.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("从 git 安装", text)
+        self.assertIn("资产基址", text)
+        self.assertIn("被拒绝的资产地址", text)
+        self.assertIn("Connection refused", text)
+        self.assertFalse(any(line.lstrip().startswith("{'")
+                             for line in text.splitlines()),
+                         f"事实行不得把 dict 打成 repr：{text}")
+
+    def test_env_base_is_reported_as_its_own_source(self):
+        os.environ["WF_FORGEJO_BASE"] = "https://forgejo.example:8443/"
+        calls = {}
+
+        def download(url, destination, token):
+            calls["url"] = url
+            Path(destination).write_bytes(b"wheel")
+            return destination
+
+        runner, _calls = self._runner()
+        facts = wf_selfupdate.perform(
+            "0.0.14", self.release(), manager="uv", token=None,
+            download=download, runner=runner,
+            executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
+            which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda *args, **kwargs: None,
+        )
+        self.assertEqual(facts["asset_base_source"], "env")
+        self.assertTrue(calls["url"].startswith("https://forgejo.example:8443/xzc/"))
+        self.assertEqual(facts["asset_base"], "https://forgejo.example:8443")
+
+    def test_corrupt_record_is_surfaced_in_the_upgrade_facts(self):
+        record_path = Path(wf_release.install_record_path())
+        record_path.parent.mkdir(parents=True)
+        record_path.write_text("{not json", encoding="utf-8")
+        runner, _calls = self._runner()
+        facts = wf_selfupdate.perform(
+            "0.0.14", self.release(), manager="uv", token="t",
+            download=lambda *args: None, runner=runner,
+            executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
+            which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda *args, **kwargs: None,
+        )
+        self.assertEqual(facts["asset_base_source"], "default")
+        self.assertIn("已忽略", facts["record_problem"])
+
+    def test_wheel_install_records_the_proven_base(self):
+        runner, _calls = self._runner()
+
+        def download(url, destination, token):
+            Path(destination).write_bytes(b"wheel")
+            return destination
+
+        record_calls = []
+        facts = wf_selfupdate.perform(
+            "0.0.14", self.release(), manager="uv", token=None,
+            base="https://forgejo.example:13785/",
+            download=download, runner=runner,
+            executable="/home/u/.local/share/uv/tools/wf-cli/bin/python",
+            which=lambda name: "/usr/bin/" + name,
+            record_writer=lambda base, **kwargs: record_calls.append(base),
+        )
+        self.assertEqual(facts["target_kind"], "wheel")
+        self.assertEqual(record_calls, ["https://forgejo.example:13785"])
+        self.assertNotIn("asset_error", facts)
+
+    def test_passed_renders_structured_facts_as_json(self):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            wf_main.passed("x", {"asset_error": {"url": "u", "detail": "d"}})
+        text = buffer.getvalue()
+        self.assertIn('asset_error: {"detail": "d", "url": "u"}', text)
+        self.assertNotIn("{'url'", text)
 
 
 class HelpTextTest(unittest.TestCase):

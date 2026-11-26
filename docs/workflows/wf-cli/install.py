@@ -5,9 +5,18 @@ No version is accepted: the script asks the repository release API for the newes
 release, requires that release to carry the `wf_cli-<version>-py3-none-any.whl` system-install
 asset, downloads it, and installs it through uv or pipx. Use it as:
 
-    curl -fsSL "https://forgejo.xzc.com/xzc/ai-coding-toolkit/raw/branch/main/docs/workflows/wf-cli/install.py" | python3 -
+    curl -fsSL "https://forgejo.xzc.com:13785/xzc/ai-coding-toolkit/raw/branch/main/docs/workflows/wf-cli/install.py" | python3 -
 
 For a private repository set FORGEJO_TOKEN in the environment (never pass it as an argument).
+
+On success the base that actually served the asset is written to the machine install record
+(`~/.wf/system-command.json`). `wf self-upgrade` reads the same record, so the upgrade uses the
+same asset URL source as this install instead of guessing one from the git source URL. The record
+path and schema are duplicated here on purpose: this file must stay runnable standalone before the
+package exists (parity is pinned by `scripts/tests/test_wf_cli.py`).
+
+The registered instance serves the Web/API endpoint on port 13785 (git runs on another port), so
+the base default carries that port; never derive an HTTP base from the git source URL.
 """
 
 from __future__ import annotations
@@ -24,8 +33,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-DEFAULT_BASE = os.environ.get("WF_FORGEJO_BASE") or "https://forgejo.xzc.com"
+DEFAULT_BASE = os.environ.get("WF_FORGEJO_BASE") or "https://forgejo.xzc.com:13785"
 DEFAULT_REPO = "xzc/ai-coding-toolkit"
+# 与 `wf_cli.release` 的同名常量逐字一致（写/读两端同一事实，由 parity 用例锁住）
+INSTALL_RECORD_REL = (".wf", "system-command.json")
+INSTALL_RECORD_SCHEMA = 1
 TAG_RE = re.compile(r"^wf-v(\d+)\.(\d+)\.(\d+)$")
 WHEEL_RE = re.compile(r"^wf[_-]cli-(\d+\.\d+\.\d+)-py3-none-any\.whl$")
 
@@ -188,6 +200,33 @@ def install(manager, wheel):
     return (result.stdout or "").strip()
 
 
+def write_install_record(base, repo, now=None):
+    """写下"这个基址确实取到了发行资产"这一本机事实（原子写、0600）。
+
+    记录只承载资产基址，不存版本/tag（它们随升级变化，记下来必然过期）。
+    """
+    import datetime
+
+    target = os.path.join(os.path.expanduser("~"), *INSTALL_RECORD_REL)
+    payload = {
+        "schema_version": INSTALL_RECORD_SCHEMA,
+        "http_base": str(base).rstrip("/"),
+        "repo": repo,
+        "written_at": (now or datetime.datetime.now(datetime.timezone.utc)
+                       ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    }
+    directory = os.path.dirname(target) or "."
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    temporary = target + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, target)
+    return target
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="从最新 Forgejo 发行安装系统 wf 命令（无版本参数）")
     parser.add_argument("--base", default=DEFAULT_BASE)
@@ -211,6 +250,12 @@ def main(argv=None):
         sys.stdout.write(f"OK  wf {version}（{tag}）→ {manager}\n")
         if output:
             sys.stdout.write(output[-800:] + "\n")
+        try:
+            record = write_install_record(args.base, args.repo)
+        except OSError as exc:
+            sys.stdout.write(f"WARN  安装记录写入失败（不影响已完成的安装）：{exc}\n")
+        else:
+            sys.stdout.write(f"资产基址已记录：{record}\n")
         sys.stdout.write("下一步：运行 `wf version` 核对系统命令。\n")
         return 0
     except BootstrapError as exc:

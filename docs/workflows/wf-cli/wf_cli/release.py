@@ -13,6 +13,7 @@ release root; the release installer still verifies tag -> commit -> manifest -> 
 
 from __future__ import annotations
 
+import datetime
 import fcntl
 import json
 import os
@@ -30,6 +31,13 @@ RELEASE_SUBDIR = "docs/workflows/wf-release"
 MANIFEST_REL = RELEASE_SUBDIR + "/wf-release.json"
 INSTALLER_REL = RELEASE_SUBDIR + "/install.py"
 TAG_PREFIX = "wf-v"
+
+# 系统命令的发行资产基址（Web/API 根）。登记实例的 Web 端口是 13785，git 走的是另一个端口，
+# 所以**不能**从 `SOURCE_URL` 推 HTTP 基址：推出来是 `https://forgejo.xzc.com`（缺端口），
+# 2026-11-26 `wf self-upgrade` 就因此拿到了一个连不上的资产地址。取值顺序见 `http_base()`。
+DEFAULT_HTTP_BASE = "https://forgejo.xzc.com:13785"
+INSTALL_RECORD_REL = (".wf", "system-command.json")
+INSTALL_RECORD_SCHEMA = 1
 
 
 class ReleaseError(Exception):
@@ -380,25 +388,97 @@ def validate_cli_tag(repo, tag, version):
     return True
 
 
-def release_asset_url(version, base):
-    """Standard release asset name for the system wf command wheel."""
-    return f"{base.rstrip('/')}/releases/download/{tag_name(version)}/wf_cli-{version}-py3-none-any.whl"
+def release_asset_url(version, base, repo=None):
+    """发行附件地址：`<实例根>/<owner/repo>/releases/download/<tag>/<wheel>`。
+
+    `base` 与 `WF_FORGEJO_BASE` 同义——**实例根**（`https://forgejo.xzc.com:13785`），不是
+    仓库根；仓库段由登记源得出。安装入口与自升级共用这一个事实。
+    """
+    slug = (repo or repo_slug()).strip("/")
+    return (f"{base.rstrip('/')}/{slug}/releases/download/{tag_name(version)}/"
+            f"wf_cli-{version}-py3-none-any.whl")
 
 
-def http_base(url=None):
-    """Derive the Forgejo web/API base from the registered git source URL."""
-    override = os.environ.get("WF_FORGEJO_BASE")
-    if override:
-        return override.rstrip("/")
-    url = url or SOURCE_URL
-    parsed = urllib.parse.urlparse(url)
-    if parsed.scheme not in ("ssh", "git+ssh"):
-        return None
-    host = parsed.hostname
+def repo_slug(url=None):
+    """`owner/name` of the registered source (diagnostic only; asset URLs use the base alone)."""
+    parsed = urllib.parse.urlparse(url or SOURCE_URL)
     path = parsed.path.strip("/")
     if path.endswith(".git"):
         path = path[:-4]
-    if not host or not path:
-        return None
-    return f"https://{host}/{path}"
+    return path
+
+
+def install_record_path():
+    """本机系统命令记录：`~/.wf/system-command.json`（单机事实，不进 Git、不进项目）。"""
+    return os.path.join(os.path.expanduser("~"), *INSTALL_RECORD_REL)
+
+
+def read_install_record(path=None):
+    """读取安装时写下的资产基址；返回 `(record, problem)`。
+
+    缺失不是问题（旧安装没有该记录）；损坏只是**警告**：它是便利记录、不承载判定事实，
+    不能因为一个坏记录挡住升级，也不能拿坏记录里的半截值当资产源。
+    """
+    path = path or install_record_path()
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            record = json.load(handle)
+    except FileNotFoundError:
+        return None, None
+    except (OSError, ValueError) as exc:
+        return None, f"安装记录不可解析，已忽略（不猜资产源）：{path}: {exc}"
+    if not isinstance(record, dict):
+        return None, f"安装记录不是 JSON 对象，已忽略：{path}"
+    base = record.get("http_base")
+    if base is not None and (not isinstance(base, str) or not base.strip()):
+        return None, f"安装记录的 http_base 非法，已忽略：{path}"
+    return record, None
+
+
+def write_install_record(base, *, repo=None, path=None, now=None):
+    """把**安装实际用上的**资产基址写进本机记录（原子写、0600）。
+
+    写者只有安装入口：记录是「装的时候这个基址确实取到了发行资产」这一事实，不是配置，
+    也不存发行身份（版本/tag 会随升级变化，记在记录里必然过期）。
+    """
+    target = str(path or install_record_path())
+    payload = {
+        "schema_version": INSTALL_RECORD_SCHEMA,
+        "http_base": str(base).rstrip("/"),
+        "repo": repo if repo is not None else repo_slug(),
+        "written_at": (now or datetime.datetime.now(datetime.timezone.utc)
+                       ).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    }
+    directory = os.path.dirname(target) or "."
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    temporary = target + ".tmp"
+    with open(temporary, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.chmod(temporary, 0o600)
+    os.replace(temporary, target)
+    return payload
+
+
+def http_base_source():
+    """资产基址与它的来源：`("https://…", "env"|"record"|"default", problem)`。
+
+    安装与自升级必须用同一个事实：安装入口（`docs/workflows/wf-cli/install.py`）把实际用上的
+    基址写进安装记录，`wf self-upgrade` 读同一条记录。任一侧都**不从 git 源地址推 HTTP 基址**
+    （git 与 Web 端口不同，推出来会缺端口）。来源要回报给使用者：否则又变成"看运气"。
+    """
+    override = (os.environ.get("WF_FORGEJO_BASE") or "").strip()
+    if override:
+        return override.rstrip("/"), "env", None
+    record, problem = read_install_record()
+    recorded = (record or {}).get("http_base")
+    if isinstance(recorded, str) and recorded.strip():
+        return recorded.strip().rstrip("/"), "record", None
+    return DEFAULT_HTTP_BASE.rstrip("/"), "default", problem
+
+
+def http_base():
+    """资产基址（来源见 `http_base_source()`）。"""
+    return http_base_source()[0]
 

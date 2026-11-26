@@ -35,6 +35,13 @@ def _payload(tier, code, facts, exit_hint, next_step, warnings=None):
     }
 
 
+def _render(value):
+    """人读输出里的复合值按 JSON 渲染：`f"{value}"` 会把 dict 打印成 repr 噪声。"""
+    if isinstance(value, (dict, list, tuple)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value)
+
+
 def _emit(payload, json_mode, human_lines):
     if json_mode:
         sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n")
@@ -60,7 +67,7 @@ def passed(message, facts=None, next_step=None, json_mode=False, warnings=None):
     payload = _payload("pass", "WF_OK", dict(facts or {}, message=message), None, next_step, warnings)
     lines = ["OK  WF_OK", message]
     for key, value in sorted((facts or {}).items()):
-        lines.append(f"{key}: {value}")
+        lines.append(f"{key}: {_render(value)}")
     if next_step:
         lines.append(f"下一步: {next_step}")
     if warnings:

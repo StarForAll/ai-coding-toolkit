@@ -28,6 +28,14 @@ another token environment variable; the token is never a CLI argument.
 Public repository: leave the token empty. Private repository: provide/paste the token; the
 bootstrap uses it for the release API and wheel download.
 
+The base is the **instance root** (`https://forgejo.xzc.com:13785`), not the repository root: the
+repository slug comes from the registered source, which is also how the release-asset URL is
+composed. On success the install writes that base to the machine record
+`~/.wf/system-command.json` (`{schema_version, http_base, repo, written_at}`, mode 0600); it stores
+no version or tag, because those change with every upgrade. `wf self-upgrade` reads the same record,
+so upgrade downloads from exactly the URL source the install used — see “Upgrade the system
+command” below.
+
 ### Without a checkout
 
 The same bootstrap is the stable `install.py` asset of every release, and the raw copy on the
@@ -142,9 +150,24 @@ wf self-upgrade --json
 ```
 
 `wf self-upgrade` upgrades the **system-level command itself**. It is separate from `wf upgrade`,
-which upgrades the wf assets inside the current project. It downloads the same release wheel when
-present and falls back to building the command from the selected release tag if the asset is
-missing. Use `--manager uv|pipx|pip` only when automatic detection fails.
+which upgrades the wf assets inside the current project. It downloads the release wheel of the
+newest release, and only falls back to building the command from that release tag when the asset
+cannot be used. Use `--manager uv|pipx|pip` only when automatic detection fails.
+
+The asset base is resolved as `WF_FORGEJO_BASE` → the machine install record written by the install
+→ the registered default (`https://forgejo.xzc.com:13785`). It is never derived from the git source
+URL: git and the Web/API listen on different ports, so a derived base loses the port and cannot
+connect.
+
+When the asset is not used (HTTP 404 or a connection failure), the upgrade still installs from the
+release tag but reports the **degradation** in its output: the rejected asset URL, the base it used
+and the reason, plus a fix exit. A plain upgrade message therefore always means the wheel asset was
+actually installed; the install record is written only in that case, because only then is the base
+proven to serve assets.
+
+`wf self-upgrade` reads `FORGEJO_TOKEN` from the environment only — unlike the install entry, it
+never prompts. For a private repository, export the token before upgrading; otherwise the asset URL
+answers 404 (Forgejo hides private resources) and the command is built from the release tag.
 
 To remove the system command itself (not a project install):
 
@@ -242,6 +265,9 @@ Running `wf` inside a project also forwards ordinary runtime commands to `.wf/bi
   to it; there is no version/ref parameter.
 - `wf self-upgrade` resolves the newest system command release and replaces the installed command;
   it is not the project upgrade command.
+- The system command's asset base is a single fact shared by install and self-upgrade
+  (`WF_FORGEJO_BASE` → `~/.wf/system-command.json` → registered default); an asset that cannot be
+  used is reported as a git-tag degradation with its URL and reason, never as a normal upgrade.
 - Forgejo keeps only the newest three `wf-v*` releases and their tags. A release is a separate
   object from its tag, so `scripts/release-wf.py` deletes the historical releases (with their
   assets) before deleting the old tags; `scripts/prune-wf-releases.py` does the same cleanup alone.

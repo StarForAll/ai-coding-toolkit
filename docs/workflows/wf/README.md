@@ -132,7 +132,7 @@ python3 scripts/verify-wf-release.py --version 0.x.y --ref refs/tags/wf-v0.x.y  
 7. 目标项目安装：在该项目根运行 `wf install`（预览）→ `wf install --confirm`（无平台参数：一次装齐全部支持平台）。`--python` 选定运行 wf 的解释器（绝对路径、>=3.11）：给定时写入本机用户级配置并按 global 确认，缺省用系统 `python3` 并按 system 确认；系统没有 `python3` 且未给该参数则拒绝安装。确认提示与写入在安装命令的终端里完成（人输入 yes），不需要再单独跑 `confirm-executor`。**不再给 `--release-ref`/`--source`，也不把本仓库路径当发行源**；命令按自身版本解析登记源 tag；
 8. 项目升级：在目标项目根运行 `wf upgrade`（预览）→ `wf upgrade --apply`。它取登记源默认分支**按 tag 创建时间最新**的发行，不支持指定版本；预览含全部路径动作、偏离清单与宿主 `hooks.json` 动作，`--apply` 在交互终端输入预览指纹确认；冲突逐路径用 `--keep <项目相对路径>` / `--restore <项目相对路径>` 选择（路径与预览 `unresolved[].path` 逐字一致，同名技能副本因根不同而各自可处置）；`--keep` 仅对可选资产有效，必需资产保留删除会在写入前 `WF_SEMANTIC_DECISION`。
    `wf upgrade --export-deviations --out <dir>` 是**只读回源**：导出全部本地偏离（含未接受项，清单标 `status=pending`；已接受项标 `accepted`）的补丁与 `manifest.json`，不取写权、不暂停任务、不应用升级；同版也允许导出。与 `--apply` 互斥。
-9. 系统命令升级/卸载（与项目操作分开）：`wf self-upgrade` 解析最新系统发行（优先取 release wheel 附件）并替换已安装命令；`wf self-uninstall` 预览 → `--apply` 移除系统命令本身；`wf upgrade` / `wf uninstall` 只作用于项目内资产。
+9. 系统命令升级/卸载（与项目操作分开）：`wf self-upgrade` 解析最新系统发行（优先取 release wheel 附件）并替换已安装命令；资产基址与安装同源（`WF_FORGEJO_BASE` → 本机安装记录 `~/.wf/system-command.json` → 登记实例缺省基址），附件取不到时按发行 tag 从 git 安装并明确报告降级（写明地址与原因），不报成资产安装；`wf self-uninstall` 预览 → `--apply` 移除系统命令本身；`wf upgrade` / `wf uninstall` 只作用于项目内资产。
 
 打包脚本不提交、不建 tag、不推送；系统 wf 命令只从登记源解析发行 tag，不把本机 checkout 当发行源。
 

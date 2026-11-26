@@ -5,6 +5,11 @@ assets inside a project to the newest project release; this one replaces the ins
 never accepts a version, tag or local checkout. The newest release is resolved from the registered
 source, downloaded from the Forgejo release asset when available, and installed through the same
 manager that owns the current command (uv/pipx, or pip on explicit request).
+
+The asset base is the same fact the install used (``http_base()``: ``WF_FORGEJO_BASE`` → the
+machine install record written by the bootstrap → the registered default), never a URL derived
+from the git source. When the asset cannot be fetched the command is still installed from the
+release tag, but that is reported as a degradation with the rejected URL and its reason.
 """
 
 from __future__ import annotations
@@ -17,7 +22,8 @@ import tempfile
 import urllib.error
 import urllib.request
 
-from .release import SOURCE_URL, http_base, release_asset_url, validate_cli_tag
+from .release import (SOURCE_URL, http_base_source, release_asset_url, validate_cli_tag,
+                     write_install_record)
 from .version import VERSION_RE, require_release_version, tag_name
 
 
@@ -182,8 +188,13 @@ def run_install(manager, target, runner=subprocess.run, executable=None, which=s
 
 
 def perform(version, latest, *, manager=None, token=None, base=None, source_url=SOURCE_URL,
-            download=download_asset, runner=subprocess.run, executable=None, which=shutil.which):
-    """Install the CLI from the latest release, with a git-tag fallback for a missing asset."""
+            download=download_asset, runner=subprocess.run, executable=None, which=shutil.which,
+            record_writer=None):
+    """Install the CLI from the latest release, with a git-tag fallback for an unusable asset.
+
+    成功的 wheel 安装会把**本次实际取到资产的基址**写回本机安装记录：记录只由"确实取到了发行
+    资产"这一事实产生，因此下一次 `self-upgrade` 不再依赖人是否导出了 `WF_FORGEJO_BASE`。
+    """
     require_release_version(version)
     require_release_version(latest.version)
     validate_cli_tag(latest.repo, latest.tag, latest.version)
@@ -192,25 +203,30 @@ def perform(version, latest, *, manager=None, token=None, base=None, source_url=
         raise SelfUpgradeError("WF_CAPABILITY_UNAVAILABLE", "无法识别系统 wf 的安装管理器",
                                {"executable": executable or sys.executable},
                                "用 --manager uv|pipx|pip 指定；先 bootstrap 安装系统 wf")
-    base = base if base is not None else http_base(source_url)
+    record_problem = None
+    if base is None:
+        base, base_source, record_problem = http_base_source()
+    else:
+        base_source = "explicit"
+    base = base.rstrip("/")
     token = token if token is not None else _token()
     asset_error = None
+    asset_state = "missing"
     target_kind = "git"
     target = git_spec(latest.version, source_url)
-    if base:
-        with tempfile.TemporaryDirectory(prefix="wf-self-upgrade-") as temporary:
-            wheel = os.path.join(temporary, f"wf_cli-{latest.version}-py3-none-any.whl")
-            try:
-                downloaded = download(release_asset_url(latest.version, base), wheel, token)
-            except SelfUpgradeError as exc:
-                downloaded = None
-                asset_error = {"code": exc.code, "message": exc.message, "facts": exc.facts}
-            if downloaded:
-                target = downloaded
-                target_kind = "wheel"
-            install_output = run_install(manager, target, runner=runner, executable=executable,
-                                         which=which)
-    else:
+    with tempfile.TemporaryDirectory(prefix="wf-self-upgrade-") as temporary:
+        wheel = os.path.join(temporary, f"wf_cli-{latest.version}-py3-none-any.whl")
+        url = release_asset_url(latest.version, base)
+        try:
+            downloaded = download(url, wheel, token)
+        except SelfUpgradeError as exc:
+            downloaded = None
+            asset_state = "unreachable"
+            asset_error = {"code": exc.code, "message": exc.message, "facts": exc.facts}
+        if downloaded:
+            target = downloaded
+            target_kind = "wheel"
+            asset_state = "wheel"
         install_output = run_install(manager, target, runner=runner, executable=executable,
                                      which=which)
     facts = {
@@ -219,9 +235,25 @@ def perform(version, latest, *, manager=None, token=None, base=None, source_url=
         "tag": latest.tag,
         "manager": manager,
         "target_kind": target_kind,
+        "asset_base": base,
+        "asset_base_source": base_source,
+        "asset_state": asset_state,
     }
+    if record_problem:
+        facts["record_problem"] = record_problem
     if asset_error:
         facts["asset_error"] = asset_error
+    elif asset_state == "missing":
+        facts["asset_missing"] = release_asset_url(latest.version, base)
+        if token is None:
+            # 安装入口在终端问 token，自升级只读环境：私有仓库没导出 token 时资产必然 404
+            facts["asset_missing_hint"] = "私有仓库需要在环境中提供 FORGEJO_TOKEN"
+    elif target_kind == "wheel":
+        try:
+            (record_writer or write_install_record)(base)
+        except OSError as exc:
+            # 记录是便利事实：写不进去不影响已完成的升级，但要如实报告
+            facts["record_problem"] = f"安装记录写入失败：{exc}"
     if install_output:
         facts["install_output"] = install_output[-800:]
     return facts

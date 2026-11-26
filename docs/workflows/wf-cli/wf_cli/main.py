@@ -56,7 +56,9 @@ COMMAND_DESC = {
               "不动业务记录与 skill 资产；--dispose <处置计划> 只回写指定维护回执的处置字段。"
               "首跑只预览，--apply 输入预览指纹才执行；旧写者进程仍存活时拒绝。",
     "version": "显示系统 wf 版本、登记发行源与当前项目已安装的版本。",
-    "self-upgrade": "升级系统 wf 命令本身到登记源最新发行（区别于项目内 wf upgrade）。",
+    "self-upgrade": "升级系统 wf 命令本身到登记源最新发行（区别于项目内 wf upgrade）：资产基址与安装同源"
+                    "（WF_FORGEJO_BASE → 本机安装记录 ~/.wf/system-command.json → 登记实例缺省）；"
+                    "附件取不到时按发行 tag 从 git 安装，并在输出里写明降级、地址与原因。",
     "self-uninstall": "卸载系统 wf 命令本身；首跑只显示将要执行的管理器命令，加 --apply 执行。",
     "help": "显示总览；wf help <命令> 给出该命令的用法与说明。",
 }
@@ -363,8 +365,48 @@ def cmd_self_upgrade(argv, leading, exec_fn):
     _status(f"系统 wf {version} → 最新发行 {latest.tag}", json_mode)
     facts = selfupdate.perform(
         version, latest, manager=parsed.get("--manager"), token=selfupdate._token())
-    return passed(f"系统 wf 已升级到 {latest.tag}（下次调用生效）", facts,
-                  "运行 `wf version` 核对系统命令版本", json_mode)
+    return _self_upgrade_result(latest, facts, json_mode)
+
+
+def _self_upgrade_result(latest, facts, json_mode):
+    """升级结果必须交代实际用的是什么：wheel 附件，还是降级成按 tag 从 git 安装。
+
+    资产的 git 降级不是"已用发行资产升级"：把原因、被拒绝的地址与修法写进输出，
+    否则只看到 OK 的人会以为自升级链路正常（2026-11-26 实测就是这么被掩盖的）。
+    """
+    warnings = []
+    asset = facts.get("asset_error") if facts.get("target_kind") != "wheel" else None
+    if facts.get("target_kind") == "wheel":
+        message = f"系统 wf 已升级到 {latest.tag}（下次调用生效）"
+        if facts.get("record_problem"):
+            warnings.append(facts["record_problem"])
+        return passed(message, facts, "运行 `wf version` 核对系统命令版本", json_mode,
+                      warnings=warnings)
+    if asset:
+        detail = asset.get("facts") or {}
+        reason = f"{asset.get('code')} {asset.get('message')}"
+        warnings.append(f"发行资产未取用：{reason}")
+        warnings.append(f"资产基址：{facts.get('asset_base')}"
+                        f"（来源 {facts.get('asset_base_source')}）")
+        if detail.get("url"):
+            warnings.append(f"被拒绝的资产地址：{detail['url']}")
+        if detail.get("detail"):
+            warnings.append(f"原因：{detail['detail']}")
+        message = f"系统 wf 已按发行 tag {latest.tag} 从 git 安装（wheel 附件不可达；下次调用生效）"
+    else:
+        warnings.append("该发行没有可用的系统命令 wheel 附件（HTTP 404 或空文件），按 tag 从 git 构建")
+        warnings.append(f"资产基址：{facts.get('asset_base')}"
+                        f"（来源 {facts.get('asset_base_source')}）")
+        if facts.get("asset_missing"):
+            warnings.append(f"缺失的资产地址：{facts['asset_missing']}")
+        if facts.get("asset_missing_hint"):
+            warnings.append(facts["asset_missing_hint"])
+        message = f"系统 wf 已按发行 tag {latest.tag} 从 git 安装（该发行缺 wheel 附件；下次调用生效）"
+    warnings.append("修好资产源（核对 WF_FORGEJO_BASE 或 ~/.wf/system-command.json）后重跑 "
+                    "`wf self-upgrade`；或从能访问 HTTP/API 的机器运行 python3 scripts/install-wf.py")
+    return passed(message, facts,
+                  "运行 `wf version` 核对版本；资产源未走通，按上面的出口修正后再升级一次",
+                  json_mode, warnings=warnings)
 
 
 def cmd_self_uninstall(argv, leading, exec_fn):
