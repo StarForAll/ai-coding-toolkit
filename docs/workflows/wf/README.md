@@ -15,7 +15,7 @@
 | 源树 | `docs/workflows/wf/` |
 | 发行根 | `docs/workflows/wf-release/`（生成物，**不手改**） |
 | 清单 | `<发行根>/wf-release.json` |
-| 目标版本 | `0.0.15`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.15**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级、用 `wf self-uninstall`（预览 + `--apply`）卸载；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
+| 目标版本 | `0.0.16`（只有人主动要求时才改；本轮内容见 [round-history](analysis/round-history.md)）。**0.0.16**：系统级 `wf` 命令由最新正式 release 的稳定 `install.py` 附件启动、再取同一 release 的 wheel（`uv tool` / `pipx`，无版本参数），目标项目用 `wf install`（按命令自身版本）与 `wf upgrade`（取登记源默认分支最新发行），系统命令自身用 `wf self-upgrade` 升级、用 `wf self-uninstall`（预览 + `--apply`）卸载；用户面不再接受 `--release`/`--release-ref`/`--source`；`wf uninstall`/`wf repair` 转交已安装独立入口，运行期命令由 `wf` 定位并转交 `.wf/bin/wf.py`。 |
 
 `dev-manifest.json` 只登记资产清单、版本与必需标记，**不含手填字节哈希**；
 `scripts/build-wf-release.py` 与 `scripts/wf-dev-deploy.py` 按源文件字节现算 digest、模板标记与
@@ -71,7 +71,7 @@
 打包入口另有两项机械守卫：`--version` 必须与本文「目标版本」一致（README 漂移即拒绝）；
 `refs/tags/wf-v<version>` 已存在时拒绝重建同版（防止同一个版本号对应两份不同内容）。
 
-**版本推进由人发起**：本仓库不按提交或轮次自动加版本（当前 0.0.15 仍属预正式发行）。
+**版本推进由人发起**：本仓库不按提交或轮次自动加版本（当前 0.0.16 仍属预正式发行）。
 `scripts/release-wf.py` 是发布入口：默认 patch +1，`--minor`/`--major` 由人选择递增级别；
 它更新「目标版本」与发行树、提交、建 tag、推送并发布。`scripts/build-wf-release.py` 只重建/校验，
 不建 tag、不推送；不要把它的 `--version` 当成自动版本决策。
