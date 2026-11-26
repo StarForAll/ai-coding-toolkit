@@ -105,22 +105,31 @@ def strip_project_flag(argv):
     return rest, project
 
 
+def script_root():
+    """脚本位于 `<root>/.wf/bin/wf.py` 时返回 `<root>`；其他位置返回 None。"""
+    script = os.path.realpath(__file__)
+    if os.path.basename(os.path.dirname(script)) != "bin" or os.path.basename(
+        os.path.dirname(os.path.dirname(script))
+    ) != ".wf":
+        return None
+    return os.path.dirname(os.path.dirname(os.path.dirname(script)))
+
+
 def locate_project(argv):
-    """返回 (root, rest, error)。"""
+    """返回 (root, rest, error)。
+
+    `--project` 可选：缺省先按脚本自身安装位置解析项目根；脚本不在 `.wf/bin/` 布局里
+    （重取/复制出来的入口）时用当前目录。两种缺省都要通过下面的 `.wf/` 布局核对。
+    """
     rest, project = strip_project_flag(argv)
     if rest is None:
-        return None, None, ("project flag requires an absolute path", "WF_PATH_INVALID")
+        return None, None, ("--project 缺路径值", "WF_PATH_INVALID")
     if project is not None:
         if not os.path.isabs(project) or not os.path.isdir(project):
-            return None, None, ("--project must be an existing absolute directory", "WF_PATH_INVALID")
+            return None, None, ("--project 必须是已存在的绝对目录", "WF_PATH_INVALID")
         root = os.path.realpath(project)
     else:
-        script = os.path.realpath(__file__)
-        if os.path.basename(os.path.dirname(script)) != "bin" or os.path.basename(
-            os.path.dirname(os.path.dirname(script))
-        ) != ".wf":
-            return None, None, ("cannot confirm layout from script location", "WF_CAPABILITY_UNAVAILABLE")
-        root = os.path.dirname(os.path.dirname(os.path.dirname(script)))
+        root = script_root() or os.path.realpath(os.getcwd())
     missing = []
     if not os.path.isdir(os.path.join(root, ".wf")):
         missing.append(".wf/")
@@ -517,7 +526,9 @@ def main(argv):
                     json_mode)
     root, rest, error = locate_project(argv)
     if error:
-        return fail(error[1], {"detail": error[0]}, "用 --project <绝对路径> 显式给目标，或按恢复说明重取入口", json_mode)
+        return fail(error[1], {"detail": error[0]},
+                    "在项目根运行、或用 --project <绝对路径> 指定目标（缺省取脚本安装位置、"
+                    "再缺省取当前目录）；布局缺失时按恢复说明重取入口", json_mode)
     if rest and rest[0] == "upgrade":
         # 升级由系统级 wf 命令承接：本层不再接受发行检出根/发行引用，也不转交安装器。
         # 保留这条显式出口而不是让未知子命令落到运行时，避免旧调用者误把本地路径当入口。
@@ -539,9 +550,8 @@ def main(argv):
                 "按恢复说明从对应发行重取该单文件入口",
                 json_mode,
             )
-        # 转交必须把已解析的 root 交给目标脚本：否则它在任何 cwd 下都拿不到项目根，
-        # 会退回"必须显式 --project"，使 wf repair/uninstall 短称形态实际不可用
-        # （第十九轮复审外部 N-1）。
+        # 转交必须把已解析的 root 交给目标脚本：目标脚本缺省用当前目录，转交时不论
+        # 调用方 cwd 在哪都要拿到同一个已解析的项目根（第十九轮复审外部 N-1）。
         env = dict(os.environ)
         env["WF_PROJECT_ROOT"] = root
         os.execve(sys.executable, [sys.executable, script] + rest[1:], env)

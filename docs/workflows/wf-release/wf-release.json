@@ -1,7 +1,7 @@
 {
   "assets": [
     {
-      "digest": "sha256:133b32b25f15bbbd163ae3e6b0fd7005d5c59b10e5c4baf77cd54c3223c5c6d5",
+      "digest": "sha256:35153607f71a866666b234a01660d176fc572cc37cebeeebb241ed37b671069a",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -11,7 +11,7 @@
       "target_relative": ".wf/bin/repair.py"
     },
     {
-      "digest": "sha256:882a034122a18ace176323c30e02954c2a37727dd529f7e403ce16c3e63e1b61",
+      "digest": "sha256:1d4d5a0d1e15b8b8f66dc2da8e16d96cd1f3ce1c63ad0f7c96b236ff78753fb2",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -21,7 +21,7 @@
       "target_relative": ".wf/bin/uninstall.py"
     },
     {
-      "digest": "sha256:4d8a1624af7ead44be8947d72fd08abe18a000f593f842c84b2142e08fa54439",
+      "digest": "sha256:88412abd0e88fc7451855e34ca85445020d70e0c96a115c9ec1e8f53765be29d",
       "executable": true,
       "file_kind": "file",
       "kind": "bin",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:d03fc837a29b488ef24ab68aab096bd165b70c0f457a65967fefa8952e1f5c73",
+    "rules_digest": "sha256:c156829ae3136e001306fe852695871bac065d5dfa39e32e012e5b4260e8b185",
     "systems": [
       "linux"
     ],
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.14"
+  "version": "0.0.15"
 }
