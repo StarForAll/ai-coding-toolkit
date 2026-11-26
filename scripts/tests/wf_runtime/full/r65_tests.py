@@ -106,9 +106,18 @@ investigation = {"id": "2026-" + "f" * 32, "plan": {"touch_paths": []},
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
 rec("R6 只有人判记录不算调查成果", "WF_CHECK_FAILED", f"{satisfied} {code}",
     satisfied is False and code == "WF_CHECK_FAILED")
+# 六轮复核 a.6：可观察成果改由**已批准验收项**承载（复盘只是附加事实，不再单独满足），
+# 否则「要复盘才许 Check、Check 又卡在这条前置」是自循环。
 investigation["retrospective"] = {"at": AT, "triggers": []}
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
-rec("R6 有复盘即满足", "满足", satisfied, satisfied is True)
+rec("R6 仅复盘不再单独满足（改由验收项承载）", "WF_CHECK_FAILED", f"{satisfied} {code}",
+    satisfied is False and code == "WF_CHECK_FAILED")
+investigation["plan"]["acceptance"] = [{"id": "a1", "statement": "结论可核", "verification_ids": ["v1"]}]
+satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
+rec("R6 已批准验收项即满足调查成果", "满足且模式为 investigation",
+    f"{satisfied} {(facts or {}).get('mode')}",
+    satisfied is True and (facts or {}).get("mode") == "investigation"
+    and (facts or {}).get("acceptance_ids") == ["a1"])
 
 json.dump(results, open(wfdrive.temp("r65_results.json"), "w"), ensure_ascii=False, indent=2)
 print("saved", sum(1 for r in results if r["pass"]), "/", len(results))

@@ -301,14 +301,15 @@ rec("3f2 单 reviewer + 人签接受 → 判定可产出（W2-3 留痕降级）"
 
 # 有效输入但审查结论 fail：必须写 verdict=fail 并留可重建的历史（§91 曾错指 3b）
 fail_axes = {axis: {"conclusion": "fail", "basis": "b"} for axis in AXES}
-fail_code, fail_verdict, fail_facts, fail_record = review_case("real-fail", fail_axes, "WF_REVIEW_INVALID", "fail")
+# 六轮复核 B2：正当不通过改用自己的码（输入成立 → 有结论），不再与"输入不成立"共用
+fail_code, fail_verdict, fail_facts, fail_record = review_case("real-fail", fail_axes, "WF_REVIEW_FAILED", "fail")
 _fail_reviews = fail_record.get("reviews") or {}
 if fail_verdict != "fail":
     print("3h facts:", json.dumps(fail_facts, ensure_ascii=False)[:500])
-rec("3h 有效审查 fail 落判定且历史可重建", "WF_REVIEW_INVALID + verdict=fail + attempts.outcome=fail",
+rec("3h 有效审查 fail 落判定且历史可重建", "WF_REVIEW_FAILED + verdict=fail + attempts.outcome=fail",
     f"{fail_code}/{fail_verdict}/"
     f"{[a.get('outcome') for a in (_fail_reviews.get('attempts') or [])]}",
-    fail_code == "WF_REVIEW_INVALID" and fail_verdict == "fail"
+    fail_code == "WF_REVIEW_FAILED" and fail_verdict == "fail"
     and ((_fail_reviews.get("result") or {}).get("verdict")) == "fail"
     and any(a.get("outcome") == "fail" for a in (_fail_reviews.get("attempts") or [])))
 

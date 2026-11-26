@@ -43,7 +43,34 @@ class Args:
         self.commit = commit
 
 
+def slot_suffix(deploy="dev"):
+    """缓存条目的槽位后缀：**由实现现算**，不写死作者机的解释器版本。
+
+    条目名 = 内容身份前 12 位 + "-" + 槽位（`py<major.minor>` 与 deploy 各段 urlsafe-base64）。
+    测试若硬编码 `-cHkzLjE0-ZGV2`（py3.14-dev），在 3.13 机器上条目照常生成但一条也找不到
+    （五轮审查 b-1：9 个失败、报“条目没有生成”，根因是测试自己的字面量）。
+    """
+    import wf_release_common as common
+
+    return "-" + common.template_cache_slot(
+        f"{sys.version_info[0]}.{sys.version_info[1]}", deploy)
+
+
+def pick_key(case, cache_root, suffixes=()):
+    """取缓存条目名；目录为空时给出可读失败而不是裸 `StopIteration`（四轮审查 b-4 的 9 个 error）。"""
+    names = sorted(os.listdir(cache_root)) if os.path.isdir(cache_root) else []
+    picked = [name for name in names
+              if name.endswith(slot_suffix()) and not name.endswith(suffixes)]
+    case.assertTrue(picked, "模板缓存条目没有生成：目录内容="
+                    + json.dumps(names, ensure_ascii=False)
+                    + "（发布/获取失败或缓存被并发改动时会出现这个形态）")
+    return picked[0]
+
+
 class Base(unittest.TestCase):
+    def _pick_key(self, suffixes=()):
+        return pick_key(self, self.cache_root, suffixes)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="wf-template-cache-")
         self.addCleanup(self.tmp.cleanup)
@@ -274,8 +301,9 @@ class ObserveTest(Base):
         return run_template_cli("publish", self.cache_root, self.results, self.scope)
 
     def key(self):
-        return next(name for name in os.listdir(self.cache_root)
-                    if name.endswith("-cHkzLjE0-ZGV2"))
+        # 不要用裸 next()：缓存目录为空时它抛 StopIteration，报错离原因很远（四轮审查 b-4 的
+        # 9 个 error 就是这个形态）。改成带目录快照的可读失败。
+        return self._pick_key()
 
     def test_inventory_is_read_only_and_names_the_control_records(self):
         self.assertEqual(self.publish().returncode, 0)
@@ -664,8 +692,7 @@ class CheckpointTest(unittest.TestCase):
         return json.loads(proc.stdout)
 
     def key(self):
-        return next(name for name in os.listdir(self.cache_root)
-                    if name.endswith("-cHkzLjE0-ZGV2") and not name.endswith((".json", ".owner")))
+        return pick_key(self, self.cache_root, (".json", ".owner"))
 
     def valid_meta(self, key):
         meta = json.loads((self.cache_root / f"{key}.meta.json").read_text())
@@ -842,7 +869,7 @@ class CheckpointTest(unittest.TestCase):
         self.assertIn("escapes the test scope", proc.stderr)
 
     def test_unproven_material_requires_explicit_unproven_confirmation(self):
-        orphan = self.cache_root / ("e" * 12 + "-cHkzLjE0-ZGV2.staging-deadbeef")
+        orphan = self.cache_root / ("e" * 12 + slot_suffix() + ".staging-deadbeef")
         orphan.mkdir()
         (orphan / "payload").write_text("x")
         report = self.inventory()

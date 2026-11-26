@@ -40,6 +40,51 @@ def documented_flags(entry):
     return flags
 
 
+class RegistryHygieneTest(unittest.TestCase):
+    """登记表本身的自检（六轮复核 A3 的回归来源）：
+
+    ① 同名键在同一字典字面量里重复时，Python 静默取最后一条——`COMMAND_BOOL_FLAGS` 曾因此丢掉
+       `--creation-draft`/`--authorization-draft`，表现为"帮助里登记了、调用却报未知旗标"；
+    ② 帮助登记的每个旗标，至少要能在该命令的某个子命令集合或并集里被用法校验放行，
+       否则帮助说得出、入口走不通。
+    """
+
+    def test_no_duplicate_keys_in_cli_registries(self):
+        import ast
+        import inspect
+        import tempfile
+        from pathlib import Path
+
+        source = inspect.getsource(cli)
+        tree = ast.parse(source)
+        problems = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            seen = {}
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    seen[key.value] = seen.get(key.value, 0) + 1
+            problems.extend(f"L{node.lineno}: duplicate key {key}" for key, count in seen.items()
+                            if count > 1)
+        # 逐字面量重复键在 AST 上可见；这里同时给出文件行号上下文便于定位
+        self.assertEqual(problems, [], "登记表出现重复键（被静默覆盖）：" + "; ".join(problems))
+
+    def test_documented_flags_are_accepted_by_usage_validation(self):
+        problems = []
+        for command, entry in sorted(cli.COMMAND_HELP.items()):
+            documented = documented_flags(entry)
+            union = set(cli.GLOBAL_FLAGS) | set(cli.COMMAND_FLAGS.get(command, ()))
+            sub_sets = cli.COMMAND_SUB_FLAGS.get(command) or {}
+            reachable = set(union)
+            for flags in sub_sets.values():
+                reachable |= set(cli.GLOBAL_FLAGS) | set(flags)
+            missing = sorted(documented - reachable)
+            if missing:
+                problems.append(f"{command}: {missing}")
+        self.assertEqual(problems, [], "帮助登记但用法校验会拒的旗标: " + "; ".join(problems))
+
+
 class ConsumptionTest(unittest.TestCase):
     """帮助登记的旗标必须被真实实现读取（幽灵旗标 = 静默丢弃输入）。"""
 

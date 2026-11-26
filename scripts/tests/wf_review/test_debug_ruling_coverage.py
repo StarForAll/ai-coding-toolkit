@@ -108,7 +108,7 @@ class FutureMultipleTest(unittest.TestCase):
             lock_ctx = mock.MagicMock()
             lock_ctx.__enter__.return_value = None
             lock_ctx.__exit__.return_value = False
-            with mock.patch.object(tasks, "_require_binding"), \
+            with mock.patch.object(tasks, "write_scope"), \
                     mock.patch.object(lock_mod, "acquire", return_value=lock_ctx):
                 ctx.require_held.return_value = (records.load_json(task_dir / "task.json"),
                                                  {"id": "human:test"})

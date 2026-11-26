@@ -31,9 +31,15 @@ DOC = {
 
 class StepOrderTest(unittest.TestCase):
     def test_next_step_from_scratch_and_from_the_middle(self):
-        self.assertEqual(runs._next_step(DOC, {}, None)["id"], "a")
-        self.assertEqual(runs._next_step(DOC, {}, "gate")["id"], "b")
-        self.assertIsNone(runs._next_step(DOC, {}, "c"))
+        self.assertEqual(runs._next_step(DOC, None)["id"], "a")
+        self.assertEqual(runs._next_step(DOC, "gate")["id"], "b")
+        self.assertIsNone(runs._next_step(DOC, "c"))
+
+    def test_next_step_skips_steps_that_already_have_results(self):
+        """六轮复核 a.2：人判/略过步骤的结果已在 `step_results` 里，重入不得再停在同一格。"""
+        results = {"gate": {"kind": "satisfied"}, "b": {"kind": "skipped"}}
+        self.assertEqual(runs._next_step(DOC, "a", results)["id"], "c")
+        self.assertIsNone(runs._next_step(DOC, "c", results))
 
     def test_previous_task_step_skips_human_steps(self):
         # human 步骤不生成任务边：b 的顺序前置仍是 a

@@ -70,7 +70,9 @@ def check():
         problems.append(f"合法定义未通过：{(payload or {}).get('code')} "
                         f"{((payload or {}).get('facts') or {}).get('problems')}")
 
-    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change", "--json"],
+    prepare_auth = H.prepare_authorization(project, root, "bounded-change", sid=SID)
+    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change",
+                                  "--authorization", prepare_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     preparation = os.path.join(project, ".wf/preparations/bounded-change.json")
     if rc != 0 or (payload or {}).get("code") != "WF_OK":
@@ -105,7 +107,8 @@ def check():
             problems.append(f"拒绝原因未点名保留前缀：{found[:2]}")
 
     # 草稿保留：未通过的 prepare 仍写记录，但 ok=false
-    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change", "--json"],
+    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change",
+                                  "--authorization", prepare_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc == 0:
         problems.append("未通过的 prepare 报了成功")

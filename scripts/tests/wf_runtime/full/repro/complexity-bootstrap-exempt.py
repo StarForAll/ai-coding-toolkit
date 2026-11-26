@@ -65,10 +65,14 @@ def check():
     # ① initialize：触碰基线/配置/spec（且无既有基线）→ 不应被机械条件判复杂
     root, project = fresh(inject)
     rc, payload = build(project, root, "initialize", "初始化基线", BLOCK)
-    if (payload or {}).get("code") == "WF_TEMPLATE_INCOMPLETE":
-        problems.append("initialize 被判成复杂（被要求补三件套）")
+    code = (payload or {}).get("code")
+    # "被判复杂"在入口有两副面孔：要求补三件套（`WF_TEMPLATE_INCOMPLETE`）或要人裁分级
+    # （`WF_SEMANTIC_DECISION`）。红模注入取消 bootstrap 豁免后出现的是后者——原用例只认前者，
+    # 把目标失败当成了前置失败，red 面因此长期不可证伪（三轮自检修正）。
+    if code in ("WF_TEMPLATE_INCOMPLETE", "WF_SEMANTIC_DECISION"):
+        problems.append(f"initialize 被判成复杂：{code}")
     elif rc != 0:
-        raise H.Precondition(f"initialize 批准失败：{(payload or {}).get('code')}")
+        raise H.Precondition(f"initialize 批准失败：{code} {(payload or {}).get('facts')}")
 
     # ② 普通任务触碰同一批路径 → 仍应判复杂（豁免不得外溢）
     root2, project2 = fresh(inject)

@@ -121,12 +121,24 @@ class TestRootState(unittest.TestCase):
     def test_boot_mismatch_is_dead(self):
         self.assertEqual(S.state_of_root(root(boot="boot-old"), BOOT, FakeProbe()), S.DEAD)
 
-    def test_sid_root_equality_only(self):
-        good = {"kind": "sid", "boot": BOOT, "sid": 4711, "sid_start": "200"}
-        bad = {"kind": "sid", "boot": BOOT, "sid": 4711, "sid_start": "999"}
-        self.assertEqual(S.state_of_root(good, BOOT, FakeProbe()), S.ALIVE)
-        self.assertEqual(S.state_of_root(bad, BOOT, FakeProbe()), S.ALIVE)  # 结构合法即 alive
-        self.assertEqual(S.state_of_root({"kind": "sid", "boot": BOOT, "sid": 1}, BOOT, FakeProbe()),
+    def test_sid_root_is_judged_by_process_facts(self):
+        """六轮复核 b.8：sid 型根必须查真实进程事实，不再"结构合法即 alive"。
+
+        同一 boot 内会话已死亡时若仍判 ALIVE，写权/并发判定会永久卡住。
+        """
+        good = {"kind": "sid", "boot": BOOT, "sid": 4711, "sid_start": "100"}
+        probe = FakeProbe({4711: proc(4711, start="100")})
+        self.assertEqual(S.state_of_root(good, BOOT, probe), S.ALIVE)
+        # sid_start 不符 = 进程被复用 = dead
+        stale = {"kind": "sid", "boot": BOOT, "sid": 4711, "sid_start": "999"}
+        self.assertEqual(S.state_of_root(stale, BOOT, probe), S.DEAD)
+        # 进程已不存在 = dead
+        self.assertEqual(S.state_of_root(good, BOOT, FakeProbe({})), S.DEAD)
+        # 读不到 = unverified（不折成 alive）
+        self.assertEqual(S.state_of_root(good, BOOT, FakeProbe({4711: proc(4711)}, unreadable={4711})),
+                         S.UNVERIFIED)
+        # 缺 sid_start 的损坏记录 = unverified
+        self.assertEqual(S.state_of_root({"kind": "sid", "boot": BOOT, "sid": 1}, BOOT, probe),
                          S.UNVERIFIED)
 
 

@@ -309,6 +309,9 @@ def validate_plan_block(block):
     touch_paths = block.get("touch_paths")
     if not isinstance(touch_paths, list) or any(not isinstance(item, str) for item in touch_paths):
         errors.append("touch_paths must be a string array")
+    applicability = block.get("tdd_applicability")
+    if applicability is not None and applicability not in TDD_APPLICABILITY:
+        errors.append(f"tdd_applicability must be one of {list(TDD_APPLICABILITY)}")
     acceptance = block.get("acceptance")
     verifications = block.get("verifications")
     if not isinstance(acceptance, list) or not acceptance:
@@ -534,6 +537,10 @@ APPROVE_CHOICES = decisions_mod.domain("plan_approval")
 # 键名与批准入口的 complexity_conditions 一致（设计稿 §4.3 四项）
 COMPLEXITY_CONDITIONS = ("governance", "contract", "acceptance", "scope")
 
+# TDD 适用性（设计稿 §4.3、task-flow「task.tdd-verified」）：`code` 要求红绿同验证项，
+# 文档/调查类以已批准的适用性 + 独立可观察验证代替。缺省是 `code`（不声明即按代码对待）。
+TDD_APPLICABILITY = ("code", "docs", "investigation")
+
 # 决定文件里的「人已确认项」注册表（设计稿 §4.3/§4.4：复杂度与 TDD 由人确认并写入批准记录）。
 # 扩展方式：新增一项只需在此登记 {键: 校验函数}，消费点用 plan_decision.get(键) 取值；
 # **未登记的键不会被丢弃**——原样记入 plan.human_inputs 并产生 unconfirmed_keys 警告，
@@ -543,6 +550,28 @@ HUMAN_PLAN_KEYS = {
     "tdd": lambda value: isinstance(value, bool),
     "downgrade": lambda value: isinstance(value, dict) and bool(value.get("reason")) and bool(value.get("evidence")),
 }
+
+
+def check_identity(task):
+    """Check 定稿的身份键（唯一实现）：这些字段一变，本次检查结论就不再成立。
+
+    消费点：`task-check` 锁外执行段结束后回锁时，与准备段取值比对——期间同一会话写入的
+    暂停/挂起、阶段迁移、重新批准或另一次 Check 都会让"结论仍成立"失效（`WF_CHECK_STALE`）。
+    不包含 `revision`（每次写入都变）、也不包含本次要覆盖的 `check/check_history`。
+    """
+    plan = (task or {}).get("plan") or {}
+    entry = (task or {}).get("entry_snapshot") or {}
+    return {
+        "status": (task or {}).get("status"),
+        "phase": (task or {}).get("phase"),
+        "paused": bool((task or {}).get("paused")),
+        "suspended": bool((task or {}).get("suspended")),
+        "plan_version": normalized_plan_version(task or {}),
+        "approved_version": plan.get("approved_version"),
+        "acceptance_digest": plan.get("acceptance_digest"),
+        "entry_snapshot_digest": (fingerprint.snapshot_digest(entry) if entry else None),
+        "check_id": ((task or {}).get("check") or {}).get("id"),
+    }
 
 
 def normalized_plan_version(task):
@@ -1047,13 +1076,18 @@ def work_satisfied_fact(ctx, task):
     if pending:
         return False, "WF_SEMANTIC_DECISION", {"pending_actions": pending}
     if not touch_paths:
-        # 纯调查也须有可观察成果（机制稿 §11.2）：决策、复盘、curation 或使其 Check 成立
-        investigation = bool(task.get("retrospective")) or bool(task.get("curation")) \
-            or (task.get("check") or {}).get("result") == "pass"
-        if not investigation:
-            return False, "WF_CHECK_FAILED", {"reason": "investigation task needs an observable outcome",
-                    "exits": ["记录复盘", "策展调查依据的 spec", "先通过 Check"]}
-        return True, None, {"mode": "investigation"}
+        # 零触碰面（纯调查）：可观察成果由**已批准的规划验收项**承载，Check 逐条给出结论。
+        # 旧实现要求「复盘 / curation / 历史 Check pass」，而 Check 又卡在这条前置上 ⇒
+        # 自循环（六轮复核 a.6）。这里只核"人已批准验收项"这一可算事实，语义留给 Check 双轴。
+        plan = task.get("plan") or {}
+        acceptance = [item for item in plan.get("acceptance") or [] if isinstance(item, dict)]
+        if not acceptance:
+            return False, "WF_CHECK_FAILED", {
+                "reason": "investigation task needs approved acceptance items",
+                "note": "零触碰面任务的成果由批准规划里的验收项承载；没有验收项无法 Check",
+                "exits": ["回 Plan 补验收项（含判据与验证/人判消费），重新 task-approve 后重试"]}
+        return True, None, {"mode": "investigation",
+                            "acceptance_ids": [item.get("id") for item in acceptance]}
     from . import check as check_mod
 
     paths = check_mod.object_paths(ctx, task)
@@ -1228,18 +1262,97 @@ def _finish_task_action(ctx, path, task, operation, holder, inputs, action, evid
     return task, assertion
 
 
-def _require_binding(ctx, task_id):
-    """日常写入口的绑定核验：对象 + 实例标识（机制稿 §1.4，不只在 start 核一次）。"""
+def write_scope(ctx, task_id):
+    """任务写入口的会话绑定面（唯一定义）：返回 `("task", None)` 或 `("run", run_id)`。
+
+    普通任务绑任务本身；**实例内任务绑实例**，且要求任务的 `run_id` 是同一实例、实例仍在途、
+    `cursor.task_id` 指向它（设计稿 §5.8「一个任务步骤覆盖一个普通任务的完整四阶段」）。
+    这里只核绑定形状与归属事实，**不核写权**——写权由 `require_held_for` 在锁内按持有者作用域核，
+    两者分开是为了让入口能在取锁之前就给出准确的拒绝原因。
+    """
     key = ctx.key()
     binding = session_mod.load_binding(ctx.root, key)
     if not binding:
         raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": key},
                         next_="由人先用 wf-start 选择对象")
     object_ref = binding.get("object") or {}
-    if object_ref.get("id") != task_id:
-        raise TaskError("WF_BINDING_MISMATCH", {"bound": object_ref, "requested": task_id})
-    _require_instance_match(ctx, binding)
-    return binding
+    kind = object_ref.get("kind")
+    if kind == "task" and object_ref.get("id") == task_id:
+        _require_instance_match(ctx, binding)
+        return "task", None
+    if kind == "run":
+        from . import runs as runs_mod
+
+        run_id = object_ref.get("id")
+        task = load_task(ctx.root, task_id) or {}
+        if task.get("run_id") != run_id:
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "task does not belong to the bound run",
+                             "bound": object_ref, "requested": task_id,
+                             "task_run_id": task.get("run_id")},
+                            next_="实例内只推进本实例生成的任务；普通任务须在新会话里选择")
+        run = runs_mod.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+        if run.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "run already ended", "run": run_id,
+                             "terminal": run.get("terminal")},
+                            next_="实例已结束：按异常/正常终态的出口处置，不再推进其任务")
+        cursor = run.get("cursor") or {}
+        if cursor.get("task_id") != task_id:
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "instance cursor is not on this task",
+                             "cursor": cursor, "task": task_id},
+                            next_="只推进游标所指的任务；换任务先 run advance")
+        _require_instance_match(ctx, binding)
+        return "run", run_id
+    raise TaskError("WF_BINDING_MISMATCH", {"bound": object_ref, "requested": task_id})
+
+
+def require_held_for(ctx, task_id):
+    """任务写入口的写权核验（唯一定义）：写权在**本会话**且该任务在**该写权作用域**内。
+
+    作用域两种形态：task（普通任务）与 run（实例内任务）。run 面按记录事实复核归属，
+    与 `write_scope` 同判据；锁内按持有者事实判，消除「绑定与写权之间」的时间差。
+    返回 `(writer_record, holder)`。
+    """
+    record, holder = ctx.require_held()
+    scope = (holder.get("scope") or {}).get("object") or {}
+    if not scope:
+        # 没有作用域的写者记录（升级前的旧记录、合成夹具）：退回 `require_held(task=…)` 的既有判据，
+        # 它本身在缺 `scope` 时不作作用域核对——不在这里另立第二套判断。
+        return ctx.require_held(task=task_id)
+    kind = scope.get("kind")
+    if kind == "task" and scope.get("id") == task_id:
+        return record, holder
+    if kind == "run":
+        from . import runs as runs_mod
+
+        run_id = scope.get("id")
+        task = load_task(ctx.root, task_id) or {}
+        if task.get("run_id") != run_id:
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "task does not belong to the held run",
+                             "writer_scope": scope, "task": task_id,
+                             "task_run_id": task.get("run_id")},
+                            next_="只写本实例生成的任务；普通任务在自己的会话里选择一个对象")
+        run = runs_mod.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+        if run.get("terminal"):
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "run already ended", "run": run_id,
+                             "terminal": run.get("terminal")})
+        cursor = run.get("cursor") or {}
+        if cursor.get("task_id") != task_id:
+            raise TaskError("WF_BINDING_MISMATCH",
+                            {"reason": "instance cursor is not on this task",
+                             "cursor": cursor, "task": task_id},
+                            next_="只推进游标所指的任务；换任务先 run advance")
+        return record, holder
+    raise TaskError("WF_BINDING_MISMATCH", {"writer_scope": scope, "requested": task_id},
+                    next_="按本会话绑定对象选择任务；换对象需新会话或 enable --new-session")
 
 
 def _require_instance_match(ctx, binding):
@@ -1365,7 +1478,6 @@ def cmd_task_new(ctx, args):
                                              {"kind": "template", "id": template},
                                              {"kind": "title", "id": title},
                                              {"kind": "task-kind", "id": kind}])
-        action["steps"] = [{"id": step, "state": "pending"} for step in steps]
         updated = dict(updated)
         updated["action"] = action
         writer_mod.save(ctx.root, updated)
@@ -1645,6 +1757,26 @@ def _resume_task_create(ctx, key, session, record, action):
                "control_assertion": assertion},
     )
 
+def acceptance_change(previous_plan, block):
+    """条件③的「验收口径变化」事实（唯一实现）：按**摘要**判，不只比 id 集合。
+
+    沿用原 id、只改判据文字同样是"人没看过的新承诺"；首次批准没有上一版时返回 None，
+    由调用方按路径面（`ACCEPTANCE_SURFACE`）判（六轮复核 a.4）。
+    """
+    previous = previous_plan or {}
+    previous_digest = previous.get("acceptance_digest")
+    if previous_digest is None:
+        return None
+    entries = (block or {}).get("acceptance") or []
+    current_digest = fingerprint.acceptance_digest(entries)
+    if previous_digest == current_digest:
+        return None
+    return {"previous_ids": previous.get("acceptance_ids"),
+            "current_ids": [item.get("id") for item in entries
+                            if isinstance(item, dict) and item.get("id")],
+            "previous_digest": previous_digest, "current_digest": current_digest}
+
+
 def _complexity_proposal(ctx, task, block, extra_conditions=None):
     """汇总四项条件后再给提议：任一 true/unknown 即提出 complex（机制稿 §1.3、设计稿 §4.3）。
 
@@ -1681,13 +1813,8 @@ def _complexity_proposal(ctx, task, block, extra_conditions=None):
         value, fact = "unknown", {"fact": f"contract-surface-unavailable: {exc}"}
     record("contract", value, fact)
 
-    acceptance_changed = None
     previous_plan = task.get("plan") or {}
-    previous_acceptance = previous_plan.get("acceptance_ids")
-    current_acceptance = [item.get("id") for item in block.get("acceptance") or []
-                          if isinstance(item, dict) and item.get("id")]
-    if previous_acceptance is not None and sorted(previous_acceptance) != sorted(current_acceptance):
-        acceptance_changed = {"previous": previous_acceptance, "current": current_acceptance}
+    acceptance_changed = acceptance_change(previous_plan, block)
     if bootstrap:
         record("acceptance", "false", {"fact": "bootstrap-not-applicable"})
     else:
@@ -1885,10 +2012,10 @@ def cmd_task_approve(ctx, args):
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-approve requires --task <id> --decision <path>"})
     decisions = cli._load_decision(decision_path)
     task = _load_or_fail(ctx, task_id)
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     inputs = ctx.inputs()
     with lock.acquire(ctx.root, holder_hint="task-approve"):
-        record, holder = ctx.require_held(task=task_id)
+        record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         mechanical = [item for item in decisions if item.get("choice") == MECHANICAL_REVISION]
@@ -2088,6 +2215,7 @@ def cmd_task_approve(ctx, args):
             "complexity": complexity,
             "complexity_reasons": reasons,
             "tdd": tdd,
+            "tdd_applicability": block.get("tdd_applicability") or "code",
             "approval": approval,
             # 人工载体：谁的值、有哪些未登记的人判项（新增项不会静默消失）
             "confirmed_source": confirmed_source,
@@ -2358,18 +2486,26 @@ def _mechanical_revision(ctx, path, task, holder, decision, decisions):
     acceptance = fingerprint.acceptance_digest(block.get("acceptance") or [])
     current_verifications = block.get("verifications") or []
     approved_verifications = plan.get("verifications") or []
+    # 等价域＝plan 版本绑定的全部语义面（机器块内）：触碰面、验收、验证声明、TDD 适用性。
+    # 验证声明摘要与门禁侧共用 `fingerprint.verifications_digest`（唯一实现，2026-11-26 二轮审查）；
+    # `tdd_applicability` 同批纳入——把它从 code 改成 docs 等于关掉红绿硬要求，不属排版/转义。
+    current_applicability = block.get("tdd_applicability") or "code"
+    approved_applicability = plan.get("tdd_applicability") or "code"
     if (sorted(touch_paths) != sorted(plan.get("touch_paths") or [])
             or acceptance != plan.get("acceptance_digest")
-            or records.H("wf-plan-verifications-v1", current_verifications)
-            != records.H("wf-plan-verifications-v1", approved_verifications)):
+            or fingerprint.verifications_digest(current_verifications)
+            != fingerprint.verifications_digest(approved_verifications)
+            or current_applicability != approved_applicability):
         raise TaskError("WF_SEMANTIC_DECISION",
-                        {"reason": "触碰面、验收或验证项定义发生变化，不属机械修订；回 Plan 重新批准",
+                        {"reason": "触碰面、验收、验证声明或 TDD 适用性发生变化，不属机械修订；回 Plan 重新批准",
                          "approved_touch_paths": plan.get("touch_paths"),
                          "current_touch_paths": touch_paths,
                          "approved_acceptance_digest": plan.get("acceptance_digest"),
                          "current_acceptance_digest": acceptance,
                          "approved_verifications": approved_verifications,
-                         "current_verifications": current_verifications})
+                         "current_verifications": current_verifications,
+                         "approved_tdd_applicability": approved_applicability,
+                         "current_tdd_applicability": current_applicability})
     conditions = [item for item in plan.get("complexity_reasons") or [] if not item.get("downgrade")]
     current_version = compute_plan_version(ctx.root, task, block, plan.get("complexity"),
                                            conditions, plan.get("tdd"))
@@ -2446,9 +2582,9 @@ def cmd_task_start(ctx, args):
                         {"problems": exclusion_problems,
                          "exits": ["按问题清单修正声明文件（paths 只写具体路径，确认要带 by/at/quote/source）"]})
     task = _load_or_fail(ctx, task_id)
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-start"):
-        record, holder = ctx.require_held(task=task_id)
+        record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         pending = actions.pending(task)
@@ -2674,9 +2810,9 @@ def cmd_task_replan(ctx, args):
     if not any(decisions_mod.accepts("replan", item.get("choice")) for item in decisions):
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"reason": "决定文件里没有 choice=replan", "choices": [d.get("choice") for d in decisions]})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-replan"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -2755,9 +2891,9 @@ def cmd_task_pause(ctx, args):
     reason = args.value("--reason")
     if not task_id:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-pause requires --task <id>"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-pause"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived" or task.get("terminal"):
@@ -2783,9 +2919,9 @@ def cmd_task_resume(ctx, args):
     task_id = args.value("--task")
     if not task_id:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-resume requires --task <id>"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-resume"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived" or task.get("terminal"):
@@ -2994,9 +3130,9 @@ def cmd_task_curate(ctx, args):
     purpose = args.value("--purpose")
     if not task_id or not spec_path or not purpose:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-curate requires --task --spec --purpose"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-curate"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -3313,9 +3449,9 @@ def cmd_task_check(ctx, args):
         raise TaskError("WF_SEMANTIC_DECISION",
                         {"problems": exclusion_problems,
                          "exits": ["按问题清单修正声明文件（paths 只写具体路径，确认要带 by/at/quote/source）"]})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-check"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") != "in_progress":
@@ -3341,11 +3477,28 @@ def cmd_task_check(ctx, args):
 
     # ③ 锁内定稿：重核写权与代次，重算锚点（期间对象被改 → 本次不判 pass）
     with lock.acquire(ctx.root, holder_hint="task-check"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = _require_task_dir(ctx, task_id)
-        # **不重读记录**：写权全程未释放（holder 仍是本会话），别的会话无法改这条记录；
-        # 而准备段已经把调试声明等输入写进了内存态，重读会把它们丢掉（cp2-A13 / cp5-B4 实测）。
-        # 锁外期间真正会变的是**工作树内容**，那由下面的锚点重算与 finish 的扫描比对判。
+        # 回锁后以**盘上记录为准**：锁外执行期间同一会话仍可写这条记录（暂停/挂起、
+        # 另一次 Check、重新批准），沿用内存态会把这些新事实覆盖掉（六轮复核 a.3）。
+        # 准备段的调试声明是决定派生值，重读后按同一决定重放；随后比对身份键——
+        # 变了就说明"本次结论不再成立"，按 `WF_CHECK_STALE` 退出而不是写回。
+        fresh = records.load_json(os.path.join(path, "task.json"))
+        _apply_debug_inputs(fresh, decisions, ctx.root, ctx.debug_threshold())
+        # 本次 Check 新登记的排除声明同样是**人给出的输入**：重读后按 state 重放，
+        # 否则定稿段会按"没有排除记录"重分类（前后不一致 → 假 WF_CHECK_STALE），
+        # 且新声明永远落不到盘上（六轮修复 A1）。
+        if state.get("exclusion_records"):
+            scope.persist_exclusions(fresh, state["exclusion_records"])
+        before_identity = check_identity(task)
+        after_identity = check_identity(fresh)
+        if after_identity != before_identity:
+            raise TaskError("WF_CHECK_STALE",
+                            {"reason": "检查期间任务记录的判定身份发生变化（本次结论不再成立）",
+                             "before": before_identity, "after": after_identity,
+                             "exits": ["按当前状态重新 task-check（暂停/挂起先解除）",
+                                       "若期间改了规划：重新批准后重检"]})
+        task = fresh
         anchor_now, _parts_now = check_mod.current_anchor(ctx, task)
         if anchor_now != state["anchor"]:
             raise TaskError("WF_CHECK_STALE",
@@ -3447,9 +3600,9 @@ def cmd_task_knowledge(ctx, args):
         if loaded is None:
             raise TaskError("WF_PATH_INVALID", {"reason": "changes file missing", "path": changes_path})
         changes = loaded if isinstance(loaded, list) else [loaded]
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-knowledge"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -3484,10 +3637,10 @@ def cmd_task_retrospect(ctx, args):
     evidence = records.load_json(evidence_path)
     if evidence is None:
         raise TaskError("WF_PATH_INVALID", {"reason": "evidence file missing", "path": evidence_path})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     required = bool(gates.retrospective_triggers(ctx.root, _load_or_fail(ctx, task_id), ctx.debug_threshold()))
     with lock.acquire(ctx.root, holder_hint="task-retrospect"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -3518,9 +3671,9 @@ def cmd_task_attribute(ctx, args):
     commit = args.value("--commit")
     if not task_id or not commit:
         raise TaskError("WF_USAGE_INVALID", {"reason": "task-attribute requires --task <id> --commit <oid>"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-attribute"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -3528,6 +3681,11 @@ def cmd_task_attribute(ctx, args):
         code, _ = scope_mod.git(ctx.root, "cat-file", "-e", f"{commit}^{{commit}}")
         if code != 0:
             raise TaskError("WF_HISTORY_UNRESOLVED", {"commit": commit, "reason": "commit not found"})
+        # 归属决定按**完整提交号**记账：短前缀在核对时既可能误命中另一提交，也无法对长串做前缀比对
+        # （六轮复核 b.7）。这里把提交号归一为全长，读侧只做精确相等。
+        code, full = scope_mod.git(ctx.root, "rev-parse", "--verify", f"{commit}^{{commit}}")
+        if code == 0 and str(full or "").strip():
+            commit = str(full).strip()
         message = scope_mod.commit_message(ctx.root, commit)
         trailer = scope_mod.commit_trailer_task(message)
         if trailer and trailer != task_id:
@@ -3607,14 +3765,14 @@ def cmd_task_abandon(ctx, args):
         if loaded is None:
             raise TaskError("WF_PATH_INVALID", {"reason": "disposition file missing"})
         disposition = loaded
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-abandon"):
         pending_resume = load_task(ctx.root, task_id)
         if pending_resume is not None and pending_resume.get("status") == "archived" \
                 and pending_resume.get("terminal") == "abnormal":
-            ctx.require_held(task=task_id)
+            require_held_for(ctx, task_id)
             return _abandon_resume(ctx, task_id)
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -4017,9 +4175,9 @@ def cmd_dep(ctx, args):
                          "got": {"op": sub, "task": task_id, "prereq": prereq}})
     if task_id == prereq:
         raise TaskError("WF_DEPENDENCY_UNMET", {"reason": "self edge", "task": task_id})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint=f"dep {sub}"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         if not path:
             raise TaskError("WF_TARGET_MISSING", {"reason": "task record missing", "task": task_id})
@@ -4195,6 +4353,8 @@ def review_acceptance_echo(task):
 def _release_after_archive(ctx, task_id, holder=None):
     """正常归档持久化成功后释放写权：对象已终态，释放没有业务语义选择。
 
+    实例内任务例外：实例仍在途，写权属于实例（设计稿 §5.8/§5.9）——释放它会让实例
+    无法 `run advance` 记 satisfied。此时只报告 `kept="run"`，由实例自己的收尾释放。
     释放失败不把归档报成失败：返回事实并给 `writer release` 恢复出口。
     """
     from . import cli
@@ -4204,7 +4364,11 @@ def _release_after_archive(ctx, task_id, holder=None):
         if record.get("state") == "idle":
             return {"released": True, "already": True}
         if holder is None:
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = require_held_for(ctx, task_id)
+        scope = (holder.get("scope") or {}).get("object") or {}
+        if scope.get("kind") == "run":
+            return {"released": False, "kept": "run", "run": scope.get("id"),
+                    "next": "实例仍在途：写权属于实例，回到实例用 run advance 记 satisfied"}
         updated, assertion = cli._release_writer_locked(ctx, holder)
         return {"released": True, "generation": updated.get("generation"),
                 "control_assertion": assertion}
@@ -4318,7 +4482,7 @@ def cmd_archive(ctx, args):
     if not finish:
         raise TaskError("WF_SEMANTIC_DECISION", {"reason": "finish decision required",
                                                  "choices": [item.get("choice") for item in decisions]})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="archive"):
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json")) if path else None
@@ -4331,7 +4495,7 @@ def cmd_archive(ctx, args):
             old_rel = None   # 续做分支：目录可能早已移动过，源路径只在本轮移动时才存在
             write_holder = None
             if current_dir and not rel_now.startswith(".wf/tasks/archive/"):
-                _record, write_holder = ctx.require_held(task=task_id)
+                _record, write_holder = require_held_for(ctx, task_id)
                 destination = _archive_destination(ctx.root, task)
                 if os.path.exists(destination):
                     raise TaskError("WF_TARGET_COLLISION",
@@ -4350,7 +4514,7 @@ def cmd_archive(ctx, args):
                 authorized = bool(task.get("finish_decision"))
                 if record_rel and authorized:
                     try:
-                        ctx.require_held(task=task_id)
+                        require_held_for(ctx, task_id)
                     except Exception as exc:  # 写权/代次不满足即停，不提交
                         return codes.result(
                             getattr(exc, "code", None) or "WF_WRITER_BUSY",
@@ -4387,6 +4551,8 @@ def cmd_archive(ctx, args):
                                          action_state=(task.get("action") or {}).get("state")),
                 next_=("归档已持久化，写权已释放；下一对象需在新会话选择"
                        if persisted.get("persisted") and write_release.get("released")
+                       else "归档已持久化；实例仍在途：回到实例用 run advance 记 satisfied"
+                       if persisted.get("persisted") and write_release.get("kept") == "run"
                        else "归档已持久化：无需重复归档或重复提交" if persisted.get("persisted")
                        else "按可达提交查证结果交人核对（不重复归档）"),
                 facts={"archive_persisted": persisted, "terminal": task.get("terminal"),
@@ -4400,7 +4566,7 @@ def cmd_archive(ctx, args):
                        # ⑥：归档强制回显当前生效的放行清单（人裁接受的风险必须跟着终态可见）
                        "unknown_acceptances": review_acceptance_echo(task)},
             )
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         if task.get("status") != "in_progress" or task.get("phase") != "finish":
             raise TaskError("WF_SEMANTIC_DECISION", {"reason": "normal archive requires finish phase",
                                                      "status": task.get("status"), "phase": task.get("phase")})
@@ -4611,7 +4777,7 @@ def _inspection_hint(ctx):
         return facts
     facts["due"] = bool(inspection.get("due"))
     if facts["due"]:
-        facts["next"] = "按设计稿 §5.4 运行 inspect 完成本轮巡检"
+        facts["next"] = "用 `wf inspect` 只读核对工作区分类与冲突后继续"
     return facts
 
 def _reassess_empty_set(ctx, task_id):
@@ -4758,9 +4924,9 @@ def cmd_baseline_apply(ctx, args):
     files = proposal.get("files")
     if not isinstance(files, list) or not files:
         raise TaskError("WF_SEMANTIC_DECISION", {"reason": "proposal has no files"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="baseline-apply"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         from . import gates as gates_mod
@@ -5005,9 +5171,9 @@ def cmd_spec_update(ctx, args):
     changes = records.load_json(changes_path)
     if not isinstance(changes, list):
         raise TaskError("WF_PATH_INVALID", {"reason": "changes file must be a JSON array"})
-    _require_binding(ctx, task_id)
+    write_scope(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="spec-update"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         # R17：与基线入口同口径的动作授权（阶段 + 批准 + 未暂停/挂起）
@@ -5090,42 +5256,18 @@ def cmd_spec_update(ctx, args):
 
 
 def bind_task_for_write(ctx, task_id):
-    """任务的写入口绑定核验：普通任务绑任务本身；**实例内的任务**绑实例且 `cursor.task_id` 指向它。
+    """任务的写入口绑定 + 写权核验（决策类入口与 review 共用）。
 
-    机制稿 §6.1：在途实例的任务只可由绑定该实例且游标正确的会话推进，不得直接以 task 绑定选取。
-    返回 `("task"|"run", run_or_None, holder)`，供决策类入口（返工/复评）共用。
+    判定本体只有一处：`write_scope`（绑定面与实例归属）与 `require_held_for`（写权作用域）。
+    本函数只把两者组合成既有返回形状 `("task"|"run", run_or_None, (record, holder))`，
+    不再自带第二套归属判据（机制稿 §6.1；实例内任务只可由绑定该实例且游标正确的会话推进）。
     """
-    from . import session as session_mod
+    scope_kind, run_id = write_scope(ctx, task_id)
+    record, holder = require_held_for(ctx, task_id)
+    from . import runs as runs_mod
 
-    key = ctx.key()
-    binding = session_mod.load_binding(ctx.root, key)
-    if not binding:
-        raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": key},
-                        next_="由人先用 wf-start 选择对象")
-    object_ref = binding.get("object") or {}
-    if object_ref.get("id") == task_id and object_ref.get("kind") == "task":
-        _require_instance_match(ctx, binding)
-        return "task", None, ctx.require_held(task=task_id)
-    task = load_task(ctx.root, task_id) or {}
-    run_id = task.get("run_id")
-    if run_id and object_ref.get("kind") == "run" and object_ref.get("id") == run_id:
-        from . import runs as runs_mod
-
-        run = runs_mod.load_run(ctx.root, run_id)
-        if not isinstance(run, dict):
-            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
-        if run.get("terminal"):
-            raise TaskError("WF_BINDING_MISMATCH",
-                            {"reason": "run already ended", "terminal": run.get("terminal")})
-        cursor = run.get("cursor") or {}
-        if cursor.get("task_id") != task_id:
-            raise TaskError("WF_BINDING_MISMATCH",
-                            {"reason": "instance cursor is not on this task",
-                             "cursor": cursor, "task": task_id},
-                            next_="只推进游标所指的任务；换任务先 run advance")
-        _require_instance_match(ctx, binding)
-        return "run", run, ctx.require_held(run=run_id)
-    raise TaskError("WF_BINDING_MISMATCH", {"bound": object_ref, "requested": task_id})
+    run = runs_mod.load_run(ctx.root, run_id) if run_id else None
+    return scope_kind, run, (record, holder)
 
 
 def rework_set(root, task_id):
@@ -5191,7 +5333,7 @@ def cmd_task_reassess(ctx, args):
     _mine_early, writer_facts = reassess_write_right(ctx)
     mine, holder = False, None
     if _mine_early:
-        _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
+        bind_task_for_write(ctx, task_id)
         mine = True
     if not mine:
         current = records.load_json(os.path.join(_require_task_dir(ctx, task_id), "task.json"))
@@ -5204,8 +5346,7 @@ def cmd_task_reassess(ctx, args):
                    **writer_facts,
                    "conditions": reassess_problems(ctx.root, current)})
     with lock.acquire(ctx.root, holder_hint="task-reassess"):
-        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
-                                    else {"run": (_run or {}).get("id")}))[1]
+        holder = require_held_for(ctx, task_id)[1]
         path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived":
@@ -5329,8 +5470,7 @@ def cmd_task_replace(ctx, args):
         return _replace_preview(ctx, task, decision, successor_paths, decision_path)
     _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-replace"):
-        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
-                                    else {"run": (_run or {}).get("id")}))[1]
+        holder = require_held_for(ctx, task_id)[1]
         path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived" or task.get("terminal"):
@@ -5501,8 +5641,7 @@ def cmd_task_rework(ctx, args):
                          "got": decision.get("choice"), "accepted": list(REWORK_CHOICES)})
     _scope_kind, _run, holder = bind_task_for_write(ctx, task_id)
     with lock.acquire(ctx.root, holder_hint="task-rework"):
-        holder = ctx.require_held(**({"task": task_id} if _scope_kind == "task"
-                                    else {"run": (_run or {}).get("id")}))[1]
+        holder = require_held_for(ctx, task_id)[1]
         path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         if task.get("status") == "archived" or task.get("terminal"):
@@ -5576,7 +5715,7 @@ def cmd_task_rework(ctx, args):
         # 机制稿 §6.2：普通任务绑定分支由本入口完成 release（新会话才能绑定 R）。
         # 释放与「暂停已落盘」同一原子段：暂停没落盘就释放，等于把 T 的进度交给一个不知道要暂停的会话。
         with lock.acquire(ctx.root, holder_hint="task-rework release"):
-            ctx.require_held(task=task_id)
+            require_held_for(ctx, task_id)
             from . import writer as writer_mod
 
             updated = writer_mod.release(ctx.writer())
@@ -5659,10 +5798,12 @@ def stop_work(ctx, decisions, choice):
         raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding"})
     object_ref = binding.get("object") or {}
     if object_ref.get("kind") != "task":
-        raise TaskError("WF_BINDING_MISMATCH", {"reason": "instance stop requires round 2"})
+        raise TaskError("WF_BINDING_MISMATCH",
+                        {"reason": "实例对象不用 stop 收工", "bound": object_ref},
+                        next_="实例内任务用 task-pause 保存暂停；实例整体用 run pause（可再 run resume）或 run terminate")
     task_id = object_ref.get("id")
     with lock.acquire(ctx.root, holder_hint="stop"):
-        record, holder = ctx.require_held(task=task_id)
+        record, holder = require_held_for(ctx, task_id)
         path = task_dir(ctx.root, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
         from . import paths as paths_mod

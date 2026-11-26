@@ -74,19 +74,6 @@ def lock_path(root):
     return os.path.join(str(root), LOCK_NAME)
 
 
-def _open_lock(root):
-    root_real = os.path.realpath(str(root))
-    path = os.path.realpath(lock_path(root_real))
-    if path != os.path.join(root_real, LOCK_NAME):
-        raise LockMismatch("lock object resolves outside project root", path)
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
-    info = os.fstat(fd)
-    if not os.path.isfile(path) or (info.st_mode & 0o170000) != 0o100000:
-        os.close(fd)
-        raise LockMismatch("lock object is not a regular file", path)
-    return path, fd
-
-
 def _read_mark(fd):
     """读首段，用于判定标记；允许其后跟持锁者事实行。"""
     os.lseek(fd, 0, os.SEEK_SET)

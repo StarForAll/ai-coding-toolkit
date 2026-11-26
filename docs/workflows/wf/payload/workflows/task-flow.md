@@ -24,7 +24,7 @@
 
 - 时点：进入 Check 前（before_check）
 - enforcement: `wflib/tasks.py::work_satisfied_fact`（核验）＋ `cmd_task_check` 在同一 action 内写 completed 回执
-- 动作：批准范围要求的产物与必需用户动作已实际完成；纯调查须有可观察成果。
+- 动作：批准范围要求的产物与必需用户动作已实际完成；零触碰面的纯调查任务以**已批准规划的验收项**为可观察成果（Check 逐条给结论）。
 - 出口：交付物缺失或用户动作未答 → `WF_CHECK_FAILED` / `WF_SEMANTIC_DECISION`。
 
 ### task.check-passed [required · repeatable]
@@ -37,16 +37,17 @@
 ### task.tdd-verified [required · repeatable]
 
 - 时点：归档前（before_archive，仅 TDD 开启时适用）
-- enforcement: `wflib/check.py::run_check` 的 `tdd_evidence` 核验（红绿证据与适用性判断见 `wf-tdd`）
-- 动作：对同一真实行为有红→绿证据；文档类对象以已批准的适用性与独立可观察验证代替。
-- 出口：开关开启而缺证据 → `WF_CHECK_FAILED`，不得以其余检查通过顶替。
+- enforcement: `wflib/check.py::tdd_evidence_problem`（核验）＋ `wflib/gates.py::verify_step`（门禁重核；红绿与适用性判断见 `wf-tdd`）
+- 动作：红运行须是**同一 `verification_id`** 的历史失败运行、绿运行须是本次通过运行（两段引用各自指向真实运行）；
+  文档/调查类对象按批准规划里的 `tdd_applicability`（`docs`/`investigation`）以独立可观察验证代替红绿。
+- 出口：开关开启而缺证据、或红绿跨验证项拼凑 → `WF_CHECK_FAILED`，不得以其余检查通过顶替。
 
 ### task.review-passed [required · repeatable]
 
 - 时点：归档前（before_archive，仅复杂任务适用）
 - enforcement: `wflib/review.py::decide`（判定）＋ `wflib/gates.py::verify_step`（核验结果与当前 check 绑定）
-- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过，或单 reviewer + 人签残余风险接受（留痕降级，不默认——机制稿 §9.2）；锚点与当前 Check 一致。
-- 出口：报告缺失/身份或人数不合格/锚点失配 → `WF_REVIEW_INVALID`；环境不足 → `WF_REVIEW_UNAVAILABLE`。
+- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过，或单 reviewer + 人签残余风险接受（留痕降级、不默认）；锚点与当前 Check 一致。
+- 出口：报告缺失/身份或人数不合格/锚点失配 → `WF_REVIEW_INVALID`；环境不足 → `WF_REVIEW_UNAVAILABLE`；审查给出的正当不通过 → `WF_REVIEW_FAILED`。
 
 ### task.knowledge-disposed [required · once]
 

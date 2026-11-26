@@ -23,7 +23,8 @@
       "complexity-human-carrier",
       "inspect-declares-omitted",
       "repair-controlled-apply",
-      "baseline-apply-generated"
+      "baseline-apply-generated",
+      "review-material-pending"
     ],
     "archive": [
       "abandon-boundary",
@@ -69,6 +70,21 @@
       "reinstall-preserves-data",
       "release-identity-commit",
       "uninstall-records-maintenance"
+    ],
+    "instance": [
+      "instance-task-phases",
+      "run-advance-creates-task",
+      "run-advance-after-human-step",
+      "run-snapshot-missing",
+      "prepare-authorization"
+    ],
+    "task": [
+      "check-writeback-keeps-pause",
+      "complexity-replan-facts",
+      "investigation-outcome",
+      "tdd-evidence-identity",
+      "check-exclusion-persists",
+      "mechanical-revision-equivalence"
     ]
   },
   "cases": {

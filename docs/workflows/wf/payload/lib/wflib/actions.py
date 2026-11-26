@@ -122,8 +122,10 @@ def new_action(
         # 意图本体也要留：恢复时（如 identity/project_id）需要取值而不只是校验摘要
         "inputs": dict(inputs or {}),
         "targets": targets or [],
-        "steps": list(steps or []),
-        "next_step": (steps or [None])[0] if steps else None,
+        # `steps` 的唯一形状：`{"id","state"}` 列表（写入流程与入口都在这一步之后按 id 标状态）。
+        # 早先这里存的是步骤名字，另有多处再改写成字典——同一字段两种形状，按名比较全部失效。
+        "steps": [{"id": str(step), "state": "pending"} for step in (steps or [])],
+        "next_step": (str(steps[0]) if steps else None),
         "state": "prepared",
         "result": None,
     }
@@ -147,18 +149,27 @@ def is_done(action) -> bool:
 
 
 def step_done(action, step_id: str):
-    steps = list(action.get("steps") or [])
-    if step_id in steps:
-        index = steps.index(step_id)
-        action = dict(action)
-        action["next_step"] = steps[index + 1] if index + 1 < len(steps) else None
-        action["state"] = "applying"
-        return action
-    raise ValueError(f"unknown step: {step_id}")
+    """推进一步：把该步骤标 done，`next_step` 指向下一个步骤 id。"""
+    steps = [dict(item) if isinstance(item, dict) else {"id": item, "state": "pending"}
+             for item in action.get("steps") or []]
+    ids = [str(item.get("id")) for item in steps]
+    if step_id not in ids:
+        raise ValueError(f"unknown step: {step_id}")
+    index = ids.index(step_id)
+    steps[index]["state"] = "done"
+    action = dict(action)
+    action["steps"] = steps
+    action["next_step"] = ids[index + 1] if index + 1 < len(ids) else None
+    action["state"] = "applying"
+    return action
 
 
 def complete(action, summary=None, control_assertion=None):
     action = dict(action)
+    # 收尾即"全部步骤完成"：状态与步骤不再各说一套
+    action["steps"] = [dict(item, state="done") if isinstance(item, dict)
+                       else {"id": item, "state": "done"}
+                       for item in action.get("steps") or []]
     action["state"] = "done"
     action["next_step"] = None
     action["result"] = {"summary": summary, "failure": None, "control_assertion": control_assertion}

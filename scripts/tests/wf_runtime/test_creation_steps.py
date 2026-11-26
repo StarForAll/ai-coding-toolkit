@@ -13,7 +13,14 @@ sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
 from wflib import runs  # noqa: E402
 
-DOC = {"inputs": {}, "steps": [{"id": "one", "type": "human"}, {"id": "two", "type": "task"}]}
+# `two` 是可略步骤（required=false + skip 声明）——只有这种步骤能被创建输入标成 skipped；
+# 必需步骤（skip=null）被声明 skipped 属越权，另有用例（六轮审查 b-1）。
+DOC = {"inputs": {}, "steps": [
+    {"id": "one", "type": "human"},
+    {"id": "two", "type": "task", "required": False,
+     "skip": {"condition": "本次无该步", "decision_point": "one",
+              "downstream": {"consumes": False}}},
+]}
 
 
 def _creation(steps):
@@ -31,6 +38,13 @@ class CreationStepsTest(unittest.TestCase):
         self.assertTrue(any("declare every step" in item["reason"] for item in problems),
                         f"未声明 two 应被拒：{problems}")
         self.assertEqual([item.get("missing") for item in problems if item.get("missing")], [["two"]])
+
+    def test_required_step_cannot_be_declared_skipped(self):
+        doc = {"inputs": {}, "steps": [{"id": "must", "type": "task", "required": True,
+                                        "skip": None}]}
+        problems = runs.creation_problems(_creation({"must": "skipped"}), doc)
+        self.assertTrue(any("required step cannot be declared skipped" in item["reason"]
+                            for item in problems), problems)
 
     def test_undeclared_and_bad_value_still_rejected(self):
         problems = runs.creation_problems(_creation({"one": "applicable", "two": "maybe", "x": "applicable"}), DOC)

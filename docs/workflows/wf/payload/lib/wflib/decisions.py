@@ -40,6 +40,12 @@ DOMAINS = {
     "acceptance_conclusion": ("passed", "failed", "pending"),
     # 外来未提交改动的排除（人确认"不属于本任务、保持原样"；路径 + 记录时内容摘要绑定）
     "workspace_exclusion": ("排除外来改动", "exclude-foreign"),
+    # 工作流定义准备范围授权（`definition prepare --authorization`）：人授予"可写这些定义路径"的
+    # 准备权限；内容本身仍由创建实例时的定义摘要单独确认（设计稿 §5.7）
+    "prepare_definition": ("准备定义", "prepare-definition"),
+    # 实例创建授权（`run create --authorization`）：人确认"用这个定义版本/输入/步骤适用性创建实例"；
+    # 决定里的 `object_digest` 是创建输入的规范摘要（`runs.creation_digest`）
+    "create_instance": ("创建实例", "create-instance"),
 }
 
 

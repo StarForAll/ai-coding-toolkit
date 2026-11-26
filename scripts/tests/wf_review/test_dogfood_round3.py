@@ -522,11 +522,14 @@ class Round4ReviewFixesTest(unittest.TestCase):
         text = (REPO / "docs/workflows/wf/skills/wf-continue/SKILL.md").read_text(encoding="utf-8")
         self.assertNotIn("每个槽位一次", text)
         self.assertIn("一次调用导入本轮全部已完成报告", text)
-        self.assertIn("authorize record --draft", text)
+        # 只读骨架的指针（旗标拼写只在 `wf help`，skill 保留"先取骨架"的动作与定位用旗标名）
+        self.assertIn("authorize record", text)
+        self.assertIn("--draft", text)
         # b6：内容边界显式声明
         self.assertIn("不覆盖每轮的具体内容", text)
         finish = (REPO / "docs/workflows/wf/skills/wf-finish/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("authorize record --draft", finish)
+        self.assertIn("authorize record", finish)
+        self.assertIn("--draft", finish)
 
     def test_preview_carries_materials_identity(self):
         # a-P1：preview 含日志清单与摘要（与 write_materials 同源）

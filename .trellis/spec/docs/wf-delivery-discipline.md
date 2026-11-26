@@ -75,6 +75,25 @@
 
 ---
 
+## 4b. 「机制之间是否接上」也是收口面（2026-11-26 六轮复核）
+
+**事实**：`tasks.bind_task_for_write()` 早就正确支持「实例内任务按实例归属 + 游标核验」，但 17 个日常写入口用的是另一套 `_require_binding()`（只认 `binding.object.id == 任务 id`）。结果是 `run advance` 建出的任务**在机制上存在、在流程上不可达**（批准即 `WF_BINDING_MISMATCH`），而两边各自的用例都绿——`run-advance-creates-task` 只验了建任务与幂等，没走到批准。
+
+**Rule（收口时逐条问）**：
+1. 新增/既有机制「被谁消费」而不是「是否存在」：一个能力实现了但入口没接，等于没有；
+2. 端到端断言必须**跨过机制接缝**（本例：建任务 → 批准 → 开工 → Check → 归档 → 实例记 satisfied），只验各段内部成立会把接缝缺陷留在中间；
+3. 接缝两侧若要各自判同一件事（归属解析），收敛成一实现（`write_scope`/`require_held_for`），并把第二个调用面改成转发，不留两套判据。
+
+---
+
+## 4c. `--full` 的 pyc 漂移假失败（2026-11-26 六轮复核）
+
+**事实**：并行套件里有几条（`p5_v1`、`r90_tests`）要求「同来源重复部署 = 幂等」。若源树里已有/正在生成 `__pycache__`，`wf-dev-deploy` 的「落点内容与本发行一致」核验会看到额外文件，把幂等报成 `WF_OK`/`WF_ASSET_DECISION` 之外的 rc=1 失败。单独跑与两两组合都绿，全量并行才红。
+
+**Rule**：跑 `--full` 前先 `find docs/workflows/wf scripts/tests \( -name "*.pyc" -o -name "__pycache__" \) -prune -exec rm -rf {} +`；或给套件层导出 `PYTHONDONTWRITEBYTECODE=1`。看到这两条失败先清 pyc 复跑，别按逻辑缺陷去改产品。
+
+---
+
 ## 5. 新增资产 / 字段的登记链
 
 **Contract**：新增 payload 文件或记录字段，同批完成四项：

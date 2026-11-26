@@ -14,8 +14,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _harness as H
 
-FROM = "        if key is None:\n            _establish_auto_session(ctx)"
-TO = "        _establish_auto_session(ctx)  # 注入：总是重建"
+# 注入形态：让锚点路由"命中即续用"退化成 no_session，于是每次 enable 都重建会话/附件
+# （模拟"找不到既有路由就新建"）。旧注入点 `if key is None:` 在会话解析重构后已不存在，
+# red 面因此长期 stale——改为注入到唯一的重用判定处（L1 单主命中）。
+FROM = ('        if len(l1_owners) == 1:                       # #1 / #2：L1 单主命中即以此为准\n'
+        '            return dict(base, state="anchor_resume", key=l1_owners[0],')
+TO = ('        if False:                                     # 注入：不认续用，总是重建\n'
+      '            return dict(base, state="anchor_resume", key=l1_owners[0],')
 
 
 def run(project, args, inputs=None):

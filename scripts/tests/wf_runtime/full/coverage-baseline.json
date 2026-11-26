@@ -36,6 +36,13 @@
       "release-identity-commit",
       "uninstall-records-maintenance"
     ],
+    "instance": [
+      "instance-task-phases",
+      "prepare-authorization",
+      "run-advance-after-human-step",
+      "run-advance-creates-task",
+      "run-snapshot-missing"
+    ],
     "review": [
       "baseline-apply-generated",
       "complexity-bootstrap-exempt",
@@ -47,8 +54,17 @@
       "review-excluded-scope-covers",
       "review-filename-identity",
       "review-identity-c6",
+      "review-material-pending",
       "review-report-boundary",
       "review-unavailable"
+    ],
+    "task": [
+      "check-exclusion-persists",
+      "check-writeback-keeps-pause",
+      "complexity-replan-facts",
+      "investigation-outcome",
+      "mechanical-revision-equivalence",
+      "tdd-evidence-identity"
     ],
     "writer": [
       "gate-run",
@@ -117,6 +133,20 @@
       ],
       "metadata": true
     },
+    "check-exclusion-persists": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
+      "metadata": false
+    },
+    "check-writeback-keeps-pause": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
+      "metadata": false
+    },
     "complexity-bootstrap-exempt": {
       "candidate_clean": "<missing>",
       "groups": [
@@ -128,6 +158,13 @@
       "candidate_clean": "<missing>",
       "groups": [
         "review"
+      ],
+      "metadata": false
+    },
+    "complexity-replan-facts": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
       ],
       "metadata": false
     },
@@ -275,10 +312,38 @@
       ],
       "metadata": true
     },
+    "instance-task-phases": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "instance"
+      ],
+      "metadata": false
+    },
+    "investigation-outcome": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
+      "metadata": false
+    },
     "maintenance-disposition-s1": {
       "candidate_clean": "<missing>",
       "groups": [
         "archive"
+      ],
+      "metadata": false
+    },
+    "mechanical-revision-equivalence": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
+      "metadata": false
+    },
+    "prepare-authorization": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "instance"
       ],
       "metadata": false
     },
@@ -364,6 +429,13 @@
       ],
       "metadata": false
     },
+    "review-material-pending": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
     "review-report-boundary": {
       "candidate_clean": "<missing>",
       "groups": [
@@ -378,9 +450,18 @@
       ],
       "metadata": false
     },
+    "run-advance-after-human-step": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "instance"
+      ],
+      "metadata": false
+    },
     "run-advance-creates-task": {
       "candidate_clean": "<missing>",
-      "groups": [],
+      "groups": [
+        "instance"
+      ],
       "metadata": false
     },
     "run-create-once": {
@@ -401,6 +482,13 @@
     "run-resume": {
       "candidate_clean": "<missing>",
       "groups": [],
+      "metadata": false
+    },
+    "run-snapshot-missing": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "instance"
+      ],
       "metadata": false
     },
     "run-terminate": {
@@ -531,6 +619,13 @@
     "task-start-surface": {
       "candidate_clean": "<missing>",
       "groups": [],
+      "metadata": false
+    },
+    "tdd-evidence-identity": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
       "metadata": false
     },
     "terminate-stop-request": {

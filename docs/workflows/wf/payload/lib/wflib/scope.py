@@ -262,23 +262,68 @@ def _overlaps(pattern, touch):
     return not paths_mod.provably_disjoint(pattern, touch)
 
 
+def _agents_block(text):
+    """`AGENTS.md` 的安装器托管块（`TRELLIS:START` … `TRELLIS:END`）文本；缺一端返回 None。"""
+    if not isinstance(text, str):
+        return None
+    start = text.find(AGENTS_BLOCK_MARKER)
+    if start < 0:
+        return None
+    end = text.find("TRELLIS:END", start)
+    if end < 0:
+        return None
+    return text[start:end]
+
+
+def _agents_block_changed(root, relative="AGENTS.md"):
+    """托管块内容是否与 HEAD 不同（机制可证的唯一判据）。
+
+    没有 HEAD / 文件未入库 / 读不到任一端时**保守判为变**（不知道就不降级）：
+    这些情形都无法证明"块外文字改动"，宁可提出复杂由人裁。
+    """
+    import subprocess
+
+    try:
+        with open(os.path.join(root, relative), "r", encoding="utf-8") as handle:
+            current = _agents_block(handle.read())
+    except OSError:
+        return True
+    try:
+        proc = subprocess.run(["git", "show", f"HEAD:{relative}"], cwd=str(root),
+                              capture_output=True, text=True, check=False)
+    except OSError:
+        return True
+    if proc.returncode != 0:
+        return True
+    return _agents_block(proc.stdout) != current or current is None
+
+
 def contract_surface_condition(root, touch_paths, declared=None):
-    """条件②：触碰面命中契约面，或 Plan 显式声明 contract_changes。"""
+    """条件②：触碰面命中契约面，或 Plan 显式声明 contract_changes。
+
+    `AGENTS.md` 单列：安装器托管块（流程路由）属于契约面，块外项目文字不属于——
+    只要路径命中就算，会把"改一句项目说明"也提成复杂（六轮复核 a.4 的误升）。
+    """
     if declared:
         return "true", {"fact": "declared", "contract_changes": list(declared)}
+    # AGENTS.md 单列，但**必须最后判**：早退会让"结果取决于 touch_paths 顺序"
+    # （`AGENTS.md` 排在契约路径之前就把整条条件判成 false，六轮审查 b-5）。
+    agents_hit = None
     for touch in touch_paths or []:
         for pattern in CONTRACT_SURFACE:
             if _overlaps(pattern, touch):
                 return "true", {"fact": "contract-surface", "pattern": pattern, "touch": touch}
         if _overlaps("AGENTS.md", touch):
-            path = os.path.join(root, "AGENTS.md")
-            try:
-                with open(path, "r", encoding="utf-8") as handle:
-                    text = handle.read()
-            except OSError:
-                text = ""
-            if AGENTS_BLOCK_MARKER in text:
-                return "true", {"fact": "agents-managed-block", "touch": touch}
+            agents_hit = touch
+    if agents_hit is not None:
+        if _agents_block_changed(root):
+            return "true", {"fact": "agents-managed-block", "touch": agents_hit}
+        # 托管块此刻未变只说明"还没改"，不能证明计划只改块外文字——机制给事实，
+        # 语义由方案/人给：计划确实要改托管块时在 Plan 声明 `contract_changes`（声明优先）。
+        return "false", {"fact": "agents-outside-block", "touch": agents_hit,
+                         "basis": "managed-block-unchanged-at-approval",
+                         "note": ("托管块与 HEAD 一致：按块外文字处理；若本计划会改托管块"
+                                  "（流程路由/指令注入），在 Plan 里声明 contract_changes 即按契约面判")}
     return "false", {"fact": "no-contract-surface"}
 
 
@@ -294,15 +339,18 @@ def acceptance_surface_condition(root, touch_paths, acceptance_changed=None):
 
 
 def expansion_condition(previous_touch_paths, touch_paths):
-    """条件④：再次批准时触碰面覆盖上一版批准面之外的路径。"""
+    """条件④：再次批准时触碰面**可证超出**上一版批准面。
+
+    判据是包含关系（`paths.subsumes(new, old)` = 新条目 ⊆ 某条旧批准），不是"是否相交"：
+    相交只说明两面有交集，`src/a.py → src/**` 恰好相交却扩大了面（六轮复核 a.4 的漏判）。
+    """
     previous = list(previous_touch_paths or [])
     if not previous:
         return "false", {"fact": "no-previous-approval"}
     for touch in touch_paths or []:
-        if not any(not paths_mod.provably_disjoint(old, touch) for old in previous):
+        covering = [old for old in previous if paths_mod.subsumes(touch, old)]
+        if not covering:
             return "true", {"fact": "scope-expanded", "touch": touch, "previous": previous}
-    # 新面覆盖了旧面没覆盖到的具体路径也视为扩张（用旧面里已批准的路径反查不含 touch 时的情形略过：
-    # 这里只判"新增条目未被旧面包含"，宁高不低）
     return "false", {"fact": "within-previous"}
 
 
@@ -936,12 +984,8 @@ def vendor_assets(root, task, paths):
     归档提交要带上 `.wf/tasks/**`、`.wf/baseline.md` 等项目数据，它们不是 vendor；
     只看前缀会把记录一起挡住。
     """
-    task_id = (task or {}).get("id")
-    installed = installed_asset_paths(root)
-    # 项目数据（不是框架自有资产）：任务记录、基线、项目配置、安装记录
-    # 项目数据（不是框架自有资产）：任务记录、**项目自己的 spec**、安装记录。
-    # `.wf/spec/**` 由 spec.update 写入、不被升级覆盖（实现方案 §"项目数据落点表"），
-    # 漏了它会让初始化任务与日常 spec 更新都归不了档。
+    # 项目数据（不是框架自有资产）的集合由 `protocol.project_data()` 唯一声明
+    # （任务记录、基线、项目配置、项目自己的 `.wf/spec/**`、安装记录）；这里不另写前缀清单。
     task_id = (task or {}).get("id")
     installed = installed_asset_paths(root)
     found = []

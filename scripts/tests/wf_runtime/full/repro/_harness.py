@@ -322,7 +322,17 @@ def release_source(root):
 
 
 def deploy(root, platforms=("dsh",)):
-    """用**真实发行树**部署一个最小项目，返回项目根（CLI 级用例需要真实部署）。"""
+    """用**真实发行树**部署一个最小项目，返回项目根（CLI 级用例需要真实部署）。
+
+    直跑守卫：`RELEASE` 缺省指向仓库里的 `docs/workflows/wf-release`（上一次发行的字节）。
+    工作树改了 payload 而发行树没重建时，从这里部署出来的是**旧实现**——green 可能因为
+    "旧实现本来就没有这个缺陷"而空洞通过，red 则找不到注入点。两种结论都不成立，
+    所以没有 `WF_RELEASE_TREE`（由 run.sh / run_all.sh 注入本次测试发行）时直接拒绝。
+    """
+    if not os.environ.get("WF_RELEASE_TREE"):
+        raise Precondition(
+            "未提供 WF_RELEASE_TREE：直接手跑会部署仓库内的发行树（可能落后于当前 payload），"
+            "green/red 结论都不成立；请用 repro/run.sh 或 run_all.sh 跑（它们会从当前源码构建测试发行）")
     project = os.path.join(root, "proj")
     os.makedirs(project, exist_ok=True)
     source = release_source(root)
@@ -421,3 +431,55 @@ def ensure_project_config(project):
     subprocess.run(["git", "add", "-A"], cwd=project, check=True, capture_output=True)
     subprocess.run(["git", "commit", "-qm", "project config", "--allow-empty"],
                    cwd=project, check=True, capture_output=True)
+
+
+def prepare_authorization(project, root, workflow_id, sid="sess-R", inputs=None, scope_paths=None):
+    """写一份「准备定义」的人授权文件并按它跑（流程用例的公共入口）。
+
+    走产品自己的 `definition prepare --authorization-draft` 取骨架——不在测试里手抄范围摘要，
+    顺便把草稿入口一起证伪；只把 TODO 换成人的答复。
+    """
+    import json
+
+    rc, payload = cli(project, ["definition", "prepare", "--id", workflow_id,
+                                "--authorization-draft", "--json"],
+                      sid=sid, inputs=inputs or {"generation": generation(project)})
+    if rc != 0:
+        raise Precondition(f"prepare --authorization-draft 失败：{(payload or {}).get('code')} "
+                           f"{(payload or {}).get('facts')}")
+    draft = dict(((payload or {}).get("facts") or {}).get("draft") or {})
+    if not draft.get("object_digest"):
+        raise Precondition("授权草稿缺 object_digest")
+    if scope_paths is not None:
+        draft["scope_paths"] = list(scope_paths)
+    draft["source"] = "human terminal (repro)"
+    draft["reason"] = "repro：人同意准备这份定义"
+    path = os.path.join(str(root), f"prepare-auth-{workflow_id}.json")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump([draft], handle, ensure_ascii=False)
+    return path
+
+
+def creation_authorization(project, root, creation_path, sid="sess-R", inputs=None):
+    """写一份「创建实例」的人授权文件并按它跑（实例流程用例的公共入口）。
+
+    走产品自己的 `run create --authorization-draft --creation <文件>` 取骨架——摘要由机制按
+    当前 creation 内容预填，测试不手抄；只把 TODO 换成人的答复。
+    """
+    import json
+
+    rc, payload = cli(project, ["run", "create", "--authorization-draft",
+                                "--creation", creation_path, "--json"],
+                      sid=sid, inputs=inputs or {"generation": generation(project)})
+    if rc != 0:
+        raise Precondition(f"run create --authorization-draft 失败：{(payload or {}).get('code')} "
+                           f"{(payload or {}).get('facts')}")
+    draft = dict(((payload or {}).get("facts") or {}).get("draft") or {})
+    if not draft.get("object_digest"):
+        raise Precondition("创建授权草稿缺 object_digest")
+    draft["source"] = "human terminal (repro)"
+    draft["reason"] = "repro：人确认按这份创建输入建实例"
+    path = os.path.join(str(root), f"create-auth-{os.path.basename(creation_path)}")
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump([draft], handle, ensure_ascii=False)
+    return path

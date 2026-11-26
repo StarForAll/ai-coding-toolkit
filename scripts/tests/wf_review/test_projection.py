@@ -143,10 +143,36 @@ class CommitClassificationTest(unittest.TestCase):
 
     def test_three_states(self):
         attributed, adjudicated, external = projection.classify_commits(
-            self.RAW, "t1", {"attribution": {"decisions": [{"commit": "0a1b2c9"}]}})
+            self.RAW, "t1", {"attribution": {"decisions": [{"commit": "0a1b2c"}]}})
         self.assertEqual(attributed, ["a1b2c3"])
         self.assertEqual(adjudicated, ["0a1b2c"])
         self.assertEqual(external, ["d4e5f6"])
+
+    def test_short_and_full_identities(self):
+        """六轮复核 b.7：归属按完整提交号匹配；旧短号仅在**唯一**前缀时放行。"""
+        full = "0a1b2c9d8e7f6a5b4c3d2e1f0011223344556677"
+        raw = f"{full}\x1ffeat: 有裁决\n\x1e"
+        # 记录短号、查询长号：唯一前缀 ⇒ 命中
+        _, adjudicated, _ = projection.classify_commits(
+            raw, "t1", {"attribution": {"decisions": [{"commit": "0a1b2c9"}]}})
+        self.assertEqual(adjudicated, [full])
+        # 记录与查询都长：精确相等
+        _, adjudicated, _ = projection.classify_commits(
+            raw, "t1", {"attribution": {"decisions": [{"commit": full}]}})
+        self.assertEqual(adjudicated, [full])
+        # 旧短号是"声明边界"：唯一前缀时按命中处理（无法分辨是能力限制，不是放行任意前缀）
+        other = "0a1b2c9" + "f" * 33
+        _, adjudicated, _ = projection.classify_commits(
+            f"{other}\x1ffeat: 别的提交\n\x1e", "t1",
+            {"attribution": {"decisions": [{"commit": "0a1b2c9"}]}})
+        self.assertEqual(adjudicated, [other])
+        # 两个提交共享该短前缀：分不清是哪一条 ⇒ 都不归属
+        third = "0a1b2c9" + "a" * 33
+        raw_two = f"{other}\x1ffeat: 1\n\x1e{third}\x1ffeat: 2\n\x1e"
+        _, adjudicated, external = projection.classify_commits(
+            raw_two, "t1", {"attribution": {"decisions": [{"commit": "0a1b2c9"}]}})
+        self.assertEqual(adjudicated, [])
+        self.assertEqual(sorted(external), sorted([other, third]))
 
     def test_multiple_commits_are_not_collapsed(self):
         raw = "aa\x1ffeat: 1\n\nwf-task: t1\n\x1ebb\x1ffeat: 2\n\nwf-task: t1\n\x1e"

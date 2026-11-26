@@ -755,13 +755,24 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             from . import fingerprint as fp
 
             block = current.get("block") or {}
+            # 等价核验必须覆盖**plan_version 绑定的全部语义域**，否则通道比宣称的宽：
+            # 此前只比触碰面与验收摘要，改验证命令（argv/cwd/required）或 TDD 适用性都能"机械修订"通过
+            # ——那等于用一格"只是排版/转义"的人签去承载语义变更（六轮复核 A2）。
             same_paths = sorted(block.get("touch_paths") or []) == sorted(plan.get("touch_paths") or [])
             same_acceptance = fp.acceptance_digest(block.get("acceptance") or []) == plan.get("acceptance_digest")
-            if not (same_paths and same_acceptance):
+            same_verifications = (fp.verifications_digest(block.get("verifications") or [])
+                                  == fp.verifications_digest(plan.get("verifications") or []))
+            same_tdd_applicability = ((block.get("tdd_applicability") or "code")
+                                       == (plan.get("tdd_applicability") or "code"))
+            if not (same_paths and same_acceptance and same_verifications and same_tdd_applicability):
                 return False, "WF_APPROVAL_MISSING", {
                     "reason": "mechanical revision endpoints are not equivalent",
                     "same_touch_paths": same_paths,
                     "same_acceptance": same_acceptance,
+                    "same_verifications": same_verifications,
+                    "same_tdd_applicability": same_tdd_applicability,
+                    "exits": ["验算语义变了就不是排版/转义：走 task-replan（实质规划变更）重新批准",
+                              "只是块外文字/排版：保持机读块语义不变再走机械修订"],
                 }
         questions = tasks_mod.plan_questions(ctx.root, task)
         errors = tasks_mod.question_errors(questions)
@@ -782,7 +793,8 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     if step_id == "task.tdd-verified":
         check = task.get("check") or {}
         evidence = check.get("tdd_evidence")
-        if plan.get("tdd"):
+        applicability = plan.get("tdd_applicability") or check.get("tdd_applicability") or "code"
+        if plan.get("tdd") and applicability == "code":
             from . import check as check_mod
 
             history_commands = [command for entry in task.get("check_history") or []
@@ -791,6 +803,11 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             if problem:
                 return False, "WF_CHECK_FAILED", dict({"reason": "tdd evidence incomplete"}, **problem)
             return True, None, {}
+        if plan.get("tdd"):
+            # 已批准的适用性=文档/调查：由 Check 的验收结论承担（每条验收项须有命令证据或人判），
+            # 这里只报事实，不再要求红绿。
+            return True, None, {"tdd_applicability": applicability,
+                                "note": "按已批准适用性以独立可观察验证代替红绿"}
         return True, None, {}
     if step_id == "task.review-passed":
         if plan.get("complexity") != "complex":
@@ -800,7 +817,7 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             if incomplete:
                 return False, "WF_SEMANTIC_DECISION", {
                     "incomplete_downgrade": incomplete,
-                    "reason": "complex 降级为 light 须有理由与证据（机制稿 §9.3 门禁 3）",
+                    "reason": "complex 降级为 light 须有理由与证据（降级条目必须带 reason 与 evidence）",
                 }
             return True, None, {}
         reviews = task.get("reviews") or {}
@@ -1133,7 +1150,7 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
         if incomplete:
             return False, "WF_SEMANTIC_DECISION", {
                 "incomplete_downgrade": incomplete,
-                "reason": "complex 降级为 light 须有理由与证据（机制稿 §9.3 门禁 3）",
+                "reason": "complex 降级为 light 须有理由与证据（降级条目必须带 reason 与 evidence）",
             }
     from . import tasks as tasks_mod
 

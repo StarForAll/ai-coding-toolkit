@@ -75,7 +75,9 @@ def check():
                 "inputs": {"request": "改 X"}, "steps": {"change": "applicable"}}
     creation_path = os.path.join(root, "creation.json")
     json.dump(creation, open(creation_path, "w"), ensure_ascii=False)
-    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path, "--json"],
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path,
+                                  "--authorization", create_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc == 0 or (payload or {}).get("code") != "WF_SEMANTIC_DECISION":
         problems.append(f"无准备记录仍创建成功：{(payload or {}).get('code')}")
@@ -83,11 +85,15 @@ def check():
         problems.append("被拒的创建仍然写了实例目录")
 
     # ② 准备后创建成功，快照与记录就位
-    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change", "--json"],
+    prepare_auth = H.prepare_authorization(project, root, "bounded-change", sid=SID)
+    rc, payload = H.cli(project, ["definition", "prepare", "--id", "bounded-change",
+                                  "--authorization", prepare_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc != 0:
         raise H.Precondition(f"definition prepare 失败：{(payload or {}).get('code')}")
-    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path, "--json"],
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path,
+                                  "--authorization", create_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     facts = (payload or {}).get("facts") or {}
     run_id = ((facts.get("run") or {}).get("id"))
@@ -125,7 +131,9 @@ def check():
     os.makedirs(os.path.join(project, ".wf/workflow-runs"), exist_ok=True)
     before = sorted(name for name in os.listdir(os.path.join(project, ".wf/workflow-runs"))
                     if name.endswith(".json"))
-    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path, "--json"],
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path,
+                                  "--authorization", create_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     after = sorted(name for name in os.listdir(os.path.join(project, ".wf/workflow-runs"))
                    if name.endswith(".json"))

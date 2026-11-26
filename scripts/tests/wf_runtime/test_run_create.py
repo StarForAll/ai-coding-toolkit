@@ -25,7 +25,12 @@ DOC = {
         "token": {"type": "secret_ref", "required": False, "description": "凭据引用"},
         "artifact": {"type": "artifact_ref", "required": False, "description": "前序产物"},
     },
-    "steps": [{"id": "change"}, {"id": "review"}],
+    # `review` 是**可略**步骤：静态校验要求 required=false 与 skip 声明同时出现，
+    # 创建输入才允许把它标成 skipped（必需步骤不能被声明略过，六轮审查 b-1）。
+    "steps": [{"id": "change"},
+              {"id": "review", "required": False,
+               "skip": {"condition": "本次无独立复核", "decision_point": "reviewed",
+                        "downstream": {"consumes": False}}}],
 }
 
 CREATION = {"definition_id": "bounded-change", "definition_digest": "sha256:" + "a" * 64,

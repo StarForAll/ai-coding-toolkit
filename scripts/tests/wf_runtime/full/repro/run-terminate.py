@@ -74,8 +74,11 @@ def check():
         return H.cli(project, args + ["--json"], sid=SID,
                      inputs={"generation": H.generation(project)}, **kw)
 
-    for args in (["definition", "prepare", "--id", "three-step"],
-                 ["run", "create", "--creation", creation_path]):
+    prepare_auth = H.prepare_authorization(project, root, "three-step", sid=SID)
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    for args in (["definition", "prepare", "--id", "three-step", "--authorization", prepare_auth],
+                 ["run", "create", "--creation", creation_path,
+                  "--authorization", create_auth]):
         rc, payload = run(args)
         if rc != 0:
             raise H.Precondition(f"{args[0]} 失败：{(payload or {}).get('code')}")

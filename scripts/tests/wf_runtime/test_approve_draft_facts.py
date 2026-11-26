@@ -145,7 +145,7 @@ class ApproveDraftFactsTest(unittest.TestCase):
         lock_ctx = mock.MagicMock()
         lock_ctx.__enter__.return_value = None
         lock_ctx.__exit__.return_value = False
-        with mock.patch.object(tasks, "_require_binding"), \
+        with mock.patch.object(tasks, "write_scope"), \
                 mock.patch.object(lock_mod, "acquire", return_value=lock_ctx), \
                 mock.patch.object(tasks, "_start_task_action", self._action), \
                 mock.patch.object(tasks, "_finish_task_action", self._finish):

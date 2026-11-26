@@ -314,8 +314,10 @@ rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", bad_notes
                     {"generation": gen22}, "sess-U22")
 rec("R22 非结构化证据不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
+# 六轮复核 a.5：红绿必须覆盖**同一验证项**（此前 v1 红 / v2 绿被称为"真实红→绿"，
+# 但两条命令互不相关）。同一验证项 v1 的两段运行：历史失败 + 本次通过。
 good = {"assertion": "add 支持变长加数", "red_reason": "旧实现不接受第三个加数",
-        "red_command_ref": "v1", "green_command_ref": "v2",
+        "red_command_ref": "v1", "green_command_ref": "v1",
         "properties": "可红、确定性、快速、可无人执行"}
 good_notes = wfdrive.temp("r22_notes_good.json")
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"},
@@ -345,13 +347,14 @@ open(os.path.join(F, "area22/r22.txt"), "w").write("ok\n")
 rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", good_notes, "--json"],
                     {"generation": gen22}, "sess-U22")
 rec("R22 真实红→绿结构通过", "WF_OK", f"{(payload or {}).get('code')}", rc == 0)
+# 红引用指向"没有历史失败运行"的验证项（v2 从未失败过）：证据不成立必须拒
 same = {"assertion": "a", "red_reason": "r", "red_command_ref": "v2", "green_command_ref": "v2",
         "properties": "可红"}
 json.dump({"standard": {"conclusion": "pass", "basis": "b"}, "requirement": {"conclusion": "pass", "basis": "b"},
            "tdd_evidence": same}, open(wfdrive.temp("r22_notes_same.json"), "w"))
 rc, payload, _ = wf(["task-check", "--task", task22, "--review-notes", wfdrive.temp("r22_notes_same.json"), "--json"],
                     {"generation": gen22}, "sess-U22")
-rec("R22 红绿同一条不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
+rec("R22 红引用无历史失败运行不得通过", "WF_CHECK_FAILED", (payload or {}).get("code"),
     (payload or {}).get("code") == "WF_CHECK_FAILED")
 wf(["task-pause", "--task", task22, "--reason", "R22 收尾", "--json"], {"generation": gen22}, "sess-U22")
 wf(["writer", "release", "--json"], {"generation": gen22}, "sess-U22")

@@ -60,8 +60,11 @@ def check():
     creation_path = os.path.join(root, "creation.json")
     json.dump(creation, open(creation_path, "w"), ensure_ascii=False)
 
-    for args in (["definition", "prepare", "--id", "one-step"],
-                 ["run", "create", "--creation", creation_path]):
+    prepare_auth = H.prepare_authorization(project, root, "one-step", sid=SID)
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    for args in (["definition", "prepare", "--id", "one-step", "--authorization", prepare_auth],
+                 ["run", "create", "--creation", creation_path,
+                  "--authorization", create_auth]):
         rc, payload = H.cli(project, args + ["--json"], sid=SID,
                             inputs={"generation": H.generation(project)})
         if rc != 0:

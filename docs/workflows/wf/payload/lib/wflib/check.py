@@ -772,6 +772,8 @@ def _run_argv(ctx, task, verification, log_dir):
     status = "passed" if exit_code == 0 else ("not_run" if exit_code is None else "failed")
     return {
         "verification_id": verification.get("id"),
+        # 验证定义身份：同 id 但改了 argv/cwd/required 就不是"同一个验证"，红绿不能跨定义配对
+        "verification_digest": fingerprint.verification_digest(verification),
         "invocation": dict(invocation, argv=masked_argv) if invocation.get("argv") else invocation,
         "cwd": cwd,
         "input_refs": verification.get("input_refs") or [],
@@ -803,6 +805,7 @@ def _manual_command(verification, decisions, anchor, plan, plan_version, content
                     or decision.get("content_digest") == content_digest)]
     entry = {
         "verification_id": verification_id,
+        "verification_digest": fingerprint.verification_digest(verification),
         "invocation": verification.get("invocation"),
         "cwd": verification.get("cwd") or ".",
         "input_refs": verification.get("input_refs") or [],
@@ -1073,7 +1076,8 @@ def _command_index(commands):
 
 
 def tdd_evidence_problem(evidence, commands, history_commands=None):
-    """TDD 证据结构核对（机制稿 §3.5）：五段齐全；绿引用当前通过项，红引用历史失败项，两者不同。"""
+    """TDD 证据结构核对（机制稿 §3.5）：五段齐全；红引用历史失败项、绿引用本次通过项，
+    且两者覆盖**同一个验证项**（六轮复核 a.5：只核"一次失败 + 一次通过"能被两条无关命令拼凑）。"""
     if not isinstance(evidence, dict):
         return {"reason": "tdd_evidence must be an object"}
     missing = [field for field in TDD_EVIDENCE_FIELDS if not str(evidence.get(field) or "").strip()]
@@ -1081,8 +1085,8 @@ def tdd_evidence_problem(evidence, commands, history_commands=None):
         return {"missing": missing}
     red_ref = str(evidence.get("red_command_ref"))
     green_ref = str(evidence.get("green_command_ref"))
-    if red_ref == green_ref:
-        return {"reason": "red and green must reference different runs", "ref": red_ref}
+    # 「不同运行」不是「引用串不同」：引用可以是 verification_id（同一验证项的两段运行
+    # 本来就同名），红取自历史、绿取自本次，两个集合不相交即已保证是两段运行。
     current = _command_index(commands)
     history = _command_index(history_commands)
     green = [item for item in current.get(green_ref) or [] if item.get("status") == "passed"]
@@ -1092,6 +1096,39 @@ def tdd_evidence_problem(evidence, commands, history_commands=None):
     if not red:
         return {"reason": "red run not found among historical failed commands", "red": red_ref,
                 "known_history_refs": sorted(history)}
+    # 红绿必须覆盖**同一个验证项**：只核"一次失败 + 一次通过"会被互不相关的两条命令拼凑成功
+    # （六轮复核 a.5：R22 正例曾以文件内容检查为红、`print(2)` 为绿）。
+    green_ids = {str(item.get("verification_id")) for item in green if item.get("verification_id")}
+    red_ids = {str(item.get("verification_id")) for item in red if item.get("verification_id")}
+    if not green_ids or not red_ids or not (green_ids & red_ids):
+        return {"reason": "red and green must cover the same verification (同一验证项先红后绿)",
+                "green": green_ref, "red": red_ref,
+                "green_verification": sorted(green_ids), "red_verification": sorted(red_ids),
+                "exits": ["用同一个 verification_id 先跑出失败、再跑出通过，并分别引用两次运行"]}
+    # 同 id 还不够：验证定义（argv/cwd/required/consume_at）改过后，旧的红运行不能证明当前行为
+    # （外部报告 b-P1：重规划可保留 id 换命令，旧失败记录会与新的通过记录配成一对）。
+    green_digests = {str(item.get("verification_digest")) for item in green
+                     if item.get("verification_digest")}
+    red_digests = {str(item.get("verification_digest")) for item in red
+                   if item.get("verification_digest")}
+    if green_digests and not red_digests:
+        # 升级前写入的历史运行没有验证定义摘要：**不能证明**它属于当前定义 ⇒ fail-closed。
+        # 放行等于让"保留 id、换命令"的旧红测继续给新绿测背书（三轮审查 a-P1）。
+        return {"reason": "red run predates verification identity (no verification_digest)"
+                          "（无法证明旧失败运行属于当前验证定义，须按当前定义重跑红）",
+                "green": green_ref, "red": red_ref,
+                "green_digest": sorted(green_digests),
+                "exits": ["按当前批准的验证定义重新制造一次失败运行，再用它和本次通过运行配对"]}
+    if red_digests and not green_digests:
+        return {"reason": "green run lacks verification identity（当前运行的验证定义摘要缺失，记录不完整）",
+                "green": green_ref, "red": red_ref,
+                "exits": ["重跑 task-check：当前运行必须带 verification_digest"]}
+    if green_digests and red_digests and not (green_digests & red_digests):
+        return {"reason": "red and green ran under different verification definitions"
+                          "（同 id 但命令/工作目录/必需性已变，须按当前定义重新跑红）",
+                "green": green_ref, "red": red_ref,
+                "green_digest": sorted(green_digests), "red_digest": sorted(red_digests),
+                "exits": ["按当前批准的验证定义重新制造一次失败运行，再用它和本次通过运行配对"]}
     return None
 
 
@@ -1103,6 +1140,7 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
     """
     # ① 范围核对
     receipts = _receipts(ctx)
+    exclusion_records = []
     classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
     # 人对外来改动的排除（本次声明给出时消费；记录进任务，摘要变化即失效）
     if exclusion_entries:
@@ -1112,7 +1150,10 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
                              {"problems": problems,
                               "exits": ["只排除未归属未提交的路径；属本任务的路径在批准触碰面内直接计入交付，"
                                         "已提交的历史改动才用 task-attribute --commit <sha> 裁决归属"]})
+        # 排除声明是**人的决定**：准备段先落到内存态、由 state 带到定稿段重放（六轮修复让定稿段
+        # 以盘上记录为准，重放是唯一不漏的接法——只写内存态会在重读时丢掉，且前后分类不一致）。
         scope.persist_exclusions(task, new_records)
+        exclusion_records = list(new_records)
         classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
     external, external_findings = scope.external_changes(ctx.root, task)
     buckets = classified["buckets"]
@@ -1128,7 +1169,7 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         raise CheckError("WF_HISTORY_UNRESOLVED",
                          dict(scope_facts, baseline=(external or {}).get("baseline"),
                               reason="task baseline head is unreachable",
-                              exits=["按设计稿 §5.4 只读核对记录锚点后由人裁决",
+                              exits=["只读核对记录锚点（wf inspect / status）后由人裁决",
                                      "确认基线被重写后重做本任务的锚点/检查",
                                      "如属历史迁移，先 repair 核旧写者与记录来源"]))
     delivery = scope.delivery_set(ctx.root, task, receipts=receipts, classified=classified)
@@ -1192,7 +1233,7 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
                                | {item.get("path") if isinstance(item, dict) else str(item)
                                   for item in (coverage.get("unresolved") or [])})
         exits = ["对缺策展的 spec 先 `task-curate --spec <路径>`",
-                 "对未核实的 spec 用 `spec --file <路径>` 完成读取留痕，或按设计稿 §6.2 处置",
+                 "对未核实的 spec 用 `spec --file <路径>` 完成读取留痕，或用 verify resolve 处置",
                  "到期/待核项按 `verify resolve` 或重新核实后重入 Check"]
         raise CheckError("WF_SPEC_INCOMPLETE",
                          dict(scope_facts, spec=coverage, missing=missing_paths,
@@ -1223,6 +1264,8 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         "started": started,
         "decisions": decisions,
         "review_notes_path": review_notes_path,
+        # 本次 Check 新登记的排除声明：定稿段重读任务记录后按它重放（见 `cmd_task_check` ③段）
+        "exclusion_records": exclusion_records,
     }
 
 
@@ -1272,12 +1315,16 @@ def run_check_finish(ctx, task, state, commands):
     review_notes_path = state["review_notes_path"]
     internal_review, review_problem = _parse_review_notes(review_notes_path)
     tdd_evidence = (internal_review or {}).get("tdd_evidence")
+    # TDD 适用性由**已批准的规划声明**（`plan.tdd_applicability`，进 plan_version）：文档/调查类
+    # 对象按独立可观察验证（验收项的命令通过或人判）承担验收，不再强迫造红绿（task-flow 已承诺）。
+    tdd_applicability = plan.get("tdd_applicability") or "code"
     history_entries = list(task.get("check_history") or [])
     if task.get("check"):
         history_entries.append(task["check"])  # 本次即将被替换的旧检查同样是历史
     history_commands = [command for entry in history_entries for command in entry.get("commands") or []]
-    tdd_problem = (tdd_evidence_problem(tdd_evidence, commands, history_commands)
-                   if plan.get("tdd") else None)
+    tdd_problem = None
+    if plan.get("tdd") and tdd_applicability == "code":
+        tdd_problem = tdd_evidence_problem(tdd_evidence, commands, history_commands)
     tdd_ok = tdd_problem is None
 
     # R21：结束前重算完整范围核对（分类/外部变更/治理面），变化即不判 pass
@@ -1332,6 +1379,7 @@ def run_check_finish(ctx, task, state, commands):
         "acceptance_results": acceptance_results,
         "internal_review": internal_review,
         "tdd_evidence": tdd_evidence,
+        "tdd_applicability": tdd_applicability,
         "invalidation": None,
         "scope_check": scope_facts,
         "spec_review": coverage,
@@ -1355,17 +1403,6 @@ def run_check_finish(ctx, task, state, commands):
     if passed:
         return check, None, facts
     return check, "WF_CHECK_FAILED", facts
-
-
-def run_check(ctx, task, decisions, review_notes_path, exclusion_entries=None):
-    """固定五步的兼容入口：三段顺序执行（不需要拆锁的调用方用它）。
-
-    `cmd_task_check` 不用它——它必须在执行段前后各取/放一次锁。
-    """
-    state = run_check_scope(ctx, task, decisions, review_notes_path,
-                            exclusion_entries=exclusion_entries)
-    commands = run_check_execute(ctx, task, state)
-    return run_check_finish(ctx, task, state, commands)
 
 
 def _task_dir(ctx, task):

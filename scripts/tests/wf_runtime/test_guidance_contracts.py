@@ -88,20 +88,30 @@ class GuidanceLandingTest(unittest.TestCase):
     """
 
     def test_manual_verification_has_a_field_and_a_source(self):
-        self.assertIn("kind=manual", SKILL_CONTINUE)
-        self.assertIn("content_digest", SKILL_CONTINUE)
-        self.assertIn("delivery.content_digest", SKILL_CONTINUE)
+        # 2026-11-26 三轮审查：字段形状只在 `wf help`；skill 保留的是**判断口径**——
+        # 人工验收必须是人的结论、且绑定"人当时看到的交付内容"（否则旧结论会沿用到新内容）。
+        self.assertIn("人工验收", SKILL_CONTINUE)
+        self.assertIn("人当时看到的交付内容", SKILL_CONTINUE)
+        self.assertIn("wf help task-check", SKILL_CONTINUE)
         help_text = str(cli.COMMAND_HELP["task-check"]["args"]["--decision"])
         self.assertIn("content_digest", help_text)
         self.assertIn("manual", help_text)
-        self.assertIn("kind=manual", SKILL_FINISH)
+        self.assertIn("手工验证", SKILL_FINISH)
+        self.assertIn("人当时看到的交付内容", SKILL_FINISH)
+        self.assertIn("wf help task-check", SKILL_FINISH)
 
     def test_scale_confirmation_names_the_write_command(self):
         self.assertIn("wf sampling confirm --task <id>", SKILL_FINISH)
 
     def test_review_chain_names_the_round_explicitly(self):
-        self.assertIn("review-import --round <n>", SKILL_CONTINUE)
-        self.assertIn("review-decide --round <n>", SKILL_CONTINUE)
+        # 断言的是**能力与判断**（必须显式给轮次、且给出该旗标），不是连续的调用行：
+        # 2026-11-26 六轮二轮审查后 §1.1 规定旗标拼写只在 `wf help`，skill 保留"要显式给轮次"
+        # 的判断句与一个定位用的旗标名（否则 AI 只知道"要显式"却不知道对应哪个参数）。
+        self.assertIn("review-import", SKILL_CONTINUE)
+        self.assertIn("--round <n>", SKILL_CONTINUE)
+        self.assertIn("轮次显式给", SKILL_CONTINUE)
+        self.assertIn("review-decide", SKILL_CONTINUE)
+        self.assertIn("正式判定", SKILL_CONTINUE)
 
     def test_task_abandon_disposition_is_conditionally_required(self):
         text = str(cli.COMMAND_HELP["task-abandon"]["args"]["--disposition"])
@@ -119,8 +129,11 @@ class GuidanceLandingTest(unittest.TestCase):
         self.assertIn("facts.task.plan_version", str(cli.COMMAND_HELP["task-check"]))
 
     def test_direct_acceptance_has_a_shape_and_landing(self):
-        self.assertIn("空 `verification_ids`", SKILL_CONTINUE)
-        self.assertIn("空 `verification_ids`", SKILL_FINISH)
+        # 直接验收（无验证项的验收项）与人工验收同口径：skill 只写"要人的结论 + 绑定交付内容"，
+        # 具体字段与取值由 `wf help task-check` 的 inputs 承载。
+        self.assertIn("直接验收", SKILL_CONTINUE)
+        self.assertIn("人当时看到的交付内容", SKILL_CONTINUE)
+        self.assertIn("直接验收", SKILL_FINISH)
         inputs = str(cli.COMMAND_HELP["task-check"]["inputs"])
         self.assertIn("acceptance-direct", inputs)
         self.assertIn("content_digest", inputs)

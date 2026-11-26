@@ -84,7 +84,7 @@ class ScopeDBucketTest(unittest.TestCase):
                 mock.patch.object(check_mod.scope, "classify_candidates", return_value=classified), \
                 mock.patch.object(check_mod.scope, "external_changes", return_value=({}, [])):
             with self.assertRaises(check_mod.CheckError) as caught:
-                check_mod.run_check(mock.Mock(root="/tmp/x"), _task(), [], None)
+                check_mod.run_check_scope(mock.Mock(root="/tmp/x"), _task(), [], None)
         self.assertEqual(caught.exception.code, "WF_SCOPE_UNRESOLVED")
         self.assertEqual(caught.exception.facts["ambiguous_ownership"], ["pkg/a.py"])
         self.assertEqual(caught.exception.facts["cross_task_claims"],

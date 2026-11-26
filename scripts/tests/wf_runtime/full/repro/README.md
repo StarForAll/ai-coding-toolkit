@@ -23,6 +23,13 @@
 - 注入点写死源码片段：实现改动后脚本会报 `repro stale`，必须同批更新，否则等于失效证据。
 - 锁对象（`.wf-lock`）不属于写入产物，目录快照需显式排除。
 
+## 直跑守卫（2026-11-26）
+
+`_harness.deploy()` 要求 `WF_RELEASE_TREE`（由 `run.sh` / `run_all.sh` 注入本次测试发行）。
+直接 `python3 repro/x.py --expect green` 会部署仓库里的 `docs/workflows/wf-release`——那是**上一次发行**
+的字节；工作树改了 payload 而发行树未重建时，green 会因"旧实现本来没有这个缺陷"而空洞通过，
+red 又找不到注入点。缺该变量时用例直接前置失败，不产出任何 green/red 结论。
+
 ## 一键运行（CI 可用）
 
 ```bash

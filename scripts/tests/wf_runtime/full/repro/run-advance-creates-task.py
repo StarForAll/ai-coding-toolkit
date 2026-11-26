@@ -73,11 +73,15 @@ def check():
     creation_path = os.path.join(root, "creation.json")
     json.dump(creation, open(creation_path, "w"), ensure_ascii=False)
 
-    rc, payload = H.cli(project, ["definition", "prepare", "--id", "two-step", "--json"],
+    prepare_auth = H.prepare_authorization(project, root, "two-step", sid=SID)
+    rc, payload = H.cli(project, ["definition", "prepare", "--id", "two-step",
+                                  "--authorization", prepare_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc != 0:
         raise H.Precondition(f"prepare 失败：{(payload or {}).get('code')}")
-    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path, "--json"],
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    rc, payload = H.cli(project, ["run", "create", "--creation", creation_path,
+                                  "--authorization", create_auth, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc != 0:
         raise H.Precondition(f"create 失败：{(payload or {}).get('code')} {(payload or {}).get('facts')}")

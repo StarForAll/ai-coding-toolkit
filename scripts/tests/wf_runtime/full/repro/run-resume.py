@@ -69,10 +69,14 @@ def check():
     creation_path = os.path.join(root, "creation.json")
     json.dump(creation, open(creation_path, "w"), ensure_ascii=False)
 
-    rc, payload = _run(project, ["definition", "prepare", "--id", "one-step"])
+    prepare_auth = H.prepare_authorization(project, root, "one-step", sid=SID)
+    rc, payload = _run(project, ["definition", "prepare", "--id", "one-step",
+                                 "--authorization", prepare_auth])
     if rc != 0:
         raise H.Precondition(f"prepare 失败：{(payload or {}).get('code')}")
-    rc, payload = _run(project, ["run", "create", "--creation", creation_path])
+    create_auth = H.creation_authorization(project, root, creation_path, sid=SID)
+    rc, payload = _run(project, ["run", "create", "--creation", creation_path,
+                                 "--authorization", create_auth])
     if rc != 0:
         raise H.Precondition(f"create 失败：{(payload or {}).get('code')}")
     run_id = ((payload or {}).get("facts") or {})["run"]["id"]

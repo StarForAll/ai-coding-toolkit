@@ -23,7 +23,7 @@ disable-model-invocation: false
 - 你要判断：改的是哪一类；受影响的**未关闭项**如何处理（哪些因此失效、哪些仍成立）。
 - 留下依据：新旧差异摘要 + 受影响未关闭项清单；人的挑战：「这次是标准写错了，还是你在绕开它？」
 - 机制只核结构（frontmatter、id 唯一、只增不改、引用存在）与锚点失效。语义冲突、删除/合并/降级由人裁决
-  （设计稿 §6.3）；普通准入与"改的是哪一类"由你判。改了尺子就补一条 `judgments add`（`kind=标准变更`，
+  ；普通准入与"改的是哪一类"由你判。改了尺子就补一条 `judgments add`（`kind=标准变更`，
   `standard_drift` 事实的两条出口之一）：判断偏好 `ai_decides` 时自己定并写依据，`ask_always` 时
   `outcome=escalated` 交人——删除/合并/降级这类人裁面的结论由人给，条目按人的答复转录（`by=human`，
   ask_always 不拦人的答复）；没补会被判定入口以 `WF_SEMANTIC_DECISION` 拦下。

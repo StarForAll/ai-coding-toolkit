@@ -18,7 +18,9 @@ import _review_flow as F
 import _snapshot as S
 
 SID = "sess-R630"
+# 注入点带上中间的事实注释行（install.py 补注释后旧模式不再命中，red 面 stale）
 FROM = ('    if writer.get("state") != "idle":\n'
+        '        # 合法的"忙"（held/recovering）不是坏记录：归因到写权边界，不误报记录非法\n'
         '        return None, blocked("WF_WRITER_BUSY",\n')
 TO = ('    if False:  # 注入：写者持有时也允许补齐\n'
       '        return None, blocked("WF_WRITER_BUSY",\n')

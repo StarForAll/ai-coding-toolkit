@@ -66,9 +66,16 @@ investigation["execution"]["human_decisions"] = [dec("plan-q-1", "passed")]
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
 rec("P1-2 仅人判记录不足以满足（R65 收紧后）", "WF_CHECK_FAILED", f"{satisfied} {code}",
     satisfied is False and code == "WF_CHECK_FAILED")
+# 六轮复核 a.6：可观察成果改由**已批准验收项**承载；复盘不再单独满足（原条目会形成
+# 「要复盘才许 Check、Check 又被这条挡住」的自循环）。
 investigation["retrospective"] = {"at": AT, "triggers": []}
 satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
-rec("P1-2 有复盘即可满足", "满足", satisfied, satisfied is True)
+rec("P1-2 仅复盘不再单独满足（改由验收项承载）", "WF_CHECK_FAILED", f"{satisfied} {code}",
+    satisfied is False and code == "WF_CHECK_FAILED")
+investigation["plan"]["acceptance"] = [{"id": "a1", "statement": "结论可核", "verification_ids": ["v1"]}]
+satisfied, code, facts = wf_tasks.work_satisfied_fact(Ctx(), investigation)
+rec("P1-2 已批准验收项即满足调查成果", "满足", f"{satisfied} {(facts or {}).get('mode')}",
+    satisfied is True and (facts or {}).get("mode") == "investigation")
 
 # ---------- P1-3：spec-update 不再自动满足 knowledge 门禁 ----------
 satisfied, code, facts = wf_gates.verify_step(Ctx(), investigation, "task.knowledge-disposed")
