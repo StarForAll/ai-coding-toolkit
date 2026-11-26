@@ -281,6 +281,29 @@ class SelfUninstallTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(called)
 
+    def test_self_uninstall_says_the_project_runtime_is_independent(self):
+        # 卸载系统命令只移除本机命令：已安装项目的控制流改用项目脚本，不能说成"项目不可用"
+        old = wf_main.selfupdate.perform_uninstall
+        wf_main.selfupdate.perform_uninstall = lambda *args, **kwargs: {
+            "manager": "uv", "command": ["uv", "tool", "uninstall", "wf-cli"], "output": "uninstalled"}
+        self.addCleanup(lambda: setattr(wf_main.selfupdate, "perform_uninstall", old))
+        for argv in (["self-uninstall", "--manager", "uv", "--json"],
+                     ["self-uninstall", "--manager", "uv", "--apply", "--json"]):
+            with self.subTest(argv=argv):
+                buffer = io.StringIO()
+                with contextlib.redirect_stdout(buffer):
+                    code = wf_main.main(argv)
+                self.assertEqual(code, 0)
+                payload = json.loads(buffer.getvalue().strip().splitlines()[-1])
+                self.assertIn(".wf/bin/wf.py", payload["facts"]["project_runtime"])
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            wf_main.main(["self-uninstall", "--manager", "uv", "--apply"])
+        human = buffer.getvalue()
+        self.assertIn("项目运行期独立", human)
+        self.assertIn(".wf/bin/wf.py", human)
+        self.assertIn("只有 install/upgrade 需要系统命令", human)
+
 
 class BootstrapTest(unittest.TestCase):
     def setUp(self):

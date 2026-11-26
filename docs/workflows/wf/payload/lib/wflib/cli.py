@@ -549,7 +549,8 @@ class Context:
                                   "结束另一个调用者后重试"]
                 next_ = "按 C2 分级：未登记的调用者不得自动继承会话"
             else:
-                facts["exits"] = ["人核实旧调用者是否停止；确认后 repair --mark-root-gone",
+                facts["exits"] = ["人核实旧调用者已停止后，运行已安装的 `.wf/bin/repair.py`"
+                                  "（预览 → `--apply` + 预览指纹）恢复写权记录",
                                   EXPLICIT_ENVELOPE_EXIT]
                 next_ = "证据未知：先人核实再重试"
             raise CliError("WF_IDENTITY_UNRESOLVED", facts, next_=next_)
@@ -1297,7 +1298,7 @@ def _rotate_session(ctx):
             raise CliError("WF_BINDING_MISMATCH",
                            {"reason": "绑定对象记录缺失或不可读：无法证明已到终态，不得轮换会话身份",
                             "object": obj, "session_key": old_key,
-                            "exits": ["`wf status` 或 `wf repair --diagnose` 核对绑定对象记录后重试",
+                            "exits": ["`status`（或 `wf status`）核对绑定对象记录后重试",
                                       "确认对象记录已丢失时按 repair 恢复；不要直接换会话把原对象丢在旧身份上",
                                       "对象确实存在且未结束时继续当前对象后再轮换"]},
                            next_="先核对绑定对象记录（status/repair），再重试 enable --new-session")

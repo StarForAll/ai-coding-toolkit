@@ -59,7 +59,7 @@ COMMAND_DESC = {
     "self-upgrade": "升级系统 wf 命令本身到登记源最新发行（区别于项目内 wf upgrade）：资产基址与安装同源"
                     "（WF_FORGEJO_BASE → 本机安装记录 ~/.wf/system-command.json → 登记实例缺省）；"
                     "附件取不到时按发行 tag 从 git 安装，并在输出里写明降级、地址与原因。",
-    "self-uninstall": "卸载系统 wf 命令本身；首跑只显示将要执行的管理器命令，加 --apply 执行。",
+    "self-uninstall": "卸载系统 wf 命令本身（只移除本机命令与 uv/pipx 工具环境，不动任何项目的 .wf/；已安装项目的控制流仍用 .wf/bin/wf.py 运行）；首跑只显示将要执行的管理器命令，加 --apply 执行。",
     "help": "显示总览；wf help <命令> 给出该命令的用法与说明。",
 }
 
@@ -426,15 +426,21 @@ def cmd_self_uninstall(argv, leading, exec_fn):
         return blocked("WF_CAPABILITY_UNAVAILABLE", "无法识别系统 wf 的安装管理器", {},
                        "用 --manager uv|pipx|pip 指定", json_mode)
     command = selfupdate.uninstall_command(detected)
+    # 系统命令与项目运行期互不隶属：卸载只移除本机命令，不改任何项目的 .wf/。
+    # 这句话必须出现在输出里，否则人会以为卸载系统命令等于让项目流程停下。
+    independence = "项目运行期独立：已安装项目仍用 <解释器> .wf/bin/wf.py <命令> 运行"
     if not parsed.get("--apply"):
         return passed("系统 wf 卸载预览（未执行）",
-                      {"manager": detected, "command": command},
+                      {"manager": detected, "command": command,
+                       "project_runtime": independence},
                       "确认后加 --apply 重跑", json_mode)
     result = selfupdate.perform_uninstall(manager=detected)
     return passed("系统 wf 已卸载（当前进程退出后命令消失）",
                   {"manager": result["manager"], "command": result["command"],
-                   "output": result["output"][-800:]},
-                  "如仍存在命令，检查 uv/pipx 的 bin 目录", json_mode)
+                   "output": result["output"][-800:],
+                   "project_runtime": independence},
+                  "项目控制流照常（用项目脚本运行）；只有 install/upgrade 需要系统命令，"
+                  "需要时再用 bootstrap 装回；若命令仍在，检查 uv/pipx 的 bin 目录", json_mode)
 
 
 def cmd_version(argv, leading, exec_fn):

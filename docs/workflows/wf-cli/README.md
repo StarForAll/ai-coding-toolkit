@@ -179,6 +179,12 @@ wf self-uninstall --apply  # remove the installed wf-cli tool
 The preview prints the exact `uv tool uninstall wf-cli` / `pipx uninstall wf-cli` command. Project
 removal remains `wf uninstall` inside the project and is a different operation.
 
+Removing the system command never touches a project: it only removes the local command (and its
+uv/pipx tool environment). Projects keep working through their own runtime entry
+(`<python> <project>/.wf/bin/wf.py <command>`); the system command is the maintenance entry
+(`install`, `upgrade`, plus the forwarding convenience), and the local `repair.py` / `uninstall.py`
+single files remain runnable on their own.
+
 ## One-shot release
 
 A pre-push-only flow cannot create the release: at pre-push time the tag does not exist on the
@@ -251,7 +257,11 @@ independent `repair.py` / `uninstall.py` entries accept the same contract — `-
 the runtime or its configuration is broken.
 
 Running `wf` inside a project also forwards ordinary runtime commands to `.wf/bin/wf.py`, so
-`task-new`, `task-check`, `spec`, `review-*`, etc. no longer need a project-local path.
+`task-new`, `task-check`, `spec`, `review-*`, etc. do not need a project-local path — but the
+project runtime never depends on the system command: with `wf` uninstalled, run
+`<python> <project>/.wf/bin/wf.py <command>` and the same commands, outputs and records apply.
+The system command is the maintenance entry (`install`, `upgrade`) plus that forwarding; the local
+`repair.py` / `uninstall.py` single files run on their own.
 
 ## Release contract
 

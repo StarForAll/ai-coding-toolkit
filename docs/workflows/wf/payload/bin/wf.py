@@ -537,7 +537,9 @@ def main(argv):
             {"detail": "升级不由项目内引导层承接",
              "replacement": "wf upgrade",
              "retired": ["--release", "--release-ref", "--source"]},
-            "在项目内运行系统级 `wf upgrade`（或 `wf --project <绝对路径> upgrade`）；"
+            "升级属维护面、由系统命令承接：先按发行说明装回系统命令（发行附带的 bootstrap），"
+            "再在项目内运行 `wf upgrade`（不在项目根时用 `wf --project <绝对路径> upgrade`）；"
+            "日常控制流不需要系统命令——直接用 `.wf/bin/wf.py`。"
             "升级到登记源默认分支的最新发行，不再接受发行路径/引用参数",
             json_mode,
         )
