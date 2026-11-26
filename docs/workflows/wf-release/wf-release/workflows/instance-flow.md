@@ -1,7 +1,7 @@
 # 实例流程（instance-flow）
 
 > 用户工作流定义、准备通道与实例编排。第二轮交付，`definition prepare` 与 `run *`
-> 子命令均已实现；升级/导出入口是系统级 `wf upgrade`，说明见 maintenance-flow，不在本流程重复。
+> 子命令均已实现；升级/导出入口属维护面（系统级 `wf upgrade`，说明见 maintenance-flow），启动与推进的日常子命令用项目脚本 `.wf/bin/wf.py` 运行，不依赖系统命令。
 
 ## required 步骤
 
