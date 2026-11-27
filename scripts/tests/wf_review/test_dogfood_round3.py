@@ -267,11 +267,16 @@ class ArchivedBindingNextTest(unittest.TestCase):
     """W2-6：绑定对象已终态时 task-new 的 next_ 与 enable 终态出口同口径。"""
 
     def test_next_text_branches_by_object_state(self):
+        """终态/在途两分档：终态出口以 enable --new-session 为主出口（W3-1），
+        continue/bind 类指引只留在在途分支（2026-11-27 收口：两档出口统一指向
+        同边界轮换入口，不再把 AI 送回"另开一个新会话"的旧路）。"""
         source = (REPO / "docs/workflows/wf/payload/lib/wflib/tasks.py").read_text(encoding="utf-8")
         self.assertIn("object terminal", source)
-        self.assertIn("换新会话标识", source)
+        # 终态分档：同边界轮换入口是主出口（不再只作为括号里的备选）
+        self.assertIn("旧对象已终态：同边界用 `wf enable --new-session` 换新会话", source)
         # archived 分档不再给 continue/bind 指引（该出口只留在 in-flight 分支）
-        self.assertIn("继续当前对象用 continue/bind", source)
+        self.assertIn("继续当前对象；要开新任务：完成/放弃当前对象并释放写权后", source)
+        self.assertIn("enable --new-session", source)
 
 
 class SingleReviewerAcceptanceTest(unittest.TestCase):

@@ -957,6 +957,13 @@ def _acceptance_results(ctx, task, commands, decisions, anchor, content_digest=N
 def _parse_review_notes(path):
     if not path:
         return None, {"reason": "internal review notes missing"}
+    # 缺失与"内容不是对象"分开归因（2026-11-27 独立审查）：`load_json` 对不存在的文件返回
+    # None，若只报"must be a JSON object"，AI 会去改文件内容而不是改路径——真实原因（相对
+    # 进程 CWD 解析不到、文件根本没被读到）被掩盖成格式问题，白跑一轮。
+    if not os.path.exists(path):
+        return None, {"reason": f"review notes file not found: {path}",
+                      "hint": "路径按进程 CWD（通常是项目根）解析；用 `wf.py status` 回显的 "
+                              "directory 拼出任务目录内的路径，或先取 `--review-notes-draft` 骨架回显的确切路径"}
     try:
         data = records.load_json(path)
     except records.RecordInvalid as exc:

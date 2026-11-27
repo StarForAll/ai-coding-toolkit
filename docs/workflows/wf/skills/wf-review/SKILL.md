@@ -85,5 +85,5 @@ user-invoked: true
 | 许可 | 跟随本仓库（内部私有源，无第三方 NOTICE 义务；上游为同作者资产） |
 | 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
 | 差异 | 改造成 `<!-- wf-review-report:v1 -->` 协议 + 项目树外暂存、只写自己报告；锚点字段按 §6.5 |
-| 最近正例 | 任务记录 `validation.md` §19：codex 与 pi（glm-5.3-flash）两异种 reviewer 各写 `review-<agent>.md` 到本轮暂存路径、锚点与当前 Check 一致，`review-import` 导入成功 |
-| 最近反例 | 实现稿 §7.1 V4：改一个交付文件后重导旧报告 → `WF_REVIEW_INVALID`（锚点失配）；报告缺 `check-anchor` 时无法核对新鲜度 |
+| 最近正例 | 2026-11-03 全链路实测：两个异种 reviewer（codex、pi）各自把 `review-<agent>.md` 写进本轮暂存路径、锚点与当前 Check 一致，`review-import` 导入成功，判定 pass（当时验证记录的摘要复述；authoring 任务记录不随发行投放） |
+| 最近反例 | 同次实测：改一个交付文件后重导旧报告 → `WF_REVIEW_INVALID`（锚点失配）；报告缺 `check-anchor` 时无法核对新鲜度 |

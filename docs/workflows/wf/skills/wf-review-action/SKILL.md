@@ -126,5 +126,5 @@ disable-model-invocation: false
 | 许可 | 跟随本仓库（内部私有源，无第三方 NOTICE 义务；上游为同作者资产） |
 | 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
 | 差异 | 只读指定轮次并先汇总后决策，写回 dispositions 而非直接改记录 |
-| 最近正例 | 任务记录 `validation.md` §19：两异种 reviewer 的两份报告按轴汇总、主会话写五轴复核后，把处置写成 `--plan` 的 dispositions 元素，`review-decide` 据此判 pass |
-| 最近反例 | 同节：同一 CLI 占两个槽位时 `review-decide` **拒绝输入、不产生 verdict**（旧版曾记为 fail，现按输入不成立拒绝）；把汇总与决策混写会让判定无法回溯到具体报告 |
+| 最近正例 | 2026-11-03 全链路实测：两异种 reviewer 的两份报告按轴汇总、主会话写五轴复核后，把处置写成 `--plan` 的 dispositions 元素，`review-decide` 据此判 pass（authoring 任务记录不随发行投放，此处为摘要复述） |
+| 最近反例 | 同次实测：同一 CLI 占两个槽位时 `review-decide` **拒绝输入、不产生 verdict**（旧版曾记为 fail，现按输入不成立拒绝）；把汇总与决策混写会让判定无法回溯到具体报告 |

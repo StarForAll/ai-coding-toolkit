@@ -82,6 +82,10 @@ shutil.move(archived_dir, active_dir)
 rec("R35 准备：目录回到活动位置", "活动在、归档不在",
     f"active={os.path.exists(active_dir)} archived={os.path.exists(archived_dir)}",
     os.path.exists(active_dir) and not os.path.exists(archived_dir))
+# 2026-11-27 终态收口：成功放弃后写权已释放（终态对称口径）；重入补完前先重取写权
+# （真实崩溃中断场景写权本就仍被持有，不经此步）。重入断言不变。
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": gen1}, "sess-Y1")
+gen1 = (payload or {}).get("facts", {}).get("generation", gen1)
 rc, payload, _ = wf(["task-abandon", "--task", task1, "--decision",
                      dfile(wfdrive.temp("r35_stop2.json"), [dec(f"stop {task1}", "abandon", d1),
                                                    dec("a35/**", "commit", d1)]),

@@ -54,31 +54,19 @@ disable-model-invocation: false
 
 ## 5. 决定文件与命令
 
-```json
-{"batch": "b-1",
- "acceptances": [{"round": 1, "slot": "s1",
-                  "report_digest": "sha256:…",
-                  "quote": "这份报告丢失的风险我认",
-                  "by": "human:xzc", "at": "2026-11-11T14:00:00.000000Z",
-                  "source": "user-declared",
-                  "waive_unknown_findings": true}]}
-```
-
 ```bash
 <python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --file <决定.json> --json
 <python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --revoke --batch b-1 --json
 <python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --revoke --round 1 --slot s1 --digest sha256:… --json
 ```
 
-规则（由入口执行，不要自己绕）：
-
-- `report_digest` 必须等于**导入记录里的登记摘要**，不是损坏文件的当前摘要；不等 → 整批拒绝。
-- 该 `(round, slot, report_digest)` 必须**当前**在 `unverifiable` 里；不做预放行。
-- 批次**全有或全无**：任一项不合法即零写入，错误里给 `bad_items`。
-- 幂等：同键且未撤销、未消费 → 回报 `already_accepted`，不新增；已撤销或已消费 → 新增一条（新 batch）。
-- `--revoke` 只标记不删除；`--batch` 与 `--round/--slot/--digest` 同时给出会报错（不猜优先级）。
-- 一次一事件：报告一旦恢复可核实，受控写点（`archive` 预检 / `review-import` / `review-decide`）
-  会把该放行标 `consumed`，旧放行不再生效。**归档时报告仍损坏**不在兜底范围——如实说，不要承诺。
+决定文件的字段形状与逐项校验**只在 `wf help review-accept-unknown` 的 inputs 一处登记**
+（§1.1「入口用法只有一个描述面」；本 skill 不再复制形状与规则清单，防止两处漂移）。
+写决定时带上文第 4 节的判断：`quote` 里要能看出人知道「未知 findings 一并被豁免」，
+不要把放行描述成"已处置/已关闭"。校验失败时按入口报的 `bad_items` 逐项改，不要绕。
+`--revoke` 只标记不删除；`--batch` 与 `--round/--slot/--digest` 同时给出会报错（不猜优先级）。
+一次一事件：报告一旦恢复可核实，受控写点（`archive` 预检 / `review-import` / `review-decide`）
+会把该放行标 `consumed`，旧放行不再生效。**归档时报告仍损坏**不在兜底范围——如实说，不要承诺。
 
 ## 6. `quote` 怎么采集
 

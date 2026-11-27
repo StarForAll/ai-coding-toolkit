@@ -126,6 +126,11 @@ rec("R31 准备：记录未提交", "任务仍归档、记录未入库",
     f"tracked={subprocess.run(['git','ls-files','--error-unmatch',f'{record_rel}/task.json'], cwd=F, capture_output=True).returncode == 0}",
     subprocess.run(["git", "ls-files", "--error-unmatch", f"{record_rel}/task.json"],
                    cwd=F, capture_output=True).returncode != 0)
+# 2026-11-27 终态收口：成功放弃已按机制稿 §5.3「归档成功后处理写权释放」的终态对称口径释放写权（writer=idle）；
+# 重入续做按"历史授权不能替代当前写权与代次"先重取写权（真实崩溃中断场景写权本就仍被
+# 持有，不经此步）。取权后的重入断言不变：WF_OK 且记录已入库。
+rc, payload, _ = wf(["writer", "acquire", "--json"], {"generation": gen2}, "sess-X2")
+gen2 = (payload or {}).get("facts", {}).get("generation", gen2)
 rc, payload, _ = wf(["task-abandon", "--task", task2, "--decision",
                      dfile(wfdrive.temp("r31_stop2.json"), [dec(f"stop {task2}", "abandon", d2),
                                                    dec("a31b/**", "commit", d2)]),
