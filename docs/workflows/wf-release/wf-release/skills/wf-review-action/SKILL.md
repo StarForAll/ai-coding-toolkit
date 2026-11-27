@@ -65,7 +65,7 @@ disable-model-invocation: false
   `facts.not_closing` 会如实回报"未关闭"，别把"已答复"当成"已了结"。
 - **误报也写 `accepted`**，并在 `reason` 里写明性质（"经复核认定误报，无需改代码"）。
   不要用 `rejected` 表达"我不同意"——那不会关闭，机制也不追溯翻转历史。
-- `recheck_by` 必填且**不得等于提出者**——后果是"同一份报告不能自证"（校验细节见机制稿，本 skill 只写后果）。
+- `recheck_by` 必填且**不得等于提出者**——后果是"同一份报告不能自证"（校验细节见 `wf help review-decide` 与本轮 facts，本 skill 只写后果）。
 - `accepted` 只能表示「**处置结果已成立**」：① 已修复且已重查通过 ② 经复核认定误报 ③ 已重分类。
   **「同意某种修法但还没做」不得写 `accepted`**——finding 会立刻从 `open_blocking` 消失，
   light 任务又没有 C4 兜底；此时保持 open，或写 `amended` + 理由（不关闭）。
@@ -127,4 +127,4 @@ disable-model-invocation: false
 | 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
 | 差异 | 只读指定轮次并先汇总后决策，写回 dispositions 而非直接改记录 |
 | 最近正例 | 任务记录 `validation.md` §19：两异种 reviewer 的两份报告按轴汇总、主会话写五轴复核后，把处置写成 `--plan` 的 dispositions 元素，`review-decide` 据此判 pass |
-| 最近反例 | 同节：同一 CLI 占两个槽位时 `review-decide` **拒绝输入、不产生 verdict**（旧版曾记为 fail，已按设计稿 §6.5 修订）；把汇总与决策混写会让判定无法回溯到具体报告 |
+| 最近反例 | 同节：同一 CLI 占两个槽位时 `review-decide` **拒绝输入、不产生 verdict**（旧版曾记为 fail，现按输入不成立拒绝）；把汇总与决策混写会让判定无法回溯到具体报告 |

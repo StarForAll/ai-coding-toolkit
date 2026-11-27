@@ -63,13 +63,15 @@ def attribution(ctx, task):
             "unattributed_paths": [] if output else []}
 
 
-def classify_commits(raw, task_id, task=None):
+def classify_commits(raw, task_id, task=None):  # noqa: D401 — 说明见 docstring
     """把 `git log` 输出（`%H%x1f%B%x1e`）分成 attributed / adjudicated / external 三态。
 
     用 `\x1f`（字段）与 `\x1e`（记录）作分隔，不用 `\x00\x00`——后者与 git 的输出不齐，
     会把多提交压成一条（实测：5 条本任务提交被判成 1 条 external）。
     """
     attributed, adjudicated, external = [], [], []
+    known = sorted({record.strip("\n\x00 ").partition("\x1f")[0].strip()
+                    for record in (raw or "").split("\x1e")} - {""})
     for record in (raw or "").split("\x1e"):
         record = record.strip("\n\x00 ")
         if not record:
@@ -82,17 +84,32 @@ def classify_commits(raw, task_id, task=None):
                    for line in body.splitlines() if "wf-task:" in line]
         if task_id and task_id in markers:
             attributed.append(sha)
-        elif task_id and task and _adjudicated(task, sha):
+        elif task_id and task and _adjudicated(task, sha, known):
             adjudicated.append(sha)
         else:
             external.append(sha)
     return attributed, adjudicated, external
 
 
-def _adjudicated(task, sha):
-    for entry in (task.get("attribution") or {}).get("decisions") or []:
-        if isinstance(entry, dict) and str(entry.get("commit", "")).startswith(sha[:7]):
+def _adjudicated(task, sha, known=()):
+    """归属决定按**完整提交号**精确匹配；旧短号前缀匹配并要求**全局唯一**。
+
+    此前用 `recorded.startswith(sha[:7])`：短前缀在长串上永不匹配（记录短、查询长时失效），
+    而 7 位前缀又可能命中另一个提交（六轮复核 b.7）。记录侧已在 `task-attribute` 归一为全长，
+    因此新记录走精确相等；旧短号只在"本段历史里只有这一个提交以它为前缀"时放行，
+    `known` 是本次解析看到的全部提交号（同一短号命中两个提交时分不清是哪条，都不归属）。
+    """
+    decisions = [entry for entry in (task.get("attribution") or {}).get("decisions") or []
+                 if isinstance(entry, dict) and entry.get("commit")]
+    for entry in decisions:
+        if str(entry.get("commit")) == sha:
             return True
+    candidates = {str(item) for item in known or ()}
+    for entry in decisions:
+        recorded = str(entry.get("commit"))
+        if len(recorded) < len(sha) and sha.startswith(recorded):
+            matches = [item for item in candidates if item.startswith(recorded)]
+            return len(matches) == 1
     return False
 
 

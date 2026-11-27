@@ -1124,6 +1124,39 @@ def coverage_conflicts(main_record, axis_reports, narrowed):
     return conflicts
 
 
+def main_review_revision_problems(previous, current_findings, accepted, round_no):
+    """主会话复核「替换上一份」的合法边界（唯一定义：register-only 与正式判定共用）。
+
+    两条：① 不能静默丢掉上一份复核里仍开着的 finding；② 不能只改 severity 把 blocking 降级。
+    两者都允许"先由 dispositions（slot=main）记录关闭/重分类"——`accepted` 是已接受关闭的
+    `(round, "main", finding_id)` 集合。此前 register-only 与正式判定各写一套、结论不一致
+    （六轮复核 b.6）。
+    """
+    previous_ids = {str(item.get("id")) for item in (previous or {}).get("main_findings") or []
+                    if isinstance(item, dict) and item.get("id")}
+    current_ids = {str(item.get("id")) for item in current_findings
+                   if isinstance(item, dict) and item.get("id")}
+    still_open = [finding_id for finding_id in sorted(previous_ids - current_ids)
+                  if (int(round_no), "main", finding_id) not in accepted]
+    previous_severity = {str(item.get("id")): item.get("severity")
+                         for item in (previous or {}).get("main_findings") or []
+                         if isinstance(item, dict) and item.get("id")}
+    current_severity = {str(item.get("id")): item.get("severity")
+                        for item in current_findings
+                        if isinstance(item, dict) and item.get("id")}
+    downgraded = [finding_id for finding_id, severity in previous_severity.items()
+                  if severity in BLOCKING_SEVERITIES
+                  and current_severity.get(finding_id) not in BLOCKING_SEVERITIES
+                  and finding_id in current_severity
+                  and (int(round_no), "main", finding_id) not in accepted]
+    problems = []
+    if still_open:
+        problems.append({"reason": "复核不能丢掉上一份里仍开着的 finding", "missing": still_open})
+    if downgraded:
+        problems.append({"reason": "blocking 降级必须先走 dispositions", "downgraded": downgraded})
+    return problems
+
+
 def merge_main_findings(payload, previous):
     """把本轮主会话 finding 与同轮已有复核**合并**（按 id 并集，机制侧算，不让 AI 重抄）。
 
@@ -1995,15 +2028,14 @@ def assertion_ref_problem(ref, index, changed, fix_kind=None, deprecated=None, t
                     "assertion_ref": ref_text,
                     "exits": ["在 finding 里补 location 字段后重试",
                               "改用验收项/验证项/spec 判据引用"]}
-        if True:
-            location = str(finding_location).strip()
-            covered = (location == target or location.startswith(target + "/")
-                       or _paths_mod.match_path(target, location))
-            if not covered:
-                return {"reason": "t: 引用与 finding 实际位置不符（引用必须是缺陷位置或其上级目录）",
-                        "assertion_ref": ref_text, "finding_location": location,
-                        "exits": ["把 t: 改为 finding 实际位置（或其上级目录/触碰面条目）",
-                                  "缺陷确在别处时：修正 location 或换引用"]}
+        location = str(finding_location).strip()
+        covered = (location == target or location.startswith(target + "/")
+                   or _paths_mod.match_path(target, location))
+        if not covered:
+            return {"reason": "t: 引用与 finding 实际位置不符（引用必须是缺陷位置或其上级目录）",
+                    "assertion_ref": ref_text, "finding_location": location,
+                    "exits": ["把 t: 改为 finding 实际位置（或其上级目录/触碰面条目）",
+                              "缺陷确在别处时：修正 location 或换引用"]}
         return None
     base = ref_text.split("#", 1)[0]
     if deprecated and ref_text in deprecated:
@@ -2720,7 +2752,7 @@ def launch(ctx, task, request_path=None, implementation_cli=None):
                            "exits": [item for problem in export_problems
                                      for item in problem.get("exits") or []]})
     with lock.acquire(ctx.root, holder_hint="review-launch"):
-        _record, holder = ctx.require_held(task=task.get("id"))
+        _record, holder = _require_held_for_task(ctx, task)
         path = _task_dir(ctx, task)
         from . import tasks as tasks_mod
 
@@ -2865,8 +2897,27 @@ def launch(ctx, task, request_path=None, implementation_cli=None):
             "degraded": entry.get("degraded"),
             "paste_text": commands,
             "control_assertion": assertion,
+            # 轻量任务发起外部审查＝把"未关闭 blocking 进归档门禁"的纪律一并接上：
+            # 这个后果只写在 skill 里，发起时由机制在 facts 里说一句（七轮审查 a-3）。
+            **({"light_task_consequence": {
+                "complexity": "light",
+                "note": "轻量任务发起外部审查后，本轮未关闭的 blocking 会进归档门禁；"
+                        "发起前先准备好逐条关闭",
+                "gate": "archive",
+            }} if ((task.get("plan") or {}).get("complexity") != "complex") else {}),
         },
     )
+
+
+def _require_held_for_task(ctx, task):
+    """任务写入口的写权核验（唯一实现转发，`tasks.require_held_for`）。
+
+    review 的四个入口（launch/import/accept-unknown/decide）都作用在任务上，实例内任务
+    的写权作用域是实例——转发而不是各自写一套 `require_held(task=…)`。
+    """
+    from . import tasks as tasks_mod
+
+    return tasks_mod.require_held_for(ctx, task.get("id"))
 
 
 def _task_dir(ctx, task):
@@ -3177,14 +3228,30 @@ def _material_staging_dir(directory):
 
 
 def _publish_materials(staging, materials):
-    """原子发布材料目录：目标只可能是"不存在"或"空目录"（其余状态不走这条路）。"""
+    """原子发布材料目录；并发下按**内容身份**归并，不把竞态报成路径冲突。
+
+    两个 reviewer 同时取材料时都可能读到"未物化"，后到者在发布时看到非空目录。
+    同轮同锚点重出的材料按定义是同一批字节（manifest 身份相同）⇒ 复用先到的，
+    丢弃自己的 staging（幂等重入，不是错误）；身份不同才是真冲突。
+    """
+    if os.path.isdir(materials) and os.listdir(materials):
+        published = records.load_json(os.path.join(materials, MANIFEST_NAME), None)
+        incoming = records.load_json(os.path.join(staging, MANIFEST_NAME), None)
+        if published is not None and incoming is not None \
+                and materials_identity(published) == materials_identity(incoming):
+            shutil.rmtree(staging, ignore_errors=True)
+            return False
+        raise ReviewError("WF_PATH_INVALID", {
+            "reason": "materials directory already holds a different set for this round",
+            "materials": materials,
+            "published_identity": materials_identity(published),
+            "incoming_identity": materials_identity(incoming),
+            "exits": ["先 review-status 核对该轮材料身份；同轮不同内容说明对象在两次取材料之间变了",
+                      "确实要按当前对象重出材料：删除 materials/ 全部内容后重跑 review-context"]})
     if os.path.isdir(materials):
-        if os.listdir(materials):
-            raise ReviewError("WF_PATH_INVALID", {
-                "reason": "materials directory is not empty but state said unmaterialized",
-                "materials": materials})
         os.rmdir(materials)
     os.replace(staging, materials)
+    return True
 
 
 def materials_identity_state(ctx, task_id, round_no):
@@ -3930,7 +3997,7 @@ def import_report(ctx, task, round_no=None, slot=None, report_path=None, _from_d
     from . import lock
 
     with lock.acquire(ctx.root, holder_hint="review-import"):
-        _record, holder = ctx.require_held(task=task.get("id"))
+        _record, holder = _require_held_for_task(ctx, task)
         path = _task_dir(ctx, task)
         from . import tasks as tasks_mod
 
@@ -4756,7 +4823,7 @@ def accept_unknown(ctx, task, decision_path=None, *, revoke=False, batch=None, r
         if not isinstance(payload, dict):
             raise ReviewError("WF_PATH_INVALID", {"reason": "决定文件缺失或不是对象", "path": decision_path})
     with lock.acquire(ctx.root, holder_hint="review-accept-unknown"):
-        _record, holder = ctx.require_held(task=task.get("id"))
+        _record, holder = _require_held_for_task(ctx, task)
         path = _task_dir(ctx, task)
         task = records.load_json(os.path.join(path, "task.json"))
         reviews = task.setdefault("reviews", {})
@@ -4905,7 +4972,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                               {"reason": "single reviewer acceptance file missing or not an object",
                                "path": single_reviewer_acceptance_path})
     with lock.acquire(ctx.root, holder_hint="review-decide"):
-        _record, holder = ctx.require_held(task=task.get("id"))
+        _record, holder = _require_held_for_task(ctx, task)
         path = _task_dir(ctx, task)
         from . import tasks as tasks_mod
 
@@ -5010,35 +5077,19 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                       "只登记 finding 时保持已有复核不变"],
                         })
                     previous = existing_main[-1]
-                    previous_ids = {str(item.get("id")) for item in
-                                    previous.get("main_findings") or []
-                                    if isinstance(item, dict) and item.get("id")}
-                    current_ids = {str(item.get("id")) for item in
-                                   (main_payload.get("main_findings") or [])
-                                   if isinstance(item, dict) and item.get("id")}
-                    if previous_ids - current_ids:
-                        raise ReviewError("WF_REVIEW_INVALID", {
-                            "reason": "登记主会话 finding 不能丢掉已有 finding",
-                            "missing": sorted(previous_ids - current_ids),
-                            "round": int(round_no),
-                            "exits": ["保留已有 main_findings 后再追加新 finding",
-                                      "或先用 dispositions 关闭已有 finding"],
-                        })
-                    previous_severity = {str(item.get("id")): item.get("severity")
-                                         for item in previous.get("main_findings") or []
-                                         if isinstance(item, dict) and item.get("id")}
-                    current_severity = {str(item.get("id")): item.get("severity")
-                                        for item in (main_payload.get("main_findings") or [])
-                                        if isinstance(item, dict) and item.get("id")}
-                    if any(previous_severity.get(fid) in BLOCKING_SEVERITIES
-                           and current_severity.get(fid) not in BLOCKING_SEVERITIES
-                           for fid in previous_ids & current_ids):
-                        raise ReviewError("WF_REVIEW_INVALID", {
-                            "reason": "登记主会话 finding 不能只改 severity 降级 blocking",
-                            "round": int(round_no),
-                            "exits": ["保留 blocking severity",
-                                      "或先用 dispositions 记录重分类/关闭"],
-                        })
+                    resolved, _ambiguous, _unknown = disposition_keys(
+                        list(reviews.get("dispositions") or []) + list(dispositions),
+                        set(proposers))
+                    accepted = {key for key, decision in resolved.items()
+                                if decision == "accepted"}
+                    revision_problems = main_review_revision_problems(
+                        previous, main_payload.get("main_findings") or [], accepted, round_no)
+                    if revision_problems:
+                        raise ReviewError("WF_REVIEW_INVALID", dict(
+                            {"round": int(round_no), "problems": revision_problems,
+                             "exits": ["保留已有 main_findings 后再追加新 finding",
+                                       "或用 dispositions 的 slot=main 记录重分类/关闭"]},
+                            **revision_problems[0]))
                     supersedes_digest = previous.get("file_digest")
                 discovery = not all(field in main_payload for field in
                                     ("axes", "report_review", "finding_review"))
@@ -5194,7 +5245,32 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                             for entry in imported if entry.get("slot")})
             else:
                 declared_slot_ids = sorted(set(launch_slots))
-            if len(declared_slot_ids) < 2:
+            declared_slots_count = len((launch or {}).get("slots") or [])
+            imported_slots = [normalize_agent(entry.get("slot")) for entry in imported]
+            # 材料/报告是否到齐先于人数判定（六轮复核 B1）：两种导入形态共用这一处——
+            # discovered 模式人数取自已导入报告，第二份只是没写完时会被误判成"单个 reviewer"，
+            # 逼人签不可逆的残余风险接受；显式槽位模式原来落到更靠后的 missing_slots 分支。
+            # 例外：人**已经**给出单 reviewer 残余风险接受时不再阻断——那说明缺的槽位是"确实不可用"
+            # 而不是"还没写完"，此时该走人签降级（否则可用报告永远判定不了）。
+            pending_acceptance, _pending_problems = single_reviewer_acceptance(
+                single_decision, round_no, task_id=task.get("id"))
+            if (declared_slots_count and len(imported) < declared_slots_count
+                    and pending_acceptance is None):
+                raise ReviewError("WF_REVIEW_INVALID", {
+                    "reason": "本轮声明了更多审查槽位，报告还没导入齐（材料未到齐，不是人数不合格）",
+                    "missing": [slot for slot in launch_slots if slot and slot not in imported_slots],
+                    "declared_slots": declared_slots_count, "imported": len(imported),
+                    "imported_reports": [{"slot": entry.get("slot"), "report_path": entry.get("report_path")}
+                                         for entry in imported],
+                    "exits": ["等其余 reviewer 写完报告后**在同一轮** review-import 导入，再 review-decide",
+                              "该槽位确实不可用（reviewer 失败/环境不足）：由人签单 reviewer 残余风险接受"
+                              "（同 --single-reviewer-acceptance）后重判——此时不再等报告",
+                              "要换 reviewer：用 review-launch 重新发起新一轮（同轮报告不跨轮复用）"],
+                })
+            # 人数不足，或"声明了更多槽位但人已签单 reviewer 残余风险接受且报告不会再来"：
+            # 两种都进同一个降级分支（后者缺的槽位按确实不可用处理）。
+            if (len(declared_slot_ids) < 2
+                    or (pending_acceptance is not None and len(imported) < declared_slots_count)):
                 # 单 reviewer（W2-3，三轮裁决④）：默认仍拒——复杂任务要求两位异种 reviewer。
                 # 有人签残余风险接受记录（--single-reviewer-acceptance）时允许产出 verdict，
                 # 留痕降级（degraded: single-provider + acceptance 引用）；接受只降级"人数"，
@@ -5211,7 +5287,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                              for entry in imported],
                         "exits": ["人接受残余风险：写接受文件（by/at/quote/source + round + residual_risk）"
                                   "后用 --single-reviewer-acceptance 重跑 review-decide",
-                                  "补第二个与实施 CLI 不同、且与它彼此不同的 reviewer CLI 后重发一轮"],
+                                  "补齐第二份报告（**同一轮**导入）后再判；确要换 reviewer 才重发新一轮"],
                     })
                 if single_acceptance is None:
                     raise ReviewError("WF_REVIEW_INVALID", {
@@ -5222,7 +5298,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                                              for entry in imported],
                         "exits": ["人接受残余风险：先 record single-reviewer-acceptance"
                                   "（by/at/quote/source + round + residual_risk）再判定",
-                                  "补第二个与实施 CLI 不同、且与它彼此不同的 reviewer CLI 后重发一轮",
+                                  "补齐第二份报告（**同一轮**导入）后再判；确要换 reviewer 才重发新一轮",
                                   "按设计稿 §6.5 的不可用处置：review-decide --unavailable <声明文件> 留痕，"
                                   "复杂任务暂停或异常归档（不得据此判 pass）"],
                     })
@@ -5247,11 +5323,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                         "attestation_digest": single_acceptance["attestation_digest"],
                         "quote_summary": _masked_quote(single_acceptance.get("quote"))[:80],
                         "by": single_acceptance.get("by"), "round": int(round_no)}}
-            imported_slots = [normalize_agent(entry.get("slot")) for entry in imported]
             missing_slots = ([] if discovered_mode
                              else [slot for slot in declared_slot_ids if slot not in imported_slots])
-            if missing_slots:
-                # 声明的槽位都要有报告：缺一即输入不完整，不能按已导入的部分判 pass
+            if missing_slots and pending_acceptance is None:
+                # 声明的槽位都要有报告：缺一即输入不完整，不能按已导入的部分判 pass。
+                # 人已签单 reviewer 残余风险接受时，缺的槽位按"确实不可用"处理（下面走降级判定）。
                 raise ReviewError("WF_REVIEW_INVALID",
                                   {"reason": "declared slots missing reports", "missing": missing_slots,
                                    "imported": imported_slots})
@@ -5365,54 +5441,19 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
                     })
                 # 本轮此前是 fail（或尚未产生结论）：允许用修正后的复核重新判定，
                 # 旧复核保留并标 supersedes。否则误报关闭后只能提交与事实矛盾的旧复核。
-                previous_ids = {str(item.get("id")) for item in
-                                previous_main[-1].get("main_findings") or []
-                                if isinstance(item, dict) and item.get("id")}
-                current_ids = {str(item.get("id")) for item in
-                               main_record.get("main_findings") or []
-                               if isinstance(item, dict) and item.get("id")}
-                missing_main = sorted(previous_ids - current_ids)
-                if missing_main:
-                    resolved, _ambiguous, _unknown = disposition_keys(
-                        list(reviews.get("dispositions") or []) + list(dispositions),
-                        set(proposers))
-                    accepted = {key for key, decision in resolved.items()
-                                if decision == "accepted"}
-                    still_open = [finding_id for finding_id in missing_main
-                                  if (int(round_no), "main", finding_id) not in accepted]
-                    if still_open:
-                        raise ReviewError("WF_REVIEW_INVALID", {
-                            "reason": "修正复核不能静默丢掉上一份复核的主会话 finding",
-                            "missing": still_open, "round": int(round_no),
-                            "exits": ["在新复核里保留该 finding",
-                                      "或先用 dispositions 的 slot=main 关闭它"],
-                        })
-                # 严重度降级也是关闭/重分类：不能靠改写同一 ID 的 severity 让 blocking 消失。
-                previous_severity = {str(item.get("id")): item.get("severity")
-                                     for item in previous_main[-1].get("main_findings") or []
-                                     if isinstance(item, dict) and item.get("id")}
-                current_severity = {str(item.get("id")): item.get("severity")
-                                    for item in main_record.get("main_findings") or []
-                                    if isinstance(item, dict) and item.get("id")}
-                downgraded = [finding_id for finding_id, severity in previous_severity.items()
-                              if severity in BLOCKING_SEVERITIES
-                              and current_severity.get(finding_id) not in BLOCKING_SEVERITIES
-                              and finding_id in current_severity]
-                if downgraded:
-                    resolved, _ambiguous, _unknown = disposition_keys(
-                        list(reviews.get("dispositions") or []) + list(dispositions),
-                        set(proposers))
-                    accepted = {key for key, decision in resolved.items()
-                                if decision == "accepted"}
-                    still_open = [finding_id for finding_id in downgraded
-                                  if (int(round_no), "main", finding_id) not in accepted]
-                    if still_open:
-                        raise ReviewError("WF_REVIEW_INVALID", {
-                            "reason": "主会话 blocking 降级必须先走 dispositions，不能只改 severity",
-                            "downgraded": still_open, "round": int(round_no),
-                            "exits": ["保留 blocking severity",
-                                      "或用 dispositions 的 slot=main 记录重分类/关闭"],
-                        })
+                resolved, _ambiguous, _unknown = disposition_keys(
+                    list(reviews.get("dispositions") or []) + list(dispositions),
+                    set(proposers))
+                accepted = {key for key, decision in resolved.items()
+                            if decision == "accepted"}
+                revision_problems = main_review_revision_problems(
+                    previous_main[-1], main_record.get("main_findings") or [], accepted, round_no)
+                if revision_problems:
+                    raise ReviewError("WF_REVIEW_INVALID", dict(
+                        {"round": int(round_no), "problems": revision_problems,
+                         "exits": ["在新复核里保留该 finding",
+                                   "或先用 dispositions 的 slot=main 关闭/重分类"]},
+                        **revision_problems[0]))
                 main_record["supersedes"] = previous_main[-1].get("file_digest")
             if not same_digest:
                 reviews["main_reviews"] = list(reviews.get("main_reviews") or []) + [main_record]
@@ -5672,7 +5713,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             "anchor": {"check_id": (task.get("check") or {}).get("id"), "check_anchor": anchor},
             "imported": [{"slot": entry.get("slot"), "report_digest": entry.get("report_digest")} for entry in imported],
             "facts": facts,
-            "degraded": (launch or {}).get("degraded"),
+            # 降级事实取**实际发生的**来源：launch 声明（人一开始就只要一位）或本轮人签接受
+            # （声明了多位但只到一份、其余确认不可用）。只认 launch 会让后者的 result 看不出降级
+            # 而 facts 里有——同一事实两个投影不一致（六轮二轮审查 B1 收尾）。
+            "degraded": ((single_reviewer_facts or {}).get("degraded")
+                         or (launch or {}).get("degraded")),
             "materials": _materials_identity,
         }
         reviews["result"] = result
@@ -5700,7 +5745,10 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         )
     from . import codes
 
-    code = "WF_OK" if verdict == "pass" else ("WF_REVIEW_UNAVAILABLE" if verdict == "unavailable" else "WF_REVIEW_INVALID")
+    # 三种结论各有码（六轮复核 B2）：pass / 输入成立但不通过（fail）/ 环境不足。
+    # 此前 fail 与"输入不成立"共用 `WF_REVIEW_INVALID`，下游按码分流会把正当结论当坏输入。
+    code = {"pass": "WF_OK", "fail": "WF_REVIEW_FAILED",
+            "unavailable": "WF_REVIEW_UNAVAILABLE"}.get(verdict, "WF_REVIEW_INVALID")
     return codes.result(
         code,
         object={"id": task.get("id"), "name": task.get("title")},

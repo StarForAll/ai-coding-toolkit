@@ -26,8 +26,9 @@ user-invoked: true
 - **未核实项**：哪些本机验不了、影响多大、能否收窄。收窄必须同时给**四项依据**：被收窄/去除的验收项 id、
   不可验证的客观原因、影响与被放弃的保障、补偿措施——缺一不予接受；`required` 只能收窄或异常归档。
   收窄经 `wf verify resolve --kind narrow` 落档，人工核验证据走 `--kind inspection`。
-  **手工验证（`kind=manual`）不是收窄**：按 `wf-continue` 的 Check 行补人判决定文件（`choice=passed` +
-  `content_digest`），缺它该项 `not_run`；空 `verification_ids` 的直接验收缺 `content_digest` 时该项 `pending`。
+  **手工验证与直接验收都不是收窄**：它们要的是人给的验收结论，且该结论必须绑定"人当时看到的交付内容"
+  （入口按 `content_digest` 核这个绑定）——缺它该项按未运行/待定处理，不能当成通过。决定文件的字段形状见
+  `wf help task-check`。
 
 ## 步骤
 
@@ -44,7 +45,7 @@ user-invoked: true
    `wf-continue`「复杂任务审查」）、材料身份状态（`review-status` facts 的 `materials.state`
    与判定 facts 的 `materials_state`：非 `fixed` 的 pass 按弱证据对待——结论有效、证据强度如实报）、
    知识处置状态、待提交路径，以及当前生效的放行清单
-   （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（`stop --preview`/`archive --draft` 的 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先跑 `authorize record --draft` 取只读骨架）、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
+   （`unknown_acceptances`，归档回显会再列一次）、**K6 不可逆确认项**（收工/归档的只读预览里 `irreversible`：命中的规则文件、删除路径与缺的 `authorize record`——缺删除/规则确认会被 `WF_DELETE_NOT_AUTHORIZED`/`WF_REPO_RULES_NOT_AUTHORIZED` 拦；确认文件结构拿不准先取 `authorize record` 的只读骨架（`--draft`））、**审查降级事实**（同投影的 `review_degraded`：本轮若是人签接受的单 reviewer 留痕降级，单列说明并附接受记录摘要，人基于降级事实决定是否收工）。若 `judgments show` 有 `[vendor]` 框架自有改动，
    单列说明它不计交付/审查/业务提交；归属确认记录（kind=框架改动）按 `wf-continue` 的 vendor 段；
    本任务声称修框架时按 `wf-continue` 的 vendor 段定去向（回源仓库立项/另开任务/保持现场），
    不在收尾里吞掉，也不混入业务提交。
@@ -63,7 +64,7 @@ user-invoked: true
   知识处置缺失、复盘未覆盖触发事实等都会用这两个码；先按 facts 补齐对应项，审查环境确不可用才按异常退出
   处置（不降级归档）。
 
-## 工作习惯（2026-11-08 起）
+## 工作习惯
 
 - 同一终端只推进一个任务、自动模式不手写信封（含 generation 口径）——完整定义见
   `wf-continue`「工作习惯」（唯一完整定义位），此处不重复论述。

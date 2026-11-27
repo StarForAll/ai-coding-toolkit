@@ -51,9 +51,7 @@ def skeleton(ctx, task):
     closures = [{"finding_id": item.get("finding_id"), "cited_verification": item.get("evidence_refs"),
                  "recheck_by": item.get("recheck_by")}
                 for item in disposals if item.get("decision") == "accepted"]
-    # 未处置 findings 直接取 K8 投影（重解析报告），与归档门禁同源
-    from . import review as review_mod
-
+    # 未处置 findings 直接取 K8 投影（重解析报告），与归档门禁同源（上面已导入 review_mod）
     unaddressed = [{"finding_id": item["finding_id"], "severity": item.get("severity")}
                    for item in review_mod.open_findings(ctx, task)["unaddressed"]]
     verifications = [{"id": entry.get("verification_id"), "result": entry.get("status")}

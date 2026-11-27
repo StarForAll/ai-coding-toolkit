@@ -954,34 +954,10 @@ def cmd_status(ctx, args):
                               next_=protocol_mod.states().next_for(
                                   task.get("status"), task.get("phase"),
                                   paused=bool(task.get("paused")), suspended=bool(task.get("suspended"))))
-                facts["task"] = {
-                    "files": task_files_mod.summary(ctx.root, task_id),
-                    "status": task.get("status"),
-                    "phase": task.get("phase"),
-                    "paused": task.get("paused"),
-                    "suspended": task.get("suspended"),
-                    "terminal": task.get("terminal"),
-                    "title": task.get("title"),
-                    # 人工验收决定可用它绑定规划版本（等价链归一后的值，不是 plan.version 原文）。
-                    "plan_version": tasks_mod.normalized_plan_version(task),
-                }
-                # ⑥：修复态事实集（纯派生，不落盘）+ 当前生效的放行清单（强制回显）
-                from . import review as review_mod
+                facts["task"] = _task_facts(ctx, task)
+                from . import check as check_mod, fingerprint as fingerprint_mod, review as review_mod
 
-                # 手工验证/收尾确认要绑定"人看到的交付内容"：这里给出与 Check 同源的
-                # 内容摘要（`content_digest` 写它；`object_digest` 是规划批准摘要，两者不能混用）。
-                # 只读事实，不参与判定。
-                try:
-                    from . import check as check_mod, fingerprint as fingerprint_mod
-
-                    delivery = check_mod.object_paths(ctx, task)
-                    facts["delivery"] = {
-                        "paths": len(delivery),
-                        "content_digest": fingerprint_mod.content_digest(
-                            fingerprint_mod.items(ctx.root, delivery)),
-                    }
-                except Exception as exc:      # noqa: BLE001 — 只读投影失败不阻断状态页
-                    facts["delivery"] = {"error": str(exc)}
+                facts["delivery"] = _delivery_facts(ctx, task, check_mod, fingerprint_mod)
                 facts["repair_scope"] = review_mod.repair_scope(ctx, task)
                 facts["unknown_acceptances"] = review_mod.acceptance_echo(task)
                 facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, task)
@@ -999,6 +975,39 @@ def cmd_status(ctx, args):
                     action_id=(run.get("action") or {}).get("id"),
                     action_state=(run.get("action") or {}).get("state"),
                 )
+                # 实例内的当前任务也是**同一个**任务：状态页必须给出与任务绑定同形的
+                # 任务事实（含 `plan_version`/`delivery.content_digest`/`repair_scope`），
+                # 否则人工验收在实例里拿不到 `content_digest`，只能去猜（六轮审查 c-1）。
+                from . import tasks as tasks_mod
+
+                current_task_id = cursor.get("task_id")
+                current_task = (tasks_mod.load_task(ctx.root, current_task_id)
+                                if current_task_id else None)
+                if isinstance(current_task, dict) and ctx.args.flag("--short"):
+                    # 实例绑定的 `--short` 同样要给当前任务的修复态：wf-finish 的收尾预检
+                    # 读的就是它（八轮审查 b-4：此前实例下缺 repair_scope）。
+                    from . import review as review_mod
+
+                    facts["task"] = {"id": current_task_id, "title": current_task.get("title"),
+                                     "status": current_task.get("status"),
+                                     "phase": current_task.get("phase"),
+                                     "plan_version": tasks_mod.normalized_plan_version(current_task),
+                                     **_short_check(ctx, current_task)}
+                    facts["repair_scope"] = _short_repair(
+                        review_mod.repair_scope(ctx, current_task),
+                        tasks_mod.archive_precheck(ctx, current_task)
+                        if current_task.get("phase") == "finish" else {"blocking": []},
+                        review_mod.acceptance_echo(current_task))
+                    facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, current_task)
+                elif isinstance(current_task, dict):
+                    from . import check as check_mod, fingerprint as fingerprint_mod, review as review_mod
+
+                    facts["task"] = _task_facts(ctx, current_task)
+                    facts["delivery"] = _delivery_facts(ctx, current_task, check_mod,
+                                                        fingerprint_mod)
+                    facts["repair_scope"] = review_mod.repair_scope(ctx, current_task)
+                    facts["unknown_acceptances"] = review_mod.acceptance_echo(current_task)
+                    facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, current_task)
     if "startup" not in facts:
         from . import tasks as tasks_mod
 
@@ -1008,6 +1017,34 @@ def cmd_status(ctx, args):
               next_=protocol_mod.states().next_for(
                   task_facts.get("status"), task_facts.get("phase"),
                   paused=bool(task_facts.get("paused")), suspended=bool(task_facts.get("suspended"))))
+
+
+def _task_facts(ctx, task):
+    """任务事实（唯一实现）：任务绑定与实例内当前任务共用，避免两套状态页。"""
+    from . import taskfiles as task_files_mod, tasks as tasks_mod
+
+    return {
+        "files": task_files_mod.summary(ctx.root, task.get("id")),
+        "status": task.get("status"),
+        "phase": task.get("phase"),
+        "paused": task.get("paused"),
+        "suspended": task.get("suspended"),
+        "terminal": task.get("terminal"),
+        "title": task.get("title"),
+        # 人工验收决定可用它绑定规划版本（等价链归一后的值，不是 plan.version 原文）。
+        "plan_version": tasks_mod.normalized_plan_version(task),
+    }
+
+
+def _delivery_facts(ctx, task, check_mod, fingerprint_mod):
+    """"人看到的交付内容"摘要（只读投影，不参与判定；失败不阻断状态页）。"""
+    try:
+        delivery = check_mod.object_paths(ctx, task)
+        return {"paths": len(delivery),
+                "content_digest": fingerprint_mod.content_digest(
+                    fingerprint_mod.items(ctx.root, delivery))}
+    except Exception as exc:      # noqa: BLE001
+        return {"error": str(exc)}
 
 
 def _short_repair(scope, precheck, acceptances=()):
@@ -1041,12 +1078,19 @@ def _short_repair(scope, precheck, acceptances=()):
             "unknown_acceptances": list(acceptances)}
 
 
+# `gate --due` 的可查询时点（帮助与本元组必须一致；`operation_end` 是内部 control 步骤的终态，
+# 不作为查询面）。六轮复核 b.1：切点此前写成两份清单，`after_archive` 帮助里有、实现里没有。
+GATE_DUE_VALUES = ("before_execute", "before_check", "before_archive", "after_archive")
+
+
 def cmd_gate(ctx, args):
-    due = args.value("--due")
-    if due not in ("before_execute", "before_check", "before_archive"):
-        raise CliError("WF_USAGE_INVALID", {"reason": "gate requires --due before_execute|before_check|before_archive"})
     from . import gates as gates_mod
 
+    due = args.value("--due")
+    if due not in GATE_DUE_VALUES:
+        raise CliError("WF_USAGE_INVALID",
+                       {"reason": "gate requires --due " + "|".join(GATE_DUE_VALUES),
+                        "known": list(GATE_DUE_VALUES)})
     return gates_mod.evaluate_cli(ctx, due)
 
 
@@ -1863,7 +1907,6 @@ def cmd_bind(ctx, args, kind="task"):
             head_before=actions.head_of(ctx.root),
             targets=bind_targets,
         )
-        updated["action"]["steps"] = [{"id": step, "state": "pending"} for step in ["binding", "writer_grant"]]
         writer_mod.save(ctx.root, updated)
         instance_id = session.get("instance_id") or session_mod.new_instance_id()
         binding = {
@@ -2001,6 +2044,17 @@ def wip_blockers(root, exclude_id=None):
         if paths or info["pending"]:
             blocked.append({"task": own_id, "paths": paths, "pending": info["pending"],
                             "registered": bool(remaining)})
+    # 准备通道保留的草稿也占工作区：指名归属并按摘要核（内容变了就要人重新处置，
+    # 不能把"写过的摘要"当装饰；也不再让同一个文件在任务侧被当成来路不明的外来改动）。
+    from . import runs as runs_mod
+
+    for item in runs_mod.retained_preparation_wip(root):
+        if not item["paths"]:
+            continue
+        blocked.append({"preparation": item["preparation"], "paths": item["paths"],
+                        "pending": item["pending"], "risk": item["risk"],
+                        "record": item["record"], "registered": True,
+                        "stale": item["stale"]})
     return blocked
 
 
@@ -2009,8 +2063,9 @@ def assert_no_foreign_wip(ctx, exclude_id=None):
     blocked = wip_blockers(ctx.root, exclude_id=exclude_id)
     if blocked:
         raise CliError("WF_WORKSPACE_UNRESOLVED",
-                       {"reason": "other tasks keep un-disposed WIP", "blocked": blocked},
-                       next_="先按各任务的实际处置落实保留 WIP，再授予写权")
+                       {"reason": "other objects keep un-disposed WIP（含准备通道保留的草稿）",
+                        "blocked": blocked},
+                       next_="先按各任务/准备记录的实际处置落实保留 WIP（提交、移走或重新出处置），再授予写权")
 
 
 def _require_instance_match(ctx, binding):
@@ -2405,9 +2460,12 @@ def cmd_stop(ctx, args):
         binding = session_mod.load_binding(ctx.root, ctx.key())
         object_ref = (binding or {}).get("object") or {}
         if object_ref.get("kind") != "task":
+            # 实例绑定会话的正确出口与 `stop_work` 主路径同口径（六轮复核 A5）：
+            # 停止/收工不作用于实例；实例内暂停用 task-pause，实例整体用 run pause/terminate。
             raise CliError("WF_BINDING_MISMATCH",
-                           {"reason": "no task binding for stop draft",
-                            "exits": ["先由人调用 start/`wf.py enable` 建立会话并绑定任务"]})
+                           {"reason": "实例对象不用 stop 收工", "bound": object_ref},
+                           next_="实例内任务用 task-pause 保存暂停；实例整体用 run pause（可 run resume）"
+                                 "或 run terminate")
         from . import tasks as _tasks_mod
 
         task = _tasks_mod.load_task(ctx.root, object_ref.get("id"))
@@ -2445,10 +2503,11 @@ def cmd_stop(ctx, args):
         binding = session_mod.load_binding(ctx.root, ctx.key())
         object_ref = (binding or {}).get("object") or {}
         if object_ref.get("kind") != "task":
+            # 与 `stop --draft` / `stop_work` 主路径同口径（三轮审查 b-2）
             raise CliError("WF_BINDING_MISMATCH",
-                           {"reason": "no task binding for stop preview",
-                            "exits": ["先由人调用 start/`wf.py enable` 建立会话并绑定任务，或 `bind --task <id>`",
-                                      "确认要预览的是哪个任务后重试"]})
+                           {"reason": "实例对象不用 stop 收工", "bound": object_ref},
+                           next_="实例内任务用 task-pause 保存暂停；实例整体用 run pause（可 run resume）"
+                                 "或 run terminate")
         from . import tasks as tasks_mod
 
         task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
@@ -2928,7 +2987,9 @@ COMMAND_HELP = {
                                "声明 subject `debug-declaration:<verification_id>:count=<n>[:dedupe=<check_id>/<vid>,…][:evidence=<ref>,…]`、"
                                "裁定 subject `debug-ruling-<verification_id>-<multiple>`（choice=同一问题/不同问题，主会话按根因裁定，依据与证据入 reason；"
                                "未跨阈值倍数前无需裁定）",
-                 "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
+                 "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）",
+                 "--run-verification": "只跑一条已批准验证并记一次运行（不产生 Check 结论、不动 check/锚点；供 TDD 红证据），"
+                                       "与 --decision/--review-notes/--workspace-exclusion 互斥"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
                                       "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}},
                    "--decision": {
@@ -3152,15 +3213,24 @@ COMMAND_HELP = {
     "confirm-executor": {"purpose": "人显式确认执行器（写本机确认记录，模型不代填）",
                          "args": {"--scope": "必填：system | global | project"},
                          "example": "wf.py confirm-executor --scope \"project\""},
-    "definition": {"purpose": "工作流实例定义：prepare 建准备代次 / validate 静态校验",
-                   "args": {"prepare|validate": "子命令", "--id": "必填：工作流定义 id"},
-                   "example": "wf.py definition validate --id \"<wf-id>\" --json"},
+    "definition": {"purpose": "工作流实例定义：prepare 建准备代次（需人授予准备范围）/ validate 静态校验",
+                   "args": {"prepare|validate": "子命令", "--id": "必填：工作流定义 id",
+                            "--authorization": "prepare：人给出的准备范围授权（choice=准备定义 + scope_paths）",
+                            "--authorization-draft": "prepare：只读生成授权文件骨架（含范围摘要）",
+                            "--end": "prepare：处置未提交定义并释放准备写权（幂等）",
+                            "--disposition": "prepare --end：逐路径去向文件（changes[].object）"},
+                   "example": "wf.py definition prepare --id \"<wf-id>\" --authorization \"auth.json\" --json"},
+    # `prepare --end` 结束准备代次：与 `prepare` 同命令，属于同一入口的动作切换（见 args）。
     "run": {"purpose": "实例生命周期：create / advance / pause / resume / locate / finish / terminate",
             "args": {"create": "子命令：建实例并首次绑定",
                      "advance|pause|resume|finish": "子命令（pause 必填理由）",
                      "locate": "子命令：只读回读",
                      "terminate": "子命令：批量处置",
                      "--run": "实例 id（子命令用）", "--creation": "create：创建输入 JSON",
+                     "--creation-draft": "create：只读生成创建输入骨架（需 --id；摘要/步骤预填）",
+                     "--authorization": "create：人确认本次创建的决定文件（choice=创建实例 + 创建输入摘要）",
+                     "--authorization-draft": "create：只读生成创建授权骨架（需 --creation；摘要预填）",
+                     "--id": "create --creation-draft：工作流定义 id",
                      "--decision": "advance/resume/finish：人判决定（可选）",
                      "--reason": "pause：暂停原因（必填）", "--plan": "terminate：处置计划 JSON",
                      "--preview": "terminate：只读预览（不落盘）"},
@@ -3269,7 +3339,7 @@ def cmd_verify(ctx, args):
     if task is None:
         raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
     with _lock(ctx.root, hint="verify resolve"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = tasks_mod.require_held_for(ctx, task_id)
         directory = tasks_mod.task_dir(ctx.root, task_id)
         fresh = records.load_json(os.path.join(directory, "task.json"))
         record, problems = projection_mod.resolve(
@@ -3365,7 +3435,7 @@ def cmd_authorize(ctx, args):
     entries = loaded if isinstance(loaded, list) else [loaded]
     recorded = []
     with _lock(ctx.root, hint="authorize record"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = tasks_mod.require_held_for(ctx, task_id)
         fresh = records.load_json(os.path.join(directory, "task.json"))
         for entry in entries:
             if not isinstance(entry, dict):
@@ -3448,7 +3518,7 @@ def cmd_sampling(ctx, args):
                            {"reason": "还没有落盘的选样：先跑 sampling pick --freeze",
                             "exits": ["跑 `wf sampling pick --task %s --freeze` 后重入" % task_id]})
         with _lock(ctx.root, hint="sampling evaluate"):
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = tasks_mod.require_held_for(ctx, task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
             _payload, _digest, _problems = attestation_mod.load(
@@ -3485,7 +3555,7 @@ def cmd_sampling(ctx, args):
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
         with _lock(ctx.root, hint="sampling confirm"):
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = tasks_mod.require_held_for(ctx, task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
             from . import scale as scale_mod
@@ -3511,7 +3581,7 @@ def cmd_sampling(ctx, args):
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
         with _lock(ctx.root, hint="sampling reviewed"):
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = tasks_mod.require_held_for(ctx, task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
             _payload, _digest, _problems = attestation_mod.load(
@@ -3554,7 +3624,7 @@ def cmd_sampling(ctx, args):
                             "exits": ["加 --freeze 冻结事件集与种子后选样"]},
                            next_="冻结写进任务记录（committed），此后 AI 改 judgments 不影响选样")
         with _lock(ctx.root, hint="sampling freeze"):
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = tasks_mod.require_held_for(ctx, task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
             facts = judgments_mod.skeleton(ctx, task)
@@ -3574,7 +3644,7 @@ def cmd_sampling(ctx, args):
     # 选样必须落盘：门禁 `task.sampled` 读的是记录里的 picks，只回显等于没抽（P1 死锁根因）
     if (picks or {}).get("picks") and not sampling_mod.selection(task)["picks"]:
         with _lock(ctx.root, hint="sampling picks"):
-            _record, holder = ctx.require_held(task=task_id)
+            _record, holder = tasks_mod.require_held_for(ctx, task_id)
             directory = tasks_mod.task_dir(ctx.root, task_id)
             task = records.load_json(os.path.join(directory, "task.json"))
             sampling_mod.record_picks(task, picks["picks"])
@@ -3690,7 +3760,7 @@ def cmd_judgments(ctx, args):
     if not isinstance(entry, dict):
         raise CliError("WF_PATH_INVALID", {"reason": "judgment file must be a JSON object", "path": path_value})
     with _lock(ctx.root, hint="judgments add"):
-        _record, holder = ctx.require_held(task=task_id)
+        _record, holder = tasks_mod.require_held_for(ctx, task_id)
         directory = tasks_mod.task_dir(ctx.root, task_id)
         fresh = records.load_json(os.path.join(directory, "task.json"))
         facts = judgments_mod.skeleton(ctx, fresh)
@@ -4103,7 +4173,7 @@ COMMAND_FLAGS = {
     "baseline-apply": {"--task", "--files", "--decision", "--proposal", "--preview"},
     "bind": {"--task", "--run"},
     "confirm-executor": {"--scope"},
-    "definition": {"--id"},
+    "definition": {"--id", "--authorization", "--authorization-draft", "--end", "--disposition"},
     "dep": {"--task", "--op", "--prereq"},
     "enable": {"--identity", "--new-session"},
     "gate": {"--due"},
@@ -4122,7 +4192,8 @@ COMMAND_FLAGS = {
     "review-import": {"--task", "--round", "--slot", "--report", "--as", "--restore"},
     "review-launch": {"--task", "--launch-request", "--implementation-cli", "--preview"},
     "review-status": {"--task", "--round"},
-    "run": {"--run", "--creation", "--decision", "--reason", "--plan", "--preview"},
+    "run": {"--run", "--creation", "--creation-draft", "--authorization", "--authorization-draft",
+            "--id", "--decision", "--reason", "--plan", "--preview"},
     "sampling": {"--task", "--freeze", "--file", "--attestation", "--quote"},
     "spec": {"--file"},
     "spec-update": {"--task", "--changes", "--changes-draft"},
@@ -4131,7 +4202,8 @@ COMMAND_FLAGS = {
     "task-abandon": {"--task", "--decision", "--disposition"},
     "task-approve": {"--task", "--decision", "--draft"},
     "task-attribute": {"--task", "--commit"},
-    "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft", "--workspace-exclusion"},
+    "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft",
+                   "--workspace-exclusion", "--run-verification"},
     "task-curate": {"--task", "--spec", "--purpose"},
     "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--changes-draft"},
     "task-new": {"--kind", "--template", "--title"},
@@ -4155,7 +4227,8 @@ COMMAND_FLAGS = {
 # 共用并集会放过"finish --preview"这类对当前子命令无效的参数（被静默忽略成真实动作）。
 COMMAND_SUB_FLAGS = {
     "run": {
-        "create": {"--creation"},
+        "create": {"--creation", "--creation-draft", "--authorization",
+                   "--authorization-draft", "--id"},
         "advance": {"--run", "--decision"},
         "pause": {"--run", "--reason"},
         "resume": {"--run", "--decision"},
@@ -4179,6 +4252,7 @@ COMMAND_BOOL_FLAGS = {
     "review-decide": {"--register-only"},
     "review-launch": {"--preview"},
     "review-import": {"--restore"},
+    "definition": {"--authorization-draft", "--end"},
     "sampling": {"--freeze"},
     "status": {"--short"},
     "stop": {"--preview", "--draft"},
@@ -4191,8 +4265,53 @@ COMMAND_BOOL_FLAGS = {
     "task-check": {"--review-notes-draft"},
     "task-replace": {"--preview"},
     "baseline-apply": {"--preview"},
-    "run": {"--preview"},
+    # 同一命令只允许登记一次：重复键会被后一条静默覆盖（`--creation-draft` 曾这样丢过一次）
+    "run": {"--preview", "--creation-draft", "--authorization-draft"},
 }
+
+# 草稿/预览旗标与"真实输入"互斥（2026-11-26 六轮复核 B3）：此前只有 archive 显式拒绝，
+# task-approve/task-replan/task-rework/stop/authorize/judgments/task-check/spec-update 是
+# `--draft` 静默胜出——人写的决定文件被无声忽略，与「入口对输入不成立不再沉默」自相矛盾。
+# 形态：命令 → {草稿旗标: (与它互斥的值旗标, …)}；只登记草稿分支会真正丢弃输入的那些命令。
+DRAFT_CONFLICTS = {
+    "task-approve": {"--draft": ("--decision",)},
+    "task-replan": {"--draft": ("--decision",)},
+    "task-rework": {"--draft": ("--decision",)},
+    "stop": {"--draft": ("--decision",)},
+    "authorize": {"--draft": ("--file",)},
+    "judgments": {"--draft": ("--file",)},
+    "task-check": {"--review-notes-draft": ("--review-notes",),
+                   "--run-verification": ("--decision", "--review-notes", "--workspace-exclusion")},
+    "spec-update": {"--changes-draft": ("--changes",)},
+    # `--changes-draft` 是 `--changes` 的骨架（`--decision` 与 `--no-update` 同给同样会被草稿分支忽略）
+    "task-knowledge": {"--changes-draft": ("--changes", "--decision", "--no-update")},
+    "review-decide": {"--main-review-draft": ("--main-review", "--plan", "--unavailable"),
+                      "--single-reviewer-acceptance-draft": ("--single-reviewer-acceptance",),
+                      "--plan-draft": ("--plan",)},
+    "definition": {"--authorization-draft": ("--authorization",)},
+    "run": {"--creation-draft": ("--creation",), "--authorization-draft": ("--authorization",)},
+}
+
+
+def reject_draft_conflicts(command, args):
+    """`--draft`/`--*-draft` 不许与同名真实输入同时出现（dispatch 前统一核，一处实现）。"""
+    booleans = set(GLOBAL_BOOL_FLAGS) | set(COMMAND_BOOL_FLAGS.get(command) or ())
+    problems = []
+    for draft_flag, conflicts in (DRAFT_CONFLICTS.get(command) or {}).items():
+        if not args.flag(draft_flag):
+            continue
+        # 冲突项既可能是取值旗标，也可能是布尔旗标（如 `--no-update`）：两种"给出"都要认。
+        present = [flag for flag in conflicts
+                   if args.value(flag) or (flag in booleans and args.flag(flag))]
+        if present:
+            problems.append({"draft_flag": draft_flag, "conflicts_with": present})
+    if problems:
+        raise CliError("WF_USAGE_INVALID", {
+            "reason": "草稿旗标与真实输入同时给出，入口不猜哪个为准",
+            "problems": problems,
+            "exits": ["要骨架：只带草稿旗标（只打印、不落盘、不消费输入）",
+                      "要执行：去掉草稿旗标后重跑"]})
+
 
 COMMAND_SUBS = {
     "definition": set(SUBACTIONS["definition"]),
@@ -4270,6 +4389,17 @@ def validate_usage(command, rest):
                                    {"reason": f"flag {flag_name} requires a value, got flag {nxt_name}",
                                     "known_flags": sorted(allowed),
                                     "exits": [f"给 {flag_name} 补上值（它不吞下一个参数）"]})
+                # 未注册的 `--x` 不是值，是拼错的旗标：吞下去会让下游拿 "--taks" 当任务 id，
+                # 报出与真实原因无关的错误（六轮复核 b.3）。值本身以 `--flag=--value` 传入。
+                import difflib
+
+                near = difflib.get_close_matches(nxt_name, allowed, n=1, cutoff=0.6)
+                hint = f"；最接近的合法参数是 {near[0]}" if near else ""
+                raise CliError("WF_USAGE_INVALID", {
+                    "reason": f"unknown flag {nxt_name} for `{command}`{hint}",
+                    "known_flags": sorted(allowed),
+                    "exits": ["按 wf help <命令> 修正参数拼写后重试",
+                              f"若 {nxt_name} 确是 {flag_name} 的值，用 {flag_name}=<值> 形式传入"]})
             index += 1     # flag 的值
             continue
         positionals.append(token)
@@ -4320,6 +4450,7 @@ def dispatch(ctx, argv):
     if _needs_activation(command, argv):
         ctx.require_activation()
     ctx.args = Args(argv[1:])
+    reject_draft_conflicts(command, ctx.args)
     payload = handler(ctx, ctx.args)
     if payload is None:
         raise CliError("WF_PERSISTENCE_FAILED", {"reason": "handler returned no result"})

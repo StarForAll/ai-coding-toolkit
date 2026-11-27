@@ -797,6 +797,299 @@ def _prepare_action_done(action, ok):
     return action
 
 
+def prepare_scope_digest(scope_paths):
+    """准备范围的身份（唯一定义）：决定里的 `object_digest` 就是它。"""
+    return records.H("wf-prepare-scope-v1",
+                     {"paths": sorted(str(item) for item in scope_paths or [])})
+
+
+def _prepare_authorization(ctx, args, workflow_id, definition_rel):
+    """`definition prepare --authorization <决定>` 的核验（设计稿 §5.7）。
+
+    决定必须是人给出的（`_load_decision` 六键与 TODO 预检）、取值在 `prepare_definition` 域内，
+    并且 `scope_paths` **可证覆盖**本次定义路径；`object_digest` 必须等于按 `scope_paths`
+    重算的范围摘要（防止"答复后改范围"）。通过返回准备记录里的 authorization 对象。
+    """
+    from . import cli, decisions as decisions_mod
+
+    path = args.value("--authorization")
+    if not path:
+        return None
+    decisions = cli._load_decision(path)
+    entry = None
+    for item in decisions:
+        if isinstance(item, dict) and decisions_mod.accepts("prepare_definition", item.get("choice")):
+            entry = item
+            break
+    if entry is None:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization file has no choice=准备定义",
+            "choices": [item.get("choice") for item in decisions if isinstance(item, dict)],
+            "accepted": list(decisions_mod.domain("prepare_definition")),
+        })
+    raw = entry.get("scope_paths")
+    if not isinstance(raw, list) or not raw or any(not isinstance(item, str) for item in raw):
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization must list scope_paths (non-empty string array)",
+            "got": raw,
+            "exits": [f"用 --authorization-draft 取骨架（scope_paths 预填 {definition_rel}）后请人确认"]})
+    from . import paths as paths_mod
+
+    scope_paths = []
+    for item in raw:
+        try:
+            scope_paths.append(paths_mod.normalize(item))
+        except paths_mod.InvalidPath as exc:
+            raise DefinitionError("WF_PATH_INVALID",
+                                  {"reason": f"scope path is not a safe project-relative path: {exc}",
+                                   "path": item})
+    if definition_rel not in scope_paths:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization scope does not cover this definition",
+            "scope_paths": scope_paths, "definition": definition_rel})
+    expected = prepare_scope_digest(scope_paths)
+    if entry.get("object_digest") != expected:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization scope digest mismatch",
+            "recorded": entry.get("object_digest"), "expected": expected,
+            "exits": ["按当前 scope_paths 重出决定（--authorization-draft 预填该摘要）",
+                      "把 scope_paths 改回已确认的范围"]})
+    return {"source": "decision", "by": entry.get("source"), "at": entry.get("at"),
+            "subject": entry.get("subject"), "scope_paths": scope_paths,
+            "scope_digest": expected}
+
+
+def _resolve_preparation_authorization(authorization_entries, previous, workflow_id, definition_rel):
+    """准备授权**只来自人给出的决定**：同范围重跑复用既有授权，范围变化必须新签。
+
+    在取写权**之前**调用：缺授权是"请求不成立"，不该先占住写权再拒绝。
+    """
+    previous_authorization = (previous.get("authorization") or {})
+    if authorization_entries is not None:
+        return authorization_entries
+    if (previous_authorization.get("source") == "decision"
+            and definition_rel in (previous_authorization.get("scope_paths") or [])):
+        return previous_authorization
+    raise DefinitionError("WF_SEMANTIC_DECISION", {
+        "reason": "准备定义需要人先授予准备范围（--authorization <决定>）",
+        "definition": definition_rel,
+        "exits": ["由人出具 choice=准备定义 的决定（scope_paths 覆盖该定义路径）后重跑",
+                  f"拿不准结构先跑 `definition prepare --id {workflow_id} --authorization-draft`"],
+    })
+
+
+def _retention_drift(root, entries):
+    """关闭保留时核对：记录里的路径现在还是不是那个内容（变了就是"离开准备通道期间被改过"）。"""
+    import os as os_mod
+
+    drifted = []
+    for entry in entries or []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+            continue
+        absolute = os.path.join(str(root), entry["path"])
+        exists = os_mod.path.isfile(absolute)
+        digest = _file_digest(absolute) if exists else None
+        if not exists or digest != entry.get("content_digest"):
+            drifted.append({"path": entry["path"], "recorded": entry.get("content_digest"),
+                            "current": digest, "exists": exists})
+    return drifted
+
+
+def _file_digest(absolute):
+    with open(absolute, "rb") as handle:
+        return "sha256:" + records.sha256_hex(handle.read())
+
+
+def retained_preparation_wip(root):
+    """未关闭的**准备通道保留草稿**（消费点）：只把"仍占着工作区"的条目算作占用。
+
+    记录里的摘要不是装饰：仍属未提交的条目按摘要核，内容变了标 `stale`（要人重新出处置）；
+    已提交或已移走的条目算**已解除**（`cleared`），不再阻挡别的对象取写权——否则人把草稿
+    处理掉了，记录却还在挡路，等于逼人删准备记录。
+    """
+    import os as os_mod
+
+    from . import scope as scope_mod
+
+    directory = os.path.join(str(root), PREPARATIONS_REL)
+    if not os.path.isdir(directory):
+        return []
+    dirty = set(scope_mod.uncommitted_paths(root))
+    found = []
+    for name in sorted(os_mod.listdir(directory)):
+        if not name.endswith(".json"):
+            continue
+        record = records.load_json(os.path.join(directory, name), {}) or {}
+        entries = record.get("retained_wip") or []
+        if not isinstance(entries, list) or not entries:
+            continue
+        blocking, stale, cleared = [], [], []
+        for entry in entries:
+            if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
+                continue
+            absolute = os.path.join(str(root), entry["path"])
+            exists = os_mod.path.isfile(absolute)
+            digest = _file_digest(absolute) if exists else None
+            item = {"path": entry["path"], "recorded": entry.get("content_digest"),
+                    "current": digest, "exists": exists}
+            if entry["path"] not in dirty:
+                cleared.append(item)          # 已提交或已移走：保留条件已落实
+                continue
+            blocking.append(item)
+            if not exists or digest != entry.get("content_digest"):
+                stale.append(item)
+        if not blocking:
+            continue
+        found.append({"preparation": record.get("id") or name[:-5],
+                      "record": f"{PREPARATIONS_REL}/{name}",
+                      "paths": [item["path"] for item in blocking],
+                      "verified": [item for item in blocking if item not in stale],
+                      "stale": stale, "cleared": cleared,
+                      "risk": [entry.get("risk") for entry in entries
+                               if isinstance(entry, dict) and entry.get("risk")],
+                      "pending": [text for entry in entries if isinstance(entry, dict)
+                                  for text in (entry.get("pending") or [])]})
+    return found
+
+
+def _staged_paths(root):
+    """索引里已暂存的路径（`git diff --cached --name-only`）；无 git 时为空。"""
+    from . import scope as scope_mod
+
+    if not scope_mod.has_git(root):
+        return set()
+    code, out = scope_mod.git(root, "diff", "--cached", "--name-only", "-z")
+    if code != 0:
+        return set()
+    return {item for item in out.split("\0") if item}
+
+
+def _end_preparation(ctx, args, workflow_id, definition_rel, record, holder, mine, held_scope,
+                     previous):
+    """`definition prepare --end [--disposition <文件>]`：定义定稿/暂停后释放准备写权。
+
+    设计稿 §5.7/§1.3 给两条合法出路，本入口都认，但都按**事实**核：
+    - 未提交路径已处置（提交或移走）——事实成立即可结束；
+    - **保留**未提交的定义草稿：仅限本次授权准备范围，且必须在 `retained_wip` 里记人选择、
+      准备范围、具体路径、存在/删除、内容哈希、暂存事实、未验证风险与待处置项
+      （缺风险或待处置项就不是"明确处置"，只是自述）。
+    顺序：**先落记录、后释放写权**，并让"已结束但写权仍在"的分支自愈补释放。两个方向都能
+    恢复：写完记录中断 → 重入补释放（幂等分支）；释放完中断 → 重入补记录（事实仍成立）。
+    反过来（先释放后落记录）在中断时会把保留事实丢掉，草稿就成了无交接记录的无主内容。
+    """
+    import os as os_mod
+
+    from . import cli as cli_mod, scope as scope_mod
+
+    path = preparation_path(ctx.root, workflow_id)
+
+    def _release_if_mine():
+        if mine and held_scope.get("kind") == "preparation" and held_scope.get("id") == workflow_id:
+            cli_mod._release_writer_locked(ctx, holder)
+            return True
+        return False
+
+    if not isinstance(previous, dict) or not previous:
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "no preparation record to end", "workflow_id": workflow_id,
+                               "exits": ["先跑 definition prepare --id <id> --authorization <决定>"]})
+    if previous.get("ended_at"):
+        # 自愈：上一次可能写完 ended_at 却在释放前中断
+        healed = _release_if_mine()
+        return codes.result("WF_OK", object={"id": workflow_id},
+                            position_=codes.position(scope="maintenance"),
+                            next_=("准备已结束（幂等）；本次补做了写权释放"
+                                   if healed else "准备已结束（幂等）；下一步 run create 或重新 prepare"),
+                            facts={"workflow_id": workflow_id, "ended_at": previous["ended_at"],
+                                   "released": healed,
+                                   "held_scope": (None if healed or not mine else held_scope)})
+
+    scope_paths = list(previous.get("scope_paths") or [definition_rel])
+    dirty = [item for item in scope_mod.uncommitted_paths(ctx.root) if item in scope_paths]
+    staged = _staged_paths(ctx.root)
+    disposition_path = args.value("--disposition")
+    declared = []
+    if disposition_path:
+        loaded = records.load_json(disposition_path)
+        entries = (loaded or {}).get("changes") if isinstance(loaded, dict) else loaded
+        for item in entries or []:
+            if isinstance(item, dict) and isinstance(item.get("object"), str):
+                declared.append({"path": item["object"], "action": item.get("action"),
+                                 "risk": item.get("risk"), "pending": item.get("pending")})
+    by_path = {item["path"]: item for item in declared}
+
+    problems, mismatched, retained = [], [], []
+    for item in dirty:
+        entry = by_path.get(item)
+        if entry is None:
+            problems.append({"path": item, "reason": "no disposition entry"})
+            continue
+        if entry.get("action") == "retain":
+            pending = [text for text in (entry.get("pending") or []) if isinstance(text, str) and text.strip()]
+            if not isinstance(entry.get("risk"), str) or not entry["risk"].strip() or not pending:
+                problems.append({"path": item,
+                                 "reason": "retain requires risk and pending（保留未验证风险与待处置项）"})
+                continue
+            absolute = os.path.join(ctx.root, item)
+            exists = os_mod.path.isfile(absolute)
+            retained.append({
+                "path": item,
+                "preparation_scope": scope_paths,
+                "exists": exists,
+                "content_digest": _file_digest(absolute) if exists else None,
+                "staged": item in staged,
+                "uncommitted": item in dirty,
+                "risk": entry["risk"].strip(),
+                "pending": pending,
+                "recorded_at": records.now_str(),
+            })
+        elif entry.get("action") in ("commit", "delete"):
+            mismatched.append(dict(entry, fact="path still uncommitted; commit/delete did not happen"))
+        else:
+            mismatched.append(dict(entry, fact="action must be commit|delete|retain"))
+    unresolved = [item for item in dirty if item not in by_path]
+    # 声明了但工作区里根本没这条未提交路径：声明与事实不符，不能静默丢弃
+    for item in declared:
+        if item["path"] in dirty:
+            continue
+        if item.get("action") == "retain":
+            mismatched.append(dict(item, fact="path is not uncommitted at end（保留的是已提交/已移走的内容）"))
+        elif item.get("action") in ("commit", "delete"):
+            continue      # 已落实：无需处置，声明与事实一致
+        else:
+            mismatched.append(dict(item, fact="action must be commit|delete|retain"))
+    if problems or mismatched or unresolved:
+        raise DefinitionError("WF_WORKSPACE_UNRESOLVED",
+                              {"reason": "preparation scope still has un-disposed edits",
+                               "uncommitted": dirty,
+                               "undisposed": [entry["path"] for entry in problems] or unresolved,
+                               "mismatched": mismatched, "declared": declared, "staged": sorted(staged),
+                               "exits": ["由人提交该定义或移走它，然后重跑 definition prepare --end",
+                                         "要继续起草就保留：写一份 disposition（action=retain + "
+                                         "risk + pending）记录保留条件后重跑",
+                                         "不要结束准备也可以：写权继续由本会话持有"]})
+
+    # 先释放、后落记录（见 docstring 的崩溃顺序）
+    released = _release_if_mine()
+    cross_scope = None if released or not mine else held_scope
+    ended = dict(records.load_json(path) or dict(previous),
+                 ended_at=records.now_str(), updated_at=records.now_str(),
+                 # 只留**事实**：处置声明、结束时仍未提交的路径、真正保留的条目。
+                 # 不写 `verified: true` 这类恒真自报——它没有消费点，等于给记录加装饰。
+                 end_disposition={"declared": declared, "uncommitted_at_end": dirty},
+                 retained_wip=retained)
+    records.write_json(path, ended)
+    return codes.result("WF_OK", object={"id": workflow_id},
+                        position_=codes.position(scope="maintenance"),
+                        next_=("准备已结束：写权已释放" if released or not mine
+                               else "准备已结束，但本会话持有的是其他对象的写权（未释放）"),
+                        facts={"workflow_id": workflow_id, "ended_at": ended["ended_at"],
+                               "released": released, "held_scope": cross_scope,
+                               "retained": retained,
+                               "exits": (["本会话还持着别的准备写权：结束那一份定义，或用新会话继续"]
+                                         if cross_scope else [])})
+
+
 def prepare(ctx, args):
     """`definition prepare --id <workflow-id>`：建立/更新准备记录（机制稿 §1.4、§7.2）。
 
@@ -809,15 +1102,77 @@ def prepare(ctx, args):
 
     workflow_id = _require_workflow_id(args)
     key = ctx.key()
+    definition_rel = f"{USER_WORKFLOWS_REL}/{workflow_id}.md"
     text, path = _definition_text(ctx.root, workflow_id)
+    if args.flag("--authorization-draft"):
+        scope_paths = [definition_rel]
+        skeleton = {"source": "TODO human:<来源>（例如 human terminal）",
+                    "at": records.now_str(),
+                    "subject": f"准备定义 {workflow_id}",
+                    "object_digest": prepare_scope_digest(scope_paths),
+                    "choice": "准备定义",
+                    "scope_paths": scope_paths,
+                    "reason": "TODO（人填写：为什么允许准备这份定义、范围是什么）"}
+        return codes.result("WF_OK", object={"id": workflow_id},
+                            position_=codes.position(scope="maintenance"),
+                            next_="把 TODO 换成人的答复后，用 definition prepare --authorization <文件> 重跑",
+                            facts={"draft": skeleton, "definition": definition_rel,
+                                   "note": "草稿只读；object_digest 随 scope_paths 变化，改范围须重出草稿"})
+    authorization_entries = _prepare_authorization(ctx, args, workflow_id, definition_rel)
+    existing_binding = session_mod.load_binding(ctx.root, key)
+    if existing_binding:
+        raise DefinitionError("WF_BINDING_MISMATCH", {
+            "reason": "准备通道只给未绑定会话；本会话已绑定对象",
+            "bound": existing_binding.get("object"),
+            "exits": ["已绑定会话要改定义：走其已批准任务范围（回 Plan 重新批准）",
+                      "确需准备另一份定义：在新会话里选择准备通道"],
+        })
     with lock.acquire(ctx.root, holder_hint=f"definition prepare {workflow_id}"):
         record = writer_mod.load(ctx.root) or {}
         holder = record.get("holder") or {}
-        if isinstance(record, dict) and record.get("state") == "held" and holder.get("id") != key:
-            # 准备不例外于写权：别的会话正在写这个项目时先让人处理（机制稿 §1.4）
+        held_scope = (holder.get("scope") or {}).get("object") or {}
+        mine = record.get("state") == "held" and holder.get("id") == key
+        state = record.get("state")
+        if not mine and state != "idle":
+            # 准备不例外于写权：held 是别人在写；recovering 是交接中间态（双方都没写权）。
+            # 两种都不能写准备记录——否则入口会回 WF_OK，让 AI 误以为已取得准备写权
+            # （六轮审查 b-4：recovering 下确实跳过取权分支照写了记录）。
             raise DefinitionError("WF_WRITER_BUSY",
-                                  {"reason": "writer held by another session", "holder": holder},
-                                  next_="等待对方释放或走已确认的交接/恢复出口")
+                                  {"reason": "writer is not available for preparation",
+                                   "state": state, "holder": holder,
+                                   "exits": ["等对方释放或走已确认的交接/恢复出口",
+                                             "交接中断（recovering）时先按恢复流程确认写者归属"]},
+                                  next_="写权未就绪：先让写权回到空闲，再准备定义")
+
+        previous = records.load_json(preparation_path(ctx.root, workflow_id), {}) or {}
+        if args.flag("--end"):
+            # 准备收口（设计稿 §5.7）：事实（未提交路径）先核，再按作用域释放准备写权。
+            return _end_preparation(ctx, args, workflow_id, definition_rel, record, holder, mine,
+                                    held_scope, previous)
+
+        # 授权先定，再动写权：缺授权时绝不能先取得写权再拒绝——那会把写权留在会话手里，
+        # 其他会话被"无主的准备写权"挡住，而准备记录根本没建立（四轮审查 a-P1）。
+        authorization = _resolve_preparation_authorization(
+            authorization_entries, previous, workflow_id, definition_rel)
+
+        # 准备通道持有的是**限定到本次定义路径**的准备写权（`scope.object=preparation`）：
+        # 这样准备期间的编辑仍是"单写者"，其他会话拿不到写权（此前只拒绝他人持权、自己不持权，
+        # 等于准备期的编辑与其他写入并发——三轮审查 a-P1）。
+        if mine:
+            if held_scope.get("kind") != "preparation" or held_scope.get("id") != workflow_id:
+                raise DefinitionError("WF_WRITER_BUSY", {
+                    "reason": "本会话持有其他对象的写权，不能同时准备定义",
+                    "scope": held_scope,
+                    "exits": ["先结束该对象的收工/归档（写权随之释放）", "或在新会话里走准备通道"]})
+        elif record.get("state") == "idle":
+            owner_scope = {"object": {"kind": "preparation", "id": workflow_id},
+                           "preparation": {"id": workflow_id,
+                                           "scope_paths": [definition_rel]}}
+            record = writer_mod.acquire(record, kind="session", ident=key, scope=owner_scope,
+                                        checkpoint={"step": "definition-prepare",
+                                                    "at": records.now_str()})
+            writer_mod.save(ctx.root, record)
+            holder = record.get("holder") or {}
         if text is None:
             validation = {"ok": False, "checked_at": records.now_str(),
                           "problems": [_problem(0, "definition file missing",
@@ -830,7 +1185,6 @@ def prepare(ctx, args):
             validation = {"ok": not problems, "checked_at": records.now_str(),
                           "problems": problems}
             digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
-        previous = records.load_json(preparation_path(ctx.root, workflow_id), {}) or {}
         # 机制稿 §5.1：具名动作先在**主记录**登记意图——准备动作的主记录是准备记录本身。
         # 未通过校验时同样登记（草稿也是准备动作的结果），steps 按事实标 applied 与否。
         action = actions_mod.new_action(
@@ -849,17 +1203,24 @@ def prepare(ctx, args):
             "schema_version": 1,
             "id": workflow_id,
             "session_key": key,
-            "scope_paths": [f"{USER_WORKFLOWS_REL}/{workflow_id}.md"],
-            # 准备授权不复用任务批准（机制稿 §1.4）：这里只记「谁在什么时候以此会话发起」，
-            # 实例创建时另核人的确认引用
-            "authorization": {"source": "human", "at": records.now_str(),
-                              "session_key": key},
+            "scope_paths": list(authorization.get("scope_paths") or [definition_rel]),
+            # 重新准备＝重新取得写权、继续占有这份草稿：上次的保留在这里**关闭**并留下审计
+            # （含当时摘要与本次进入时的实际摘要差异），而不是原样复制成一条永不过期的声明。
+            "retained_wip": None,
+            "retention_closed": ({"at": records.now_str(),
+                                  "previous": previous.get("retained_wip"),
+                                  "drifted": _retention_drift(ctx.root,
+                                                              previous.get("retained_wip"))}
+                                 if (isinstance(previous, dict)
+                                     and previous.get("retained_wip")) else
+                                 previous.get("retention_closed")),
+            "authorization": authorization,
             "definition_refs": ([{"path": f"{USER_WORKFLOWS_REL}/{workflow_id}.md",
                                   "digest": digest}] if digest else []),
             "validation": validation,
             "progress": {"attempts": int((previous.get("progress") or {}).get("attempts") or 0) + 1,
                          "last_ok": validation["ok"]},
-            "wip": previous.get("wip"),
+            "end_disposition": previous.get("end_disposition"),
             "ended_at": None,
             "updated_at": records.now_str(),
             "action": _prepare_action_done(action, validation["ok"]),
@@ -867,6 +1228,8 @@ def prepare(ctx, args):
         records.write_json(preparation_path(ctx.root, workflow_id), preparation)
     facts = {"workflow_id": workflow_id, "preparation": _rel(ctx.root, preparation_path(ctx.root, workflow_id)),
              "validation": validation, "progress": preparation["progress"],
+             # 上次结束保留的草稿在这里**关闭**；离开准备通道期间被改过的路径在 drifted 里如实列出
+             "retention_closed": ((preparation.get("retention_closed") or {}).get("drifted") or None),
              "action": {"id": preparation["action"]["id"],
                         "state": preparation["action"]["state"]}}
     if not validation["ok"]:
@@ -925,6 +1288,15 @@ def creation_problems(creation, doc=None):
         if missing:
             problems.append({"reason": "steps must declare every step of the definition",
                              "missing": missing})
+        # 略过资格由定义给：必需步骤（skip=null）不能在这一层被声明成 skipped，
+        # 否则 advance/finish 都会把创建输入当成"人已批准略过"（必需步骤被绕过）。
+        by_id = {step.get("id"): step for step in doc.get("steps") or []
+                 if isinstance(step, dict) and step.get("id")}
+        for step_id, value in steps.items():
+            if value == "skipped" and step_id in by_id and not step_skippable(by_id[step_id]):
+                problems.append({"reason": "required step cannot be declared skipped"
+                                           "（定义里该步骤 skip=null）",
+                                 "step": step_id})
     expansion = creation.get("expansion")
     if expansion is not None and not isinstance(expansion, dict):
         problems.append({"reason": "expansion must be an object when present", "field": "expansion"})
@@ -975,6 +1347,69 @@ def input_value_problems(doc, values):
     return problems
 
 
+CREATION_FIELDS_FOR_DIGEST = ("definition_id", "definition_digest", "inputs", "steps", "expansion")
+
+
+def creation_digest(creation):
+    """创建输入的规范身份（唯一定义）：人签授权里的 `object_digest` 就是它。
+
+    覆盖 `definition_id`/`definition_digest`/`inputs`/`steps`/`expansion` 五域——授权之后
+    任何一域被改（换定义版本、改输入、改某步适用性）都不再匹配。
+    """
+    payload = {key: (creation or {}).get(key) for key in CREATION_FIELDS_FOR_DIGEST}
+    return records.H("wf-creation-v1", payload)
+
+
+def _creation_decision(authorization, creation):
+    """实例记录里的 `creation_decision`：只记**可核的授权事实**，不自报 `source=human`。"""
+    if not isinstance(authorization, dict) or authorization.get("source") != "decision":
+        # 不该发生：`create` 已在入口拒绝无授权的创建；这里兜住"续做意图里丢了授权"的旧记录
+        raise DefinitionError("WF_SEMANTIC_DECISION",
+                              {"reason": "run.create intent has no human authorization",
+                               "creation": (creation or {}).get("definition_id"),
+                               "exits": ["由人重新出具 choice=创建实例 的决定后重跑 run create"]})
+    return {"source": "decision",
+            "by": authorization.get("by"),
+            "at": authorization.get("at"),
+            "subject": authorization.get("subject"),
+            "creation_digest": authorization.get("creation_digest"),
+            "steps": (creation or {}).get("steps") or {},
+            "expansion": (creation or {}).get("expansion")}
+
+
+def _creation_authorization(ctx, args, creation):
+    """`run create --authorization <决定>` 的核验（设计稿 §5.7「实例创建授权」）。
+
+    此前创建记录的 `creation_decision.source` 一律写 `human`——那是自报值，机制没有消费任何
+    人的输入（六轮复核 A3 / 外部报告 b-P1）。现在必须交一份人给出的决定：取值在
+    `create_instance` 域内，且 `object_digest` 等于**按创建文件当前内容**重算的摘要。
+    """
+    from . import cli, decisions as decisions_mod
+
+    path = args.value("--authorization")
+    if not path:
+        return None
+    entries = cli._load_decision(path)
+    entry = next((item for item in entries
+                  if isinstance(item, dict)
+                  and decisions_mod.accepts("create_instance", item.get("choice"))), None)
+    if entry is None:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization file has no choice=创建实例",
+            "choices": [item.get("choice") for item in entries if isinstance(item, dict)],
+            "accepted": list(decisions_mod.domain("create_instance")),
+        })
+    expected = creation_digest(creation)
+    if entry.get("object_digest") != expected:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "authorization does not bind the current creation input",
+            "recorded": entry.get("object_digest"), "expected": expected,
+            "exits": ["按当前 creation 文件重出决定（run create --authorization-draft --creation <文件> 预填摘要）",
+                      "把 creation 改回已确认的内容"]})
+    return {"source": "decision", "by": entry.get("source"), "at": entry.get("at"),
+            "subject": entry.get("subject"), "creation_digest": expected}
+
+
 def _creation_file(args):
     from . import records as records_mod
 
@@ -998,12 +1433,25 @@ def _preparation_problems(root, workflow_id, key, definition_rel):
     if record.get("session_key") != key:
         problems.append({"reason": "preparation belongs to another session",
                          "exit": "由原会话创建实例，或在新会话重跑 definition prepare"})
-    if record.get("ended_at"):
-        problems.append({"reason": "preparation already ended",
-                         "exit": f"重新跑 definition prepare --id {workflow_id}"})
+    # 已结束（`--end`）的准备记录仍可用于创建：结束只表示"准备写权释放 + 未提交编辑已处置"，
+    # 定义内容由 `validation`/`digest`（创建时按当前字节重核）保证，不因结束而失效。
     if definition_rel not in (record.get("scope_paths") or []):
         problems.append({"reason": "preparation scope does not cover this definition",
                          "scope_paths": record.get("scope_paths")})
+    authorization = record.get("authorization") or {}
+    if authorization.get("source") != "decision":
+        problems.append({"reason": "preparation record has no human authorization",
+                         "authorization": authorization.get("source"),
+                         "exit": f"由人出具 choice=准备定义 的决定后重跑 definition prepare --id {workflow_id}"})
+    elif definition_rel not in (authorization.get("scope_paths") or []):
+        problems.append({"reason": "preparation authorization does not cover this definition",
+                         "authorization_scope": authorization.get("scope_paths")})
+    elif authorization.get("scope_digest") != prepare_scope_digest(authorization.get("scope_paths")):
+        # 记录里的范围被改过（或旧记录缺摘要）：摘要与范围必须自洽，消费点重算一遍
+        problems.append({"reason": "preparation authorization scope digest mismatch",
+                         "recorded": authorization.get("scope_digest"),
+                         "expected": prepare_scope_digest(authorization.get("scope_paths")),
+                         "exit": "由人重新出具准备范围授权后重跑 definition prepare"})
     if not (record.get("validation") or {}).get("ok"):
         problems.append({"reason": "preparation validation did not pass",
                          "problems": (record.get("validation") or {}).get("problems")})
@@ -1050,13 +1498,90 @@ def _write_run_snapshot(ctx, run_id, text):
     return path
 
 
+def fixed_snapshot(ctx, run):
+    """实例的**固定快照**（唯一定义）：存在性 + 摘要复核 + 解析一次，返回 `(doc, bytes)`。
+
+    固定快照在实例生命周期内不可变（摘要随记录保存），所以"单读"与"重读"语义等价；
+    但**读取时点**不是等价的：`run terminate` 曾在逐任务处置之后才读快照，快照缺失就留下
+    半写状态。所有消费方（advance/finish/terminate/preview）都在业务写入之前调这里。
+    """
+    run_id = (run or {}).get("id")
+    definition = (run or {}).get("definition") or {}
+    snapshot_rel = definition.get("snapshot_path")
+    snapshot_abs = join(ctx.root, snapshot_rel or "")
+    if not snapshot_rel or not os.path.isfile(snapshot_abs):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "definition snapshot missing", "path": snapshot_rel,
+                               "run": run_id})
+    with open(snapshot_abs, "rb") as handle:
+        snapshot_bytes = handle.read()
+    digest = "sha256:" + records.sha256_hex(snapshot_bytes)
+    if digest != definition.get("digest"):
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "snapshot digest mismatch",
+                               "recorded": definition.get("digest"), "current": digest,
+                               "run": run_id})
+    doc, problems = parse_definition(snapshot_bytes.decode("utf-8"))
+    if doc is None or problems:
+        raise DefinitionError("WF_DEFINITION_INVALID",
+                              {"reason": "fixed snapshot is not statically valid",
+                               "problems": problems, "run": run_id})
+    return doc, snapshot_bytes
+
+
 def create(ctx, args):
     """`run create --creation <path>`：建立实例、固定定义快照、首次绑定（机制稿 §7.2）。
 
     writer 上的**单一 `run.create` 父动作**承载：意图与写权授予同一次写入，中断按原意图续做
     （目标一次固定，不从当前请求重建）。实例创建只取得「规划权限」——不代批准业务、不建任务。
     """
-    from . import actions as actions_mod, cli, lock, session as session_mod, writer as writer_mod
+    from . import actions as actions_mod, cli, codes as codes_mod, lock, session as session_mod, writer as writer_mod
+
+    if args.flag("--creation-draft"):
+        # 创建输入的只读骨架（与 `definition validate` 同一事实源）：摘要与步骤清单由机制预填，
+        # 人只确认输入值与步骤适用性（设计稿 §5.7「人明确选择确切版本/哈希、输入与展开规则」）。
+        workflow_id = args.value("--id")
+        if not workflow_id or not ID_RE.match(workflow_id):
+            raise DefinitionError("WF_PATH_INVALID",
+                                  {"reason": "--creation-draft requires --id <workflow-id>"})
+        doc, problems, text, path = load_definition(ctx.root, workflow_id)
+        if text is None:
+            raise DefinitionError("WF_PATH_INVALID",
+                                  {"reason": "definition file missing",
+                                   "expected": f"{USER_WORKFLOWS_REL}/{workflow_id}.md"})
+        if doc is not None:
+            problems = validate_definition(doc, ctx.root, workflow_id=workflow_id)
+        digest = "sha256:" + records.sha256_hex(text.encode("utf-8"))
+        steps = {step.get("id"): "applicable" for step in doc.get("steps") or []
+                 if isinstance(step, dict) and step.get("id")} if doc else {}
+        skeleton = {"definition_id": workflow_id, "definition_digest": digest,
+                    "inputs": {name: "TODO" for name in ((doc or {}).get("inputs") or {})},
+                    "steps": steps}
+        return codes_mod.result(
+            "WF_OK", object={"id": workflow_id},
+            position_=codes_mod.position(scope="maintenance"),
+            next_=("确认输入值与每个步骤的适用性（skipped 须同步写 creation）后，"
+                   "人确认创建：run create --creation <文件>"
+                   if not problems else "先按 validation.problems 修定义，再取创建骨架"),
+            facts={"draft": skeleton, "definition": _rel(ctx.root, path), "digest": digest,
+                   "validation": {"ok": not problems, "problems": problems},
+                   "note": "草稿只读；摘要随定义内容变化，改定义后须重出草稿"})
+
+    if args.flag("--authorization-draft"):
+        # 创建授权骨架：`object_digest` 按**当前 creation 文件**预填，人只确认/写 quote 与理由。
+        creation = _creation_file(args)
+        skeleton = {"source": "TODO human:<来源>（例如 human terminal）",
+                    "at": records.now_str(),
+                    "subject": f"创建实例 {(creation or {}).get('definition_id')}",
+                    "object_digest": creation_digest(creation),
+                    "choice": "创建实例",
+                    "reason": "TODO（人填写：为什么按这些输入与步骤适用性创建实例）"}
+        return codes_mod.result(
+            "WF_OK", object={"id": (creation or {}).get("definition_id")},
+            position_=codes_mod.position(scope="maintenance"),
+            next_="把 TODO 换成人的答复后，用 run create --creation <文件> --authorization <该文件> 重跑",
+            facts={"draft": skeleton,
+                   "note": "草稿只读；creation 的版本/输入/步骤任一变动都会让摘要失配，须重出草稿"})
 
     creation = _creation_file(args)
     session = ctx.session()
@@ -1091,6 +1616,13 @@ def create(ctx, args):
                               {"reason": "bound inputs do not satisfy the definition",
                                "problems": value_problems})
     definition_rel = f"{USER_WORKFLOWS_REL}/{workflow_id}.md"
+    authorization = _creation_authorization(ctx, args, creation)
+    if authorization is None:
+        raise DefinitionError("WF_SEMANTIC_DECISION", {
+            "reason": "实例创建需要人确认确切定义版本、输入与步骤适用性（--authorization <决定>）",
+            "definition": definition_rel, "creation_digest": creation_digest(creation),
+            "exits": ["由人出具 choice=创建实例 的决定（object_digest 取创建输入摘要）后重跑",
+                      "拿不准结构先跑 `run create --authorization-draft --creation <文件>` 取骨架"]})
     problems = _preparation_problems(ctx.root, workflow_id, key, definition_rel)
     if problems:
         raise DefinitionError("WF_SEMANTIC_DECISION",
@@ -1100,6 +1632,16 @@ def create(ctx, args):
 
     with lock.acquire(ctx.root, holder_hint="run create"):
         record = ctx.writer() or {}
+        holder = record.get("holder") or {}
+        scoped = (holder.get("scope") or {}).get("object") or {}
+        if (record.get("state") == "held" and holder.get("id") == key
+                and scoped.get("kind") == "preparation" and scoped.get("id") == workflow_id):
+            # 创建实例是准备的天然收口：释放限定准备写权，随后由本入口取得实例写权。
+            # （显式 `definition prepare --end` 仍用于"只备定义、不建实例"的路径。）
+            from . import cli as _cli_mod
+
+            _cli_mod._release_writer_locked(ctx, holder)
+            record = ctx.writer() or {}
         pending = record.get("action") or {}
         if pending.get("kind") == "run.create" and pending.get("state") != "done":
             if (record.get("holder") or {}).get("id") != key:
@@ -1124,8 +1666,8 @@ def create(ctx, args):
         instance_id = session.get("instance_id") or session_mod.new_instance_id()
         inputs = {"run": run_id, "definition": definition_rel, "digest": digest,
                   "inputs_digest": records.plain_digest(creation.get("inputs") or {}),
-                  # 意图里固定完整创建输入：续做时不必再读 creation 文件（它可能已被移走/删除）
-                  "creation": creation}
+                  # 意图里固定完整创建输入与**人给出的创建授权**：续做时不必再读文件
+                  "creation": creation, "authorization": authorization}
         owner_scope = {"object": {"kind": "run", "id": run_id},
                        "preparation": {"id": workflow_id, "scope_paths": [definition_rel]}}
         updated = writer_mod.acquire(record, kind="session", ident=key, scope=owner_scope,
@@ -1139,16 +1681,15 @@ def create(ctx, args):
                      {"kind": "instance", "id": instance_id},
                      {"kind": "definition", "id": workflow_id},
                      {"kind": "definition-digest", "id": digest}])
-        action["steps"] = [{"id": step, "state": "pending"} for step in RUN_STEPS]
         updated = dict(updated)
         updated["action"] = action
         writer_mod.save(ctx.root, updated)
         return _advance_run_create(ctx, key, session, updated, action, text, creation,
-                                   workflow_id, digest, instance_id)
+                                   workflow_id, digest, instance_id, authorization)
 
 
 def _advance_run_create(ctx, key, session, record, action, text, creation,
-                        workflow_id, digest, instance_id):
+                        workflow_id, digest, instance_id, authorization=None):
     from . import actions as actions_mod, cli, session as session_mod, writer as writer_mod
 
     targets = {item.get("kind"): item.get("id") for item in action.get("targets") or []
@@ -1171,9 +1712,7 @@ def _advance_run_create(ctx, key, session, record, action, text, creation,
                        "snapshot_path": f"{RUNS_REL}/{run_id}/definition.md",
                        "digest": digest},
         "inputs": creation.get("inputs") or {},
-        "creation_decision": {"source": "human", "at": records.now_str(),
-                              "steps": creation.get("steps") or {},
-                              "expansion": creation.get("expansion")},
+        "creation_decision": _creation_decision(authorization, creation),
         "cursor": None,
         "step_results": {},
         "task_map": {},
@@ -1211,7 +1750,6 @@ def _advance_run_create(ctx, key, session, record, action, text, creation,
     )
     # ③ 步骤后置逐个核（手工标 done 不能代替产物）
     action = dict(action)
-    action["steps"] = [{"id": step, "state": "done"} for step in RUN_STEPS]
     action = dict(action, state="applying", next_step=None)
     record = dict(record)
     record["action"] = action
@@ -1265,14 +1803,17 @@ def _resume_run_create(ctx, key, session, record, action, text):
         # 并把这一点如实报告（不假装恢复到了完整输入）
         creation = {"inputs": {}, "steps": {}, "definition_id": workflow_id,
                     "degraded": True}
+    # 续做分支：授权取证在原始意图里（`inputs.creation` 是固定输入，授权另存 inputs.authorization）
+    resumed_authorization = (action.get("inputs") or {}).get("authorization")
     return _advance_run_create(ctx, key, session, record, action, text, creation,
-                               workflow_id, digest, targets.get("instance"))
+                               workflow_id, digest, targets.get("instance"),
+                               resumed_authorization)
 
 
 ADVANCE_STEPS = ("resolve_step", "create_or_reuse_task", "record_cursor")
 
 
-def _step_outputs(doc, step_id, instance_inputs):
+def _step_outputs(doc, step_id, instance_inputs, root=None):
     """步骤产物的引用（机制稿 §7.3：`step_results` 保存本次消费摘要）。
 
     字面路径直接用；`{input: name}` 按实例输入解析；解不出的保留声明并标 `resolved: false`
@@ -1299,9 +1840,23 @@ def _step_outputs(doc, step_id, instance_inputs):
                                   "from_input": declared["input"]})
             else:
                 entry.update({"path": None, "resolved": False})
-            found.append(entry)
+            # `resolved` 只表示"路径能解出来"，不等于产物存在：两者分开记，
+            # 下游据此判断"声明的产物是否真的落地"（六轮审查 b-2）。
+            path = entry.get("path") if entry.get("resolved") and isinstance(entry.get("path"), str) else None
+            absolute = join(str(root), path) if (path and root) else None
+            found.append(dict(entry, exists=bool(absolute) and os.path.isfile(absolute)))
         return found
     return []
+
+
+def step_skippable(step):
+    """该步骤**是否允许**略过（唯一判据）：静态校验保证 `required=false ⇔ skip 声明存在`，
+    所以 `skip` 是对象即可略；必需步骤的 `skip` 必然是 null。
+
+    创建校验、推进与收尾都消费这一个函数——把"可略"当纪律判断，会让 `creation.steps` 里
+    一句 `skipped` 变成绕过必需步骤的许可。
+    """
+    return isinstance((step or {}).get("skip"), dict)
 
 
 def _applicability(creation, doc):
@@ -1315,7 +1870,9 @@ def _applicability(creation, doc):
         if step_id in declared:
             result[step_id] = declared[step_id]
         else:
-            result[step_id] = "skipped" if step.get("required") is False and False else "applicable"
+            # 未在 creation 里声明的步骤：`required: false` 只说明"可略"，**不等于**已声明略过；
+            # 略过必须由人在创建时逐步骤表态（`creation_problems` 要求全覆盖），这里只给默认适用。
+            result[step_id] = "applicable"
     return result
 
 
@@ -1323,12 +1880,180 @@ def _ordered_steps(doc):
     return [step for step in doc.get("steps") or [] if isinstance(step, dict) and step.get("id")]
 
 
-def _next_step(doc, creation, step_id):
-    """下一个未记录的步骤（`step_results` 里已有结果的跳过）；到头返回 None。"""
+def _step_by_id(doc, step_id):
+    """按 id 取步骤（唯一定义：只有 `_ordered_steps` 里的条目才是可执行步骤）。"""
+    for step in _ordered_steps(doc):
+        if step.get("id") == step_id:
+            return step
+    return None
+
+
+def _next_step(doc, step_id, step_results=None):
+    """下一个**尚无结果**的步骤；到头返回 None。
+
+    跳过 `step_results` 里已记结果的步骤（含人判答复与 `skipped`），这样「返工返回定位后
+    重入」与「重入同一条命令」都不会把已经结案的步骤再走一遍。游标不在定义里时报
+    `WF_HISTORY_UNRESOLVED`——那是记录损坏，不按"从头开始"放行。
+    """
     ordered = _ordered_steps(doc)
     ids = [step["id"] for step in ordered]
+    if step_id and step_id not in ids:
+        raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                              {"reason": "cursor step is not declared by the snapshot",
+                               "step": step_id})
     start = 0 if not step_id else ids.index(step_id) + 1
-    return ordered[start] if start < len(ordered) else None
+    for step in ordered[start:]:
+        if (step_results or {}).get(step["id"]):
+            continue
+        return step
+    return None
+
+
+SKIP_CHOICES = ("skip", "略过", "跳过")
+
+
+def _replacement_ready(ctx, doc, source, step_results, instance_inputs=None):
+    """`skip.downstream[].replacement` 的引用是否真的落实（只核事实）。
+
+    `from: input` 也在这里解析：静态校验允许它（实例输入可以是路径），运行期就必须给出
+    同一结论——否则人写下的合法声明会到"上游真的被略过"那一刻才硬失败（八轮审查 a-3）。
+    """
+    if not isinstance(source, dict):
+        return False, "replacement reference missing"
+    kind = source.get("from")
+    if kind == "project":
+        path = source.get("path")
+        return (bool(path) and os.path.isfile(join(ctx.root, str(path))),
+                f"project path not found: {path}")
+    if kind == "input":
+        name = source.get("name")
+        value = (instance_inputs or {}).get(name) if isinstance(instance_inputs, dict) else None
+        if not isinstance(value, str) or not value:
+            return False, f"instance input {name!r} is not a path value"
+        return (os.path.isfile(join(ctx.root, value)),
+                f"replacement path from input {name!r} not found: {value}")
+    if kind == "step":
+        upstream = step_results.get(source.get("step")) or {}
+        output = next((item for item in upstream.get("outputs") or []
+                       if isinstance(item, dict) and item.get("id") == source.get("output")), None)
+        if output is None:
+            return False, f"replacement output not produced: {source.get('step')}/{source.get('output')}"
+        path = output.get("path")
+        return (bool(path) and os.path.isfile(join(ctx.root, str(path))),
+                f"replacement artifact missing: {path}")
+    return False, f"replacement from must be project|input|step, got {kind}"
+
+
+def _declared_alternative(doc, source_step, consumer_id):
+    """上游略过时，定义里为该消费方声明的替代（`unused` 或 `replacement`）。"""
+    skip = (source_step or {}).get("skip") or {}
+    for item in skip.get("downstream") or []:
+        if isinstance(item, dict) and item.get("consumer") == consumer_id:
+            return item
+    return None
+
+
+def step_contract(doc, step, *, run_id, run, workflow_id):
+    """把定义的步骤声明转成任务记录里的契约（机制只搬运声明，不解释业务语义）。
+
+    - `actions`：必做动作，`result` 初始 `pending`（既有 `tasks.work_satisfied_fact` 已按此判待办）；
+    - `human_points`：步骤内人判点（Check 要求有对应决定）；
+    - `verifications`：声明摘要（Check 要求同 id 出现在**已批准 plan** 里）；
+    - `verification_runs`：单次验证运行的记录位（空列表，追加写）。
+    """
+    actions = []
+    for action in step.get("actions") or []:
+        if not isinstance(action, dict) or not isinstance(action.get("id"), str):
+            continue
+        actions.append({"id": action["id"],
+                        "text": action.get("text"),
+                        "required": action.get("required") is not False,
+                        "skip": action.get("skip"),
+                        "human_points": [item for item in action.get("human_points") or []
+                                         if isinstance(item, dict)],
+                        "result": "pending"})
+    human_points = [{"id": item.get("id"), "question": item.get("question"),
+                     "choices": item.get("choices")}
+                    for item in step.get("human_points") or []
+                    if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    verifications = [{"id": item.get("id"), "source": item.get("source"),
+                      "consume_at": item.get("consume_at")}
+                     for item in step.get("verifications") or []
+                     if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    return {"step": {"workflow_id": workflow_id, "step_id": step.get("id"),
+                     "definition_digest": (run.get("definition") or {}).get("digest")},
+            "actions": actions,
+            "human_points": human_points,
+            "verifications": verifications,
+            "verification_runs": []}
+
+
+def _require_upstream_outputs(ctx, doc, step, step_results, instance_inputs=None):
+    """`from: step` 的引用必须落在**当下真实存在**的产物上（机制稿 §7.2/§7.3）。
+
+    三条机械事实各管一段，缺一项就不建下游任务（七轮审查 b-2）：
+    ① 上游结果：`satisfied`，或**被合法略过且为该消费方声明了 unused/replacement**；
+    ② 产物声明：本次结果里确实列出该 output；
+    ③ 文件现状：**此刻**按磁盘核存在与内容——记录里的 `exists` 只是当时的事实，
+       文件被删/被移走后再拿旧标记放行，等于用陈旧事实当证据。
+    """
+    by_id = {item.get("id"): item for item in doc.get("steps") or []
+             if isinstance(item, dict) and item.get("id")}
+    missing = []
+    # 步骤顶层与步骤内动作的声明都是"本步骤要消费的引用"，同一套核验（机制稿 §7.1）
+    declared_refs = list(step.get("inputs") or [])
+    for action in step.get("actions") or []:
+        if isinstance(action, dict):
+            declared_refs.extend(action.get("inputs") or [])
+    for entry in declared_refs:
+        if not isinstance(entry, dict) or entry.get("from") != "step":
+            continue
+        source, output_id = entry.get("step"), entry.get("output")
+        upstream = step_results.get(source) or {}
+        kind = upstream.get("kind")
+        if kind == "skipped":
+            alternative = _declared_alternative(doc, by_id.get(source), step.get("id"))
+            if alternative is None:
+                missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                                "reason": "upstream step was skipped and no alternative is declared "
+                                          "for this consumer"})
+                continue
+            if alternative.get("mode") == "unused":
+                continue
+            ready, detail = _replacement_ready(ctx, doc, alternative.get("replacement"),
+                                               step_results, instance_inputs)
+            if not ready:
+                missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                                "reason": "declared replacement is not available", "detail": detail,
+                                "replacement": alternative.get("replacement")})
+            continue
+        if kind != "satisfied":
+            missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                            "reason": "upstream step has no satisfied result", "kind": kind})
+            continue
+        outputs = upstream.get("outputs") or []
+        found = next((item for item in outputs
+                      if isinstance(item, dict) and item.get("id") == output_id), None)
+        if found is None:
+            missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                            "reason": "upstream result does not list this output",
+                            "declared": [item.get("id") for item in outputs
+                                         if isinstance(item, dict)]})
+            continue
+        path = found.get("path")
+        if not found.get("resolved") or not path or not os.path.isfile(join(ctx.root, str(path))):
+            missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                            "path": path, "resolved": found.get("resolved"),
+                            "exists": found.get("exists"),
+                            "reason": "declared artifact is not on disk now"})
+    if missing:
+        raise DefinitionError("WF_DEPENDENCY_UNMET",
+                              {"reason": "upstream artifacts required by this step are missing",
+                               "step": step.get("id"), "missing": missing,
+                               "exits": ["回到上游步骤产出该产物（或改定义里的引用）",
+                                         "上游确实要略过：在定义的 skip.downstream 里为该消费方声明 "
+                                         "mode=unused 或 mode=replacement"]},
+                              next_="下游需要上游产物：先让上游真正产出（或按声明的替代），再推进本步骤")
 
 
 def _previous_task_step(doc, step_id, applicability=None, step_results=None):
@@ -1423,15 +2148,17 @@ def _return_from_rework(ctx, run, sequence, cursor, task_map):
 
 
 def _human_answer(decisions, step):
-    """人判答复：`subject` 含该步骤 id；`skip` 表示按 skip 处置（仅可略步骤）。"""
+    """人判答复：`subject` 里**整词**出现该步骤 id；`skip` 表示按 skip 处置（仅可略步骤）。
+
+    整词匹配（与 `plan-q` 同一口径）：定义同时有 `api` 与 `api-docs` 时，子串匹配会让
+    给 `api-docs` 的答复被 `api` 抢走（六轮复核 b.4）。
+    """
     for decision in decisions or []:
         if not isinstance(decision, dict):
             continue
-        subject = decision.get("subject")
-        text = " ".join(str(item) for item in subject) if isinstance(subject, list) else str(subject or "")
-        if step["id"] not in text:
-            continue
-        return decision
+        # 整词覆盖：唯一实现在 `decisions.subject_mentions`（同一判据不在两处维护）
+        if decisions_mod.subject_mentions(decision.get("subject"), str(step["id"])):
+            return decision
     return None
 
 
@@ -1478,24 +2205,7 @@ def advance(ctx, args):
             raise DefinitionError("WF_SEMANTIC_DECISION",
                                   {"reason": "run is paused", "exit": "先 run resume 或终止实例"})
         # 固定快照：记录里的摘要必须仍等于快照文件本身（源定义改了不影响已固定实例）
-        snapshot_rel = (run.get("definition") or {}).get("snapshot_path")
-        snapshot_abs = join(ctx.root, snapshot_rel or "")
-        if not snapshot_rel or not os.path.isfile(snapshot_abs):
-            raise DefinitionError("WF_HISTORY_UNRESOLVED",
-                                  {"reason": "definition snapshot missing", "path": snapshot_rel})
-        with open(snapshot_abs, "rb") as handle:
-            snapshot_bytes = handle.read()
-        digest = "sha256:" + records.sha256_hex(snapshot_bytes)
-        if digest != (run.get("definition") or {}).get("digest"):
-            raise DefinitionError("WF_HISTORY_UNRESOLVED",
-                                  {"reason": "snapshot digest mismatch",
-                                   "recorded": (run.get("definition") or {}).get("digest"),
-                                   "current": digest})
-        doc, problems = parse_definition(snapshot_bytes.decode("utf-8"))
-        if doc is None or problems:
-            raise DefinitionError("WF_DEFINITION_INVALID",
-                                  {"reason": "fixed snapshot is not statically valid",
-                                   "problems": problems})
+        doc, _snapshot_bytes = fixed_snapshot(ctx, run)
         creation = run.get("creation_decision") or {}
         cursor = run.get("cursor") or {}
         step_results = dict(run.get("step_results") or {})
@@ -1511,31 +2221,52 @@ def advance(ctx, args):
         cursor = run.get("cursor") or {}
         step_results = dict(run.get("step_results") or {})
 
-        # ① 先把「已完成的步骤」结掉：前一个任务正常归档且持久化可核 → satisfied 并推进游标
+        # ① 先把「已完成的步骤」结掉。**按步骤类型与已落盘结果判**，不把「游标上有 step_id」
+        #    当成「必然有任务」：人判步骤与可略步骤合法地没有任务映射（`task_id: null`），
+        #    它们的结果就在 `step_results` 里，重入时直接结案推进下一步。
         current = cursor.get("step_id")
         settled = None
         if current:
             mapping = task_map.get(current) or {}
             task_id = mapping.get("task_id")
-            task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
-            if task is None:
-                raise DefinitionError("WF_HISTORY_UNRESOLVED",
-                                      {"reason": "mapped task missing", "step": current,
-                                       "task": task_id})
-            persisted = tasks_mod.archive_persisted(ctx.root, task)
-            if task.get("terminal") == "normal" and persisted.get("persisted"):
+            recorded = step_results.get(current) or {}
+            if task_id:
+                task = tasks_mod.load_task(ctx.root, task_id)
+                if task is None:
+                    raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                          {"reason": "mapped task missing", "step": current,
+                                           "task": task_id})
+                persisted = tasks_mod.archive_persisted(ctx.root, task)
+                if task.get("terminal") == "normal" and persisted.get("persisted"):
+                    settled = current
+                    step_results[current] = {"kind": "satisfied", "task_id": task_id,
+                                             "at": records.now_str(),
+                                             "terminal": task.get("terminal"),
+                                             "outputs": _step_outputs(
+                                                 doc, current, run.get("inputs") or {},
+                                                 root=ctx.root)}
+                elif task.get("terminal"):
+                    # 任务已异常归档：本步骤不会再被满足，实例层只剩「终止或替换」两条路
+                    raise DefinitionError(
+                        "WF_SEMANTIC_DECISION",
+                        {"reason": "task ended abnormally; step is not satisfied",
+                         "step": current, "task": task_id,
+                         "terminal": task.get("terminal"),
+                         "exits": ["run terminate：按逐任务处置计划（放弃/保留）异常终止实例",
+                                   "由人裁定替换该步骤的任务（task-replace）后重建推进",
+                                   "若目标是继续做这件事：**新建任务承载**（新任务有自己的 Plan/批准），"
+                                   "不在已归档的旧步骤上推进"]},
+                        next_="该步骤任务已异常归档：实例不再推进本步骤；用 run terminate 逐任务处置，或由人裁定替换")
+            elif recorded.get("kind") in ("satisfied", "skipped"):
+                # 人判答复、或按 creation 声明略过的步骤：结果已在盘上，重入即结案
                 settled = current
-                step_results[current] = {"kind": "satisfied", "task_id": task_id,
-                                         "at": records.now_str(),
-                                         "terminal": task.get("terminal"),
-                                         "outputs": _step_outputs(doc, current,
-                                                                   run.get("inputs") or {})}
-            elif task.get("terminal"):
-                raise DefinitionError("WF_SEMANTIC_DECISION",
-                                      {"reason": "task ended abnormally; step is not satisfied",
-                                       "step": current, "task": task_id,
-                                       "terminal": task.get("terminal")},
-                                      next_="按机制稿 §6.4/§7.4 处置该任务后重试")
+            else:
+                raise DefinitionError("WF_HISTORY_UNRESOLVED",
+                                      {"reason": "cursor step has neither a task nor a result",
+                                       "step": current,
+                                       "step_type": (_step_by_id(doc, current) or {}).get("type"),
+                                       "recorded": recorded or None},
+                                      next_="只读核对实例记录与快照；不按猜测补建任务")
 
         # ①' 当前步骤已有任务但还没正常归档：**停在原地等它**，不跳到下一步
         #    （机制稿 §7.3：任务四阶段完成且归档持久化可核后才记 satisfied 并推进 cursor）
@@ -1552,10 +2283,17 @@ def advance(ctx, args):
                            "step_results": step_results})
 
         # ② 找下一个要处理的步骤
-        step = _next_step(doc, creation, settled or current)
+        step = _next_step(doc, settled or current, step_results)
         if step is None:
+            # 末步结案必须落盘：此前只回显 facts，`run finish` 重读磁盘仍看到该步骤未完成
+            # （六轮审查 b-1：末步 advance 返回 WF_OK、写盘 0 次）。
+            if settled:
+                # 只补结果，**不动 cursor**：游标上的 task_id 还被写权释放前置与 current-task
+                # 投影消费，置空会顺手改掉那两处的行为（自查：状态字段不做"顺手归一"）。
+                run = dict(run, step_results=step_results)
+                records.write_json(run_path(ctx.root, run_id), run)
             return codes.result("WF_OK", object={"id": run_id},
-                                position_=codes.position(scope="run"),
+                                position_=codes.position(scope="run", step_id=settled),
                                 next_="所有步骤已记录结果：run finish 正常结束，或 run terminate 异常终止",
                                 facts={"run": run_id, "cursor": cursor,
                                        "step_results": step_results, "settled": settled})
@@ -1564,6 +2302,14 @@ def advance(ctx, args):
         decided = _human_answer(decisions, step)
 
         if applicability.get(step_id) == "skipped":
+            if not step_skippable(step):
+                raise DefinitionError(
+                    "WF_SEMANTIC_DECISION",
+                    {"reason": "step is required (skip=null); it cannot be skipped",
+                     "step": step_id, "creation_steps": applicability,
+                     "exits": ["按定义执行该步骤（建任务或回答人判点）",
+                               "确要略过：改定义声明 skip 后由人重新确认创建输入（新实例）"]},
+                    next_="必需步骤不能略过：回到该步骤执行，不要用创建输入绕过")
             # 可略步骤：不为保存答复强建任务；下游替代链已在静态校验里核过
             if decided is None:
                 raise DefinitionError("WF_SEMANTIC_DECISION",
@@ -1571,6 +2317,17 @@ def advance(ctx, args):
                                        "step": step_id,
                                        "decision_point": ((step.get("skip") or {}).get("decision_point"))},
                                       next_="用 --decision 记录略过决定（subject 含该步骤 id）")
+            choice = str(decided.get("choice") or "")
+            if choice not in SKIP_CHOICES:
+                # 创建输入说"这一步骤本次略过"，人判却给了别的答复：两条事实冲突，
+                # 谁也不能覆盖谁——此前一律记成 skipped，人的"不略过"被静默吞掉（七轮 b-2）。
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "decision does not agree with the declared skip",
+                                       "step": step_id, "decision": choice,
+                                       "creation_steps": applicability, "skip_choices": list(SKIP_CHOICES),
+                                       "exits": ["用 choice=skip 的决定确认略过（subject 含该步骤 id）",
+                                                 "要执行该步骤：创建输入已固定为 skipped，需按新的创建输入另开实例"]},
+                                      next_="人判答复与创建输入冲突：按出口统一后再推进")
             step_results[step_id] = {"kind": "skipped", "at": records.now_str(),
                                      "decision": decided.get("choice"),
                                      "decision_detail": decided,
@@ -1623,6 +2380,7 @@ def advance(ctx, args):
                                 next_="该步骤的任务已生成：在其上完成四阶段后重入 advance 记 satisfied",
                                 facts={"run": run_id, "step": step_id, "task": task_id,
                                        "reused": True, "cursor": cursor})
+        _require_upstream_outputs(ctx, doc, step, step_results, run.get("inputs") or {})
         previous = _previous_task_step(doc, step_id, applicability, step_results)
         predecessors = []
         if previous is not None:
@@ -1639,32 +2397,52 @@ def advance(ctx, args):
                                        "terminal": prior_record.get("terminal")},
                                       next_="先完成并正常归档上一个任务，再推进")
             predecessors = [prior_task]
+        # 续做而不是重建：锁内中断（例如"任务目录已发布、映射还没写"）后重入时，
+        # 已登记的 `run.advance` 动作里固定着这次的 task id——沿用它，绝不再生成第二个。
+        pending = run.get("action") or {}
+        resume_task = None
+        if (pending.get("kind") == "run.advance" and pending.get("state") != "done"
+                and (pending.get("inputs") or {}).get("step") == step_id
+                and (pending.get("inputs") or {}).get("run") == run_id):
+            resume_task = (pending.get("inputs") or {}).get("task")
         task = tasks_mod.new_task_record(step.get("task_kind") or "ordinary",
                                          step.get("title") or step_id)
+        if resume_task:
+            task["id"] = resume_task
         task["run_id"] = run_id
         task["prerequisites"] = list(predecessors)
+        # 步骤契约随任务落盘（唯一写入点）：定义里声明的必做动作/步骤内人判点/验证来源
+        # 从此有消费者（Check 准备段），不再只靠 AI 从定义重建（九/十轮审查的共同结论）。
+        task["execution"] = dict(task.get("execution") or {},
+                                 **step_contract(doc, step, run_id=run_id, run=run,
+                                                 workflow_id=run.get("workflow_id")))
         inputs = {"run": run_id, "step": step_id, "task": task["id"],
                   "predecessors": sorted(predecessors)}
-        action = actions_mod.new_action("run.advance",
-                                        writer_mod.owner_ref("session", key, scope),
-                                        int(run.get("revision", 0)), inputs,
-                                        steps=list(ADVANCE_STEPS),
-                                        head_before=actions_mod.head_of(ctx.root),
-                                        targets=[{"kind": "run", "id": run_id},
-                                                 {"kind": "task", "id": task["id"]},
-                                                 {"kind": "step", "id": step_id}])
+        action = (pending if resume_task else
+                  actions_mod.new_action("run.advance",
+                                         writer_mod.owner_ref("session", key, scope),
+                                         int(run.get("revision", 0)), inputs,
+                                         steps=list(ADVANCE_STEPS),
+                                         head_before=actions_mod.head_of(ctx.root),
+                                         targets=[{"kind": "run", "id": run_id},
+                                                  {"kind": "task", "id": task["id"]},
+                                                  {"kind": "step", "id": step_id}]))
         run = dict(run, action=action)
         records.write_json(run_path(ctx.root, run_id), run)
         template = join(ctx.root, ".wf/templates/task")
         directory = join(ctx.root, f"{tasks_mod.TASKS_REL}/{tasks_mod.dir_name(task['id'], task['title'])}")
         staging = join(ctx.root, f"{tasks_mod.TASKS_REL}/.staging-{task['id']}")
-        if os.path.exists(directory) or os.path.exists(staging):
-            raise cli.CliError("WF_TARGET_COLLISION",
-                               {"path": _rel(ctx.root, directory if os.path.exists(directory) else staging)})
-        tasks_mod._publish_task_tree(ctx, directory, staging, template, task)
+        if os.path.exists(staging):
+            raise cli.CliError("WF_TARGET_COLLISION", {"path": _rel(ctx.root, staging)})
+        if not os.path.exists(directory):
+            tasks_mod._publish_task_tree(ctx, directory, staging, template, task)
+        elif not resume_task:
+            # 不是本次中断留下的目录：真冲突（别把别人的任务认成自己的）
+            raise cli.CliError("WF_TARGET_COLLISION", {"path": _rel(ctx.root, directory)})
         task_map[step_id] = {"task_id": task["id"], "predecessors": sorted(predecessors),
                              "superseded_ids": []}
-        run = dict(run, task_map=task_map, cursor={"step_id": step_id, "task_id": task["id"]},
+        run = dict(run, task_map=task_map, step_results=step_results,
+                   cursor={"step_id": step_id, "task_id": task["id"]},
                    action=actions_mod.complete(
                        action, summary="run.advance",
                        control_assertion=cli._control_assertion(
@@ -1723,6 +2501,24 @@ def _advance_step_done(ctx, run_id, run, step):
 PAUSE_STEPS = ("record_reason", "pause_task", "write_run")
 
 
+def _reassert_current_task_pause(ctx, run, reason):
+    """实例处于暂停态时，确保当前任务也暂停（幂等修复，不改 phase/status/游标）。"""
+    from . import tasks as tasks_mod
+
+    task_id = (run.get("cursor") or {}).get("task_id")
+    if not task_id:
+        return False
+    task = tasks_mod.load_task(ctx.root, task_id)
+    if not isinstance(task, dict) or task.get("paused"):
+        return False
+    directory = tasks_mod.task_dir(ctx.root, task_id)
+    task = dict(task, paused=True,
+                pause_reason={"reason": reason or "instance paused",
+                              "at": records.now_str(), "by": "run.pause", "run": run.get("id")})
+    tasks_mod.save_task(ctx.root, directory, task)
+    return True
+
+
 def pause(ctx, args):
     """`run pause --run <id> --reason <text>`：受控暂停（机制稿 §7.3、§1.5 的 `paused`）。
 
@@ -1730,9 +2526,8 @@ def pause(ctx, args):
     机制稿 §7.3 明确「实例暂停须保存当前任务的暂停或等待原因及当前步骤，
     不能只移动游标绕过任务门禁」，所以这里不动 `cursor`。
 
-    **解除路径不在本命令**：机制稿 §2.2 只为任务定义了「暂停/恢复」，实例的解除没有出处
-    （`run` 的子动作表里也没有 resume）。当前 paused 实例的出口是 `run terminate`；
-    是否新增解除入口见任务记录里的待裁项。
+    **解除路径是 `run resume`**：它只清 `paused`、记录谁/何时/依据，不恢复任务、不动游标。
+    是否恢复当前步骤的任务是第二个决定（`task-resume`），异常收场走 `run terminate`。
     """
     from . import actions as actions_mod, cli, lock, session as session_mod, tasks as tasks_mod, writer as writer_mod
 
@@ -1766,11 +2561,16 @@ def pause(ctx, args):
             raise DefinitionError("WF_BINDING_MISMATCH",
                                   {"reason": "run already ended", "terminal": run.get("terminal")})
         if run.get("paused"):
+            # 幂等之外还要**修复不变量**：实例暂停 ⇒ 当前任务也暂停。此前这里直接返回，
+            # 于是"实例暂停、任务被 task-resume 解冻"的矛盾状态没人收拾（六轮审查 b-6）。
+            repaired = _reassert_current_task_pause(ctx, run, reason)
             return codes.result("WF_OK", object={"id": run_id},
                                 position_=codes.position(scope="run"),
-                                next_="实例已在暂停态（幂等，不重复写入）",
+                                next_=("实例已在暂停态（幂等）；已补上当前任务的暂停"
+                                       if repaired else "实例已在暂停态（幂等，不重复写入）"),
                                 facts={"run": run_id, "paused": True,
-                                       "paused_reason": run.get("paused_reason")})
+                                       "paused_reason": run.get("paused_reason"),
+                                       "task_pause_repaired": repaired})
         cursor = run.get("cursor") or {}
         task_id = cursor.get("task_id")
         action = actions_mod.new_action("run.pause",
@@ -1825,7 +2625,8 @@ def pause(ctx, args):
         position_=codes.position(scope="run", step_id=cursor.get("step_id"), task_id=paused_task,
                                  action_id=run["action"]["id"],
                                  action_state=run["action"]["state"]),
-        next_="解除路径未定义（机制稿只为任务定义暂停/恢复）：当前出口是 run terminate",
+        next_=("人确认后 run resume 解除实例暂停（只清 paused、不恢复任务、不动游标）；"
+               "是否恢复当前任务另跑 task-resume；要异常收场用 run terminate"),
         facts={"run": run_id, "paused": True, "paused_reason": run["paused_reason"],
                "paused_task": paused_task, "cursor": cursor,
                "control_assertion": run["action"]["result"]["control_assertion"]},
@@ -1840,6 +2641,146 @@ TERMINATE_DISPOSITIONS = {"放弃": "abandon", "abandon": "abandon",
 
 
 FINISH_STEPS = ("check_steps", "write_normal", "persist_record")
+
+
+def _run_persist_pending(ctx, run, run_id):
+    """终态已落、但**记录组还没闭合**（提交未完成/快照未入库/动作停在 persist_pending）。
+
+    三种状态都允许重入续做固定提交步骤：进程在"写 done → 提交"之间退出的窗口、
+    `persist_pending`、以及旧版本留下的"done 但 Git 里不是 done"。判据只看事实，
+    不看上一次入口的回显（八轮审查 b-3）。
+    """
+    import subprocess
+
+    action_state = (run.get("action") or {}).get("state")
+    if action_state in ("persist_pending", "prepared", "applying"):
+        return True
+    record_rel = f"{RUNS_REL}/{run_id}.json"
+    committed = subprocess.run(["git", "show", f"HEAD:{record_rel}"], cwd=str(ctx.root),
+                               capture_output=True, text=True, check=False)
+    if committed.returncode != 0:
+        return True
+    try:
+        from_git = json.loads(committed.stdout)
+    except ValueError:
+        return True
+    if (from_git.get("action") or {}).get("state") != "done":
+        return True
+    snapshot_rel = ((run.get("definition") or {}).get("snapshot_path"))
+    if snapshot_rel and subprocess.run(["git", "ls-files", "--error-unmatch", snapshot_rel],
+                                       cwd=str(ctx.root), capture_output=True, text=True,
+                                       check=False).returncode != 0:
+        return True
+    return False
+
+
+def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
+    """固定提交步骤（唯一实现）：**先把"完成态"写盘，再提交，然后从 Git 读回核对**。
+
+    原先的顺序是"先提交、后把动作标 done"：成功后磁盘上留下的是 `persist_pending`，
+    下一次写入才变成 `done`——于是回显 `persisted=true` 时 Git 里的记录还停在待提交
+    （六轮审查 b-5）。改成先写后提交后，提交的内容就是我们声称的那个终态；
+    核对失败则回退到 `persist_pending` 并如实报 `persisted=false`。
+    提交清单只含**该授权覆盖**的路径（记录 + 被覆盖的定义快照）：实例记录引用了快照，
+    所以授权覆盖它时一并提交；没覆盖就只提交记录本身——不因为"引用了"就扩权。
+    """
+    from . import actions as actions_mod, cli, paths as paths_mod, tasks as tasks_mod, writer as writer_mod
+
+    record_rel = f"{RUNS_REL}/{run_id}.json"
+    snapshot_rel = ((run.get("definition") or {}).get("snapshot_path"))
+    grants = [item for item in decisions if isinstance(item, dict)
+              and decisions_mod.accepts("commit_grant", item.get("choice"))]
+    def _covered(relative):
+        """该路径是否被**某条授权**覆盖（逐路径核，不因为记录在清单里就顺带提交）。"""
+        return any(path == relative or paths_mod.match_path(path, relative)
+                   for grant in grants for path in _grant_paths(grant.get("subject")))
+
+    wanted = [item for item in (record_rel, snapshot_rel) if item]
+    paths = [item for item in wanted if _covered(item) and os.path.exists(join(ctx.root, item))]
+    result = {"persisted": False, "commit": None, "record": record_rel,
+              "records": wanted, "committed": paths,
+              "uncovered": [item for item in wanted if not _covered(item)]}
+    if record_rel not in paths:
+        return result
+
+    pending_run = dict(run)
+    action = dict(run["action"])
+    done_run = dict(run, action=actions_mod.complete(
+        action, summary=f"run.{op}",
+        control_assertion=cli._control_assertion(
+            ctx, f"run.{op}", writer_mod.owner_ref("session", key, scope),
+            action, [f"run:{run_id}"])))
+    records.write_json(run_path(ctx.root, run_id), done_run)
+    try:
+        result["commit"] = tasks_mod._commit_paths(
+            ctx.root, paths, f"wf: run {op} {run_id}\n\nwf-task: {run_id}")
+    except Exception as exc:      # noqa: BLE001 — 提交失败不改变"记录组尚未提交"的事实
+        records.write_json(run_path(ctx.root, run_id), pending_run)
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
+    tracked = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
+                             cwd=str(ctx.root), capture_output=True, text=True, check=False)
+    dirty = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
+                           cwd=str(ctx.root), capture_output=True, text=True,
+                           check=False).stdout.strip()
+    committed = subprocess.run(["git", "show", f"HEAD:{record_rel}"], cwd=str(ctx.root),
+                               capture_output=True, text=True, check=False)
+    from_git = None
+    if committed.returncode == 0:
+        try:
+            from_git = json.loads(committed.stdout)
+        except ValueError:
+            from_git = None
+    # 记录组完整性：实例记录引用的定义快照也必须在 Git 里，否则"从该提交重新检出"会缺字节
+    # （`fixed_snapshot` 之后将报 WF_HISTORY_UNRESOLVED，且历史里已无法补）——八轮审查 b-3。
+    missing_records = []
+    if snapshot_rel and snapshot_rel not in paths:
+        missing_records.append(snapshot_rel)
+    for relative in paths:
+        probe = subprocess.run(["git", "ls-files", "--error-unmatch", relative],
+                               cwd=str(ctx.root), capture_output=True, text=True, check=False)
+        if probe.returncode != 0:
+            missing_records.append(relative)
+    result["missing_records"] = missing_records
+    result["persisted"] = (tracked.returncode == 0 and dirty == ""
+                           and isinstance(from_git, dict)
+                           and (from_git.get("action") or {}).get("state") == "done"
+                           and not missing_records)
+    if not result["persisted"]:
+        # 提交没落地或记录组不齐：把动作退回"目标已成立、提交未完成"，别让磁盘上留下假的完成态。
+        # 终态（terminal/ended_at）保留——那是业务事实；只回退动作状态。
+        reverted = dict(pending_run, action=dict(pending_run["action"], state="persist_pending",
+                                                 next_step="persist_record"))
+        records.write_json(run_path(ctx.root, run_id), reverted)
+        result["head_state"] = ((from_git or {}).get("action") or {}).get("state")
+    return result
+
+
+def _pending_persist(ctx, run, run_id, decisions, op, key, scope):
+    """`persist_pending` 的重入：只重做固定提交步骤，不重做业务。
+
+    终态已落盘、只差分提交时，两个入口原来一律报 "run already ended"——入口自己给的
+    "补授权后重入"于是变成死出口（六轮审查 b-2）。这里按**事实**续做：有覆盖该路径的
+    commit 授权就提交并只读复核，然后把动作收尾；没有就仍停着并给同一个出口。
+    """
+    outcome = _persist_run_records(ctx, run, run_id, decisions, op, key, scope)
+    persisted, commit_result = outcome["persisted"], outcome["commit"]
+    record_rel = outcome["record"]
+    return codes.result(
+        "WF_OK",
+        object={"id": run_id},
+        position_=codes.position(scope="run", action_id=run["action"]["id"],
+                                 action_state=run["action"]["state"]),
+        next_=("实例已结束并持久化：可 writer release 结束会话"
+               if persisted else
+               (f"实例已结束，但**记录组不完整**（缺提交：{', '.join(outcome.get('missing_records') or [])}）："
+                f"给出覆盖这些路径的 commit 授权后重入 run {op} 续做")),
+        facts={"run": run_id, "terminal": run.get("terminal"), "ended_at": run.get("ended_at"),
+               "closing": run.get("closing"), "persisted": persisted,
+               "record": record_rel, "commit": commit_result, "resumed": True,
+               "records": outcome.get("records"), "committed": outcome.get("committed"),
+               "missing_records": outcome.get("missing_records"),
+               "note": "重入只补做固定提交步骤，不重做结束/终止的业务判定"})
 
 
 def finish(ctx, args):
@@ -1882,37 +2823,37 @@ def finish(ctx, args):
             raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
                                                            "run": run_id})
         if run.get("terminal"):
-            raise DefinitionError("WF_BINDING_MISMATCH",
-                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+            if not _run_persist_pending(ctx, run, run_id):
+                raise DefinitionError("WF_BINDING_MISMATCH",
+                                      {"reason": "run already ended",
+                                       "terminal": run.get("terminal")})
+            return _pending_persist(ctx, run, run_id, decisions, "finish", key, scope)
         if run.get("paused"):
             raise DefinitionError("WF_SEMANTIC_DECISION",
                                   {"reason": "run is paused", "exit": "先 run resume 再结束"})
-        doc, _problems = parse_definition(
-            open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"), "rb").read().decode("utf-8"))
-        if doc is None:
-            raise DefinitionError("WF_HISTORY_UNRESOLVED",
-                                  {"reason": "fixed snapshot is not statically valid"})
+        doc, _snapshot_bytes = fixed_snapshot(ctx, run)
         step_results = run.get("step_results") or {}
         task_map = run.get("task_map") or {}
         creation = run.get("creation_decision") or {}
         applicability = _applicability(creation, doc)
 
-        # ① 步骤面：必需步骤 satisfied；可略步骤的 skipped 必须有声明/决定
+        # ① 步骤面：每个步骤都要有**本次适用性允许**的落盘结果。
+        #    可略资格只看定义的 skip 声明（`step_skippable`），创建输入只能决定"本次是否要略"，
+        #    不能把必需步骤变成可略；反过来，可略但本次标 applicable 的步骤也必须真做完。
         unsatisfied, illegal_skips = [], []
         for step in _ordered_steps(doc):
             step_id = step["id"]
             result = step_results.get(step_id) or {}
             kind = result.get("kind")
             declared_skipped = applicability.get(step_id) == "skipped"
-            if declared_skipped or step.get("required") is False:
-                if kind in ("skipped", "satisfied"):
-                    continue
-                if step.get("required") is False and kind is None:
-                    continue      # 可略但未走到：不算未完，也不记满足
-                illegal_skips.append({"step": step_id, "kind": kind})
-                continue
-            if kind != "satisfied":
-                unsatisfied.append({"step": step_id, "kind": kind})
+            allowed_kinds = ("skipped", "satisfied") if (declared_skipped and step_skippable(step)) \
+                else ("satisfied",)
+            if kind is None:
+                unsatisfied.append({"step": step_id, "kind": None})
+            elif kind not in allowed_kinds:
+                illegal_skips.append({"step": step_id, "kind": kind,
+                                      "declared": applicability.get(step_id),
+                                      "skippable": step_skippable(step)})
         # ② 任务面：每个已生成任务都正常归档且持久化可核
         bad_tasks = []
         for step_id, mapping in sorted(task_map.items()):
@@ -1968,30 +2909,11 @@ def finish(ctx, args):
         records.write_json(run_path(ctx.root, run_id), run)
 
         # ④ 持久化：有覆盖该路径的提交授权才提交；否则停在 persist_pending 并如实说明
-        grants = [item for item in decisions if isinstance(item, dict)
-                  and decisions_mod.accepts("commit_grant", item.get("choice"))]
-        from . import paths as paths_mod
-
-        covered = any(path == record_rel or paths_mod.match_path(path, record_rel)
-                      for grant in grants for path in _grant_paths(grant.get("subject")))
-        persisted = False
-        commit_result = None
-        if covered:
-            commit_result = tasks_mod._commit_paths(
-                ctx.root, [record_rel], f"wf: run finish {run_id}\n\nwf-task: {run_id}")
-            status = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
-                                    cwd=str(ctx.root), capture_output=True, text=True, check=False)
-            dirty_record = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
-                                          cwd=str(ctx.root), capture_output=True, text=True,
-                                          check=False).stdout.strip()
-            persisted = status.returncode == 0 and dirty_record == ""
-            if persisted:
-                run = dict(run, action=actions_mod.complete(
-                    run["action"], summary="run.finish",
-                    control_assertion=cli._control_assertion(
-                        ctx, "run.finish", writer_mod.owner_ref("session", key, scope),
-                        action, [f"run:{run_id}"])))
-                records.write_json(run_path(ctx.root, run_id), run)
+        outcome = _persist_run_records(ctx, run, run_id, decisions, "finish", key, scope)
+        persisted = outcome["persisted"]
+        commit_result = outcome["commit"]
+        if persisted:
+            run = records.load_json(run_path(ctx.root, run_id)) or run
     next_ = ("实例已正常结束并持久化：可 writer release 结束会话"
              if persisted else
              "实例已正常结束，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入 run finish 续做")
@@ -2005,6 +2927,8 @@ def finish(ctx, args):
         facts={"run": run_id, "terminal": "normal", "ended_at": run["ended_at"],
                "closing": run["closing"], "persisted": persisted,
                "record": record_rel, "commit": commit_result,
+               "records": outcome.get("records"), "committed": outcome.get("committed"),
+               "missing_records": outcome.get("missing_records"),
                "note": "任务 finish 由人实际调用；实例结束入口不代调"})
 
 
@@ -2042,6 +2966,38 @@ def _record_stop_request(ctx, run_id, plan_path, holder):
                                         str(ctx.root)).replace(os.sep, "/"))
 
 
+def _run_disposable_tasks(ctx, run):
+    """实例终止要处置的任务集合（唯一判据）：步骤任务 ∪ 未归档的受控返工 R。
+
+    R 登记在 `sequence_changes` 而不是 `task_map`：只枚举 task_map 会让"返工进行中"的实例
+    既漏列 R、又把 R 的计划条目判成"实例外任务"，等于没有合法终止路径（八轮审查 b-1）。
+    返回 `[{task, step_id, source, archived}]`，`source` 取 `step|rework`。
+    """
+    from . import tasks as tasks_mod
+
+    found = []
+    for step_id, mapping in sorted((run.get("task_map") or {}).items()):
+        task_id = (mapping or {}).get("task_id")
+        if not task_id:
+            continue
+        record = tasks_mod.load_task(ctx.root, task_id) or {}
+        found.append({"task": task_id, "step_id": step_id, "source": "step",
+                      "archived": record.get("status") == "archived"})
+    known = {item["task"] for item in found}
+    for entry in (run.get("sequence_changes") or []):
+        if not isinstance(entry, dict):
+            continue
+        task_id = entry.get("task_id")
+        if not isinstance(task_id, str) or not task_id or task_id in known:
+            continue
+        record = tasks_mod.load_task(ctx.root, task_id) or {}
+        found.append({"task": task_id, "step_id": entry.get("step_id"), "source": "rework",
+                      "archived": record.get("status") == "archived",
+                      "resume_task": entry.get("resume_task")})
+        known.add(task_id)
+    return found
+
+
 def _terminate_preview(ctx, run_id):
     """异常终止的只读预览（机制稿 §7.4：逐个列出已生成任务、返工/继任者、未生成步骤、已有改动、外部依赖）。
 
@@ -2055,18 +3011,19 @@ def _terminate_preview(ctx, run_id):
     if run.get("terminal"):
         raise DefinitionError("WF_BINDING_MISMATCH",
                               {"reason": "run already ended", "terminal": run.get("terminal")})
-    text = open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"), "rb").read().decode("utf-8")
-    doc, _problems = parse_definition(text)
+    doc, _snapshot_bytes = fixed_snapshot(ctx, run)
     task_map = run.get("task_map") or {}
     tasks = []
-    for step_id, mapping in sorted(task_map.items()):
-        task_id = (mapping or {}).get("task_id")
-        task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+    for item in _run_disposable_tasks(ctx, run):
+        task_id = item["task"]
+        task = tasks_mod.load_task(ctx.root, task_id)
         if not isinstance(task, dict):
-            tasks.append({"step_id": step_id, "task_id": task_id, "unknown": True})
+            tasks.append({"step_id": item["step_id"], "task_id": task_id, "unknown": True,
+                          "source": item["source"]})
             continue
         preview = tasks_mod._abandon_preview(ctx, task)
-        tasks.append({"step_id": step_id, "task_id": task_id,
+        tasks.append({"step_id": item["step_id"], "task_id": task_id, "source": item["source"],
+                      "resume_task": item.get("resume_task"),
                       "status": task.get("status"), "terminal": task.get("terminal"),
                       "paused": bool(task.get("paused")), "suspended": bool(task.get("suspended")),
                       "uncommitted": preview.get("uncommitted") or [],
@@ -2108,20 +3065,21 @@ def terminate(ctx, args):
     run_id = args.value("--run")
     plan_path = args.value("--plan")
     preview_only = args.flag("--preview")
-    if not run_id or (not plan_path and not preview_only):
-        raise DefinitionError("WF_PATH_INVALID",
-                              {"reason": "run terminate requires --run <id> --plan <path> "
-                                         "（或 --preview 只读列出待处置清单）"})
+    if not run_id:
+        raise DefinitionError("WF_PATH_INVALID", {"reason": "run terminate requires --run <id>"})
     if preview_only:
         return _terminate_preview(ctx, run_id)
-    plan = records.load_json(plan_path)
-    if plan is None:
-        raise DefinitionError("WF_PATH_INVALID", {"reason": "plan file missing", "path": plan_path})
-    if isinstance(plan, dict):
-        plan = [plan]
-    if not isinstance(plan, list) or not plan:
-        raise DefinitionError("WF_SEMANTIC_DECISION",
-                              {"reason": "plan must be a non-empty array of {object, decision_ref, reason}"})
+    # 计划只覆盖**已生成的任务**：实例刚建好、一步还没展开时，合法计划就是空数组
+    # （此前空数组与"没有任务条目"同时被拒 → 新实例无路可终止，六轮审查 b-4）。
+    plan = []
+    if plan_path:
+        loaded = records.load_json(plan_path)
+        if loaded is None:
+            raise DefinitionError("WF_PATH_INVALID", {"reason": "plan file missing", "path": plan_path})
+        plan = [loaded] if isinstance(loaded, dict) else loaded
+        if not isinstance(plan, list):
+            raise DefinitionError("WF_SEMANTIC_DECISION",
+                                  {"reason": "plan must be an array of {object, decision_ref, reason}"})
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run terminate"):
         record = ctx.writer() or {}
@@ -2150,9 +3108,30 @@ def terminate(ctx, args):
         if not isinstance(run, dict):
             raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
                                                            "run": run_id})
+        generated_now = [item["task"] for item in _run_disposable_tasks(ctx, run)]
+        if not plan_path and generated_now and not run.get("terminal"):
+            raise DefinitionError("WF_PATH_INVALID",
+                                  {"reason": "run terminate requires --plan when tasks were generated",
+                                   "generated": generated_now,
+                                   "exits": ["按 run terminate --preview 的清单逐任务给处置后带 --plan 重入"]})
         if run.get("terminal"):
-            raise DefinitionError("WF_BINDING_MISMATCH",
-                                  {"reason": "run already ended", "terminal": run.get("terminal")})
+            if not _run_persist_pending(ctx, run, run_id):
+                raise DefinitionError("WF_BINDING_MISMATCH",
+                                      {"reason": "run already ended",
+                                       "terminal": run.get("terminal")})
+            # `decision_ref` 与主路径同形：单个 Decision 或 Decision 数组（后者才带提交授权）。
+            entries = {}
+            for item in plan:
+                if not isinstance(item, dict) or not isinstance(item.get("object"), str):
+                    continue
+                raw = item.get("decision_ref")
+                entries[item["object"]] = {"decisions": [entry for entry in raw
+                                                         if isinstance(entry, dict)] if isinstance(raw, list)
+                                            else ([raw] if isinstance(raw, dict) else [])}
+            return _pending_persist(ctx, run, run_id, _terminate_decisions(entries),
+                                    "terminate", key, scope)
+        # 快照在任何业务写入之前读一次：缺失/失配即零写入退出（不再留半写状态）
+        doc, _snapshot_bytes = fixed_snapshot(ctx, run)
 
         # ① 计划归一与覆盖核对（未知任务/漏项/重复一律拒，零写入）
         entries, problems = {}, []
@@ -2193,10 +3172,10 @@ def terminate(ctx, args):
                                 "reason": item["reason"],
                                 "wip": item.get("disposition"),
                                 "decisions": [entry for entry in candidates if isinstance(entry, dict)]}
-        generated = sorted({(mapping or {}).get("task_id")
-                            for mapping in (run.get("task_map") or {}).values()
-                            if (mapping or {}).get("task_id")})
-        missing = [task_id for task_id in generated if task_id not in entries]
+        disposable = _run_disposable_tasks(ctx, run)
+        generated = sorted(item["task"] for item in disposable)
+        missing = [item["task"] for item in disposable
+                   if not item["archived"] and item["task"] not in entries]
         unknown = sorted(set(entries) - set(generated))
         if missing:
             problems.append({"reason": "every generated task needs a disposition", "missing": missing})
@@ -2288,9 +3267,7 @@ def terminate(ctx, args):
                 tasks_mod.save_task(ctx.root, directory, task)
                 applied[task_id] = {"disposition": "keep", "paused": bool(task.get("paused"))}
 
-        # ⑤ 未生成的步骤记 not_executed（不建空壳任务）
-        doc, _problems = parse_definition(open(join(ctx.root, f"{RUNS_REL}/{run_id}/definition.md"),
-                                               "rb").read().decode("utf-8"))
+        # ⑤ 未生成的步骤记 not_executed（不建空壳任务）；`doc` 来自 ③ 之前的单次读取
         step_results = dict(run.get("step_results") or {})
         for step in _ordered_steps(doc or {}):
             if step["id"] in (run.get("task_map") or {}):
@@ -2303,33 +3280,12 @@ def terminate(ctx, args):
                    ended_at=records.now_str(),
                    action=dict(action, state="persist_pending", next_step="persist_record"))
         records.write_json(run_path(ctx.root, run_id), run)
-        # ④ 固定提交步骤：有覆盖实例记录的 commit 授权才提交，否则停在 persist_pending
-        record_rel = f"{RUNS_REL}/{run_id}.json"
-        grants = [item for item in _terminate_decisions(entries) if isinstance(item, dict)
-                  and decisions_mod.accepts("commit_grant", item.get("choice"))]
-        from . import paths as paths_mod
-
-        covered = any(path == record_rel or paths_mod.match_path(path, record_rel)
-                      for grant in grants for path in _grant_paths(grant.get("subject")))
-        persisted, commit_result = False, None
-        if covered:
-            commit_result = tasks_mod._commit_paths(
-                ctx.root, [record_rel], f"wf: run terminate {run_id}\n\nwf-task: {run_id}")
-            tracked = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
-                                     cwd=str(ctx.root), capture_output=True, text=True, check=False)
-            dirty = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
-                                   cwd=str(ctx.root), capture_output=True, text=True,
-                                   check=False).stdout.strip()
-            persisted = tracked.returncode == 0 and dirty == ""
-        if persisted:
-            run = dict(run, action=actions_mod.complete(
-                dict(run["action"], steps=[{"id": step, "state": "done"}
-                                           for step in run["action"]["steps"]]),
-                summary="run.terminate",
-                control_assertion=cli._control_assertion(
-                    ctx, "run.terminate", writer_mod.owner_ref("session", key, scope),
-                    action, [f"run:{run_id}"])))
-            records.write_json(run_path(ctx.root, run_id), run)
+        # ④ 固定提交步骤：与 finish 共用同一实现（先写完成态、再提交、从 Git 读回核对）
+        outcome = _persist_run_records(ctx, run, run_id, _terminate_decisions(entries),
+                                       "terminate", key, scope)
+        persisted = outcome["persisted"]
+        commit_result = outcome["commit"]
+        record_rel = outcome["record"]
     stale = [step for step in ("save_closing", "apply_tasks", "write_terminal")
              if not _terminate_step_done(ctx, run_id, step, entries)]
     if not persisted:

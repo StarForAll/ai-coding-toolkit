@@ -755,13 +755,24 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             from . import fingerprint as fp
 
             block = current.get("block") or {}
+            # 等价核验必须覆盖**plan_version 绑定的全部语义域**，否则通道比宣称的宽：
+            # 此前只比触碰面与验收摘要，改验证命令（argv/cwd/required）或 TDD 适用性都能"机械修订"通过
+            # ——那等于用一格"只是排版/转义"的人签去承载语义变更（六轮复核 A2）。
             same_paths = sorted(block.get("touch_paths") or []) == sorted(plan.get("touch_paths") or [])
             same_acceptance = fp.acceptance_digest(block.get("acceptance") or []) == plan.get("acceptance_digest")
-            if not (same_paths and same_acceptance):
+            same_verifications = (fp.verifications_digest(block.get("verifications") or [])
+                                  == fp.verifications_digest(plan.get("verifications") or []))
+            same_tdd_applicability = ((block.get("tdd_applicability") or "code")
+                                       == (plan.get("tdd_applicability") or "code"))
+            if not (same_paths and same_acceptance and same_verifications and same_tdd_applicability):
                 return False, "WF_APPROVAL_MISSING", {
                     "reason": "mechanical revision endpoints are not equivalent",
                     "same_touch_paths": same_paths,
                     "same_acceptance": same_acceptance,
+                    "same_verifications": same_verifications,
+                    "same_tdd_applicability": same_tdd_applicability,
+                    "exits": ["验算语义变了就不是排版/转义：走 task-replan（实质规划变更）重新批准",
+                              "只是块外文字/排版：保持机读块语义不变再走机械修订"],
                 }
         questions = tasks_mod.plan_questions(ctx.root, task)
         errors = tasks_mod.question_errors(questions)
@@ -782,7 +793,8 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     if step_id == "task.tdd-verified":
         check = task.get("check") or {}
         evidence = check.get("tdd_evidence")
-        if plan.get("tdd"):
+        applicability = plan.get("tdd_applicability") or check.get("tdd_applicability") or "code"
+        if plan.get("tdd") and applicability == "code":
             from . import check as check_mod
 
             history_commands = [command for entry in task.get("check_history") or []
@@ -791,6 +803,11 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             if problem:
                 return False, "WF_CHECK_FAILED", dict({"reason": "tdd evidence incomplete"}, **problem)
             return True, None, {}
+        if plan.get("tdd"):
+            # 已批准的适用性=文档/调查：由 Check 的验收结论承担（每条验收项须有命令证据或人判），
+            # 这里只报事实，不再要求红绿。
+            return True, None, {"tdd_applicability": applicability,
+                                "note": "按已批准适用性以独立可观察验证代替红绿"}
         return True, None, {}
     if step_id == "task.review-passed":
         if plan.get("complexity") != "complex":
@@ -800,7 +817,7 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
             if incomplete:
                 return False, "WF_SEMANTIC_DECISION", {
                     "incomplete_downgrade": incomplete,
-                    "reason": "complex 降级为 light 须有理由与证据（机制稿 §9.3 门禁 3）",
+                    "reason": "complex 降级为 light 须有理由与证据（降级条目必须带 reason 与 evidence）",
                 }
             return True, None, {}
         reviews = task.get("reviews") or {}
@@ -996,6 +1013,7 @@ def evaluate_instance_cli(ctx, run_id, due):
 
 def evaluate_cli(ctx, due):
     """gate 命令：只读断言，取当前绑定任务。"""
+    from . import runs as runs_mod
     from . import session as session_mod
     from . import tasks as tasks_mod
 
@@ -1011,7 +1029,47 @@ def evaluate_cli(ctx, due):
         return codes.result("WF_OK", facts={"bound": False, "due": due}, next_="wf-start 选择对象")
     object_ref = binding.get("object") or {}
     if object_ref.get("kind") == "run":
-        return evaluate_instance_cli(ctx, object_ref.get("id"), due)
+        run = runs_mod.load_run(ctx.root, object_ref.get("id")) or {}
+        current_task_id = (run.get("cursor") or {}).get("task_id")
+        task = tasks_mod.load_task(ctx.root, current_task_id) if current_task_id else None
+        instance = evaluate_instance_cli(ctx, object_ref.get("id"), due)
+        if not isinstance(task, dict):
+            return instance
+        if due != "before_archive":
+            # 其余时点看实例面（步骤/等待原因），把当前任务的门禁作为附带事实并列
+            return codes.result(
+                instance.get("code") or "WF_OK",
+                object=instance.get("object"),
+                position_=instance.get("position"),
+                next_=instance.get("next"),
+                facts=dict((instance.get("facts") or {}),
+                           task_gate={"task": current_task_id,
+                                      "findings": evaluate(ctx, task, due)}))
+        # 实例内当前任务的门禁缺口是真要看的（wf-finish 的收尾预检）；实例门禁作为附带事实，
+        # 不能拿它替掉任务面的结论（八轮审查 b-4）。
+        task_findings = evaluate(ctx, task, due)
+        blocking = [item for item in task_findings if item["status"] == "missing"]
+        facts = dict((instance.get("facts") or {}), instance_gate={
+            "code": instance.get("code"), "facts": instance.get("facts"),
+        }, task_gate={
+            "task": current_task_id,
+            "blocking": blocking,
+            "findings": task_findings,
+        })
+        if blocking:
+            first = blocking[0]
+            payload = codes.result(
+                first["code"] or "WF_CHECK_FAILED",
+                object={"id": current_task_id},
+                position_=codes.position(scope="run", task_id=current_task_id,
+                                         step_id=(run.get("cursor") or {}).get("step_id")),
+                next_=first.get("next") or "按缺口补齐后重查",
+                facts=dict(facts, due=due),
+            )
+            return payload
+        return codes.result("WF_OK", facts=dict(facts, due=due),
+                            position_=codes.position(scope="run", task_id=current_task_id),
+                            next_="当前任务的门禁缺口为空：可继续收尾（实例层面见 facts.instance_gate）")
     if object_ref.get("kind") != "task":
         raise _cli_error("WF_BINDING_MISMATCH",
                          {"reason": "bound object is neither task nor run", "object": object_ref})
@@ -1133,7 +1191,7 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
         if incomplete:
             return False, "WF_SEMANTIC_DECISION", {
                 "incomplete_downgrade": incomplete,
-                "reason": "complex 降级为 light 须有理由与证据（机制稿 §9.3 门禁 3）",
+                "reason": "complex 降级为 light 须有理由与证据（降级条目必须带 reason 与 evidence）",
             }
     from . import tasks as tasks_mod
 

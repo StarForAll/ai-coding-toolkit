@@ -57,6 +57,28 @@ def acceptance_digest(acceptance) -> str:
     return records.H("wf-acceptance-v1", acceptance)
 
 
+def verifications_digest(verifications) -> str:
+    """验证声明的内容身份（唯一实现）：id / invocation / cwd / input_refs / required / consume_at。
+
+    消费点：机械修订的等价核验（同一批验证命令是否真没变）与 TDD 红绿配对
+    （历史红运行是否属于**同一个**验证定义）。
+    """
+    return records.H("wf-verifications-v1", list(verifications or []))
+
+
+def verification_digest(verification) -> str:
+    """单条验证声明的身份（红绿配对的第二端：同 id 但改了 argv 不算同一定义）。"""
+    entry = verification if isinstance(verification, dict) else {}
+    return records.H("wf-verification-v1", {
+        "id": entry.get("id"),
+        "invocation": entry.get("invocation"),
+        "cwd": entry.get("cwd") or ".",
+        "input_refs": list(entry.get("input_refs") or []),
+        "required": bool(entry.get("required", True)),
+        "consume_at": entry.get("consume_at"),
+    })
+
+
 def snapshot_digest(snapshot):
     return records.plain_digest(snapshot)
 

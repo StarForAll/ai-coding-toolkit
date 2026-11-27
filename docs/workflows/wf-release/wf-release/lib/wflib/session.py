@@ -425,7 +425,13 @@ def state_of_root(root, current_boot: str, probe: Probe | None = None) -> str:
     if root.get("boot") and root.get("boot") != current_boot:
         return DEAD
     if kind == "sid":
-        return ALIVE if root.get("sid_start") is not None else UNVERIFIED
+        # 与 L1 锚同一套判定（唯一实现）：sid 型根此前只凭 `sid_start` 字段就判 ALIVE，
+        # 同一 boot 内会话已死亡也看不出来，会让写权/并发判定永久卡住（六轮复核 b.8）。
+        state = state_of_l1({"boot": root.get("boot"), "sid": root.get("sid"),
+                             "sid_start": root.get("sid_start")}, current_boot, probe)
+        if state == MATCH:
+            return ALIVE
+        return DEAD if state == GONE else UNVERIFIED
     pid = root.get("pid")
     if not isinstance(pid, int):
         return UNVERIFIED

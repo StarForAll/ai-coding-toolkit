@@ -24,7 +24,7 @@
 
 - 时点：进入 Check 前（before_check）
 - enforcement: `wflib/tasks.py::work_satisfied_fact`（核验）＋ `cmd_task_check` 在同一 action 内写 completed 回执
-- 动作：批准范围要求的产物与必需用户动作已实际完成；纯调查须有可观察成果。
+- 动作：批准范围要求的产物与必需用户动作已实际完成；零触碰面的纯调查任务以**已批准规划的验收项**为可观察成果（Check 逐条给结论）。
 - 出口：交付物缺失或用户动作未答 → `WF_CHECK_FAILED` / `WF_SEMANTIC_DECISION`。
 
 ### task.check-passed [required · repeatable]
@@ -37,16 +37,17 @@
 ### task.tdd-verified [required · repeatable]
 
 - 时点：归档前（before_archive，仅 TDD 开启时适用）
-- enforcement: `wflib/check.py::run_check` 的 `tdd_evidence` 核验（红绿证据与适用性判断见 `wf-tdd`）
-- 动作：对同一真实行为有红→绿证据；文档类对象以已批准的适用性与独立可观察验证代替。
-- 出口：开关开启而缺证据 → `WF_CHECK_FAILED`，不得以其余检查通过顶替。
+- enforcement: `wflib/check.py::tdd_evidence_problem`（核验）＋ `wflib/gates.py::verify_step`（门禁重核；红绿与适用性判断见 `wf-tdd`）
+- 动作：红运行须是**同一 `verification_id`** 的历史失败运行、绿运行须是本次通过运行（两段引用各自指向真实运行）；
+  文档/调查类对象按批准规划里的 `tdd_applicability`（`docs`/`investigation`）以独立可观察验证代替红绿。
+- 出口：开关开启而缺证据、或红绿跨验证项拼凑 → `WF_CHECK_FAILED`，不得以其余检查通过顶替。
 
 ### task.review-passed [required · repeatable]
 
 - 时点：归档前（before_archive，仅复杂任务适用）
 - enforcement: `wflib/review.py::decide`（判定）＋ `wflib/gates.py::verify_step`（核验结果与当前 check 绑定）
-- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过，或单 reviewer + 人签残余风险接受（留痕降级，不默认——机制稿 §9.2）；锚点与当前 Check 一致。
-- 出口：报告缺失/身份或人数不合格/锚点失配 → `WF_REVIEW_INVALID`；环境不足 → `WF_REVIEW_UNAVAILABLE`。
+- 动作：当前对象由两个与实施 CLI 不同、彼此也不同的审查 CLI 实际审查通过，或单 reviewer + 人签残余风险接受（留痕降级、不默认）；锚点与当前 Check 一致。
+- 出口：报告缺失/身份或人数不合格/锚点失配 → `WF_REVIEW_INVALID`；环境不足 → `WF_REVIEW_UNAVAILABLE`；审查给出的正当不通过 → `WF_REVIEW_FAILED`。
 
 ### task.knowledge-disposed [required · once]
 
@@ -128,7 +129,13 @@
 - 时点：Check 动作结束
 - enforcement: `wflib/tasks.py::cmd_task_check`（五步由 `wflib/check.py::run_check` 执行）
 - 动作：写检查记录、指纹与回执；pass 时阶段进入 Finish。
-- 出口：五步任一失败按其码返回，不写可 pass 的结果。
+  带 `execution.step` 的实例任务还要兑现该步骤的契约：必做动作须有 `--decision` 的
+  `choice=done|waived`（subject 含动作 id）、步骤内人判点须有对应决定、定义声明的验证 id 须出现在
+  已批准 `plan.verifications` 里；缺任何一项即停（出口见下）。
+  另提供 `--run-verification <id>`：只跑一条已批准验证并记一次运行（`execution.verification_runs`），
+  **不产生 Check 结论、不动 check/锚点**——供 TDD 的红证据消费，与 `--decision/--review-notes` 互斥。
+- 出口：五步任一失败按其码返回，不写可 pass 的结果；契约未兑现 → `WF_SEMANTIC_DECISION`（列出缺哪类），
+  单次运行只回报运行事实（退出码/日志/身份摘要），不据此判 pass。
 
 ### control.task.pause [required · repeatable]
 
