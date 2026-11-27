@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-8.md`
-- **Total Sessions**: 422
-- **Last Active**: 2026-11-25
+- **Total Sessions**: 423
+- **Last Active**: 2026-11-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-8.md` | ~1534 | Active |
+| `journal-8.md` | ~1556 | Active |
 | `journal-7.md` | ~1964 | Archived |
 | `journal-6.md` | ~1986 | Archived |
 | `journal-5.md` | ~1974 | Archived |
@@ -36,6 +36,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 423 | 2026-11-27 | wf 六轮七~十轮修正收口 + 步骤契约与单次验证运行 | `b2cda492` | `main` |
 | 422 | 2026-11-25 | wf 第五轮独立复审收口（0.0.1→0.0.4 发行与候选审计） | `bccac09d`, `1a3ca537`, `c42da2f1`, `7479940e`, `90ca7d48`, `f74ea6df`, `49ef1c3a`, `5793bd4a`, `21af215b`, `7ed09c1b`, `5828b092`, `336b3d42`, `567d60e2` | `main` |
 | 421 | 2026-11-24 | wf dogfood 残缺口修正（材料身份/启用前置/批准绑定） | `cf09db12`, `ef6b8a4f` | `main` |
 | 420 | 2026-11-24 | wf 十六轮 dogfood 修正收口＋安装面向全部平台 | `697db100`, `585bea20`, `e4bfde70`, `1fdb315e`, `3ad03aa0`, `976e9d4c` | `main` |

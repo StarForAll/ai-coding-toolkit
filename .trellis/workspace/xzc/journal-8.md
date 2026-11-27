@@ -1532,3 +1532,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 423: wf 六轮七~十轮修正收口 + 步骤契约与单次验证运行
+<!-- trellis-session: v=2 fp=b01ce089d48d82f0 -->
+
+**Date**: 2026-11-27
+**Task**: wf 六轮七~十轮修正收口 + 步骤契约与单次验证运行
+**Branch**: `main`
+
+### Summary
+
+两条任务一并收口：① 六轮 dogfood 七~十轮外部审查修正（准备通道生命周期与保留草稿消费、实例收尾持久化记录组、推进末步落盘与中断续做、受控返工作用域与终止处置集合、实例暂停写冻结、TDD 红绿绑定验证定义、审查到齐先于人数、WF_REVIEW_FAILED 分码、草稿旗标互斥）；② 步骤契约接进任务记录并被 Check 消费（execution.step/actions/human_points/verifications，动作结果由 --decision 的 action_result 域在门禁前派生），新增 task-check --run-verification 单次验证运行（不产 Check 结论，供 TDD 红证据），修正 decisions.canonical 把失败结论折成通过的缺陷，subject 整词覆盖收敛为单一实现。验证：单测 2155 OK、run_all --full 156 单元 fail=0 GATE-OK、red 92/92；spec 新增 §5b 契约。发行树未重建（待发版批次）。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b2cda492` | wf: 六轮七~十轮修正收口 + 步骤契约与单次验证运行（0.0.17 之后） |
+
+### Status
+
+[OK] **Completed**
