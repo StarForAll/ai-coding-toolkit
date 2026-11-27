@@ -983,7 +983,23 @@ def cmd_status(ctx, args):
                 current_task_id = cursor.get("task_id")
                 current_task = (tasks_mod.load_task(ctx.root, current_task_id)
                                 if current_task_id else None)
-                if isinstance(current_task, dict) and not ctx.args.flag("--short"):
+                if isinstance(current_task, dict) and ctx.args.flag("--short"):
+                    # 实例绑定的 `--short` 同样要给当前任务的修复态：wf-finish 的收尾预检
+                    # 读的就是它（八轮审查 b-4：此前实例下缺 repair_scope）。
+                    from . import review as review_mod
+
+                    facts["task"] = {"id": current_task_id, "title": current_task.get("title"),
+                                     "status": current_task.get("status"),
+                                     "phase": current_task.get("phase"),
+                                     "plan_version": tasks_mod.normalized_plan_version(current_task),
+                                     **_short_check(ctx, current_task)}
+                    facts["repair_scope"] = _short_repair(
+                        review_mod.repair_scope(ctx, current_task),
+                        tasks_mod.archive_precheck(ctx, current_task)
+                        if current_task.get("phase") == "finish" else {"blocking": []},
+                        review_mod.acceptance_echo(current_task))
+                    facts["legacy_unverifiable"] = review_mod.legacy_unverifiable(ctx, current_task)
+                elif isinstance(current_task, dict):
                     from . import check as check_mod, fingerprint as fingerprint_mod, review as review_mod
 
                     facts["task"] = _task_facts(ctx, current_task)
@@ -2971,7 +2987,9 @@ COMMAND_HELP = {
                                "声明 subject `debug-declaration:<verification_id>:count=<n>[:dedupe=<check_id>/<vid>,…][:evidence=<ref>,…]`、"
                                "裁定 subject `debug-ruling-<verification_id>-<multiple>`（choice=同一问题/不同问题，主会话按根因裁定，依据与证据入 reason；"
                                "未跨阈值倍数前无需裁定）",
-                 "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
+                 "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）",
+                 "--run-verification": "只跑一条已批准验证并记一次运行（不产生 Check 结论、不动 check/锚点；供 TDD 红证据），"
+                                       "与 --decision/--review-notes/--workspace-exclusion 互斥"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
                                       "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}},
                    "--decision": {
@@ -4184,7 +4202,8 @@ COMMAND_FLAGS = {
     "task-abandon": {"--task", "--decision", "--disposition"},
     "task-approve": {"--task", "--decision", "--draft"},
     "task-attribute": {"--task", "--commit"},
-    "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft", "--workspace-exclusion"},
+    "task-check": {"--task", "--decision", "--review-notes", "--review-notes-draft",
+                   "--workspace-exclusion", "--run-verification"},
     "task-curate": {"--task", "--spec", "--purpose"},
     "task-knowledge": {"--task", "--decision", "--no-update", "--changes", "--changes-draft"},
     "task-new": {"--kind", "--template", "--title"},
@@ -4261,7 +4280,8 @@ DRAFT_CONFLICTS = {
     "stop": {"--draft": ("--decision",)},
     "authorize": {"--draft": ("--file",)},
     "judgments": {"--draft": ("--file",)},
-    "task-check": {"--review-notes-draft": ("--review-notes",)},
+    "task-check": {"--review-notes-draft": ("--review-notes",),
+                   "--run-verification": ("--decision", "--review-notes", "--workspace-exclusion")},
     "spec-update": {"--changes-draft": ("--changes",)},
     # `--changes-draft` 是 `--changes` 的骨架（`--decision` 与 `--no-update` 同给同样会被草稿分支忽略）
     "task-knowledge": {"--changes-draft": ("--changes", "--decision", "--no-update")},

@@ -18,6 +18,8 @@
 
 from __future__ import annotations
 
+import re
+
 # 操作名 → 已登记的写法（首项为规范值）。只登记**当前实现已接受**的写法，不新增。
 DOMAINS = {
     # 规划批准（`task-approve`、`baseline-apply` 的批准决定、最终门禁的批准复核）
@@ -46,6 +48,9 @@ DOMAINS = {
     # 实例创建授权（`run create --authorization`）：人确认"用这个定义版本/输入/步骤适用性创建实例"；
     # 决定里的 `object_digest` 是创建输入的规范摘要（`runs.creation_digest`）
     "create_instance": ("创建实例", "create-instance"),
+    # 步骤契约里的必做动作结果（`task-check --decision`，subject 整词含动作 id）：
+    # `done` = 该项已做；`waived` = 经人/审查认定本次不适用（理由写在 reason）
+    "action_result": ("done", "完成", "waived", "不适用"),
 }
 
 
@@ -64,12 +69,61 @@ def accepts(operation: str, choice) -> bool:
     return choice in domain(operation)
 
 
+# 同义写法 → 规范值。**只登记"同一含义的不同拼写"**：取值语义彼此不同的域（如
+# `stop_choice` 的 commit/keep、`acceptance_conclusion` 的 passed/failed）不在此表，`canonical`
+# 对它们返回取值本身。此前实现一律返回登记表首项，于是 `failed` → `passed`、`keep` → `commit`：
+# 人工验收的失败结论会被当成通过，spec 核实的失败结论也不会进 unresolved（十轮自审查发现）。
+ALIAS_GROUPS = {
+    "plan_approval": {"批准": "approve"},
+    "replan": {"重新规划": "replan"},
+    "archive_finish": {"完成": "finish", "pass": "finish"},
+    "commit_grant": {},
+    "external_checked": {"核对无影响": "已核对无影响", "checked": "已核对无影响",
+                         "no-impact": "已核对无影响"},
+    "workspace_exclusion": {"exclude-foreign": "排除外来改动"},
+    "prepare_definition": {"prepare-definition": "准备定义"},
+    "create_instance": {"create-instance": "创建实例"},
+    "action_result": {"完成": "done", "不适用": "waived"},
+}
+
+
 def canonical(operation: str, choice):
-    """返回登记表里的规范值；未登记返回 None（调用方据此拒绝并列出可接受值）。"""
-    for item in domain(operation):
-        if item == choice:
-            return domain(operation)[0]
-    return None
+    """把已登记的写法归一成规范值；未登记返回 None（调用方据此拒绝并列出可接受值）。
+
+    语义彼此不同的域返回取值本身：`canonical("acceptance_conclusion", "failed") == "failed"`。
+    """
+    values = domain(operation)
+    if choice not in values:
+        return None
+    return ALIAS_GROUPS.get(operation, {}).get(choice, choice)
+
+
+SUBJECT_SPLIT = re.compile(r"[\s,，;；、|]+")
+
+
+def subject_tokens(subject):
+    """决定 `subject` 的 token 列表（数组或分隔字符串两种形态，唯一实现）。
+
+    判定"某 id 是否被这份决定覆盖"在四个入口出现过四份实现（正则整词、`re.split` 成员、
+    路径切分）——同一判据多处维护必然漂移。这里给出**唯一**切分：空白与 `,，;；、|` 都是分隔符。
+    """
+    if isinstance(subject, list):
+        items = [str(item) for item in subject]
+    elif isinstance(subject, str):
+        items = [subject]
+    else:
+        return []
+    tokens = []
+    for item in items:
+        tokens.extend(token for token in SUBJECT_SPLIT.split(item) if token and token.strip())
+    return tokens
+
+
+def subject_mentions(subject, target):
+    """`subject` 是否以**整词**覆盖 `target`（`api` 不覆盖 `api-docs`）。"""
+    if not isinstance(target, str) or not target:
+        return False
+    return target in subject_tokens(subject)
 
 
 def registered() -> dict:

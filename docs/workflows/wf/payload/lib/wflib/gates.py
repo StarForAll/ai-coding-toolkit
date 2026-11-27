@@ -1013,6 +1013,7 @@ def evaluate_instance_cli(ctx, run_id, due):
 
 def evaluate_cli(ctx, due):
     """gate 命令：只读断言，取当前绑定任务。"""
+    from . import runs as runs_mod
     from . import session as session_mod
     from . import tasks as tasks_mod
 
@@ -1028,7 +1029,47 @@ def evaluate_cli(ctx, due):
         return codes.result("WF_OK", facts={"bound": False, "due": due}, next_="wf-start 选择对象")
     object_ref = binding.get("object") or {}
     if object_ref.get("kind") == "run":
-        return evaluate_instance_cli(ctx, object_ref.get("id"), due)
+        run = runs_mod.load_run(ctx.root, object_ref.get("id")) or {}
+        current_task_id = (run.get("cursor") or {}).get("task_id")
+        task = tasks_mod.load_task(ctx.root, current_task_id) if current_task_id else None
+        instance = evaluate_instance_cli(ctx, object_ref.get("id"), due)
+        if not isinstance(task, dict):
+            return instance
+        if due != "before_archive":
+            # 其余时点看实例面（步骤/等待原因），把当前任务的门禁作为附带事实并列
+            return codes.result(
+                instance.get("code") or "WF_OK",
+                object=instance.get("object"),
+                position_=instance.get("position"),
+                next_=instance.get("next"),
+                facts=dict((instance.get("facts") or {}),
+                           task_gate={"task": current_task_id,
+                                      "findings": evaluate(ctx, task, due)}))
+        # 实例内当前任务的门禁缺口是真要看的（wf-finish 的收尾预检）；实例门禁作为附带事实，
+        # 不能拿它替掉任务面的结论（八轮审查 b-4）。
+        task_findings = evaluate(ctx, task, due)
+        blocking = [item for item in task_findings if item["status"] == "missing"]
+        facts = dict((instance.get("facts") or {}), instance_gate={
+            "code": instance.get("code"), "facts": instance.get("facts"),
+        }, task_gate={
+            "task": current_task_id,
+            "blocking": blocking,
+            "findings": task_findings,
+        })
+        if blocking:
+            first = blocking[0]
+            payload = codes.result(
+                first["code"] or "WF_CHECK_FAILED",
+                object={"id": current_task_id},
+                position_=codes.position(scope="run", task_id=current_task_id,
+                                         step_id=(run.get("cursor") or {}).get("step_id")),
+                next_=first.get("next") or "按缺口补齐后重查",
+                facts=dict(facts, due=due),
+            )
+            return payload
+        return codes.result("WF_OK", facts=dict(facts, due=due),
+                            position_=codes.position(scope="run", task_id=current_task_id),
+                            next_="当前任务的门禁缺口为空：可继续收尾（实例层面见 facts.instance_gate）")
     if object_ref.get("kind") != "task":
         raise _cli_error("WF_BINDING_MISMATCH",
                          {"reason": "bound object is neither task nor run", "object": object_ref})

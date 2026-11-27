@@ -107,6 +107,90 @@
 
 ---
 
+## 5b. 步骤契约与单次验证运行（2026-11-27，十一轮收敛项）
+
+### 1. Scope / Trigger
+
+改动以下任一处必须遵守本节，并按 §5 完成登记链（payload 文件/记录字段 + 机制稿字段表）：
+
+- 实例为步骤建任务的记录形态（`runs.advance` 的建任务分支 / `runs.step_contract`）；
+- Check 对步骤声明的兑现核对（`check.check_step_contract` / `apply_decisions_to_actions`）；
+- 单次验证运行入口（`task-check --run-verification` / `check.run_single_verification`）；
+- `decisions` 的取值域或 `subject` 覆盖判定（`subject_tokens` / `subject_mentions`）。
+
+### 2. Signatures
+
+```
+runs.step_contract(doc, step, *, run_id, run, workflow_id) -> dict
+check.check_step_contract(ctx, task, plan, decisions) -> {problems, exits, action_results, human_points, applied, step}
+check.apply_action_results(task, contract) -> task          # 幂等；定稿段重放
+check.apply_decisions_to_actions(ctx, task, decisions) -> contract   # 门禁求值**之前**调用
+check.run_single_verification(ctx, task, verification_id) -> (task, entry)
+check.verification_run_commands(task) -> [command-shaped run]
+decisions.subject_tokens(subject) -> [token] / decisions.subject_mentions(subject, target) -> bool
+```
+
+### 3. Contracts
+
+任务记录（只增字段，`execution.step` 存在时才生效）：
+
+| 字段 | 语义 | 违反时的出口 |
+|---|---|---|
+| `execution.step` | `{workflow_id, step_id, definition_digest}` | — |
+| `execution.actions[].result` | `pending→done|waived`，由 `--decision` 的 `action_result` 域派生 | `WF_SEMANTIC_DECISION`（`pending_actions`） |
+| `execution.human_points` | 步骤内人判点，须有整词覆盖其 id 的决定 | `WF_SEMANTIC_DECISION`（`missing_human_points`） |
+| `execution.verifications` | 声明摘要；同 id 必须在**已批准 plan** 里 | `WF_SEMANTIC_DECISION`（`declared_verification_not_in_plan`，出口回 Plan） |
+| `execution.verification_runs[]` | 单次运行：`verification_id/verification_digest/invocation/cwd/exit_code/status/at/log` | 只回报运行事实，不判 pass |
+
+### 4. Validation & Error Matrix
+
+| 条件 | 结果 |
+|---|---|
+| 动作结果为 `pending` 且 `required` | Check 阻断（`pending_actions`） |
+| 决定 `choice` 不在 `action_result` 域 | 同一阻断（列 `accepted` 取值） |
+| 步骤人判点无覆盖决定 | Check 阻断（`missing_human_points`） |
+| 定义验证 id 不在批准 plan | Check 阻断（回 Plan 补齐后重新批准） |
+| 单次运行：验证 id 不在批准 plan | `WF_SEMANTIC_DECISION`（列已批准 id） |
+| 单次运行：`kind=manual` | `WF_SEMANTIC_DECISION`（改用 `--decision`） |
+| 单次运行与 `--decision/--review-notes/--workspace-exclusion` 同给 | `WF_USAGE_INVALID`（用法登记一处） |
+| 运行期间任务身份变化（暂停/挂起/重批/另一次 Check） | `WF_CHECK_STALE` |
+
+### 5. Good / Base / Bad
+
+- Good：实例建任务 → `execution` 落盘；Check 时用 `--decision`（`done`）结动作、人给步骤判点结论 → pass。
+- Base：普通任务（无 `execution.step`）→ 本节全部判据不生效，行为与升级前一致。
+- Bad：只跑整轮 Check 求红证据（历史行为，逼 AI 为留痕改开发节奏）；或把动作结果写进自由文本而不走决定。
+
+### 6. Tests Required（断言点）
+
+| 断言点 | 位置 |
+|---|---|
+| 契约形状（step/actions 初始 pending/human_points/verifications/verification_runs） | `test_step_contract.StepContractProducerTest` |
+| 三类阻断 + 动作决定回写（含 `result_decision`） | `test_step_contract.StepContractCheckTest` |
+| 单次运行只记身份、不写 check、manual 拒绝、失败运行可作红证据 | `test_single_verification` |
+| `canonical` 不折叠语义不同的取值；`subject` 整词覆盖 | `test_decision_canonical` |
+| CLI 端到端（双模）：不写 check/history、与 `--decision` 互斥 | repro `single-verification-run` |
+| 实例内任务走完契约并通过 Check | repro `instance-task-phases` |
+
+### 7. Wrong vs Correct
+
+**Wrong**：把动作结果的回写放在 Check 准备段（门禁之后）——
+
+```python
+# 门禁先按 execution.actions[].result == pending 判待办 → 本次已用决定结掉的动作仍被报待办
+findings = gates.evaluate(ctx, task, "before_check")
+contract = check_module.check_step_contract(ctx, task, plan, decisions)
+```
+
+**Correct**：门禁求值前先派生，准备段只做核对与回显（同一份决定派生两次，幂等）。
+
+```python
+check_mod.apply_decisions_to_actions(ctx, task, decisions)   # 先派生
+findings = gates.evaluate(ctx, task, "before_check")
+```
+
+---
+
 ## 6. "有实现、无断言" = 未验证，必须登记或补断言
 
 **Contract**：任何分支若只有实现、没有能区分的断言，收口时二选一：补断言，或写进任务的"无断言清单"并说明为什么现在补不了。

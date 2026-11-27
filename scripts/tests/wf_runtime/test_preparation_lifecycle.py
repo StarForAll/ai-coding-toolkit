@@ -279,5 +279,65 @@ class RecoveringWriterTest(unittest.TestCase):
         self.assertEqual((caught.exception.facts or {}).get("state"), "recovering")
 
 
+
+
+class InstanceBoundTaskGuardTest(unittest.TestCase):
+    """实例内任务写入口的三条不变量（七轮审查 b-1 / b-5）：
+
+    ① 实例暂停 ⇒ 其任务写入被冻结（`write_scope` 与 `require_held_for` 两处都要有）；
+    ② 受控返工的任务与恢复目标在实例写权作用域下可写（判据是 `sequence_changes` 的登记）；
+    ③ 返工任务本身**不写** `run_id`（它仍是独立任务，要独立批准/开工）。
+    """
+
+    def _tasks_source(self):
+        import pathlib as _p
+
+        from wflib import tasks as tasks_mod
+
+        return _p.Path(tasks_mod.__file__).read_text(encoding="utf-8")
+
+    def test_paused_instance_freezes_task_writes(self):
+        count = self._tasks_source().count("instance is paused; its task writes are frozen")
+        self.assertGreaterEqual(count, 2, f"两个写入口都要冻结（实际 {count} 处）")
+
+    def test_rework_membership_is_checked_by_registered_fact(self):
+        source = self._tasks_source()
+        self.assertIn("def _task_in_run(", source)
+        self.assertIn("sequence_changes", source)
+        self.assertIn("_task_in_run(task, task_id, run_id, run, ctx.root)", source)
+
+    def test_rework_task_stays_independent(self):
+        self.assertNotIn('rework["run_id"] = task["run_id"]', self._tasks_source())
+
+    def test_membership_predicate(self):
+        """成员资格：步骤任务按 run_id；受控返工 R 可写；恢复目标 T 只在 **R 已归档**后可写。"""
+        import tempfile
+        from pathlib import Path
+
+        from wflib import tasks as tasks_mod
+
+        tmp = tempfile.TemporaryDirectory(prefix="wf-member-")
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / ".wf" / "tasks").mkdir(parents=True)
+
+        def _put(task_id, status="in_progress"):
+            directory = root / ".wf" / "tasks" / task_id
+            directory.mkdir(parents=True, exist_ok=True)
+            records.write_json(str(directory / "task.json"),
+                               {"id": task_id, "status": status, "title": task_id})
+
+        _put("R1", "in_progress")
+        run = {"id": "r1", "sequence_changes": [{"kind": "rework", "task_id": "R1",
+                                                 "resume_task": "t1"}]}
+        self.assertTrue(tasks_mod._task_in_run({"run_id": "r1"}, "t1", "r1", run, str(root)))
+        self.assertTrue(tasks_mod._task_in_run({}, "R1", "r1", run, str(root)))
+        self.assertFalse(tasks_mod._task_in_run({}, "t1", "r1", run, str(root)),
+                         "R 还没归档时不能改回原任务 T")
+        self.assertFalse(tasks_mod._task_in_run({}, "other", "r1", run, str(root)))
+        # R 归档后，恢复目标 T 放行
+        _put("R1", "archived")
+        self.assertTrue(tasks_mod._task_in_run({}, "t1", "r1", run, str(root)))
+
 if __name__ == "__main__":
     unittest.main()

@@ -21,7 +21,7 @@ disable-model-invocation: false
 | 已批准，未开工 | 先看批准结果的 warnings：TDD 提示「未由人确认」时，把缺省值告诉人即可（设计允许按缺省执行，记录已记 `tdd_source`；要记成人的选择或改值，补 `plan.tdd` 重批），然后 `task-start`；复杂分级缺决定在批准时已被拒，不会再出现在本步 |
 | in_progress/execute | 在批准触碰面内实施（开工前已存在的未提交路径若出现在 `preexisting_in_scope` 事实里：先按快照、提交和 WIP 证据判它是本任务交付还是外来——外来走排除声明，是本任务交付就继续；只有证据冲突、或必须决定接管/排除/提交时才问人，判断口径见下节「实施期要自己判的几件事」）；读规则用 `spec --file <path>`；需要时 `task-curate`。**单点面外扩展**：触碰面外一个具体路径、人又同意直接改时，走轻量通道——`authorize record` 一条 `choice=expand` + paths=该路径，`delivery_set` 会把它纳入本次交付；只有改验收口径/批量扩面才回 Plan 重批，不为单点走完整 replan。
 **改仓库级规则文件（.gitignore/依赖清单/锁文件/CI 配置等——提交时按 K6 第 5 类确认拦截）**：改动前先取得人的同意；**改动完成后立即** `wf authorize record`（choice=repo_rules + paths + quote/by/source）落档——入口按内容摘要绑定确认，**确认之后再改内容即失效**，需按新内容重新 record。record 必须发生在改动之后（绑定的是实际生效的内容）；人先口头同意、改动、record 落档是认可顺序 |
-| in_progress/check | `task-check`；双轴结论与决定输入的字段形状见 `wf help task-check`（拿不准先取只读骨架）。**你要判的是**：双轴结论与依据够不够；人工验收/直接验收的结论是否绑定"人当时看到的交付内容"（内容变了旧结论不沿用——入口会用 `content_digest` 核它，缺该值就按未通过处理）；重复调试的「同一问题/不同问题」是你在授权内的裁定，不要套用验收字段 |
+| in_progress/check | `task-check`；实例任务的**步骤契约**（必做动作/步骤内人判点/声明验证）也在这里兑现——动作结果用 `--decision` 的 `choice=done|waived`（subject 含动作 id）记录；要留一次针对性红测用 `--run-verification`（不产生 Check 结论）。双轴结论与决定输入的字段形状见 `wf help task-check`（拿不准先取只读骨架）。**你要判的是**：双轴结论与依据够不够；人工验收/直接验收的结论是否绑定"人当时看到的交付内容"（内容变了旧结论不沿用——入口会用 `content_digest` 核它，缺该值就按未通过处理）；重复调试的「同一问题/不同问题」是你在授权内的裁定，不要套用验收字段 |
 | 需要记录知识处置（Check/归档前） | `task-knowledge`（取值域见 `wf help task-knowledge`）；spec 变更走 `wf-spec-update` skill（`spec-update`），先看后改 |
 | 复盘触发（入口 facts 的触发集合非空） | `task-retrospect`（结论写在 evidence 的 `conclusion`，形状见 `wf help task-retrospect`）；触发项与证据缺口由入口 facts 给出，不自行缩减 |
 | 需要返工或替换 | `task-rework`（建 R、挂起 T、继承前置）；替换用 `task-replace`（先可取只读预览）；先读 `task-flow` 的返工/替换段 |

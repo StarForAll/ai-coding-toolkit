@@ -67,13 +67,51 @@ class UpstreamArtifactGuardTest(unittest.TestCase):
         self.assertEqual(caught.exception.code, "WF_DEPENDENCY_UNMET")
         self.assertEqual((caught.exception.facts or {})["missing"][0]["output"], "out")
 
-    def test_unsatisfied_upstream_blocks(self):
+    def test_skipped_upstream_without_alternative_blocks(self):
+        """上游被略过、但没有为该消费方声明替代 → 视为缺产物。"""
         ctx = type("C", (), {"root": str(self.root)})()
         with self.assertRaises(runs.DefinitionError) as caught:
             runs._require_upstream_outputs(ctx, self.doc, self.step,
                                            {"a": {"kind": "skipped", "outputs": []}})
         self.assertEqual(caught.exception.code, "WF_DEPENDENCY_UNMET")
-        self.assertEqual((caught.exception.facts or {})["missing"][0]["kind"], "skipped")
+        missing = (caught.exception.facts or {})["missing"][0]
+        self.assertIn("skipped", missing["reason"])
+
+    def test_skipped_upstream_with_unused_alternative_passes(self):
+        """`skip.downstream` 声明 mode=unused → 该消费方不需要这份产物，允许推进。"""
+        ctx = type("C", (), {"root": str(self.root)})()
+        doc = {"inputs": {}, "steps": [
+            {"id": "a", "type": "task", "required": False,
+             "skip": {"condition": "本次不需要", "decision_point": "confirm",
+                      "downstream": [{"consumer": "b", "mode": "unused"}]}},
+            {"id": "b", "type": "task",
+             "inputs": [{"id": "in", "from": "step", "step": "a", "output": "out"}]}]}
+        runs._require_upstream_outputs(ctx, doc, doc["steps"][1],
+                                       {"a": {"kind": "skipped", "outputs": []}})
+
+    def test_skipped_upstream_with_replacement_must_exist(self):
+        ctx = type("C", (), {"root": str(self.root)})()
+        doc = {"inputs": {}, "steps": [
+            {"id": "a", "type": "task", "required": False,
+             "skip": {"condition": "本次不需要", "decision_point": "confirm",
+                      "downstream": [{"consumer": "b", "mode": "replacement",
+                                      "replacement": {"from": "project",
+                                                      "path": "art/substitute.txt"}}]}},
+            {"id": "b", "type": "task",
+             "inputs": [{"id": "in", "from": "step", "step": "a", "output": "out"}]}]}
+        with self.assertRaises(runs.DefinitionError):
+            runs._require_upstream_outputs(ctx, doc, doc["steps"][1],
+                                           {"a": {"kind": "skipped", "outputs": []}})
+        (self.root / "art" / "substitute.txt").write_text("x\n", encoding="utf-8")
+        runs._require_upstream_outputs(ctx, doc, doc["steps"][1],
+                                       {"a": {"kind": "skipped", "outputs": []}})
+
+    def test_stale_exists_flag_is_not_trusted(self):
+        """记录里写着 exists=true，但文件此后被删：按**当下**磁盘事实拒绝。"""
+        ctx = type("C", (), {"root": str(self.root)})()
+        with self.assertRaises(runs.DefinitionError) as caught:
+            runs._require_upstream_outputs(ctx, self.doc, self.step, self._results(True))
+        self.assertEqual(caught.exception.code, "WF_DEPENDENCY_UNMET")
 
 
 if __name__ == "__main__":

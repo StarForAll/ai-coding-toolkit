@@ -985,8 +985,9 @@ def _parse_review_notes(path):
 
 def _decision_covers(decision, subject_id, plan, plan_version):
     """决定必须以「整词」覆盖目标 id，并绑定当前规划（显式版本或批准对象摘要）。"""
-    tokens = [token for token in re.split(r"[\s,;、|]+", str(decision.get("subject") or "")) if token]
-    if subject_id not in tokens:
+    from . import decisions as decisions_mod
+
+    if not decisions_mod.subject_mentions(decision.get("subject"), subject_id):
         return False
     declared = decision.get("plan_version")
     if declared is not None:
@@ -1073,6 +1074,19 @@ def _command_index(commands):
             if key:
                 index.setdefault(str(key), []).append(command)
     return index
+
+
+def verification_run_commands(task):
+    """把 `execution.verification_runs` 归一成 command 形状（供红证据消费）。"""
+    execution = (task or {}).get("execution") or {}
+    found = []
+    for entry in execution.get("verification_runs") or []:
+        if not isinstance(entry, dict):
+            continue
+        item = dict(entry)
+        item.setdefault("evidence_ref", entry.get("verification_id"))
+        found.append(item)
+    return found
 
 
 def tdd_evidence_problem(evidence, commands, history_commands=None):
@@ -1248,6 +1262,11 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
     plan = task.get("plan") or {}
     started = records.now_str()      # 本次 Check 的起点（`check.started_at`），供两段共用
 
+    # ①''  实例步骤契约：定义里声明的必做动作/步骤内人判点/验证来源必须有兑现（十轮收敛项）
+    contract = check_step_contract(ctx, task, plan, decisions)
+    if contract["problems"]:
+        raise CheckError("WF_SEMANTIC_DECISION", dict(contract))
+
     # ② verification.resolve(check)
     unresolved = resolve_verifications(ctx, task, "check")
     if unresolved:
@@ -1266,7 +1285,168 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         "review_notes_path": review_notes_path,
         # 本次 Check 新登记的排除声明：定稿段重读任务记录后按它重放（见 `cmd_task_check` ③段）
         "exclusion_records": exclusion_records,
+        # 动作结果由决定派生：定稿段重读记录后按同一份决定重放（与排除声明同型）
+        "step_contract": contract,
     }
+
+
+ACTION_RESULT_FIELD = "result"
+
+
+def check_step_contract(ctx, task, plan, decisions):
+    """实例步骤契约的兑现核对（唯一实现）：必做动作、步骤内人判点、声明验证。
+
+    只核**声明是否被兑现**，不判业务内容：动作"做没做完"由 AI 给出结论（`--decision` 的
+    `action_result` 域），人判点由人给结论，验证声明要求同 id 出现在**已批准 plan** 里。
+    非实例任务（无 `execution.step`）直接通过——不给普通任务新增门禁。
+    """
+    from . import decisions as decisions_mod
+
+    execution = task.get("execution") or {}
+    step = execution.get("step") or {}
+    if not step:
+        return {"problems": [], "action_results": [], "human_points": [], "applied": []}
+    approved_ids = {str(item.get("id")) for item in plan.get("verifications") or []
+                    if isinstance(item, dict) and item.get("id")}
+    action_results, pending_actions, applied = [], [], []
+    for entry in execution.get("actions") or []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
+            continue
+        decision = _action_decision(decisions, entry["id"])
+        result = None
+        if decision is not None:
+            normalized = decisions_mod.canonical("action_result", decision.get("choice"))
+            if normalized is None:
+                pending_actions.append({"id": entry["id"], "reason": "decision choice is not registered",
+                                        "choice": decision.get("choice"),
+                                        "accepted": list(decisions_mod.domain("action_result"))})
+                continue
+            result = normalized
+            action_results.append({"id": entry["id"], "result": result,
+                                   "decision": {"choice": decision.get("choice"),
+                                                "why": decision.get("reason"),
+                                                "by": decision.get("by") or decision.get("source"),
+                                                "at": decision.get("at")}})
+            applied.append({"id": entry["id"], "result": result})
+            continue
+        if entry.get("required") and entry.get("result") in ("pending", None):
+            pending_actions.append({"id": entry["id"], "text": entry.get("text")})
+    missing_points = []
+    for point in execution.get("human_points") or []:
+        if not isinstance(point, dict) or not isinstance(point.get("id"), str):
+            continue
+        if not any(_subject_mentions(decision.get("subject"), point["id"]) for decision in decisions or []):
+            missing_points.append({"id": point["id"], "question": point.get("question"),
+                                   "choices": point.get("choices")})
+    missing_verifications = [item for item in execution.get("verifications") or []
+                             if isinstance(item, dict) and str(item.get("id")) not in approved_ids]
+    problems = []
+    exits = []
+    if pending_actions:
+        problems.append({"kind": "pending_actions", "actions": pending_actions})
+        exits.append("对每个必做动作下一条决定：subject 含动作 id、choice=done（已做）或 "
+                     "waived（本次不适用，理由写 reason）后重跑 task-check")
+    if missing_points:
+        problems.append({"kind": "missing_human_points", "points": missing_points})
+        exits.append("请人给出步骤内人判结论（subject 含该人判点 id）后带 --decision 重跑 task-check")
+    if missing_verifications:
+        problems.append({"kind": "declared_verification_not_in_plan",
+                         "verifications": missing_verifications,
+                         "approved_plan_verifications": sorted(approved_ids)})
+        exits.append("回 Plan 把定义声明的验证 id 写进 plan.verifications 并重新批准（tag 同一 id）")
+    return {"problems": problems, "exits": exits, "action_results": action_results,
+            "human_points": [item.get("id") for item in execution.get("human_points") or []
+                             if isinstance(item, dict)],
+            "applied": applied, "step": step}
+
+
+def apply_decisions_to_actions(ctx, task, decisions):
+    """把 `action_result` 类决定写进任务记录的内存态（**早于门禁求值**，唯一应用点）。
+
+    `task.work-satisfied` 门禁按 `execution.actions[].result` 判待办，而该结果本身由决定派生：
+    若等到 Check 准备段才应用，门禁会先一步把"本次已用决定结掉的动作"报成待办（实测踩到）。
+    这里返回契约事实（含 problems），供 Check 准备段与回显共用，不重复推导。
+    """
+    contract = check_step_contract(ctx, task, task.get("plan") or {}, decisions)
+    apply_action_results(task, contract)
+    return contract
+
+
+def apply_action_results(task, contract):
+    """把动作结果写回任务记录（定稿段重读后按同一份决定重放；幂等）。"""
+    if not contract or not contract.get("action_results"):
+        return task
+    execution = dict(task.get("execution") or {})
+    actions = [dict(item) if isinstance(item, dict) else item
+               for item in execution.get("actions") or []]
+    by_id = {item["id"]: item for item in contract["action_results"]
+             if isinstance(item, dict) and isinstance(item.get("id"), str)}
+    for index, entry in enumerate(actions):
+        if not isinstance(entry, dict) or entry.get("id") not in by_id:
+            continue
+        record = by_id[entry["id"]]
+        actions[index] = dict(entry, **{ACTION_RESULT_FIELD: record["result"],
+                                        "result_decision": record["decision"]})
+    execution["actions"] = actions
+    task["execution"] = execution
+    return task
+
+
+def _action_decision(decisions, action_id):
+    """按动作 id 找决定（`subject` 整词匹配，与 plan-q/步骤 id 同口径）。"""
+    for decision in decisions or []:
+        if isinstance(decision, dict) and _subject_mentions(decision.get("subject"), action_id):
+            return decision
+    return None
+
+
+def _subject_mentions(subject, target):
+    """整词覆盖判定（唯一实现在 `decisions.subject_mentions`）。"""
+    from . import decisions as decisions_mod
+
+    return decisions_mod.subject_mentions(subject, target)
+
+
+def run_single_verification(ctx, task, verification_id):
+    """单次验证运行（`task-check --run-verification <id>`）：只跑一条、只记一次运行。
+
+    不产生 Check 结论、不动 `check`/锚点：它给的是**一次运行的运行身份**（验证 id + 定义摘要 +
+    退出码 + 日志），供 TDD 的红证据消费（此前红证据只能来自整轮 Check，逼 AI 为取证改开发节奏）。
+    """
+    from . import tasks as tasks_mod
+
+    plan = task.get("plan") or {}
+    declared = [item for item in plan.get("verifications") or []
+                if isinstance(item, dict) and str(item.get("id")) == str(verification_id)]
+    if not declared:
+        raise CheckError("WF_SEMANTIC_DECISION",
+                         {"reason": "verification id is not in the approved plan",
+                          "verification": verification_id,
+                          "approved": [item.get("id") for item in plan.get("verifications") or []
+                                       if isinstance(item, dict)],
+                          "exits": ["用已批准 plan 里的验证 id", "要新增验证：回 Plan 补齐并重新批准"]})
+    verification = declared[0]
+    invocation = verification.get("invocation") or {}
+    task_dir = _task_dir(ctx, task)
+    run_at = records.now_str()
+    log_dir = os.path.join(task_dir, "run-logs", run_at.replace(":", "").replace(".", ""))
+    if invocation.get("kind") == "manual":
+        raise CheckError("WF_SEMANTIC_DECISION",
+                         {"reason": "manual verification has no command to run",
+                          "verification": verification_id,
+                          "exits": ["人工验收结论走 task-check --decision（choice=passed/failed）",
+                                    "只有命令型验证可以用 --run-verification"]})
+    command = _run_argv(ctx, task, verification, log_dir)
+    execution = dict(task.get("execution") or {})
+    runs = [item for item in execution.get("verification_runs") or [] if isinstance(item, dict)]
+    entry = {key: command.get(key) for key in
+             ("verification_id", "verification_digest", "invocation", "cwd", "exit_code",
+              "status", "started_at", "ended_at", "log", "evidence_ref")}
+    entry["at"] = run_at
+    runs.append(entry)
+    execution["verification_runs"] = runs
+    task["execution"] = execution
+    return task, entry
 
 
 def run_check_execute(ctx, task, state):
@@ -1322,6 +1502,8 @@ def run_check_finish(ctx, task, state, commands):
     if task.get("check"):
         history_entries.append(task["check"])  # 本次即将被替换的旧检查同样是历史
     history_commands = [command for entry in history_entries for command in entry.get("commands") or []]
+    # 单次验证运行（`task-check --run-verification`）也是历史运行：红证据不必来自整轮 Check
+    history_commands.extend(verification_run_commands(task))
     tdd_problem = None
     if plan.get("tdd") and tdd_applicability == "code":
         tdd_problem = tdd_evidence_problem(tdd_evidence, commands, history_commands)

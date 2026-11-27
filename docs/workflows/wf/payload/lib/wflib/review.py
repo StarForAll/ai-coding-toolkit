@@ -2897,6 +2897,14 @@ def launch(ctx, task, request_path=None, implementation_cli=None):
             "degraded": entry.get("degraded"),
             "paste_text": commands,
             "control_assertion": assertion,
+            # 轻量任务发起外部审查＝把"未关闭 blocking 进归档门禁"的纪律一并接上：
+            # 这个后果只写在 skill 里，发起时由机制在 facts 里说一句（七轮审查 a-3）。
+            **({"light_task_consequence": {
+                "complexity": "light",
+                "note": "轻量任务发起外部审查后，本轮未关闭的 blocking 会进归档门禁；"
+                        "发起前先准备好逐条关闭",
+                "gate": "archive",
+            }} if ((task.get("plan") or {}).get("complexity") != "complex") else {}),
         },
     )
 

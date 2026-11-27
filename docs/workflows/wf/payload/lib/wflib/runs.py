@@ -1909,43 +1909,151 @@ def _next_step(doc, step_id, step_results=None):
     return None
 
 
-def _require_upstream_outputs(ctx, doc, step, step_results):
-    """`from: step` 的引用必须落在**已落地**的产物上（机制稿 §7.3）。
+SKIP_CHOICES = ("skip", "略过", "跳过")
 
-    只核事实：引用声明本身在静态校验里已核过（更早步骤、已声明产物）；这里核上游结果存在、
-    路径解出、文件真的在。缺任何一项就不建下游任务——此前下游照常创建，
-    AI 拿到的是"可以继续"的假信号（六轮审查 b-2）。
+
+def _replacement_ready(ctx, doc, source, step_results, instance_inputs=None):
+    """`skip.downstream[].replacement` 的引用是否真的落实（只核事实）。
+
+    `from: input` 也在这里解析：静态校验允许它（实例输入可以是路径），运行期就必须给出
+    同一结论——否则人写下的合法声明会到"上游真的被略过"那一刻才硬失败（八轮审查 a-3）。
     """
+    if not isinstance(source, dict):
+        return False, "replacement reference missing"
+    kind = source.get("from")
+    if kind == "project":
+        path = source.get("path")
+        return (bool(path) and os.path.isfile(join(ctx.root, str(path))),
+                f"project path not found: {path}")
+    if kind == "input":
+        name = source.get("name")
+        value = (instance_inputs or {}).get(name) if isinstance(instance_inputs, dict) else None
+        if not isinstance(value, str) or not value:
+            return False, f"instance input {name!r} is not a path value"
+        return (os.path.isfile(join(ctx.root, value)),
+                f"replacement path from input {name!r} not found: {value}")
+    if kind == "step":
+        upstream = step_results.get(source.get("step")) or {}
+        output = next((item for item in upstream.get("outputs") or []
+                       if isinstance(item, dict) and item.get("id") == source.get("output")), None)
+        if output is None:
+            return False, f"replacement output not produced: {source.get('step')}/{source.get('output')}"
+        path = output.get("path")
+        return (bool(path) and os.path.isfile(join(ctx.root, str(path))),
+                f"replacement artifact missing: {path}")
+    return False, f"replacement from must be project|input|step, got {kind}"
+
+
+def _declared_alternative(doc, source_step, consumer_id):
+    """上游略过时，定义里为该消费方声明的替代（`unused` 或 `replacement`）。"""
+    skip = (source_step or {}).get("skip") or {}
+    for item in skip.get("downstream") or []:
+        if isinstance(item, dict) and item.get("consumer") == consumer_id:
+            return item
+    return None
+
+
+def step_contract(doc, step, *, run_id, run, workflow_id):
+    """把定义的步骤声明转成任务记录里的契约（机制只搬运声明，不解释业务语义）。
+
+    - `actions`：必做动作，`result` 初始 `pending`（既有 `tasks.work_satisfied_fact` 已按此判待办）；
+    - `human_points`：步骤内人判点（Check 要求有对应决定）；
+    - `verifications`：声明摘要（Check 要求同 id 出现在**已批准 plan** 里）；
+    - `verification_runs`：单次验证运行的记录位（空列表，追加写）。
+    """
+    actions = []
+    for action in step.get("actions") or []:
+        if not isinstance(action, dict) or not isinstance(action.get("id"), str):
+            continue
+        actions.append({"id": action["id"],
+                        "text": action.get("text"),
+                        "required": action.get("required") is not False,
+                        "skip": action.get("skip"),
+                        "human_points": [item for item in action.get("human_points") or []
+                                         if isinstance(item, dict)],
+                        "result": "pending"})
+    human_points = [{"id": item.get("id"), "question": item.get("question"),
+                     "choices": item.get("choices")}
+                    for item in step.get("human_points") or []
+                    if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    verifications = [{"id": item.get("id"), "source": item.get("source"),
+                      "consume_at": item.get("consume_at")}
+                     for item in step.get("verifications") or []
+                     if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    return {"step": {"workflow_id": workflow_id, "step_id": step.get("id"),
+                     "definition_digest": (run.get("definition") or {}).get("digest")},
+            "actions": actions,
+            "human_points": human_points,
+            "verifications": verifications,
+            "verification_runs": []}
+
+
+def _require_upstream_outputs(ctx, doc, step, step_results, instance_inputs=None):
+    """`from: step` 的引用必须落在**当下真实存在**的产物上（机制稿 §7.2/§7.3）。
+
+    三条机械事实各管一段，缺一项就不建下游任务（七轮审查 b-2）：
+    ① 上游结果：`satisfied`，或**被合法略过且为该消费方声明了 unused/replacement**；
+    ② 产物声明：本次结果里确实列出该 output；
+    ③ 文件现状：**此刻**按磁盘核存在与内容——记录里的 `exists` 只是当时的事实，
+       文件被删/被移走后再拿旧标记放行，等于用陈旧事实当证据。
+    """
+    by_id = {item.get("id"): item for item in doc.get("steps") or []
+             if isinstance(item, dict) and item.get("id")}
     missing = []
-    for entry in step.get("inputs") or []:
+    # 步骤顶层与步骤内动作的声明都是"本步骤要消费的引用"，同一套核验（机制稿 §7.1）
+    declared_refs = list(step.get("inputs") or [])
+    for action in step.get("actions") or []:
+        if isinstance(action, dict):
+            declared_refs.extend(action.get("inputs") or [])
+    for entry in declared_refs:
         if not isinstance(entry, dict) or entry.get("from") != "step":
             continue
         source, output_id = entry.get("step"), entry.get("output")
         upstream = step_results.get(source) or {}
+        kind = upstream.get("kind")
+        if kind == "skipped":
+            alternative = _declared_alternative(doc, by_id.get(source), step.get("id"))
+            if alternative is None:
+                missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                                "reason": "upstream step was skipped and no alternative is declared "
+                                          "for this consumer"})
+                continue
+            if alternative.get("mode") == "unused":
+                continue
+            ready, detail = _replacement_ready(ctx, doc, alternative.get("replacement"),
+                                               step_results, instance_inputs)
+            if not ready:
+                missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                                "reason": "declared replacement is not available", "detail": detail,
+                                "replacement": alternative.get("replacement")})
+            continue
+        if kind != "satisfied":
+            missing.append({"input": entry.get("id"), "step": source, "output": output_id,
+                            "reason": "upstream step has no satisfied result", "kind": kind})
+            continue
         outputs = upstream.get("outputs") or []
         found = next((item for item in outputs
                       if isinstance(item, dict) and item.get("id") == output_id), None)
-        if upstream.get("kind") != "satisfied":
-            missing.append({"input": entry.get("id"), "step": source, "output": output_id,
-                            "reason": "upstream step has no satisfied result",
-                            "kind": upstream.get("kind")})
-        elif found is None:
+        if found is None:
             missing.append({"input": entry.get("id"), "step": source, "output": output_id,
                             "reason": "upstream result does not list this output",
                             "declared": [item.get("id") for item in outputs
                                          if isinstance(item, dict)]})
-        elif not found.get("resolved") or not found.get("exists"):
+            continue
+        path = found.get("path")
+        if not found.get("resolved") or not path or not os.path.isfile(join(ctx.root, str(path))):
             missing.append({"input": entry.get("id"), "step": source, "output": output_id,
-                            "path": found.get("path"), "resolved": found.get("resolved"),
+                            "path": path, "resolved": found.get("resolved"),
                             "exists": found.get("exists"),
-                            "reason": "declared artifact is missing on disk"})
+                            "reason": "declared artifact is not on disk now"})
     if missing:
         raise DefinitionError("WF_DEPENDENCY_UNMET",
                               {"reason": "upstream artifacts required by this step are missing",
                                "step": step.get("id"), "missing": missing,
                                "exits": ["回到上游步骤产出该产物（或改定义里的引用）",
-                                         "确要跳过该步骤：改定义声明 skip 后由人重新确认创建输入"]},
-                              next_="下游需要上游产物：先让上游真正产出，再推进本步骤")
+                                         "上游确实要略过：在定义的 skip.downstream 里为该消费方声明 "
+                                         "mode=unused 或 mode=replacement"]},
+                              next_="下游需要上游产物：先让上游真正产出（或按声明的替代），再推进本步骤")
 
 
 def _previous_task_step(doc, step_id, applicability=None, step_results=None):
@@ -2045,17 +2153,12 @@ def _human_answer(decisions, step):
     整词匹配（与 `plan-q` 同一口径）：定义同时有 `api` 与 `api-docs` 时，子串匹配会让
     给 `api-docs` 的答复被 `api` 抢走（六轮复核 b.4）。
     """
-    import re
-
     for decision in decisions or []:
         if not isinstance(decision, dict):
             continue
-        subject = decision.get("subject")
-        text = " ".join(str(item) for item in subject) if isinstance(subject, list) else str(subject or "")
-        pattern = r"(?<![A-Za-z0-9_-])" + re.escape(str(step["id"])) + r"(?![A-Za-z0-9_-])"
-        if not re.search(pattern, text):
-            continue
-        return decision
+        # 整词覆盖：唯一实现在 `decisions.subject_mentions`（同一判据不在两处维护）
+        if decisions_mod.subject_mentions(decision.get("subject"), str(step["id"])):
+            return decision
     return None
 
 
@@ -2151,7 +2254,8 @@ def advance(ctx, args):
                          "terminal": task.get("terminal"),
                          "exits": ["run terminate：按逐任务处置计划（放弃/保留）异常终止实例",
                                    "由人裁定替换该步骤的任务（task-replace）后重建推进",
-                                   "若目标是继续做这件事：回 Plan 重新规划，不在旧步骤上推进"]},
+                                   "若目标是继续做这件事：**新建任务承载**（新任务有自己的 Plan/批准），"
+                                   "不在已归档的旧步骤上推进"]},
                         next_="该步骤任务已异常归档：实例不再推进本步骤；用 run terminate 逐任务处置，或由人裁定替换")
             elif recorded.get("kind") in ("satisfied", "skipped"):
                 # 人判答复、或按 creation 声明略过的步骤：结果已在盘上，重入即结案
@@ -2213,6 +2317,17 @@ def advance(ctx, args):
                                        "step": step_id,
                                        "decision_point": ((step.get("skip") or {}).get("decision_point"))},
                                       next_="用 --decision 记录略过决定（subject 含该步骤 id）")
+            choice = str(decided.get("choice") or "")
+            if choice not in SKIP_CHOICES:
+                # 创建输入说"这一步骤本次略过"，人判却给了别的答复：两条事实冲突，
+                # 谁也不能覆盖谁——此前一律记成 skipped，人的"不略过"被静默吞掉（七轮 b-2）。
+                raise DefinitionError("WF_SEMANTIC_DECISION",
+                                      {"reason": "decision does not agree with the declared skip",
+                                       "step": step_id, "decision": choice,
+                                       "creation_steps": applicability, "skip_choices": list(SKIP_CHOICES),
+                                       "exits": ["用 choice=skip 的决定确认略过（subject 含该步骤 id）",
+                                                 "要执行该步骤：创建输入已固定为 skipped，需按新的创建输入另开实例"]},
+                                      next_="人判答复与创建输入冲突：按出口统一后再推进")
             step_results[step_id] = {"kind": "skipped", "at": records.now_str(),
                                      "decision": decided.get("choice"),
                                      "decision_detail": decided,
@@ -2265,7 +2380,7 @@ def advance(ctx, args):
                                 next_="该步骤的任务已生成：在其上完成四阶段后重入 advance 记 satisfied",
                                 facts={"run": run_id, "step": step_id, "task": task_id,
                                        "reused": True, "cursor": cursor})
-        _require_upstream_outputs(ctx, doc, step, step_results)
+        _require_upstream_outputs(ctx, doc, step, step_results, run.get("inputs") or {})
         previous = _previous_task_step(doc, step_id, applicability, step_results)
         predecessors = []
         if previous is not None:
@@ -2296,6 +2411,11 @@ def advance(ctx, args):
             task["id"] = resume_task
         task["run_id"] = run_id
         task["prerequisites"] = list(predecessors)
+        # 步骤契约随任务落盘（唯一写入点）：定义里声明的必做动作/步骤内人判点/验证来源
+        # 从此有消费者（Check 准备段），不再只靠 AI 从定义重建（九/十轮审查的共同结论）。
+        task["execution"] = dict(task.get("execution") or {},
+                                 **step_contract(doc, step, run_id=run_id, run=run,
+                                                 workflow_id=run.get("workflow_id")))
         inputs = {"run": run_id, "step": step_id, "task": task["id"],
                   "predecessors": sorted(predecessors)}
         action = (pending if resume_task else
@@ -2523,6 +2643,37 @@ TERMINATE_DISPOSITIONS = {"放弃": "abandon", "abandon": "abandon",
 FINISH_STEPS = ("check_steps", "write_normal", "persist_record")
 
 
+def _run_persist_pending(ctx, run, run_id):
+    """终态已落、但**记录组还没闭合**（提交未完成/快照未入库/动作停在 persist_pending）。
+
+    三种状态都允许重入续做固定提交步骤：进程在"写 done → 提交"之间退出的窗口、
+    `persist_pending`、以及旧版本留下的"done 但 Git 里不是 done"。判据只看事实，
+    不看上一次入口的回显（八轮审查 b-3）。
+    """
+    import subprocess
+
+    action_state = (run.get("action") or {}).get("state")
+    if action_state in ("persist_pending", "prepared", "applying"):
+        return True
+    record_rel = f"{RUNS_REL}/{run_id}.json"
+    committed = subprocess.run(["git", "show", f"HEAD:{record_rel}"], cwd=str(ctx.root),
+                               capture_output=True, text=True, check=False)
+    if committed.returncode != 0:
+        return True
+    try:
+        from_git = json.loads(committed.stdout)
+    except ValueError:
+        return True
+    if (from_git.get("action") or {}).get("state") != "done":
+        return True
+    snapshot_rel = ((run.get("definition") or {}).get("snapshot_path"))
+    if snapshot_rel and subprocess.run(["git", "ls-files", "--error-unmatch", snapshot_rel],
+                                       cwd=str(ctx.root), capture_output=True, text=True,
+                                       check=False).returncode != 0:
+        return True
+    return False
+
+
 def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
     """固定提交步骤（唯一实现）：**先把"完成态"写盘，再提交，然后从 Git 读回核对**。
 
@@ -2530,7 +2681,8 @@ def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
     下一次写入才变成 `done`——于是回显 `persisted=true` 时 Git 里的记录还停在待提交
     （六轮审查 b-5）。改成先写后提交后，提交的内容就是我们声称的那个终态；
     核对失败则回退到 `persist_pending` 并如实报 `persisted=false`。
-    提交清单同时带上定义快照：实例记录引用了它，分开提交会留下半份记录组。
+    提交清单只含**该授权覆盖**的路径（记录 + 被覆盖的定义快照）：实例记录引用了快照，
+    所以授权覆盖它时一并提交；没覆盖就只提交记录本身——不因为"引用了"就扩权。
     """
     from . import actions as actions_mod, cli, paths as paths_mod, tasks as tasks_mod, writer as writer_mod
 
@@ -2538,11 +2690,17 @@ def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
     snapshot_rel = ((run.get("definition") or {}).get("snapshot_path"))
     grants = [item for item in decisions if isinstance(item, dict)
               and decisions_mod.accepts("commit_grant", item.get("choice"))]
-    covered = any(path in (record_rel, snapshot_rel) or paths_mod.match_path(path, record_rel)
-                  for grant in grants for path in _grant_paths(grant.get("subject")))
+    def _covered(relative):
+        """该路径是否被**某条授权**覆盖（逐路径核，不因为记录在清单里就顺带提交）。"""
+        return any(path == relative or paths_mod.match_path(path, relative)
+                   for grant in grants for path in _grant_paths(grant.get("subject")))
+
+    wanted = [item for item in (record_rel, snapshot_rel) if item]
+    paths = [item for item in wanted if _covered(item) and os.path.exists(join(ctx.root, item))]
     result = {"persisted": False, "commit": None, "record": record_rel,
-              "records": [item for item in (record_rel, snapshot_rel) if item]}
-    if not covered:
+              "records": wanted, "committed": paths,
+              "uncovered": [item for item in wanted if not _covered(item)]}
+    if record_rel not in paths:
         return result
 
     pending_run = dict(run)
@@ -2553,10 +2711,13 @@ def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
             ctx, f"run.{op}", writer_mod.owner_ref("session", key, scope),
             action, [f"run:{run_id}"])))
     records.write_json(run_path(ctx.root, run_id), done_run)
-    paths = [item for item in (record_rel, snapshot_rel)
-             if item and os.path.exists(join(ctx.root, item))]
-    result["commit"] = tasks_mod._commit_paths(
-        ctx.root, paths, f"wf: run {op} {run_id}\n\nwf-task: {run_id}")
+    try:
+        result["commit"] = tasks_mod._commit_paths(
+            ctx.root, paths, f"wf: run {op} {run_id}\n\nwf-task: {run_id}")
+    except Exception as exc:      # noqa: BLE001 — 提交失败不改变"记录组尚未提交"的事实
+        records.write_json(run_path(ctx.root, run_id), pending_run)
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
     tracked = subprocess.run(["git", "ls-files", "--error-unmatch", record_rel],
                              cwd=str(ctx.root), capture_output=True, text=True, check=False)
     dirty = subprocess.run(["git", "status", "--porcelain", "--", record_rel],
@@ -2570,12 +2731,27 @@ def _persist_run_records(ctx, run, run_id, decisions, op, key, scope):
             from_git = json.loads(committed.stdout)
         except ValueError:
             from_git = None
+    # 记录组完整性：实例记录引用的定义快照也必须在 Git 里，否则"从该提交重新检出"会缺字节
+    # （`fixed_snapshot` 之后将报 WF_HISTORY_UNRESOLVED，且历史里已无法补）——八轮审查 b-3。
+    missing_records = []
+    if snapshot_rel and snapshot_rel not in paths:
+        missing_records.append(snapshot_rel)
+    for relative in paths:
+        probe = subprocess.run(["git", "ls-files", "--error-unmatch", relative],
+                               cwd=str(ctx.root), capture_output=True, text=True, check=False)
+        if probe.returncode != 0:
+            missing_records.append(relative)
+    result["missing_records"] = missing_records
     result["persisted"] = (tracked.returncode == 0 and dirty == ""
                            and isinstance(from_git, dict)
-                           and (from_git.get("action") or {}).get("state") == "done")
+                           and (from_git.get("action") or {}).get("state") == "done"
+                           and not missing_records)
     if not result["persisted"]:
-        # 提交没落地：把记录退回"目标已成立、提交未完成"，别让磁盘上留下假的完成态
-        records.write_json(run_path(ctx.root, run_id), pending_run)
+        # 提交没落地或记录组不齐：把动作退回"目标已成立、提交未完成"，别让磁盘上留下假的完成态。
+        # 终态（terminal/ended_at）保留——那是业务事实；只回退动作状态。
+        reverted = dict(pending_run, action=dict(pending_run["action"], state="persist_pending",
+                                                 next_step="persist_record"))
+        records.write_json(run_path(ctx.root, run_id), reverted)
         result["head_state"] = ((from_git or {}).get("action") or {}).get("state")
     return result
 
@@ -2597,10 +2773,13 @@ def _pending_persist(ctx, run, run_id, decisions, op, key, scope):
                                  action_state=run["action"]["state"]),
         next_=("实例已结束并持久化：可 writer release 结束会话"
                if persisted else
-               f"实例已结束，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入 run {op} 续做"),
+               (f"实例已结束，但**记录组不完整**（缺提交：{', '.join(outcome.get('missing_records') or [])}）："
+                f"给出覆盖这些路径的 commit 授权后重入 run {op} 续做")),
         facts={"run": run_id, "terminal": run.get("terminal"), "ended_at": run.get("ended_at"),
                "closing": run.get("closing"), "persisted": persisted,
                "record": record_rel, "commit": commit_result, "resumed": True,
+               "records": outcome.get("records"), "committed": outcome.get("committed"),
+               "missing_records": outcome.get("missing_records"),
                "note": "重入只补做固定提交步骤，不重做结束/终止的业务判定"})
 
 
@@ -2644,7 +2823,7 @@ def finish(ctx, args):
             raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
                                                            "run": run_id})
         if run.get("terminal"):
-            if (run.get("action") or {}).get("state") != "persist_pending":
+            if not _run_persist_pending(ctx, run, run_id):
                 raise DefinitionError("WF_BINDING_MISMATCH",
                                       {"reason": "run already ended",
                                        "terminal": run.get("terminal")})
@@ -2748,6 +2927,8 @@ def finish(ctx, args):
         facts={"run": run_id, "terminal": "normal", "ended_at": run["ended_at"],
                "closing": run["closing"], "persisted": persisted,
                "record": record_rel, "commit": commit_result,
+               "records": outcome.get("records"), "committed": outcome.get("committed"),
+               "missing_records": outcome.get("missing_records"),
                "note": "任务 finish 由人实际调用；实例结束入口不代调"})
 
 
@@ -2785,6 +2966,38 @@ def _record_stop_request(ctx, run_id, plan_path, holder):
                                         str(ctx.root)).replace(os.sep, "/"))
 
 
+def _run_disposable_tasks(ctx, run):
+    """实例终止要处置的任务集合（唯一判据）：步骤任务 ∪ 未归档的受控返工 R。
+
+    R 登记在 `sequence_changes` 而不是 `task_map`：只枚举 task_map 会让"返工进行中"的实例
+    既漏列 R、又把 R 的计划条目判成"实例外任务"，等于没有合法终止路径（八轮审查 b-1）。
+    返回 `[{task, step_id, source, archived}]`，`source` 取 `step|rework`。
+    """
+    from . import tasks as tasks_mod
+
+    found = []
+    for step_id, mapping in sorted((run.get("task_map") or {}).items()):
+        task_id = (mapping or {}).get("task_id")
+        if not task_id:
+            continue
+        record = tasks_mod.load_task(ctx.root, task_id) or {}
+        found.append({"task": task_id, "step_id": step_id, "source": "step",
+                      "archived": record.get("status") == "archived"})
+    known = {item["task"] for item in found}
+    for entry in (run.get("sequence_changes") or []):
+        if not isinstance(entry, dict):
+            continue
+        task_id = entry.get("task_id")
+        if not isinstance(task_id, str) or not task_id or task_id in known:
+            continue
+        record = tasks_mod.load_task(ctx.root, task_id) or {}
+        found.append({"task": task_id, "step_id": entry.get("step_id"), "source": "rework",
+                      "archived": record.get("status") == "archived",
+                      "resume_task": entry.get("resume_task")})
+        known.add(task_id)
+    return found
+
+
 def _terminate_preview(ctx, run_id):
     """异常终止的只读预览（机制稿 §7.4：逐个列出已生成任务、返工/继任者、未生成步骤、已有改动、外部依赖）。
 
@@ -2801,14 +3014,16 @@ def _terminate_preview(ctx, run_id):
     doc, _snapshot_bytes = fixed_snapshot(ctx, run)
     task_map = run.get("task_map") or {}
     tasks = []
-    for step_id, mapping in sorted(task_map.items()):
-        task_id = (mapping or {}).get("task_id")
-        task = tasks_mod.load_task(ctx.root, task_id) if task_id else None
+    for item in _run_disposable_tasks(ctx, run):
+        task_id = item["task"]
+        task = tasks_mod.load_task(ctx.root, task_id)
         if not isinstance(task, dict):
-            tasks.append({"step_id": step_id, "task_id": task_id, "unknown": True})
+            tasks.append({"step_id": item["step_id"], "task_id": task_id, "unknown": True,
+                          "source": item["source"]})
             continue
         preview = tasks_mod._abandon_preview(ctx, task)
-        tasks.append({"step_id": step_id, "task_id": task_id,
+        tasks.append({"step_id": item["step_id"], "task_id": task_id, "source": item["source"],
+                      "resume_task": item.get("resume_task"),
                       "status": task.get("status"), "terminal": task.get("terminal"),
                       "paused": bool(task.get("paused")), "suspended": bool(task.get("suspended")),
                       "uncommitted": preview.get("uncommitted") or [],
@@ -2893,16 +3108,14 @@ def terminate(ctx, args):
         if not isinstance(run, dict):
             raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
                                                            "run": run_id})
-        generated_now = [(mapping or {}).get("task_id")
-                         for mapping in (run.get("task_map") or {}).values()
-                         if (mapping or {}).get("task_id")]
+        generated_now = [item["task"] for item in _run_disposable_tasks(ctx, run)]
         if not plan_path and generated_now and not run.get("terminal"):
             raise DefinitionError("WF_PATH_INVALID",
                                   {"reason": "run terminate requires --plan when tasks were generated",
                                    "generated": generated_now,
                                    "exits": ["按 run terminate --preview 的清单逐任务给处置后带 --plan 重入"]})
         if run.get("terminal"):
-            if (run.get("action") or {}).get("state") != "persist_pending":
+            if not _run_persist_pending(ctx, run, run_id):
                 raise DefinitionError("WF_BINDING_MISMATCH",
                                       {"reason": "run already ended",
                                        "terminal": run.get("terminal")})
@@ -2959,10 +3172,10 @@ def terminate(ctx, args):
                                 "reason": item["reason"],
                                 "wip": item.get("disposition"),
                                 "decisions": [entry for entry in candidates if isinstance(entry, dict)]}
-        generated = sorted({(mapping or {}).get("task_id")
-                            for mapping in (run.get("task_map") or {}).values()
-                            if (mapping or {}).get("task_id")})
-        missing = [task_id for task_id in generated if task_id not in entries]
+        disposable = _run_disposable_tasks(ctx, run)
+        generated = sorted(item["task"] for item in disposable)
+        missing = [item["task"] for item in disposable
+                   if not item["archived"] and item["task"] not in entries]
         unknown = sorted(set(entries) - set(generated))
         if missing:
             problems.append({"reason": "every generated task needs a disposition", "missing": missing})

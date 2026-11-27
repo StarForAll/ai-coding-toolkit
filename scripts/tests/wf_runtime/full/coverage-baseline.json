@@ -64,6 +64,7 @@
       "complexity-replan-facts",
       "investigation-outcome",
       "mechanical-revision-equivalence",
+      "single-verification-run",
       "tdd-evidence-identity"
     ],
     "writer": [
@@ -494,6 +495,13 @@
     "run-terminate": {
       "candidate_clean": "<missing>",
       "groups": [],
+      "metadata": false
+    },
+    "single-verification-run": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "task"
+      ],
       "metadata": false
     },
     "skill-frontmatter-selfcheck": {

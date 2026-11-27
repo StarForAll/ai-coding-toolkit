@@ -174,6 +174,18 @@
      补消费侧（`retained_preparation_wip` + `wip_blockers` 指名归属 + 重新准备关闭保留并记 drift）；④ 复杂度条件②
      的 `AGENTS.md` 判定与触碰面顺序无关、给 `basis` 与 `contract_changes` 声明入口。新增单测
      `test_contract_surface_order`（4 条）与 `test_preparation_lifecycle` 扩到 10 条。
+   - 九轮外部审查（同日）的修正：① 实例内返工可走通（`_task_in_run`：步骤任务看 `run_id`、受控返工看
+     `sequence_changes` 登记；R 保持独立任务不写 `run_id`；游标停在 R 时恢复目标 T 同样可写）；
+     ② 略过资格与替代产物接进运行时（`skip.downstream` 的 `unused`/`replacement`；产物在消费时按磁盘重核；
+     人判答复必须与创建输入一致，否则报冲突而不是静默记 skipped）；③ 收尾提交按授权逐路径核（不再顺带提交快照）、
+     提交抛错回退 `persist_pending`；④ 实例暂停冻结其任务写入（两处写入口，新增回归断言锁住它）；
+     ⑤ 异常归档出口改"新建任务承载"；⑥ 轻量任务发起审查时给 `light_task_consequence` facts。
+   - 十轮外部审查（同日）的修正：① 恢复目标 T 只在 R 已归档后可写（`_task_in_run` / `_task_focused` 同一判据）；
+     ② 终止处置集合 `task_map ∪ 未归档受控返工`（`_run_disposable_tasks`，预览与计划覆盖共用）；
+     ③ `replacement.from=input` 运行期解析 + 守卫扫 `actions[].inputs`；④ `persisted` 改记录组口径
+     （记录+快照都在 Git），缺口进 `missing_records`；终态已落可重入续做（修掉不可达的 return）；
+     ⑤ 实例内 `status --short` 与 `gate --due` 回落到**当前任务**；⑥ 实例内归档下一步改 `run advance`。
+     新增单测 `test_run_disposable`（5 条）。
    - 同日**自审查**（不依赖外部报告，按"写了不核 / 形状不一 / 顺序相关 / 恒真自报 / 出口不通"五类逐项核）：
      ① `run terminate` 完成动作时把 `steps` 从步骤名改写成 `{"id","state"}`（同一字段两种形状）——已停；
      ② 反过来统一步骤形状为 `{"id","state"}`：`actions.new_action` 直接产出、`complete()` 把步骤一起标 done，

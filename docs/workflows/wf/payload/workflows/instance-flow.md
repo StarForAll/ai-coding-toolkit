@@ -20,6 +20,9 @@
 - 时点：实例推进动作结束
 - enforcement: `wflib/runs.py::advance`
 - 动作：核固定快照、游标与任务归属后推进步骤，必要时按展开规则创建任务与顺序边；人判/略过步骤按已落盘结果结案推进。
+  为步骤建任务时把该步骤的**契约**写进任务记录 `execution`：`step`（workflow/step/定义摘要）、
+  `actions`（必做动作，`result` 初始 `pending`）、`human_points`、`verifications`（声明摘要）——
+  它们随后由 Check 消费（见 `task-flow` 的 `control.task.check`），机制只搬运声明，不解释业务语义。
 - 出口：快照/游标不明 → `WF_HISTORY_UNRESOLVED`；待决人判 → `WF_SEMANTIC_DECISION`（任务已异常归档时给实例层出口）。
 
 ### control.run.terminate [required · repeatable]

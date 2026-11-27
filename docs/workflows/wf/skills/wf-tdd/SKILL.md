@@ -15,8 +15,12 @@ disable-model-invocation: false
 ## 做法
 
 1. 先写针对目标行为的断言，运行并确认**因行为缺失**而失败（不是环境启动失败）。
+   要让这次失败成为**可消费的红证据**，用 `task-check --run-verification <验证 id>` 跑它：
+   该入口只跑这一条、只记一次运行（验证 id + 定义摘要 + 退出码 + 日志），不产生 Check 结论——
+   **不必为了留痕提前跑整轮 Check**。
 2. 最小实现使其通过；再补边界用例。
 3. 把证据写成 `check.tdd_evidence`：`{assertion, red_command_ref, red_reason, green_command_ref, properties}`。
+   `red_command_ref` 取那条失败运行的身份（验证 id），绿仍取**最终 Check** 里同一验证的通过运行。
 4. `properties` 逐项说明：可红、确定性、快速、可无人执行。
 
 ## 不做

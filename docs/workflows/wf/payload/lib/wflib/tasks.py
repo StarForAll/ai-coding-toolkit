@@ -1285,29 +1285,95 @@ def write_scope(ctx, task_id):
 
         run_id = object_ref.get("id")
         task = load_task(ctx.root, task_id) or {}
-        if task.get("run_id") != run_id:
+        run = runs_mod.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+        if not _task_in_run(task, task_id, run_id, run, ctx.root):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "task does not belong to the bound run",
                              "bound": object_ref, "requested": task_id,
                              "task_run_id": task.get("run_id")},
-                            next_="实例内只推进本实例生成的任务；普通任务须在新会话里选择")
-        run = runs_mod.load_run(ctx.root, run_id)
-        if not isinstance(run, dict):
-            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+                            next_="实例内只推进本实例生成的任务或它登记的受控返工；"
+                                   "普通任务须在新会话里选择")
+        if run.get("paused"):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "instance is paused; its task writes are frozen",
+                             "run": run_id, "task": task_id,
+                             "paused_reason": run.get("paused_reason")},
+                            next_="先 run resume 解除实例暂停（只解除实例暂停、保留任务暂停是人的选择）")
         if run.get("terminal"):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "run already ended", "run": run_id,
                              "terminal": run.get("terminal")},
                             next_="实例已结束：按异常/正常终态的出口处置，不再推进其任务")
         cursor = run.get("cursor") or {}
-        if cursor.get("task_id") != task_id:
+        if not _task_focused(run, cursor, task_id, ctx.root):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "instance cursor is not on this task",
-                             "cursor": cursor, "task": task_id},
-                            next_="只推进游标所指的任务；换任务先 run advance")
+                             "cursor": cursor, "task": task_id,
+                             "resume_target": _rework_resume_target(run, cursor),
+                             "resume_allowed": _rework_resume_allowed(run, cursor, task_id, ctx.root)},
+                            next_="只推进游标所指的任务；返工任务 R 归档后才能回到原任务 T")
         _require_instance_match(ctx, binding)
         return "run", run_id
     raise TaskError("WF_BINDING_MISMATCH", {"bound": object_ref, "requested": task_id})
+
+
+def _rework_resume_allowed(run, cursor, task_id, root):
+    """游标停在 R 上时，T 是否允许被写：只有 **R 已归档**（登记事实）才允许改 T。"""
+    if _rework_resume_target(run, cursor) != task_id:
+        return False
+    for entry in (run.get("sequence_changes") or []):
+        if isinstance(entry, dict) and entry.get("resume_task") == task_id:
+            return _rework_archived(root, entry)
+    return False
+
+
+def _task_focused(run, cursor, task_id, root):
+    """写入口的聚焦判据：游标所指任务，或放行中的返工恢复目标。"""
+    if (cursor or {}).get("task_id") == task_id:
+        return True
+    return _rework_resume_allowed(run, cursor, task_id, root)
+
+
+def _task_in_run(task, task_id, run_id, run, root):
+    """该任务是否可在**这个实例**的写权作用域下写（唯一判据）。
+
+    三种来源，各自按**已落盘事实**判：
+    ① 实例为步骤生成的任务（`task.run_id == run_id`）；
+    ② 该实例登记的**受控返工** R（`sequence_changes[].task_id`）——R 仍是独立任务
+       （不写 `run_id`），可写是因为机制已把游标按登记移交给它；
+    ③ R 的恢复目标 T（`resume_task`）——只在 **R 已归档**后可写：R 还没归档时 T 的
+       挂起不该被改动，否则"返工未完成就先改回原任务"会绕过返工本身（八轮审查 b-1）。
+    """
+    if task.get("run_id") == run_id:
+        return True
+    for entry in (run.get("sequence_changes") or []):
+        if not isinstance(entry, dict):
+            continue
+        if task_id == entry.get("task_id"):
+            return True
+        if task_id == entry.get("resume_task") and _rework_archived(root, entry):
+            return True
+    return False
+
+
+def _rework_archived(root, entry):
+    """登记的返工 R 是否已归档（按记录事实，不看缓存）。"""
+    rework_id = entry.get("task_id")
+    if not rework_id:
+        return False
+    record = load_task(root, rework_id)
+    return isinstance(record, dict) and record.get("status") == "archived"
+
+
+def _rework_resume_target(run, cursor):
+    """游标停在受控返工 R 上时登记的原任务 T（`sequence_changes` 是唯一事实来源）。"""
+    current = (cursor or {}).get("task_id")
+    for entry in (run.get("sequence_changes") or []):
+        if isinstance(entry, dict) and entry.get("task_id") == current:
+            return entry.get("resume_task")
+    return None
 
 
 def require_held_for(ctx, task_id):
@@ -1331,25 +1397,36 @@ def require_held_for(ctx, task_id):
 
         run_id = scope.get("id")
         task = load_task(ctx.root, task_id) or {}
-        if task.get("run_id") != run_id:
+        run = runs_mod.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+        if not _task_in_run(task, task_id, run_id, run, ctx.root):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "task does not belong to the held run",
                              "writer_scope": scope, "task": task_id,
                              "task_run_id": task.get("run_id")},
-                            next_="只写本实例生成的任务；普通任务在自己的会话里选择一个对象")
-        run = runs_mod.load_run(ctx.root, run_id)
-        if not isinstance(run, dict):
-            raise TaskError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing", "run": run_id})
+                            next_="只写本实例生成的任务或它登记的受控返工；"
+                                   "普通任务在自己的会话里选择一个对象")
+        if run.get("paused"):
+            # 实例暂停是明确的停止边界：其任务的写入一并冻结。否则 `task-resume` 会给出
+            # 与 `run advance` 相反的结论（七轮审查 b-5）。
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "instance is paused; its task writes are frozen",
+                             "run": run_id, "task": task_id,
+                             "paused_reason": run.get("paused_reason")},
+                            next_="先 run resume 解除实例暂停（只解除实例暂停、保留任务暂停是人的选择）")
         if run.get("terminal"):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "run already ended", "run": run_id,
                              "terminal": run.get("terminal")})
         cursor = run.get("cursor") or {}
-        if cursor.get("task_id") != task_id:
+        if not _task_focused(run, cursor, task_id, ctx.root):
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "instance cursor is not on this task",
-                             "cursor": cursor, "task": task_id},
-                            next_="只推进游标所指的任务；换任务先 run advance")
+                             "cursor": cursor, "task": task_id,
+                             "resume_target": _rework_resume_target(run, cursor),
+                             "resume_allowed": _rework_resume_allowed(run, cursor, task_id, ctx.root)},
+                            next_="只推进游标所指的任务；返工任务 R 归档后才能回到原任务 T")
         return record, holder
     raise TaskError("WF_BINDING_MISMATCH", {"writer_scope": scope, "requested": task_id},
                     next_="按本会话绑定对象选择任务；换对象需新会话或 enable --new-session")
@@ -3399,6 +3476,64 @@ def check_next_hint(task, check, ctx=None):
     return hint
 
 
+def _single_verification(ctx, task_id, verification_id):
+    """`task-check --run-verification <id>`：只跑一条已批准验证并记一次运行（不判 Check）。
+
+    三段与 Check 同型（锁内取记录 → 锁外跑 → 锁内写回），但**不重算锚点、不写 check**：
+    这次的产物只是"一次运行的运行身份"，供 TDD 红证据消费。
+    """
+    from . import check as check_mod, cli as cli_mod, lock
+
+    write_scope(ctx, task_id)
+    with lock.acquire(ctx.root, holder_hint="task-check run-verification"):
+        _record, holder = require_held_for(ctx, task_id)
+        path = _require_task_dir(ctx, task_id)
+        task = records.load_json(os.path.join(path, "task.json"))
+        if task.get("status") != "in_progress":
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "check requires in_progress", "status": task.get("status")})
+        if task.get("paused") or task.get("suspended"):
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"paused": task.get("paused"), "suspended": task.get("suspended")})
+    try:
+        _task_after, entry = check_mod.run_single_verification(ctx, task, verification_id)
+    except check_mod.CheckError as exc:
+        raise TaskError(exc.code, exc.facts)
+    with lock.acquire(ctx.root, holder_hint="task-check run-verification"):
+        holder = require_held_for(ctx, task_id)[1]
+        path = _require_task_dir(ctx, task_id)
+        fresh = records.load_json(os.path.join(path, "task.json"))
+        if check_identity(fresh) != check_identity(task):
+            raise TaskError("WF_CHECK_STALE",
+                            {"reason": "运行期间任务记录的判定身份发生变化",
+                             "exits": ["按当前状态重跑该次验证"]})
+        execution = dict(fresh.get("execution") or {})
+        runs = [item for item in execution.get("verification_runs") or [] if isinstance(item, dict)]
+        runs.append(entry)
+        execution["verification_runs"] = runs
+        fresh["execution"] = execution
+        fresh, action = _start_task_action(ctx, path, fresh, "task.verify_run", holder,
+                                          {"task": task_id, "verification": verification_id,
+                                           "status": entry.get("status")},
+                                          ["run", "record"])
+        fresh, assertion = _finish_task_action(ctx, path, fresh, "task.verify_run", holder,
+                                              {"task": task_id, "verification": verification_id,
+                                               "status": entry.get("status")}, action,
+                                              evidence_refs=[entry.get("evidence_ref") or verification_id])
+    return codes.result(
+        "WF_OK",
+        object={"id": task_id, "name": fresh.get("title")},
+        position_=codes.position(scope="task", phase=fresh.get("phase"), task_id=task_id,
+                                 action_id=fresh["action"]["id"], action_state=fresh["action"]["state"]),
+        next_=("这次运行已记录（不产生 Check 结论）：按退出事实决定下一步；"
+               "红证据可直接引用它，最终仍要跑 task-check 得到绿证据"),
+        facts={"task": task_id, "verification": verification_id,
+               "run": entry, "runs": len(execution["verification_runs"]),
+               "check": fresh.get("check"), "anchor_unchanged": True,
+               "control_assertion": assertion},
+    )
+
+
 def cmd_task_check(ctx, args):
     """Check 的固定五步（机制稿 §3.5），**验证命令在锁外执行**（机制稿 §4.1）。
 
@@ -3443,6 +3578,9 @@ def cmd_task_check(ctx, args):
             facts={"draft": skeleton, "path": os.path.join(path, "review-notes.json"),
                    "note": "草稿只读；TODO 原样提交会被判为非法 conclusion"},
         )
+    run_verification = args.value("--run-verification")
+    if run_verification:
+        return _single_verification(ctx, task_id, run_verification)
     decisions = cli._load_decision(decision_path) if decision_path else []
     exclusion_entries, exclusion_problems = scope.load_exclusion_declarations(exclusion_file)
     if exclusion_problems:
@@ -3459,6 +3597,8 @@ def cmd_task_check(ctx, args):
         if task.get("paused") or task.get("suspended"):
             raise TaskError("WF_SEMANTIC_DECISION", {"paused": task.get("paused"), "suspended": task.get("suspended")})
         _apply_debug_inputs(task, decisions, ctx.root, ctx.debug_threshold())
+        # 动作结果由决定派生、且门禁按它判待办：必须在门禁求值**之前**落进内存态
+        check_mod.apply_decisions_to_actions(ctx, task, decisions)
         findings = gates.evaluate(ctx, task, "before_check")
         blocking = [item for item in findings if item["status"] == "missing"]
         if blocking:
@@ -3490,6 +3630,10 @@ def cmd_task_check(ctx, args):
         # 且新声明永远落不到盘上（六轮修复 A1）。
         if state.get("exclusion_records"):
             scope.persist_exclusions(fresh, state["exclusion_records"])
+        # 步骤契约的动作结果同样是**决定派生值**：重读后按同一份决定重放（幂等），
+        # 否则定稿段会把准备段算出的结果丢掉（十轮收敛项）。
+        if state.get("step_contract"):
+            check_mod.apply_action_results(fresh, state["step_contract"])
         before_identity = check_identity(task)
         after_identity = check_identity(fresh)
         if after_identity != before_identity:
@@ -3550,7 +3694,11 @@ def cmd_task_check(ctx, args):
                "vendor_judgments": [entry for entry in (task.get("judgments") or [])
                                     if isinstance(entry, dict) and entry.get("kind") == "框架改动"],
                # b-1（九轮，事实不阻断）：开工前已存在的交付路径，Check facts 同步可见
-               "preexisting_in_scope": facts.get("preexisting_in_scope") or []},
+               "preexisting_in_scope": facts.get("preexisting_in_scope") or [],
+               # 步骤契约（实例生成的任务）：动作结果与剩余缺口一并回显，便于下一跳判断
+               "step_contract": {"step": (state.get("step_contract") or {}).get("step"),
+                                 "action_results": (state.get("step_contract") or {}).get("action_results"),
+                                 "human_points": (state.get("step_contract") or {}).get("human_points")}},
     )
 
 
@@ -4350,6 +4498,21 @@ def review_acceptance_echo(task):
     return review_mod.acceptance_echo(task)
 
 
+def _archive_next(write_release, task):
+    """归档后的下一步（唯一措辞）：实例内任务与普通任务不同。
+
+    实例内任务归档时写权**有意**留给实例（`kept="run"`），下一步是 `run advance` 记 satisfied，
+    再按实例继续；此前无论哪种情况都说"重跑 writer release"，AI 照做会撞上
+    "写权不属于该任务"的死路（八轮审查 b-4）。
+    """
+    if write_release.get("kept") == "run":
+        return ("归档已完成；实例写权留着继续推进：下一步 run advance（游标在该步骤上），"
+                "不要在这里再做写权释放")
+    if write_release.get("released"):
+        return "归档已完成，写权已释放；下一对象需在新会话选择"
+    return "归档已完成；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
+
+
 def _release_after_archive(ctx, task_id, holder=None):
     """正常归档持久化成功后释放写权：对象已终态，释放没有业务语义选择。
 
@@ -4725,9 +4888,7 @@ def cmd_archive(ctx, args):
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase="finish", task_id=task_id,
                                  action_id=task["action"]["id"], action_state=task["action"]["state"]),
-        next_=("归档已完成，写权已释放；下一对象需在新会话选择"
-               if write_release.get("released")
-               else "归档已完成；写权释放未完成，按 write_release 事实重跑 `wf writer release`"),
+        next_=(_archive_next(write_release, task)),
         facts={"terminal": "normal", "archived_at": task["archived_at"], "moved_to": record_rel,
                "write_release": write_release,
                "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,

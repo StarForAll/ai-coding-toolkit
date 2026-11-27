@@ -187,10 +187,22 @@ def check():
     json.dump({"standard": {"conclusion": "pass", "basis": "新文件，风格一致"},
                "requirement": {"conclusion": "pass", "basis": "a1 由 v1 覆盖"}},
               open(notes, "w"), ensure_ascii=False)
-    rc, payload = H.cli(project, ["task-check", "--task", task_id, "--review-notes", notes, "--json"],
+    # 步骤契约：定义里声明的必做动作 `work` 要有结果记录（`choice=done`），否则 Check 会停
+    action_decision = os.path.join(root, "action-result.json")
+    json.dump([{"source": "human terminal (repro)", "at": "2026-11-26T02:05:00.000000Z",
+                "subject": ["work"], "object_digest": prd_digest,
+                "choice": "done", "reason": "实现已完成（机制只记结论，不判业务）"}],
+              open(action_decision, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["task-check", "--task", task_id, "--review-notes", notes,
+                                  "--decision", action_decision, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
     if rc != 0 or (payload or {}).get("code") != "WF_OK":
         problems.append(f"task-check 失败：{(payload or {}).get('code')} {(payload or {}).get('facts')}")
+    else:
+        contract = ((payload or {}).get("facts") or {}).get("step_contract") or {}
+        if not any(item.get("id") == "work" and item.get("result") == "done"
+                   for item in contract.get("action_results") or []):
+            problems.append(f"动作结果未回显/未落 a：{contract}")
 
     rc, payload = H.cli(project, ["task-knowledge", "--task", task_id, "--decision", "no-update", "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
@@ -215,6 +227,9 @@ def check():
         release = facts.get("write_release") or {}
         if release.get("kept") != "run":
             problems.append(f"归档把实例的写权一起释放了：write_release={release}")
+        next_text = str((payload or {}).get("next") or "")
+        if "run advance" not in next_text or "writer release" in next_text:
+            problems.append(f"实例内归档的下一步不是 run advance：{next_text}")
 
     rc, payload = H.cli(project, ["run", "advance", "--run", run_id, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})
@@ -224,6 +239,12 @@ def check():
         problems.append(f"归档后实例未记 satisfied：code={code} facts={facts}")
     if (facts.get("step_results") or {}).get("build", {}).get("kind") != "satisfied":
         problems.append(f"step_results 未记 satisfied：{facts.get('step_results')}")
+
+    rc, payload = H.cli(project, ["gate", "--due", "before_archive", "--json"], sid=SID,
+                        inputs={"generation": H.generation(project)})
+    gate_facts = (payload or {}).get("facts") or {}
+    if "task_gate" not in gate_facts:
+        problems.append(f"实例内 gate 没有给出当前任务的缺口：{gate_facts}")
 
     # 落盘核对：末步结案必须写进实例记录——只回显 facts 会让 `run finish` 重读后仍判未完
     # （六轮审查 b-1：末步 advance 返回 WF_OK、写盘 0 次）
@@ -244,12 +265,28 @@ def check():
     if (record.get("action") or {}).get("state") != "persist_pending":
         problems.append(f"待提交状态不对：{(record.get('action') or {}).get('state')}")
 
-    # 补交授权后**重入必须能续做**（此前一律报 run already ended，出口是死的）
+    # 补交授权后**重入必须能续做**（此前一律报 run already ended，出口是死的）。
+    # 记录组包含实例 JSON 与它引用的定义快照：只授权 JSON 时不能报 persisted（见下一条）。
     record_rel = f".wf/workflow-runs/{run_id}.json"
-    grant = os.path.join(root, "finish-grant.json")
+    snapshot_rel = f".wf/workflow-runs/{run_id}/definition.md"
+    json_only = os.path.join(root, "finish-grant-json-only.json")
     json.dump([{"source": "human terminal (repro)", "at": "2026-11-26T03:00:00.000000Z",
                 "subject": [record_rel], "object_digest": prd_digest,
-                "choice": "commit", "reason": "提交实例结束记录"}],
+                "choice": "commit", "reason": "只授权提交实例记录"}],
+              open(json_only, "w"), ensure_ascii=False)
+    rc, payload = H.cli(project, ["run", "finish", "--run", run_id,
+                                  "--decision", json_only, "--json"],
+                        sid=SID, inputs={"generation": H.generation(project)})
+    facts = (payload or {}).get("facts") or {}
+    if facts.get("persisted") is not False:
+        problems.append(f"只授权记录时仍报已持久化：{facts.get('persisted')}")
+    elif snapshot_rel not in (facts.get("missing_records") or []):
+        problems.append(f"未列出缺提交的快照：{facts.get('missing_records')}")
+
+    grant = os.path.join(root, "finish-grant.json")
+    json.dump([{"source": "human terminal (repro)", "at": "2026-11-26T03:00:00.000000Z",
+                "subject": [record_rel, snapshot_rel], "object_digest": prd_digest,
+                "choice": "commit", "reason": "提交实例结束记录与定义快照"}],
               open(grant, "w"), ensure_ascii=False)
     rc, payload = H.cli(project, ["run", "finish", "--run", run_id, "--decision", grant, "--json"],
                         sid=SID, inputs={"generation": H.generation(project)})

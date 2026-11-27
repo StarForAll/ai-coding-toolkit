@@ -129,7 +129,13 @@
 - 时点：Check 动作结束
 - enforcement: `wflib/tasks.py::cmd_task_check`（五步由 `wflib/check.py::run_check` 执行）
 - 动作：写检查记录、指纹与回执；pass 时阶段进入 Finish。
-- 出口：五步任一失败按其码返回，不写可 pass 的结果。
+  带 `execution.step` 的实例任务还要兑现该步骤的契约：必做动作须有 `--decision` 的
+  `choice=done|waived`（subject 含动作 id）、步骤内人判点须有对应决定、定义声明的验证 id 须出现在
+  已批准 `plan.verifications` 里；缺任何一项即停（出口见下）。
+  另提供 `--run-verification <id>`：只跑一条已批准验证并记一次运行（`execution.verification_runs`），
+  **不产生 Check 结论、不动 check/锚点**——供 TDD 的红证据消费，与 `--decision/--review-notes` 互斥。
+- 出口：五步任一失败按其码返回，不写可 pass 的结果；契约未兑现 → `WF_SEMANTIC_DECISION`（列出缺哪类），
+  单次运行只回报运行事实（退出码/日志/身份摘要），不据此判 pass。
 
 ### control.task.pause [required · repeatable]
 

@@ -115,9 +115,11 @@ def check():
              "decision_ref": _decision("放弃", first_task, digest),
              "reason": "实例终止，这项工作不再需要"}
     # 放弃决定里带上覆盖实例记录的提交授权（`commit`）”的约定：另给一条 commit 决定
+    # 记录组包含实例 JSON 与它引用的定义快照：授权要覆盖两者，否则记录组不完整
+    snapshot_rel = f".wf/workflow-runs/{run_id}/definition.md"
     commit_grant = {"source": "human", "at": "2026-11-12T00:00:00.000000Z",
-                    "subject": [record_rel], "object_digest": digest,
-                    "choice": "commit", "reason": "提交实例终止记录"}
+                    "subject": [record_rel, snapshot_rel], "object_digest": digest,
+                    "choice": "commit", "reason": "提交实例终止记录与定义快照"}
     json.dump([dict(grant, decision_ref=[grant["decision_ref"], commit_grant])],
               open(second, "w"), ensure_ascii=False)
     rc, payload = run(["run", "terminate", "--run", run_id, "--plan", second])

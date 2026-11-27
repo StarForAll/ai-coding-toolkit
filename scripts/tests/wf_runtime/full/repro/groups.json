@@ -84,7 +84,8 @@
       "investigation-outcome",
       "tdd-evidence-identity",
       "check-exclusion-persists",
-      "mechanical-revision-equivalence"
+      "mechanical-revision-equivalence",
+      "single-verification-run"
     ]
   },
   "cases": {
