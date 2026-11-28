@@ -31,13 +31,16 @@
 - 时点：交接第一段结束
 - enforcement: `wflib/cli.py::_handover_begin`
 - 动作：旧写者保存进度与 WIP 处置，使旧代次失效并写接收者与待恢复范围。
-- 出口：中间态双方均无业务写权；未持写权 → `WF_WRITER_BUSY`。
+- 出口：中间态双方均无业务写权；未持写权 → `WF_WRITER_BUSY`；**接收前**发起方可用正确 key
+  重发 begin 更正接收者（只改 handover 的接收 key/决定，不授写权、不动代次）；接收后只能 `wf repair`。
 
 ### control.writer.handover.accept [required · repeatable]
 
 - 时点：交接第二段结束
 - enforcement: `wflib/cli.py::_handover_accept`
-- 动作：接收方核自身绑定、对象与真实工作区后授予新代次并补检查点（`step=handover-accepted`）。
+- 动作：接收方核自身绑定、对象与真实工作区后授予新代次、补检查点（`step=handover-accepted`），
+  并按首次绑定同形建立接收方绑定与身份载体（附件 `instance_id`、运行态 `binding_digest`/`instance_id`/`current_task`）——
+  只写绑定文件会让自动身份模式的接收方下一条写命令被 `WF_IDENTITY_UNRESOLVED` 拒。
 - 出口：非声明接收者 → `WF_BINDING_MISMATCH`；状态不符 → `WF_WRITER_BUSY`。
 
 ### control.task.reassess [required · repeatable]

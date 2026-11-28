@@ -15,16 +15,9 @@ user-invoked: true
 
 ## 输入（任务 id 与轮次）
 
-**任务 id** 与 **轮次**，其余信息由入口给出。身份按你的会话模式补一项：
-
-```bash
-# 自动身份模式（身份由执行边界派生，没有宿主 host_id）：署名必须自报
-<python> <项目根>/.wf/bin/wf.py review-context --task <任务 id> --round <轮次> --as <你的 CLI> --json
-
-# 显式信封模式：信封携带 session.identity.host_id 时 --as 可省
-<python> <项目根>/.wf/bin/wf.py review-context --task <任务 id> --round <轮次> \
-  --envelope <本会话信封> --json
-```
+**任务 id** 与 **轮次**，其余信息由入口给出。**命令与对象**：`review-context`（任务、轮次）；
+署名来源按会话模式补一项——自动身份模式必须自报署名，显式信封由信封的宿主身份承载。
+旗标拼写、取值与示例只在 `wf help review-context`（入口用法只有一个描述面）。
 
 返回的 `facts` 里给全了你需要的：`report_path`（报告要写到哪）、`materials`（材料目录，文件名以 facts 返回为准）、`submitted_scope` / `readable_scope` / `exclusions`（本次授权边界）、`anchor`（`check_anchor`）、以及 `agent`（你的署名，取自本会话宿主身份）。若 `narrowed` 为真，材料只是交付集合的子集（`submitted_paths` / `delivery_path_count`）：按声明范围审，不把未选路径当作已覆盖；需要更多材料时停止回报，不自行扩大。
 
@@ -61,9 +54,8 @@ user-invoked: true
 同一份报告内 `findings[].id` 必须唯一；不同报告之间可以复用同名 id（身份由 round+slot+id 组成）。
 
 8. `verdict` 只写本报告的事实结论；不得声称“已通过项目门禁”。
-9. **先在 `status=in-progress` 下跑一遍
-   `<python> <项目根>/.wf/bin/wf.py lint report --file <report_path> --task <任务 id> --json`**，
-   按 `problems` 一次改全。草稿阶段的 `in-progress` 不是格式错误（lint 只在 `notes` 里提示
+9. **先在 `status=in-progress` 下用 `lint report` 只读核对一遍**（对象：报告文件与任务；
+   旗标与示例见 `wf help lint`），按 `problems` 一次改全。草稿阶段的 `in-progress` 不是格式错误（lint 只在 `notes` 里提示
    “导入前须改 done”，`ok` 仍为 true）；`import`/`decide` 才要求 `status=done`。
 10. 结束时回显三项事实：`round`、`agent`（= 你的文件名 token）、实际输出路径。回显后停止，不宣称流程已推进、不标记修复已完成、不宣称已验证。
 

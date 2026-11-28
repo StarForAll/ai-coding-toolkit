@@ -1,6 +1,6 @@
 ---
 name: wf-repair-loop
-description: 修复态判读：读 repair_scope 的四组事实与 exits，决定下一步动作（重查/重判/重发/放行/终止）。
+description: 当 repair_scope 有未关闭修复项或 Check 失败需要判下一步时使用：读四组事实与 exits，决定动作（重查/重判/重发/放行/终止）。
 disable-model-invocation: false
 ---
 
@@ -27,10 +27,8 @@ disable-model-invocation: false
 
 ## 1. 先读什么
 
-```bash
-<python> <项目根>/.wf/bin/wf.py status --short --json     # 四条件 + exits + 确定阻断
-<python> <项目根>/.wf/bin/wf.py status --json             # 需要细节时再取全量 facts
-```
+**命令与对象**：`status`——先取短视图（四条件 + exits + 确定阻断），需要细节时取全量 facts；
+旗标与示例见 `wf help status`。
 
 `--short` 里的 `repair_scope` 是**原样过滤**：
 
@@ -50,11 +48,11 @@ disable-model-invocation: false
 | action | 对应命令 | 说明 |
 |---|---|---|
 | `rerun_check` | `task-check` | C1：当前检查不能用于完成任务（内容变了 / 规则版本变了 / 失效登记） |
-| `record_disposition` | `review-decide --register-only --plan <file>`（只登记关闭）或带 `--main-review` 产生判定 | C2：关闭 blocking；只有 `accepted` 清零（见 `wf-review-action`） |
+| `record_disposition` | `review-decide`（登记关闭，或带复核产生判定；旗标见帮助） | C2：关闭 blocking；只有"接受"一类清零（见 `wf-review-action`） |
 | `restore_bytes` | 找回原字节放回原路径 | C3：恢复后该条离开 `unverifiable`（不依赖身份） |
-| `human_release` | `review-accept-unknown --file <决定.json>` | C3：只在该条 `release_allowed == true` 时出现 |
+| `human_release` | `review-accept-unknown`（任务 + 决定文件；旗标见帮助） | C3：只在该条 `release_allowed == true` 时出现 |
 | `resume_inflight` | 继续该轮证据收集后 `review-import` / `review-decide` | C4：该轮 `blocked` 为空且未判定 |
-| `redecide_round` | `review-decide --round <n>` | C4：该轮已判定但不是"当前绑定的 pass 轮" |
+| `redecide_round` | `review-decide`（对象：任务 + 轮次） | C4：该轮已判定但不是"当前绑定的 pass 轮" |
 | `await_material` | 等材料到达 | C4：该轮 `blocked` 仅含 `material_missing` |
 | `relaunch_review` | `review-launch` | C4：改变事实（新轮新报告），常列 |
 | `pause_for_human` | `task-pause` | 终局动作之一 |

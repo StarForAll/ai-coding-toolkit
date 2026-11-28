@@ -11,7 +11,7 @@
   "initial": "plan",
   "display": {"plan": "Plan", "execute": "Execute", "check": "Check", "finish": "Finish"}
  },
- "phase_model": "任务阶段为 Plan → Execute → Check → Finish，与 status 三态（未开工/执行中/已归档）正交；暂停与挂起是独立标记，不是第四态；检查 fail 留在 check、修复回 execute，内容或规范变化使旧结果失效时回 check 或 execute。",
+ "phase_model": "任务阶段为 Plan → Execute → Check → Finish，与 status 三态（未开工/执行中/已归档）正交；暂停与挂起是独立标记，不是第四态；检查失败不迁移阶段——常规 Check 在 Execute 中执行，失败后留在当前阶段修复并重跑；phase=check 只表示 Finish 中变更使旧检查失效、等待受控重检，不设 check→execute 的独立迁移。",
  "legal_positions": {
   "not_started": ["plan"],
   "in_progress": ["plan", "execute", "check", "finish"],
@@ -56,19 +56,17 @@
    "action": "task-check",
    "from": [{"status": "in_progress", "phase": "execute"}, {"status": "in_progress", "phase": "check"}],
    "to": [
-    {"status": "in_progress", "phase": "finish", "when": "结果 pass"},
-    {"status": "in_progress", "phase": "check", "when": "结果 fail（留在 check，等待修复）"},
-    {"status": "in_progress", "phase": "execute", "when": "修复完成后回 execute 重做工作"}
+    {"status": "in_progress", "phase": "finish", "when": "结果 pass"}
    ],
-   "notes": "对象稳定（前后扫描比对）与范围合法（含治理面声明）通过后才执行验证与双轴，写结果后 pass 进入 finish",
+   "notes": "对象稳定（前后扫描比对）与范围合法（含治理面声明）通过后才执行验证与双轴；结果 pass 进入 finish，结果 fail 不迁移阶段（留在当前阶段修复后重跑；finish 变更后的重检留在 check）",
    "fail_codes": ["WF_SCOPE_VIOLATION", "WF_SCOPE_UNRESOLVED", "WF_WORKSPACE_UNRESOLVED", "WF_CHECK_FAILED", "WF_SEMANTIC_DECISION"]
   },
   {
    "id": "finish-invalidate",
-   "action": "task-check",
+   "action": "baseline-apply",
    "from": [{"status": "in_progress", "phase": "finish"}],
-   "to": [{"status": "in_progress", "phase": "check"}, {"status": "in_progress", "phase": "execute"}],
-   "notes": "Finish 中对象/规范变化使旧结果失效，回 check 或 execute；不沿用旧 pass",
+   "to": [{"status": "in_progress", "phase": "check"}],
+   "notes": "Finish 中对象/规范变化使旧结果失效，回 check 受控重检（spec-update 同）；不沿用旧 pass",
    "fail_codes": ["WF_CHECK_STALE"]
   },
   {
@@ -128,7 +126,7 @@
   "not_started/plan": "wf task-approve（人批准当前规划与复杂度）",
   "in_progress/plan": "wf task-start（核对批准与开工前置后进入 Execute）",
   "in_progress/execute": "wf task-check（对象稳定且范围合法后执行检查）",
-  "in_progress/check": "wf task-check（按 fail 项修复后重新检查；修复回 execute）",
+  "in_progress/check": "wf task-check（按 fail 项修复后重新检查；失败不改变阶段）",
   "in_progress/finish": "wf archive（人调用 finish：最终门禁 + 归档）",
   "archived": "wf status（只读查看结果）；下一个对象由新会话经 wf bind 选择"
  },

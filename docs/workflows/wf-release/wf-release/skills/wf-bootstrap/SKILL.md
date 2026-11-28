@@ -13,10 +13,10 @@ user-invoked: true
 
 1. 清点本地事实：代码、测试、已有文档、本地命令。命令缺失就写“缺失 + 核验出口”，不猜。
 2. 起草接入 PRD（`task-new --kind bootstrap`），机读块列出触碰面（`.wf/baseline.md`、`.wf/project-config.json`、`.wf/spec/**`）与可立即运行的基本核验。
-3. 规划经人批准后 `task-start`；把基线/配置/spec 内容写进工作树，先
-   `baseline-apply --task <id> --files <a,b,c> --preview`（只读）取 `proposal_digest`，
-   请人对该摘要批准（决定文件 `object_digest` 写 `proposal_digest`），再以同一 `--files`
-   + `--decision <人的批准决定>` 成组落盘——提案由入口生成，不手写 proposal JSON。
+3. 规划经人批准后 `task-start`；把基线/配置/spec 内容写进工作树，先用 `baseline-apply` 的
+   只读预览取 `proposal_digest`，请人对该摘要批准（决定文件的 `object_digest` 写 `proposal_digest`），
+   再用同一批文件与人的批准决定成组落盘——提案由入口生成，不手写 proposal JSON。
+   旗标拼写与示例见 `wf help baseline-apply`。
 4. 从代码推断的技术事实标 `verified_at: extracted`，不伪造核实日期。
 5. `task-check` → 人调用 `wf-finish` → `archive`。
 

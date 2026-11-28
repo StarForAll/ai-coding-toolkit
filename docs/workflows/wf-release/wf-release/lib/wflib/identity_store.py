@@ -229,10 +229,14 @@ def verify_attachment_identity(attachment: dict) -> bool:
 # --------------------------------------------------------------------------
 
 def maintain_roots(attachment: dict, current_root, path: str = "P1",
-                   probe=None, at: str | None = None) -> dict:
+                   probe=None, at: str | None = None, allow_concurrent: bool = False) -> dict:
     """按 §3.4 的顺序维护 roots。返回 `{action, reason?, facts?}`，并就地更新 attachment。
 
     action ∈ {"normal", "disclose", "stale", "block"}
+
+    `allow_concurrent=True` 只由**人调启用入口**（`wf enable`）使用：设计稿 §1.3 规定
+    "可检测的未登记第二调用者按 C2 分级阻断，仅人调启用入口可登记"。普通写命令仍阻断，
+    且阻断先于 upsert；启用入口则把当前执行根登记进同一附件（disclose 事实可见）。
     """
     probe = probe or session_mod.Probe()
     boot = probe.boot
@@ -250,8 +254,9 @@ def maintain_roots(attachment: dict, current_root, path: str = "P1",
         return {"action": "block", "reason": EVIDENCE_UNKNOWN,
                 "facts": {"roots_unverified": others_unknown}}
 
-    # 2) C2 分级：未登记的调用者 + 有存活兄弟根 ⇒ 阻断（**先于任何 upsert**）
-    if not known and others_alive:
+    # 2) C2 分级：未登记的调用者 + 有存活兄弟根 ⇒ 阻断（**先于任何 upsert**）。
+    #    启用入口（人调）是唯一登记通道：放行下面第 4 步的 upsert，并以 disclose 回报。
+    if not known and others_alive and not allow_concurrent:
         return {"action": "block", "reason": CONCURRENT_CALLER,
                 "facts": {"concurrent_callers": others_alive, "unknown": others_unknown}}
 
@@ -281,7 +286,9 @@ def maintain_roots(attachment: dict, current_root, path: str = "P1",
                 "facts": {"roots": kept}}
     if others_alive:
         return {"action": "disclose", "reason": None,
-                "facts": {"concurrent_callers": others_alive}}
+                "facts": {"concurrent_callers": others_alive,
+                          "registered": bool(not known and allow_concurrent),
+                          "roots": kept}}
     return {"action": "normal", "reason": None, "facts": {"roots": kept}}
 
 

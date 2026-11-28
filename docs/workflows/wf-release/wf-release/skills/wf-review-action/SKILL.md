@@ -1,6 +1,6 @@
 ---
 name: wf-review-action
-description: action 侧：读指定轮次已导入报告，先汇总各轴发现再做逐条处置建议。
+description: 当 review-import 后需要逐条处置审查发现时使用：读指定轮次已导入报告，先汇总各轴发现再做逐条处置建议。
 disable-model-invocation: false
 ---
 
@@ -10,35 +10,25 @@ disable-model-invocation: false
 
 ## 步骤（任务 id 已知；主会话复核文件按下面命令生成/填写）
 
-本会话知道当前任务与审查轮次；`--main-review` 是必填的复核文件：
+本会话知道当前任务与审查轮次；主会话复核文件是必填输入（形状与旗标见 `wf help review-decide`）：
 
-```bash
-# 1) 导入：按文件名发现本轮已完成（status=done）的报告，重复调用幂等
-# 轮次必须显式给：缺省取**最大发起轮**，恢复较早一轮时会导到另一轮去
-# 自动模式（默认）不传信封；只有本会话确实有显式信封文件时才追加 --envelope <本会话信封>
-<python> <项目根>/.wf/bin/wf.py review-import --task <任务 id> --round <n> --json
-
-# 2) 生成主会话复核骨架（不产生结论；放 .wf/.runtime/，该目录不入库）
-<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \
-  --main-review-draft .wf/.runtime/main-review.json --json
-
-# 3) 填写后判定：**必须显式传 --round 与 --main-review**
-<python> <项目根>/.wf/bin/wf.py review-decide --task <任务 id> --round <n> \
-  --main-review .wf/.runtime/main-review.json --plan <处置.json> --json
-```
+**命令与对象**：`review-import`（任务、轮次）导入本轮已完成报告（重复调用幂等）→ `review-decide`
+的只读复核骨架（不产生结论；放 `.wf/.runtime/`，该目录不入库）→ `review-decide`（复核 + 本轮处置）。
+轮次必须显式给：缺省取**最大发起轮**，恢复较早一轮时会导到另一轮去。旗标拼写、决定/复核文件的
+字段形状与示例只在 `wf help review-import` / `wf help review-decide`（入口用法只有一个描述面）。
 
 1. 导入后读 `facts.imported_agents`（本轮报告来自哪些 agent）；报告正文在任务目录 `review/` 下。若本轮 launch 的 `scope.narrowed` 为真，报告只覆盖交付集合的声明子集；这是实施侧对审查输入面的判断：在受影响轴的 `basis` 写清未选路径是否相关、能否补证、还剩什么风险，`review-decide` 的 `scope.unselected` 会随判定记录；只有确实留下需要人接受的残余风险时才登记 judgment，不要为每次收窄机械补一条规模判断。不要把它当作全交付面审查。
-2. **主会话复核（不是可选步骤）**：逐份报告质疑其覆盖、证据与矛盾（`report_review.reliance` 取 `primary|partial|none`，写清为什么）；逐条 finding 本地核实（`finding_review.check` 取 `verified|disputed|unable`）；对五个轴给出**你自己的** `pass|fail|uncovered` 与依据（`basis`），来源写 `main` 或具体报告槽位（与某采信报告一致的轴，`basis` 一句指向即可——如"与 r1 一致"——不必逐轴重述完整依据；有分歧或你补核实的轴才写完整依据，把判断力集中在差异处）。判 `fail` 必须指回本轮未关闭的 blocking finding；判 `pass` 不能覆盖未关闭 blocking。**覆盖按你的采信计算**：`reliance=none` 的报告不贡献覆盖，`partial` 只贡献你在该轴 `sources` 列出的槽位，`primary` 贡献它全部 `pass/fail` 轴；不要把不采信的报告当覆盖来源。材料收窄时若你把某轴留 `uncovered`，就不要把覆盖该轴的报告标 `primary`；入口会把这对矛盾拒掉，改成 `partial/none` 或把轴改判 `pass/fail`。
+2. **主会话复核（不是可选步骤）**：逐份报告质疑其覆盖、证据与矛盾（`report_review.reliance` 写采信程度：主采信/部分采信/不采信，并写清为什么；取值拼写见 `wf help review-decide`）；逐条 finding 本地核实（`finding_review.check` 写已核实/有争议/无法核实）；对五个轴给出**你自己的** 通过/不通过/未覆盖结论与依据（`basis`），来源写 `main` 或具体报告槽位（与某采信报告一致的轴，`basis` 一句指向即可——如"与 r1 一致"——不必逐轴重述完整依据；有分歧或你补核实的轴才写完整依据，把判断力集中在差异处）。判 `fail` 必须指回本轮未关闭的 blocking finding；判 `pass` 不能覆盖未关闭 blocking。**覆盖按你的采信计算**：不采信的报告不贡献覆盖，部分采信只贡献你在该轴 `sources` 列出的槽位，主采信贡献它全部通过/不通过轴；不要把不采信的报告当覆盖来源。材料收窄时若你把某轴留未覆盖，就不要把覆盖该轴的报告标主采信；入口会把这对矛盾拒掉，改成部分采信/不采信或把轴改判通过/不通过。
 3. 先汇总：按轴列出共识、分歧与互相矛盾的事实，标明来源 agent 与 finding id。**reviewer 报告是辅助证据**：报告未覆盖的轴，你能核实就自己补（写 `pass/fail` + 依据），补不了才留 `uncovered` 交人；不要为补一个 reviewer 的未覆盖轴自动再发一轮。
    - **只有 blocking finding 必须逐条核实**（`finding_review`）；非阻塞建议填不填由你判断，未填会记进 `deferred_suggestions`，不影响本轮成立；草稿骨架只给 blocking 留占位，建议的空占位直接删掉即可视为延后。修正复核只需提交新增/改动的 `main_findings`，入口按 id 并集保留旧的，并沿用它们上次的核实状态（重交草稿也一样；要改状态就显式写 `finding_review`）。
    - 主会话复核 `fail` 轴必须指回一条**未关闭**的 blocking finding；修好后重跑 Check、发**新一轮**，不要改已判轮次的复核。
-   - 主会话自己核实、reviewer 未提出的 blocking：写进 `main_findings[]`（id/severity/statement/assertion_ref/basis），`fail` 轴的 `finding_refs` 用 `{finding_id, slot:"main"}` 引用，关闭时 dispositions 写 `slot:"main"`；这不是伪造 reviewer finding。`finding_review` 可省（默认 verified），要写 `disputed/unable` 时才补；`finding_id` 唯一时 `slot` 可省，入口会写回。
+   - 主会话自己核实、reviewer 未提出的 blocking：写进 `main_findings[]`（按 `wf help review-decide` 的 inputs 填字段），失败轴的 finding 引用用"主会话"槽位，关闭时处置也写该槽位；这不是伪造 reviewer finding。逐条核实状态可省（默认已核实），要写有争议/无法核实时才补。
    - `finding_review.check=unable` 的 finding 不能靠 accepted 关闭；先补核实，或保持 open 让判定 fail。blocking main finding 的 severity 降级/关闭必须先走 dispositions；`broken-reference` 只有所引规则确实被本任务改过才要求人复核。
    - 缺陷落在已批准验收项/验证/spec 条款之外时，先判断是否仍在原触碰面内、能否直接修：能修就继续修，并把 `assertion_ref` 写成 `t:<触碰面内路径>`、**finding 同时补 location 字段**（入口核验：路径在批准触碰面内且覆盖 location，2026-11-21 起 blocking 可用）；不要为凑 `assertion_ref` 降成 suggestion 或先停下请批。只有要改验收/承诺/授权，或需要人确认残余风险时，才登记 `judgment`（kind=缺口/未核实, outcome=escalated）请人扩判据。
-   - 报告未到齐时，可先用 `review-decide --register-only --main-review <file>` 登记已核实 main_findings（不产生 verdict）；最小文件只需 `task`/`round`/`main_findings`，入口补 discovery 并标未就绪。正式判否仍要完整审查。已判 `pass/unavailable` 后不能用登记入口改写复核；先关闭、后核实为 verified 的 finding，核实那次必须补可解析的 evidence_refs。
+   - 报告未到齐时，可先用 `review-decide` 的登记入口提交已核实 main_findings（不产生 verdict；文件形状见 `wf help review-decide`），入口补 discovery 并标未就绪。正式判否仍要完整审查。已判 `pass/unavailable` 后不能用登记入口改写复核；先关闭、后核实为 verified 的 finding，核实那次必须补可解析的 evidence_refs。
    - 你认为某条 finding 是误报/重分类时，主会话复核对应轴写 `pass`、`finding_review.check=disputed`，按处置规则写 `accepted`；同一轮重判可在 finding 关闭后通过。判定为 `pass`/`unavailable` 后不可替换复核；判定为 `fail` 或尚未判定时，可提交修正复核（旧复核保留并标 `supersedes`）。若复核仍有 `fail` 轴，不能据此产 `pass`。
-4. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。`finding_id` 命中多轮/多槽位时，在自己的 `--plan` 元素里补 `round`+`slot` 重交即可，不需要请人裁。
-5. 把处置写成 `--plan` 文件的元素数组，再交 `review-decide`。
+4. 逐条给出处置：关闭 / 误报 / 重分类 / 不处置（见下节）。finding 命中多轮/多槽位时，在处置元素里补上轮次与槽位重交即可，不需要请人裁。
+5. 把处置写成处置文件的元素数组，再交 `review-decide`（形状见 `wf help review-decide`）。
 6. 驳回必须本地核实；「作者不认可」不是证据。
 
 ## 报告还能不能沿用（内容或标准变了之后）
@@ -51,24 +41,20 @@ disable-model-invocation: false
   能放回原字节就放回（原报告继续有效），放不回就按新材料重写并开新一轮。
 - 关闭证据要指回问题本身：见 `wf-repair-loop`「这条 blocking 真的修了吗」。
 
-## 处置形状（只有 `accepted` 清零）
+## 处置（只有"接受"一类清零）
 
-`--plan` 的每个元素：
+每条处置按 `wf help review-decide` 的 inputs 写（finding 身份、处置种类、理由、复核人；
+字段形状与取值只在帮助里）。
 
-```json
-{"finding_id": "f1", "decision": "accepted", "reason": "已修复并重查通过 / 经复核认定误报 / 已重分类",
- "recheck_by": "human:xzc"}
-```
-
-- **只有 `decision == "accepted"` 会关闭**（`open_blocking` 里消失）。
-  `rejected` / `amended` 只记录、**不关闭**：写入后 `open_blocking` 仍在，
-  `facts.not_closing` 会如实回报"未关闭"，别把"已答复"当成"已了结"。
-- **误报也写 `accepted`**，并在 `reason` 里写明性质（"经复核认定误报，无需改代码"）。
-  不要用 `rejected` 表达"我不同意"——那不会关闭，机制也不追溯翻转历史。
-- `recheck_by` 必填且**不得等于提出者**——后果是"同一份报告不能自证"（校验细节见 `wf help review-decide` 与本轮 facts，本 skill 只写后果）。
-- `accepted` 只能表示「**处置结果已成立**」：① 已修复且已重查通过 ② 经复核认定误报 ③ 已重分类。
-  **「同意某种修法但还没做」不得写 `accepted`**——finding 会立刻从 `open_blocking` 消失，
-  light 任务又没有 C4 兜底；此时保持 open，或写 `amended` + 理由（不关闭）。
+- **只有"接受"会关闭**（从 `open_blocking` 消失）；"驳回"与"修正"只记录、**不关闭**：
+  写入后 `open_blocking` 仍在，`facts.not_closing` 会如实回报“未关闭”，别把“已答复”当成“已了结”。
+- **误报也写"接受"**，并在 `reason` 里写明性质（经复核认定误报，无需改代码）。
+  不要用"驳回"表达“我不同意”——那不会关闭，机制也不追溯翻转历史。
+- 复核人必填且**不得等于提出者**——后果是"同一份报告不能自证"（校验细节见 `wf help review-decide`
+  与本轮 facts，本 skill 只写后果）。
+- "接受"只能表示「**处置结果已成立**」：① 已修复且已重查通过 ② 经复核认定误报 ③ 已重分类。
+  **「同意某种修法但还没做」不得写“接受”**——finding 会立刻从 `open_blocking` 消失，
+  light 任务又没有 C4 兜底；此时保持 open，或写"修正" + 理由（不关闭）。
 
 ## 处置时机与类型的对应
 

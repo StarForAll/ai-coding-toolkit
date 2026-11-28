@@ -24,7 +24,7 @@ disable-model-invocation: false
 | in_progress/check | `task-check`；实例任务的**步骤契约**（必做动作/步骤内人判点/声明验证）也在这里兑现——动作结果用 `--decision` 的 `choice=done|waived`（subject 含动作 id）记录；要留一次针对性红测用 `--run-verification`（不产生 Check 结论）。双轴结论与决定输入的字段形状见 `wf help task-check`（拿不准先取只读骨架）。**你要判的是**：双轴结论与依据够不够；人工验收/直接验收的结论是否绑定"人当时看到的交付内容"（内容变了旧结论不沿用——入口会用 `content_digest` 核它，缺该值就按未通过处理）；重复调试的「同一问题/不同问题」是你在授权内的裁定，不要套用验收字段 |
 | 需要记录知识处置（Check/归档前） | `task-knowledge`（取值域见 `wf help task-knowledge`）；spec 变更走 `wf-spec-update` skill（`spec-update`），先看后改 |
 | 复盘触发（入口 facts 的触发集合非空） | `task-retrospect`（结论写在 evidence 的 `conclusion`，形状见 `wf help task-retrospect`）；触发项与证据缺口由入口 facts 给出，不自行缩减 |
-| 需要返工或替换 | `task-rework`（建 R、挂起 T、继承前置）；替换用 `task-replace`（先可取只读预览）。**R 是 T 的交接承接方**：T 的保留 WIP 不挡 R 的绑定/取写权；R 完成后由 `task-reassess` 清挂起并核销 T 的旧登记（机制稿 §6.2 是定义位，`wf help task-rework` 给形状） |
+| 需要返工或替换 | **先取人签决定**（`choice=返工/rework` 或 `替换`；返工/替换是 §1.1 封闭清单，不由 AI 代作）→ `task-rework`（建 R、挂起 T、继承前置）/ `task-replace`（先可取只读预览）。**R 是 T 的交接承接方**：T 的保留 WIP 不挡 R 的绑定/取写权；但**普通任务** T 已暂停仍绑定本会话，本会话不能 `bind R`——由人**新开终端/新执行边界**后 `bind --task R`（即使不并行也必须换执行边界）；实例内任务按 `run advance` 的游标定位。R 完成后由 `task-reassess` 清挂起并核销 T 的旧登记（机制稿 §6.2 是定义位，`wf help task-rework` 给形状） |
 | 任务挂起需要复评 | `task-reassess`（单任务复评；未挂起时幂等返回、不写记录） |
 | 建/删依赖边 | `dep`（建/删边形态见 `wf help dep`）；前置状态与顺序由入口校验，不手改记录 |
 | 基线/项目配置变更 | `baseline-apply`（先只读预览，再由人的批准决定承载）→ 只在已批准任务内，spec 变更走 `wf-spec-update` |
@@ -46,10 +46,8 @@ disable-model-invocation: false
 
 进入 finish、或收到 `fail` / `unavailable` / 报告损坏 / 换实施宿主的信号时，先读事实再动作：
 
-```bash
-<python> <项目根>/.wf/bin/wf.py status --short --json    # 四条件 + exits + 确定阻断
-<python> <项目根>/.wf/bin/wf.py gate --due "before_archive" --json   # 步骤面缺口（取值见 wf help gate）
-```
+命令与对象：`status`（短视图：四条件 + exits + 确定阻断，旗标见 `wf help status`）与 `gate`
+（到期时点为归档前，取值与旗标见 `wf help gate`）。
 
 - `repair_scope` 的四组事实与 `exits` 怎么读：见 `wf-repair-loop`。
 - **不要用 `archive` 试归档探路**：为什么不行、还差什么该从哪里读，完整论述见
@@ -72,10 +70,9 @@ disable-model-invocation: false
   属「偏离裁决」的那一类；一直不裁，就会把框架缺陷悄悄并入业务任务。
   这条只在**真要定去向**时才成为停点。先自己核实是哪些路径、影响了什么：去向还没被后续动作
   逼定时，可先继续未受影响的活（Check 失效要重跑这件事照做），不要读成"停下等答复"。
-  确认留痕走判断记录（可审计）：写判断文件条目
-  `{kind: "框架改动", decision: <归属去向：回源仓库立项/另开任务/保持现场>, basis: <依据>,
-  outcome: "applied", by: "human"}`，经 `judgments add` 入库
-  （`kind` 写在判断条目里而不是旗标上；task-check/归档回显的
+  确认留痕走判断记录（可审计）：按 `wf help judgments` 的 inputs 写一条判断条目——判断类取
+  「框架改动」一类、内容写归属去向（回源仓库立项/另开任务/保持现场）、依据与 `by=human`，
+  经 `judgments add` 入库（判断类写在条目里而不是旗标上；task-check/归档回显的
   `vendor_judgments` 可见）。回源仓库立项的修复在源仓库按补丁/记录立项，归属与取舍仍是人判。
   不要把它当业务交付或审查材料：现场改 vendor 升级会丢、也不进提交。改 `.wf/**`
   会使当前 Check 失效（`WF_CHECK_STALE`——锚点的 `control_plane_digest` 随 vendor 内容
@@ -89,6 +86,9 @@ disable-model-invocation: false
   Check 失效是预期。手工 `git diff` 只在导出不可用情形作兜底。
   不要把导出当成“已接受偏离”或“已回源”。这不算违反：只读 `.wf` 状态、读取/导出安装记录；
   改 `.wf/**` 才需要归属确认与回源。
+- **本机判断偏好**：本机可把某类判断设为"必须交人"或"自定"（`wf prefs show` 查看；取值与旗标见
+  `wf help prefs`）。设为必须交人时，该类只能写 `escalated` 交人，写 `applied` 会被 `judgments add` 拒；
+  设为自定时的越界升级要在条目里写清为什么判断不了。偏好是本地用户设置，不是项目契约，不要改写它。
 - **与人的限制冲突**（"别动 `.wf/`""不要提交""先别装依赖"）：停下并报告冲突点、你选的做法与影响；
   不自行取舍、不隐瞒、不改限制本身。冲突无法调和时停下报告是合法终态。
 
@@ -161,9 +161,10 @@ disable-model-invocation: false
 
 ## 不做
 
-- 不调用 `wf-finish`、不发起正常收工归档、不提交（提交只在拿到精确路径授权时由归档动作执行）。
+- 不调用 `wf-finish`、不发起正常收工归档、不自行提交（`archive` 的 commit 授权与 `stop` 的
+  commit 去向都只在拿到精确路径授权时由对应入口执行）。
   这不算违反：归档中断（`status=archived` 未移目录）按上面路由表重入 `archive` 续做；在批准触碰面内
-  改业务文件；按精确路径授权由归档动作执行提交。
+  改业务文件；按精确路径授权由归档/`stop` 入口执行提交。
 - 不替人回答 `plan-q`、不伪造 review 结论。
 
 ## 工作习惯（唯一完整定义位）

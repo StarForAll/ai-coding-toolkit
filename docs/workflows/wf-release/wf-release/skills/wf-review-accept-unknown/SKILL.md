@@ -1,6 +1,6 @@
 ---
 name: wf-review-accept-unknown
-description: 人裁放行：向人呈现不可核实证据的登记事实、采集 quote、写放行记录或撤销。
+description: 当需要人裁放行不可核实证据或撤销放行时使用：向人呈现登记事实、采集 quote、写放行记录或撤销。
 disable-model-invocation: false
 ---
 
@@ -54,17 +54,15 @@ disable-model-invocation: false
 
 ## 5. 决定文件与命令
 
-```bash
-<python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --file <决定.json> --json
-<python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --revoke --batch b-1 --json
-<python> <项目根>/.wf/bin/wf.py review-accept-unknown --task <id> --revoke --round 1 --slot s1 --digest sha256:… --json
-```
+**命令与对象**：`review-accept-unknown`（任务 + 决定文件）；撤销用同一命令的撤销入口
+（按批次或按轮次/槽位/摘要）。旗标拼写、取值与示例只在 `wf help review-accept-unknown`。
 
 决定文件的字段形状与逐项校验**只在 `wf help review-accept-unknown` 的 inputs 一处登记**
 （§1.1「入口用法只有一个描述面」；本 skill 不再复制形状与规则清单，防止两处漂移）。
 写决定时带上文第 4 节的判断：`quote` 里要能看出人知道「未知 findings 一并被豁免」，
 不要把放行描述成"已处置/已关闭"。校验失败时按入口报的 `bad_items` 逐项改，不要绕。
-`--revoke` 只标记不删除；`--batch` 与 `--round/--slot/--digest` 同时给出会报错（不猜优先级）。
+撤销入口只标记不删除；按批次与按轮次/槽位/摘要同时给出会报错（不猜优先级；旗标见
+`wf help review-accept-unknown`）。
 一次一事件：报告一旦恢复可核实，受控写点（`archive` 预检 / `review-import` / `review-decide`）
 会把该放行标 `consumed`，旧放行不再生效。**归档时报告仍损坏**不在兜底范围——如实说，不要承诺。
 

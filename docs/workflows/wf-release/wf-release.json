@@ -102,7 +102,7 @@
       "target_relative": ".wf/lib/wflib/authorize.py"
     },
     {
-      "digest": "sha256:7ea4383a034141790395862d77327d836bfd6352b6e0be1fe16688d1c1314dc2",
+      "digest": "sha256:87c8db9e90b5b3429d7c50317020b7c3d519a0d4248c1a729706adb3bba73063",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -112,7 +112,7 @@
       "target_relative": ".wf/lib/wflib/check.py"
     },
     {
-      "digest": "sha256:d01e03407b183f5ce5496c7028d7b34f360dcdf1efca8ae31693d06ba87b67d6",
+      "digest": "sha256:107f59e4dcedfefcd33a8ad5a8287b2ee11e412bd50590cd4cfbf3f080394db3",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -162,7 +162,7 @@
       "target_relative": ".wf/lib/wflib/fingerprint.py"
     },
     {
-      "digest": "sha256:50fb99bfd6e98fc230a806222881840d507c003135c6c0b88d8cc3716b8c884d",
+      "digest": "sha256:6dab5ec2a7c6f6eb39cf1f73042a8bc482adf116af58a01b3f416602dfba02f8",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -172,7 +172,7 @@
       "target_relative": ".wf/lib/wflib/gates.py"
     },
     {
-      "digest": "sha256:1e796fefb8de46b6d9f12f23eec45d79ebfa3034fa1fcedf54cf883aeabfb199",
+      "digest": "sha256:1dcb026a06a500b2caa2571951adbe746fdc93ab674c17dd9a94bf5ae23e3e1f",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -182,7 +182,7 @@
       "target_relative": ".wf/lib/wflib/identity_store.py"
     },
     {
-      "digest": "sha256:a109bbdbea6a3bbd567568e74fb88e17bd85a2540ce663e7d3cf687d086dba85",
+      "digest": "sha256:8d9450714c33ab0fe5c9fb92856d471bc95047e35c80a249e2d41ce3415108ed",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -242,7 +242,7 @@
       "target_relative": ".wf/lib/wflib/projection.py"
     },
     {
-      "digest": "sha256:433bc1a155018040a0b68a71e51d0db152fe253d31cd248a76421e6bff384432",
+      "digest": "sha256:f4c8bcd33acf07fdce717da037605480981c08d5c5a626bf0063aa6368857364",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -262,7 +262,7 @@
       "target_relative": ".wf/lib/wflib/records.py"
     },
     {
-      "digest": "sha256:0aeae1a7eb2e9e2484d8df3d1b608b40ba569dda42646e4067724621f6099650",
+      "digest": "sha256:cc962fc67e1583ecf1ba9715470c822aeffba4330706485d37772e115b4081e7",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -272,7 +272,7 @@
       "target_relative": ".wf/lib/wflib/review.py"
     },
     {
-      "digest": "sha256:678b5cf5f0b20c841893ca3c68f0a81b509132a8ba00ba9a556c9b9af8caed5a",
+      "digest": "sha256:af953dabe04da72eedc1e15b10a7e021538a1d7640a4a8b29a6a5aa440622c28",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -342,7 +342,7 @@
       "target_relative": ".wf/lib/wflib/taskfiles.py"
     },
     {
-      "digest": "sha256:e618fcaa6732e504636f239c669d4811d407f3a4a9d837adbfb8dd3259d2e420",
+      "digest": "sha256:aa691b919d9d9b805ac623f1bc8dc6f45c08578dd0b2993c98c9234848087d72",
       "executable": false,
       "file_kind": "file",
       "kind": "lib",
@@ -422,7 +422,7 @@
       "target_relative": ".wf/protocol/repo_rules.json"
     },
     {
-      "digest": "sha256:bac30d06ab6e66fc8870524bed8705fd2be3555135fd794155d7311e711032ce",
+      "digest": "sha256:6b5389ddf5f7809c108a8b0e1710e7e252e95b9dda54c4e6004eccab6e34df3b",
       "executable": false,
       "file_kind": "file",
       "kind": "protocol",
@@ -552,7 +552,7 @@
       "target_relative": ".wf/templates/user-workflow.md"
     },
     {
-      "digest": "sha256:0366e62d4a081954a2a4eee6216314d0bd98bab01260da21e0e7d94d2d66ad65",
+      "digest": "sha256:99a4697374c0df845c76123971712ab2b9ff9763379d865b0f2ce7176ac80a38",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -572,7 +572,7 @@
       "target_relative": ".wf/workflows/knowledge-flow.md"
     },
     {
-      "digest": "sha256:2fd5a6e53e72af18ccfb4eab9ca5f278f17e6307ed65a29f75dd760519b0beb2",
+      "digest": "sha256:954daa0df47221216debaa570b2e31943e1c54220af8755c167e57b449d5d225",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -592,7 +592,7 @@
       "target_relative": ".wf/workflows/review-flow.md"
     },
     {
-      "digest": "sha256:76856f0f3f414ecfccfdfe785f6a7ff4cf47b508d36c7422b6a18165ed259af1",
+      "digest": "sha256:5526f65bcc7ee9c16486095e14ea83ca4002810682a090e20585cbb869273fab",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -602,7 +602,7 @@
       "target_relative": ".wf/workflows/session-flow.md"
     },
     {
-      "digest": "sha256:34ffdb68ec4fb52cb17ac3fb46cf330744d4642ed7c7b6d969215f0aea74b4ae",
+      "digest": "sha256:01aa9ec58bde0072f20e733672bbdc564b2fe0d37f10331ec2ed5aa066c2a299",
       "executable": false,
       "file_kind": "file",
       "kind": "workflow",
@@ -612,7 +612,7 @@
       "target_relative": ".wf/workflows/task-flow.md"
     },
     {
-      "digest": "sha256:90cce524ec087ccc9bd51a33a9d73f84075fb04de47ca4b1f6ec6f3992b02588",
+      "digest": "sha256:44b59f0a455328511fd60e8be7f6a2347bb68bf65b2546d54c2c4f578512a1be",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -632,7 +632,7 @@
       "target_relative": "wf-code-review/SKILL.md"
     },
     {
-      "digest": "sha256:45f78ed13e62c0133d8fbfac5d595cc3036bda42c9a98268023091d9c46c800f",
+      "digest": "sha256:226b579d763df6f9de8568fea2d555678e150755279cbb4949bfce24a24eccc6",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -652,7 +652,7 @@
       "target_relative": "wf-diagnosing-bugs/SKILL.md"
     },
     {
-      "digest": "sha256:c76febdf2c2eac2fb22cdadec551c566dc3a09e7befd17f33454de9db7f8aa2d",
+      "digest": "sha256:7860caadd486cbff9debb8fd12feb0c58e9ea755b4e471d6ba4c1002256c442c",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -672,7 +672,7 @@
       "target_relative": "wf-grilling/SKILL.md"
     },
     {
-      "digest": "sha256:4cd3870ac0991a7337dc6844ad0309ffa9563680fbc7540ad6a11721ca58b19f",
+      "digest": "sha256:9fa7b999e265af8b9be7536ad823add3255c5b1d40ed2069273080c13b7973d0",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -682,7 +682,7 @@
       "target_relative": "wf-repair-loop/SKILL.md"
     },
     {
-      "digest": "sha256:61bd4329d60c73400356cbee704878a49b4d394bc6ae25748d6e99d4ec1016d0",
+      "digest": "sha256:4a3740318c26fdbf62cde46a98d9a971b05a2e339f70b0db14ad7e205b027f4f",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -692,7 +692,7 @@
       "target_relative": "wf-review-accept-unknown/SKILL.md"
     },
     {
-      "digest": "sha256:a079d10b16b1ebc8fd09623f39d2177277c2ffcddee42be4987e11e880a5ce0d",
+      "digest": "sha256:1c98f7e46379b8bad9d0ef78f064d112ca630bfc21f4b126bd0dfef6226ab7a6",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -702,7 +702,7 @@
       "target_relative": "wf-review-action/SKILL.md"
     },
     {
-      "digest": "sha256:0ce3d1c49dde3ee002e2dc91d70b778ff46c5f2a3c0e687764f29fc4e2784d6c",
+      "digest": "sha256:5139677d6853631dadb9419445a8e99a1ae248950667fba4755e335a03264ff8",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -722,7 +722,7 @@
       "target_relative": "wf-spec-update/SKILL.md"
     },
     {
-      "digest": "sha256:723559f357698f1310f5ee50c99f5e62f8da95395619bb06b927aa772eb4f6b8",
+      "digest": "sha256:7469ed26f6043f006bdf7f834b285a2c19cd8442429bd48c12778b613961f0cc",
       "executable": false,
       "file_kind": "file",
       "kind": "skill",
@@ -802,7 +802,7 @@
         "write": 1
       }
     },
-    "rules_digest": "sha256:85692fc99d486a7ee0816e9bcfa64f129654c671435470dc576973d958e67b3b",
+    "rules_digest": "sha256:cc601ce26db5f329da83505a4fcbfde00cc8bc7127fdaf3611009905b7f75fce",
     "systems": [
       "linux"
     ],
@@ -813,7 +813,7 @@
       "write": 1
     }
   },
-  "delivery_round": 1,
+  "delivery_round": 3,
   "gitignore_managed": {
     "begin_marker": "# wf-managed-v1",
     "end_marker": "# wf-managed-end",
@@ -898,7 +898,7 @@
       "applies": {
         "operation": "spec.update"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.spec.update",
       "mode": "repeatable",
@@ -909,7 +909,7 @@
       "applies": {
         "operation": "task.curate"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.curate",
       "mode": "repeatable",
@@ -920,7 +920,7 @@
       "applies": {
         "operation": "task.knowledge-dispose"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.knowledge-dispose",
       "mode": "repeatable",
@@ -942,7 +942,7 @@
       "applies": {
         "operation": "repair.apply"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.repair.apply",
       "mode": "repeatable",
@@ -953,7 +953,7 @@
       "applies": {
         "operation": "uninstall.apply"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.uninstall.apply",
       "mode": "repeatable",
@@ -964,7 +964,7 @@
       "applies": {
         "operation": "review.launch"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.review.launch",
       "mode": "repeatable",
@@ -975,7 +975,7 @@
       "applies": {
         "operation": "review.import"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.review.import",
       "mode": "repeatable",
@@ -986,7 +986,7 @@
       "applies": {
         "operation": "review.decide"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.review.decide",
       "mode": "repeatable",
@@ -997,7 +997,7 @@
       "applies": {
         "operation": "session.bind"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.session.bind",
       "mode": "repeatable",
@@ -1008,7 +1008,7 @@
       "applies": {
         "operation": "writer.acquire"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.writer.acquire",
       "mode": "repeatable",
@@ -1019,7 +1019,7 @@
       "applies": {
         "operation": "writer.release"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.writer.release",
       "mode": "repeatable",
@@ -1030,7 +1030,7 @@
       "applies": {
         "operation": "writer.handover.begin"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.writer.handover.begin",
       "mode": "repeatable",
@@ -1041,7 +1041,7 @@
       "applies": {
         "operation": "writer.handover.accept"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.writer.handover.accept",
       "mode": "repeatable",
@@ -1052,7 +1052,7 @@
       "applies": {
         "operation": "task.reassess"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.reassess",
       "mode": "repeatable",
@@ -1068,7 +1068,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_execute",
       "id": "task.plan-approved",
       "mode": "once",
@@ -1084,7 +1084,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_execute",
       "id": "task.spec-loaded",
       "mode": "repeatable",
@@ -1100,7 +1100,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_check",
       "id": "task.work-satisfied",
       "mode": "once",
@@ -1116,7 +1116,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.check-passed",
       "mode": "repeatable",
@@ -1132,7 +1132,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.tdd-verified",
       "mode": "repeatable",
@@ -1148,7 +1148,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.review-passed",
       "mode": "repeatable",
@@ -1164,7 +1164,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.knowledge-disposed",
       "mode": "once",
@@ -1180,7 +1180,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.retrospective-done",
       "mode": "once",
@@ -1196,7 +1196,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "before_archive",
       "id": "task.changes-persisted",
       "mode": "repeatable",
@@ -1212,7 +1212,7 @@
           "bootstrap"
         ]
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "after_archive",
       "id": "task.archived",
       "mode": "once",
@@ -1223,7 +1223,7 @@
       "applies": {
         "operation": "task.create"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.create",
       "mode": "repeatable",
@@ -1234,7 +1234,7 @@
       "applies": {
         "operation": "task.transition"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.transition",
       "mode": "repeatable",
@@ -1245,7 +1245,7 @@
       "applies": {
         "operation": "task.attribute"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.attribute",
       "mode": "repeatable",
@@ -1256,7 +1256,7 @@
       "applies": {
         "operation": "baseline.apply"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.baseline.apply",
       "mode": "repeatable",
@@ -1267,7 +1267,7 @@
       "applies": {
         "operation": "task.retrospect"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.retrospect",
       "mode": "repeatable",
@@ -1278,7 +1278,7 @@
       "applies": {
         "operation": "task.check"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.check",
       "mode": "repeatable",
@@ -1289,7 +1289,7 @@
       "applies": {
         "operation": "task.pause"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.pause",
       "mode": "repeatable",
@@ -1300,7 +1300,7 @@
       "applies": {
         "operation": "session.stop"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.session.stop",
       "mode": "repeatable",
@@ -1311,7 +1311,7 @@
       "applies": {
         "operation": "task.archive"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.archive",
       "mode": "repeatable",
@@ -1322,7 +1322,7 @@
       "applies": {
         "operation": "task.abandon"
       },
-      "delivery_round": 1,
+      "delivery_round": 3,
       "due": "operation_end",
       "id": "control.task.abandon",
       "mode": "repeatable",
@@ -1552,5 +1552,5 @@
       }
     ]
   },
-  "version": "0.0.21"
+  "version": "0.0.22"
 }

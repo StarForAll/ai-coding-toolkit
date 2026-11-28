@@ -23,6 +23,24 @@ EXPLICIT_ENVELOPE_EXIT = (
     "provider=wf 的显式信封会被拒）"
 )
 
+# 已启用、无绑定对象时的会话级下一步（唯一实现）：启用入口与只读状态页共用。
+SESSION_UNBOUND_NEXT = "人显式选择对象：task-new、bind --task，或 run create"
+# Finish 中交付内容/规范变化使旧 Check 失效时的下一步：位置表的 finish 文案是"归档"，
+# 但 C1 已 false，直接按它去试归档只会被 WF_CHECK_STALE 拒（不要试归档探路）。
+STALE_CHECK_NEXT = "检查已失效：先重跑 `wf task-check` 修复并重检，再考虑归档（不要试归档探路）"
+
+
+def finish_check_stale_next(task, scope):
+    """finish 且旧 Check 失效时的下一步；暂停/挂起交给位置表（恢复优先）。"""
+    if not isinstance(task, dict) or task.get("phase") != "finish":
+        return None
+    if task.get("paused") or task.get("suspended"):
+        return None
+    conditions = (scope or {}).get("conditions") or {}
+    if conditions.get("C1_check_valid") is False:
+        return STALE_CHECK_NEXT
+    return None
+
 
 def resolve_generation(ctx, key):
     """写权代次的来源解析（唯一实现）：显式请求 → 本会话运行态 → `(None, None)`。
@@ -70,6 +88,35 @@ def writer_handover_projection(record):
         "object": handover.get("object_or_preparation"),
         "invalidated_generation": handover.get("invalidated_generation"),
     }
+
+
+def handover_next_text(record, key):
+    """交接中间态的下一步文案（唯一实现）：`enable` 与 `status` 共用。
+
+    返回 `(handover, for_me, text)`；非 recovering 时 `text=None`。接收方必须被点名
+    `writer-handover accept`，不能落到位置表的通用 next（bind/task-new）。
+    """
+    handover = writer_handover_projection(record)
+    state = (record or {}).get("state")
+    for_me = bool(handover and state == "recovering" and key
+                  and handover.get("receiver_session_key") == key)
+    if not handover or state != "recovering":
+        return handover, for_me, None
+    text = ("写权交接已就绪：运行 `writer-handover accept` 接收对象"
+            f"（对象 {handover_object_label(handover)}，发起方 {handover.get('from')}）；"
+            "接收前不要 task-new/bind") if for_me else (
+            "写权处于交接中间态：接收方是另一会话（见 facts.writer.handover）；"
+            "本会话不要写，等接收方 accept 或按 `wf repair` 恢复")
+    return handover, for_me, text
+
+
+def handover_object_label(handover):
+    """面向人的对象标签（`next_` 里不要塞整份 dict）。"""
+    obj = (handover or {}).get("object") or {}
+    if isinstance(obj, dict) and obj.get("id"):
+        kind = obj.get("kind")
+        return f"{kind}:{obj.get('id')}" if kind else str(obj.get("id"))
+    return str(obj)
 
 
 def writer_snapshot(root):
@@ -487,7 +534,9 @@ class Context:
                        "instance_id": (attachment or {}).get("instance_expected"),
                        "activation": (attachment or {}).get("activation"),
                        "source": "auto"}
-            if attachment and attachment.get("activation_stale"):
+            if attachment and attachment.get("activation_stale") and getattr(self, "command", "") != "enable":
+                # 启用入口是刷新激活状态的通道（它会把 stale 清掉并重新启用）；
+                # 其他命令仍按 WF_NOT_ENABLED 阻断，不因"人重新调用 /wf-start"而绕开写权。
                 raise CliError("WF_NOT_ENABLED",
                                {"reason": "activation_stale", "session_key": key,
                                 "roots": attachment.get("roots")},
@@ -616,6 +665,9 @@ class Context:
         "bind", "writer", "writer-handover", "dep", "spec-update", "definition",
         "run", "baseline-apply", "task-knowledge", "review-launch", "review-import",
         "review-decide",
+        # 启用入口也是 roots 的**登记通道**（设计稿 §1.3）：C2 阻断的出口指向它，
+        # 它必须在写盘前经过同一维护点，否则"人调 /wf-start 登记"永远不会发生。
+        "enable",
     })
 
     def _needs_roots(self) -> bool:
@@ -629,9 +681,11 @@ class Context:
         root = getattr(self, "_auto_root", None)
         if not isinstance(attachment, dict) or root is None:
             return
-        verdict = store.maintain_roots(attachment, root, self.identity_path())
+        verdict = store.maintain_roots(attachment, root, self.identity_path(),
+                                       allow_concurrent=(getattr(self, "command", "") == "enable"))
         store.save_attachment(self.root, self._auto_key, attachment)
         self._auto_attachment = attachment
+        self._roots_verdict = verdict
         if verdict["action"] == "block":
             reason = verdict["reason"]
             facts = dict(verdict.get("facts") or {})
@@ -649,7 +703,14 @@ class Context:
         if verdict["action"] == "stale":
             facts = dict(verdict.get("facts") or {})
             facts["reason"] = "activation_stale"
-            raise CliError("WF_NOT_ENABLED", facts, next_="人重新调用 /wf-start")
+            if getattr(self, "command", "") == "enable":
+                # 启用入口是刷新激活状态的通道：旧根全 dead 时重跑 enable 应重新启用，
+                # 而不是让"人重新调用 /wf-start"这条出口永远撞回同一阻断。
+                attachment["activation_stale"] = False
+                store.save_attachment(self.root, self._auto_key, attachment)
+                self._auto_attachment = attachment
+            else:
+                raise CliError("WF_NOT_ENABLED", facts, next_="人重新调用 /wf-start")
 
     def key(self, required=True):
         session = self.session(required=required)
@@ -975,11 +1036,14 @@ def cmd_version(ctx, args):
         "rules_digest": (manifest.get("compatibility") or {}).get("rules_digest"),
         "python_min": (manifest.get("compatibility") or {}).get("python_min"),
     }
-    return ok(facts=facts, next_="wf-start（人显式调用）")
+    return ok(facts=facts, next_="人显式调用 /wf-start（宿主 skill；不是 `wf` 子命令）")
 
 
 def cmd_status(ctx, args):
     _check_layout(ctx.root)
+    # 规划期的下一步取决于"批准是否覆盖当前 PRD"，不是纯位置事实：批准后仍报
+    # `task-approve`（未批准）会把 AI 送进一次必然被拒的重复批准（回归：批准后 status 指回批准）。
+    plan_approved = None
     record = ctx.writer()
     facts = {
         "writer_state": record.get("state"),
@@ -989,7 +1053,11 @@ def cmd_status(ctx, args):
         # 这是 checkpoint 的读取消费点（不只在写侧落盘）——2026-11-28 终审 F1.4。
         "checkpoint": record.get("checkpoint"),
     }
-    handover = writer_handover_projection(record)
+    # 交接发现面（与 enable 共用 `handover_next_text`）：recovering 时接收方在只读状态页
+    # 就要看到"有交接给我"与 accept 出口，不能被位置表的通用 next（bind/task-new）指走
+    # （wf-start 的接收四步第③步读的就是 status --short）。
+    handover, handover_for_me, handover_next = handover_next_text(record, ctx.key(required=False))
+    facts["handover_for_me"] = handover_for_me
     if handover:
         facts["handover"] = handover
         # 统一投影：未绑定/实例绑定的只读面也要看到交接与检查点（不能只在 task 绑定的
@@ -1052,21 +1120,26 @@ def cmd_status(ctx, args):
                     # --short 保持轻量（envelope-cache-and-short 契约：避免整份 task.json 进上下文）；
                     # directory/plan_version 用全量 status 取（2026-11-27 审查发现 8 为权衡项，
                     # 与既有轻量契约冲突时维持原契约，登记两跳成本为观察项）。
+                    short_scope = _short_repair(
+                        review_mod.repair_scope(ctx, task), precheck,
+                        review_mod.acceptance_echo(task))
                     return ok(facts={"task": {"id": task_id, "title": task.get("title"),
                                               "status": task.get("status"), "phase": task.get("phase"),
                                               "complexity": plan.get("complexity"), "tdd": plan.get("tdd"),
                                               **_short_check(ctx, task)},
                                      "writer": facts.get("writer"),
-                                     "repair_scope": _short_repair(
-                                         review_mod.repair_scope(ctx, task), precheck,
-                                         review_mod.acceptance_echo(task)),
+                                     "handover_for_me": facts.get("handover_for_me"),
+                                     "repair_scope": short_scope,
                                      # A6 裁定：缺登记摘要的遗留记录不计入 C3 阻断，单列在 status
                                      "legacy_unverifiable": review_mod.legacy_unverifiable(ctx, task)},
                               position=position,
-                              next_=protocol_mod.states().next_for(
+                              next_=handover_next or finish_check_stale_next(task, short_scope)
+                              or protocol_mod.states().next_for(
                                   task.get("status"), task.get("phase"),
-                                  paused=bool(task.get("paused")), suspended=bool(task.get("suspended"))))
+                                  paused=bool(task.get("paused")), suspended=bool(task.get("suspended")),
+                                  approved=tasks_mod._is_approved_plan(task, ctx.root)))
                 facts["task"] = _task_facts(ctx, task)
+                plan_approved = tasks_mod._is_approved_plan(task, ctx.root)
                 from . import check as check_mod, fingerprint as fingerprint_mod, review as review_mod
 
                 facts["delivery"] = _delivery_facts(ctx, task, check_mod, fingerprint_mod)
@@ -1115,6 +1188,7 @@ def cmd_status(ctx, args):
                     from . import check as check_mod, fingerprint as fingerprint_mod, review as review_mod
 
                     facts["task"] = _task_facts(ctx, current_task)
+                    plan_approved = tasks_mod._is_approved_plan(current_task, ctx.root)
                     facts["delivery"] = _delivery_facts(ctx, current_task, check_mod,
                                                         fingerprint_mod)
                     facts["repair_scope"] = review_mod.repair_scope(ctx, current_task)
@@ -1125,10 +1199,22 @@ def cmd_status(ctx, args):
 
         facts["startup"] = tasks_mod.startup_check(ctx)
     task_facts = facts.get("task") or {}
-    return ok(facts=facts, position=position,
-              next_=protocol_mod.states().next_for(
-                  task_facts.get("status"), task_facts.get("phase"),
-                  paused=bool(task_facts.get("paused")), suspended=bool(task_facts.get("suspended"))))
+    next_text = handover_next or finish_check_stale_next(task_facts, facts.get("repair_scope")) \
+        or protocol_mod.states().next_for(
+            task_facts.get("status"), task_facts.get("phase"),
+            paused=bool(task_facts.get("paused")), suspended=bool(task_facts.get("suspended")),
+            approved=plan_approved)
+    if not task_facts and not facts.get("binding") and handover_next is None:
+        # 已启用但没有绑定对象：位置表的会话文案还写着"wf enable"（未启用的口径），
+        # 会被读成"本会话没启用"（回归：已启用会被读成未启用）。按实际启用事实改口径。
+        try:
+            session = ctx.session(required=False)
+        except CliError:
+            # 身份/启用问题由各自出口报告；只读状态页不在这里改写成错误页。
+            session = None
+        if session is not None and (session.get("activation") or {}).get("enabled") is True:
+            next_text = SESSION_UNBOUND_NEXT
+    return ok(facts=facts, position=position, next_=next_text)
 
 
 def _task_facts(ctx, task):
@@ -1761,6 +1847,7 @@ def cmd_enable(ctx, args):
     applicable = [item for item in state["host_files"] if item["host"] == host_id]
     disabled = bool((ctx.inputs() or {}).get("trellis_disabled_confirmed"))
     warnings = _identity_warnings(identity_facts, state, applicable, disabled)
+    ctx._extra_warnings = warnings
     if writer_corrupt:
         warnings.append({"reason": "writer record unreadable",
                          "note": "writer.json 损坏：只读启用事实已降级，写权相关动作按 `wf repair` 核对后再做"})
@@ -1791,19 +1878,10 @@ def cmd_enable(ctx, args):
     # 交接发现面（设计稿 §4.4 的"报告标识/对象/范围/检查点"）：接收方在 enable 就能看到
     # "有交接给我"，不必先 bind/task-new 撞一圈；发起方也能看到接收方是谁。
     # writer 快照在函数入口已读（写盘之前）；这里只投影，不再二次读盘。
-    handover = writer_handover_projection(writer_record)
-    handover_for_me = bool(handover and writer_state == "recovering"
-                           and handover.get("receiver_session_key") == ctx.key())
-    if handover_for_me:
-        enable_next = ("写权交接已就绪：运行 `writer-handover accept` 接收对象"
-                       f"（对象 {handover.get('object')}，发起方 {handover.get('from')}）；"
-                       "接收前不要 task-new/bind")
-    elif writer_state == "recovering":
-        enable_next = ("写权处于交接中间态：接收方是另一会话（见 facts.writer.handover）；"
-                       "本会话不要写，等接收方 accept 或按 `wf repair` 恢复"
-                       + ("；之后再 `enable --new-session` 轮换已终态对象" if binding_terminal else ""))
-    else:
-        enable_next = None
+    handover, handover_for_me, handover_next = handover_next_text(writer_record, ctx.key())
+    enable_next = handover_next
+    if enable_next and not handover_for_me and binding_terminal:
+        enable_next += "；之后再 `enable --new-session` 轮换已终态对象"
     return ok(
         facts={
             "session_key": ctx.key(),
@@ -1832,6 +1910,8 @@ def cmd_enable(ctx, args):
                         "handover": handover}
                        if writer_state not in (None, "idle") else None),
             "handover_for_me": handover_for_me,
+            # 启用登记（设计稿 §1.3）：人调启用入口登记并发调用者时，事实必须可见。
+            **(_roots_registration_facts(ctx)),
         },
         position=codes.position(scope="session"),
         next_=(enable_next if enable_next else
@@ -1842,9 +1922,27 @@ def cmd_enable(ctx, args):
                 "不据猜测推进" if binding_terminal_unknown else
                 "已绑定对象：继续当前对象；要开新任务请在新执行边界/新会话里选择"
                 "（同进程内无法区分时开新终端）") if binding is not None
-               else "人显式选择对象：task-new、bind --task，或 run create"),
+               else SESSION_UNBOUND_NEXT),
         warnings=warnings,
     )
+
+
+def _roots_registration_facts(ctx):
+    """`enable` 的 roots 登记事实（C2 的唯一登记通道，设计稿 §1.3）。"""
+    verdict = getattr(ctx, "_roots_verdict", None) or {}
+    facts = verdict.get("facts") or {}
+    if verdict.get("action") not in ("disclose", "normal"):
+        return {}
+    payload = {"roots": facts.get("roots") or (getattr(ctx, "_auto_attachment", None) or {}).get("roots")}
+    if facts.get("registered"):
+        registered = facts.get("concurrent_callers") or []
+        payload["roots_registered"] = registered
+        warnings = getattr(ctx, "_extra_warnings", None)
+        if isinstance(warnings, list):
+            warnings.append({"reason": "concurrent_caller_registered",
+                             "note": "并发调用者已由本次启用登记（C2 的唯一登记通道）",
+                             "roots": registered})
+    return payload
 
 
 def _runtime_current_task(ctx, kind, target):
@@ -2388,7 +2486,7 @@ def _require_instance_match(ctx, binding):
     if not carried:
         raise CliError("WF_IDENTITY_UNRESOLVED",
                        {"reason": "instance_id not carried by request", "bound_instance": stored},
-                       next_="由人核实会话实例并重新 wf-start 恢复原对象")
+                       next_="由人核实会话实例并重新调用 /wf-start 恢复原对象")
     if carried != stored:
         raise CliError("WF_BINDING_MISMATCH",
                        {"reason": "instance_id differs from binding", "carried": carried, "bound": stored},
@@ -2566,10 +2664,41 @@ def _handover_begin(ctx, args):
     decision_path = args.value("--decision")
     if not receiver or not decision_path:
         raise CliError("WF_USAGE_INVALID", {"reason": "handover begin requires --to <session-key> --decision <path>"})
-    # 接收方 key 的形态校验暂不做：会话 key 是 sha256 hex，但既有测试/夹具使用短占位 key；
-    # 收紧形态会要求同步 candidate audit（cp1/r71 脚本字节），成本高于收益。存在性在显式
-    # 信封模式下也无法核实；打错时由 accept 按 key 拒绝，出口是 repair/核对回显（§71 边界）。
     decision = _load_decision(decision_path)
+    # 接收前更正接收者：发起方在 recovering 中重发 begin 只改 handover 的接收 key/决定，
+    # 不授予写权、不动代次；这样一次转抄错误可在本步内修正，不必升级到交互式 repair。
+    # 接收后（handover 已消费）只能 repair，不能再改接收者。
+    record = ctx.writer()
+    if record.get("state") == "recovering":
+        handover = record.get("handover") or {}
+        if handover.get("from") != ctx.key():
+            raise writer_busy_error(record, caller=ctx.key())
+        object_ref = handover.get("object_or_preparation") or {}
+        binding = session_mod.load_binding(ctx.root, ctx.key())
+        if binding:
+            _require_instance_match(ctx, binding)
+        if object_ref.get("kind") == "task":
+            from . import tasks as tasks_mod
+
+            task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
+            if task is None:
+                raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
+            if task.get("status") == "archived":
+                raise CliError("WF_BINDING_MISMATCH", {"reason": "object already archived"})
+        with _lock(ctx.root, hint="handover begin"):
+            record = ctx.writer()
+            handover = record.get("handover") or {}
+            if record.get("state") != "recovering" or handover.get("from") != ctx.key():
+                raise writer_busy_error(record, caller=ctx.key())
+            handover = dict(handover, receiver_session_key=receiver, decision=decision)
+            record["handover"] = handover
+            writer_mod.save(ctx.root, record)
+        projection = writer_handover_projection(record)
+        return ok(
+            facts={"writer_state": "recovering", "handover": projection, "redeclared": True},
+            position=codes.position(scope="session"),
+            next_="接收方在新会话执行 writer-handover accept；接收前可再次重发 begin 更正 key",
+        )
     record, holder = ctx.require_held()
     object_ref = (holder.get("scope") or {}).get("object") or {}
     binding = session_mod.load_binding(ctx.root, ctx.key())
@@ -2609,8 +2738,31 @@ def _handover_begin(ctx, args):
     return ok(
         facts={"writer_state": updated.get("state"), "handover": updated.get("handover")},
         position=codes.position(scope="session"),
-        next_="接收会话在新会话执行 writer-handover accept；接收方 key 打错时先核对，再按 `wf repair` 恢复写者记录",
+        next_="接收会话在新会话执行 writer-handover accept；接收前 key 打错可由发起方重发 begin 更正，接收后按 `wf repair` 恢复",
     )
+
+
+def _accept_binding_state(ctx, key, object_ref, binding):
+    """交接接收后的绑定/附件/运行态（唯一实现）：与首次 `bind` 同形。
+
+    只写 `session-bindings/<key>.json` 会让自动身份模式下的接收方**拿不到 instance_id**：
+    附件仍缺 `instance_expected`，下一条写命令被 `_require_instance_match` 以
+    `WF_IDENTITY_UNRESOLVED` 拒绝，而 `enable --new-session`/显式信封/`writer release`
+    都被同一门禁挡住——接收方持权却无法写、也无法释放（实测：接收方持权后第一条写命令被同一门禁拒绝）。
+    """
+    session_mod.save_binding(ctx.root, key, binding)
+    instance_id = binding.get("instance_id")
+    _sync_attachment_instance(ctx, key, instance_id)
+    session_mod.update_runtime(
+        ctx.root,
+        key,
+        binding_digest=records.plain_digest(binding),
+        instance_id=instance_id,
+        object=object_ref,
+        current_task=_runtime_current_task(ctx, object_ref.get("kind"), object_ref.get("id")),
+        cursor=None,
+    )
+    return binding
 
 
 def _handover_accept(ctx):
@@ -2635,8 +2787,8 @@ def _handover_accept(ctx):
             raise CliError(
                 "WF_BINDING_MISMATCH",
                 {"reason": "not the declared receiver", "handover": handover},
-                next_="用 `handover.receiver_session_key` 声明的会话接收；key 打错时由发起方/人核对，"
-                      "必要时先按 `wf repair` 恢复写者记录再重发 begin")
+                next_="用 `handover.receiver_session_key` 声明的会话接收；接收前 key 打错由发起方"
+                      "重发 begin 更正，接收后按 `wf repair` 恢复写者记录")
         object_ref = handover.get("object_or_preparation") or {}
         binding = session_mod.load_binding(ctx.root, key)
         if binding:
@@ -2662,7 +2814,7 @@ def _handover_accept(ctx):
         )
         writer_mod.save(ctx.root, updated)
         if not binding and handover_accept_creates_binding(object_ref):
-            updated_binding = {
+            accepted_binding = {
                 "schema_version": 1,
                 "id": key,
                 "revision": 0,
@@ -2675,7 +2827,7 @@ def _handover_accept(ctx):
                 "object": object_ref,
                 "bound_at": records.now_str(),
             }
-            session_mod.save_binding(ctx.root, key, updated_binding)
+            _accept_binding_state(ctx, key, object_ref, accepted_binding)
     kind = (object_ref or {}).get("kind")
     if kind == "preparation":
         workflow_id = object_ref.get("id")
@@ -2866,8 +3018,17 @@ def cmd_stop(ctx, args):
                  "subject": pending or "TODO（人填写：处置对象或路径）",
                  "object_digest": "", "choice": "TODO（人选一个：commit|keep|reverse|transfer）",
                  "reason": "TODO（人填写：为什么这样处置）"}
-        return ok(facts={"draft": [entry],
-                         "note": "草稿只读；choice 是人的选择，照抄 TODO 会被预检拒绝",
+        draft = [entry]
+        if pending:
+            # commit 去向需要**第二条**独立授权（decisions[1:] 的 commit_grant）；
+            # 只给一条会让照抄草稿的人必被 WF_COMMIT_NOT_AUTHORIZED 拒。
+            draft.append({"source": "TODO human:<来源>", "at": records.now_str(),
+                          "subject": list(pending), "object_digest": "",
+                          "choice": "commit",
+                          "reason": "TODO（仅当收工选择为 commit 时保留：逐路径提交授权）"})
+        return ok(facts={"draft": draft,
+                         "note": "草稿只读；第一条是收工选择，choice=commit 时其后每条是提交授权；"
+                                 "照抄 TODO 会被预检拒绝，非 commit 去向可删掉授权条目",
                          "pilot_sampling_pending": None},
                   position=codes.position(scope="task", phase=task.get("phase"),
                                          task_id=task.get("id")),
@@ -3409,6 +3570,11 @@ COMMAND_HELP = {
                                           "properties": {"可红": "说明", "确定性": "说明",
                                                          "快速": "说明", "可无人执行": "说明"}}},
                    "--decision": {
+  "source": "human:<来源>（每条决定必填）",
+  "at": "时间（必填）",
+  "subject": "人读的线索；人工验收须以整词含验收项 id",
+  "object_digest": "规划批准的对象摘要（人工验收）",
+  "reason": "决定依据（必填）",
                        "manual": {"choice": "passed|failed", "subject": "以整词含该验证项 id",
                                   "object_digest": "规划批准的对象摘要",
                                   "plan_version": "status --json 的 facts.task.plan_version（等价链归一后的值）",
@@ -3442,13 +3608,16 @@ COMMAND_HELP = {
              "args": {"--decision": "决定文件（正式执行必填；--preview/--draft 可不带）",
                       "--preview": "只读预览（不写任何记录、不要求写权）",
                       "--draft": "只读生成收工决定草稿（commit 条目预填待提交路径）"},
-             "inputs": {"decision[]": {"choice": "commit|keep|reverse|transfer",
-                                       "subject": "路径或承接对象", "reason": "理由",
-                                       "object_digest": "可选"}},
+             "inputs": {"decision[]": "第一条＝收工选择（commit|keep|reverse|transfer，subject 列路径/承接对象）；"
+                                      "choice=commit 时其后每条＝commit 授权（subject 精确路径，须逐项覆盖）"},
              "example": "wf.py stop --decision \"stop.json\" --preview --json",
-             "example_file": [{"source": "human:chat", "at": "2026-11-21T10:00:00+08:00",
-                               "subject": ["src/a.py", "tests/test_a.py"], "object_digest": "",
-                               "choice": "commit", "reason": "授权提交以上交付路径"}]},
+             "example_file": [
+                 {"source": "human:chat", "at": "2026-11-21T10:00:00+08:00",
+                  "subject": ["src/a.py", "tests/test_a.py"], "object_digest": "",
+                  "choice": "commit", "reason": "收工去向：提交本次 WIP"},
+                 {"source": "human:chat", "at": "2026-11-21T10:00:01+08:00",
+                  "subject": ["src/a.py", "tests/test_a.py"], "object_digest": "",
+                  "choice": "commit", "reason": "授权提交以上精确路径"}]},
     "archive": {"note": "commit 的 subject 可写数组，或用逗号/分号/换行/空格分隔的多路径字符串",
 "purpose": "正常归档（最终门禁 + 提交授权）",
                 "args": {"--task": "任务 id（必填）", "--decision": "决定文件（必填）",
@@ -3474,9 +3643,12 @@ COMMAND_HELP = {
                                               "object_digest=提案摘要——正常流程用 --files + --preview/--decision 由入口生成）"},
                        "inputs": {"--proposal": {"files": "[{path, before, content}]",
                                                  "approval": "{choice, subject} 人的批准引用"},
-                                  "--decision": {"choice": "approve|批准",
+                                  "--decision": {"source": "human:<来源>",
+                                                 "at": "时间",
                                                  "subject": "人的批准线索（含任务/提案标识）",
-                                                 "object_digest": "= --preview 的 proposal_digest"}},
+                                                 "object_digest": "= --preview 的 proposal_digest",
+                                                 "choice": "approve|批准",
+                                                 "reason": "批准理由"}},
                        "example": "wf.py baseline-apply --task \"<id>\" --files \".wf/baseline.md,.wf/spec/index.md\" --preview --json"},
     "spec-update": {"purpose": "spec 增改删/合并/停用，并同步三段索引",
                     "args": {"--task": "任务 id（必填）",
@@ -3536,8 +3708,16 @@ COMMAND_HELP = {
                "example": "wf.py verify resolve --task \"2026-xxxx\" --id \"a5\" --kind \"narrow\" --evidence \"...\" --json"},
     "authorize": {"purpose": "K6 不可逆动作的确认入口：record 落盘（脱敏入库）/ show 查看已确认（四类：delete/export/expand/repo_rules；提交授权唯一通道是 finish 决定的 commit_grants）",
                   "args": {"record|show": "子命令", "--task": "任务 id（必填）",
-                           "--file": "决定文件（record 必填，每条含 choice∈四类 + quote）",
+                           "--file": "决定文件（record 必填，每条含 choice∈四类 + quote + by: human:<来源>；at/source 也必填）",
                            "--draft": "record：只读生成四类确认骨架（TODO 占位，只打印不落盘）"},
+                  "inputs": {"--file": {
+                      "choice": "delete|export|expand|repo_rules",
+                      "task": "任务 id",
+                      "paths": ["本次确认覆盖的具体路径/glob"],
+                      "quote": "人给出的原话（谁在什么范围确认了什么）",
+                      "by": "human:<来源>（必填，不由 source 合成）",
+                      "at": "时间", "source": "user-declared", "reason": "为什么需要该确认",
+                      "materials": "export 必填：外发材料类集合"}},
                   "example": "wf.py authorize record --task \"2026-xxxx\" --file \"decisions.json\" --json"},
     "prefs": {"purpose": "判断偏好（只在本机）：ask_always 强制交人 / ai_decides 自己定",
               "args": {"set|show": "子命令", "--kind": "判断类（归属/关闭/沿用/扩面/标准变更/缺口/未核实/规模/框架改动）",
@@ -3551,11 +3731,26 @@ COMMAND_HELP = {
                            "--file": "evaluate：评估 JSON（必填）",
                            "--attestation": "evaluate/reviewed：人确认文件（该两子命令必填；含 by/at/quote/source）",
                            "--quote": "confirm：人的确认原文（遮罩摘要入库；reviewed 的原话取自确认文件）"},
+                  # evaluate 的评估文件形状（设计稿 §1.1 单描述面）：键是 pick 的 <class>:<event>，
+                  # 值是评价结论；未列出的抽选按"未评价"留痕（不进成功率）。
+                  "inputs": {"--file": {
+                      "<class>:<event>": "ok | wrong | missing（评价结论；未列出的抽选按未评价处理）"}},
                   "example": "wf.py sampling pick --task \"2026-xxxx\" --freeze --json"},
     "judgments": {"purpose": "判断清单：add 追加一条（append-only）/ show 渲染收工预览",
                   "args": {"add|show": "子命令", "--task": "任务 id（必填）", "--file": "判断 JSON（add 必填）",
                            "--attestation": "add：豁免（waived_by=human:…）时的人确认文件",
                                   "--draft": "add：只读生成判断条目骨架（TODO 占位，只打印不落盘）"},
+                  "inputs": {"--file": {
+                   "kind": "归属|关闭|沿用|扩面|标准变更|缺口|未核实|规模|框架改动（取值域见本帮助）",
+                   "decision": "判断内容/归属去向",
+                   "basis": "依据（可核实的理由）",
+                   "outcome": "applied|escalated（escalated 须写 escalated_question）",
+                   "by": "ai|human",
+                   "at": "时间",
+                   "escalated_question": "交人时的问题",
+                   "waived_by": "human:<来源>（豁免时）",
+                   "waiver": {"attestation_digest": "人给出的确认摘要（豁免必填）"},
+                   "evidence_refs": ["可解析引用（v:/a:/f:/p:/j:/d:）"]}},
                   "example": "wf.py judgments show --task \"2026-xxxx\" --json",
                   # v42 §4：判断指引写进 skill 与 help，不写进代码逻辑。
                   # 2026-11-12 人裁：**不单独成 skill**——十条散在"用得上它的那一步"的流程 skill 判据位上，
@@ -3611,6 +3806,13 @@ COMMAND_HELP = {
                "args": {"--identity": "可选，仅接受 host（显式确认以宿主标识为准）",
                         "--new-session": "可选：本执行边界显式换新会话身份（宿主无关）。"
                                           "前置＝旧绑定对象已终态且写权空闲；旧附件/绑定保留为历史"},
+               # 显式信封的字段形状唯一登记处（设计稿 §1.1 入口用法单描述面）：
+               # wf-start 等 skill 只写"要携带哪些事实"，不复制这些路径与形状。
+               "inputs": {"envelope": {
+                   "inputs.generation": "写权代次；缺省取本会话运行态（取得写权时记入），过期报 WF_GENERATION_STALE",
+                   "session.activation": "启用事实（把 enable 回显的 activation 原样缓存后随每次请求重放）",
+                   "session.identity": "provider=host + identity.host_id + identity.session_id（显式模式）",
+                   "session.instance_id": "首次绑定生成的实例标识（启用/绑定回显，随请求重放）"}},
                "example": "wf.py enable --new-session --json"},
     "status": {"purpose": "只读总览：绑定对象、阶段、门禁/步骤状态、待决与下一步",
                "args": {"--short": "可选：只输出单行摘要"},
@@ -3647,6 +3849,18 @@ COMMAND_HELP = {
                             "--authorization-draft": "prepare：只读生成授权文件骨架（含范围摘要）",
                             "--end": "prepare：处置未提交定义并释放准备写权（幂等）",
                             "--disposition": "prepare --end：逐路径去向文件（changes[].object）"},
+                   "inputs": {
+                       "--authorization": {"source": "human:<来源>", "at": "时间", "subject": "人读的线索（含定义 id）",
+                                           "object_digest": "sha256:准备范围摘要（--authorization-draft 预填）",
+                                           "choice": "准备定义", "scope_paths": ["项目相对路径（须覆盖该定义）"],
+                                           "reason": "为什么允许准备这份定义、范围是什么"},
+                       "--disposition": {"changes": [{"object": "项目相对路径", "action": "commit|delete|retain",
+                                                      "risk": "retain 必填", "pending": ["retain 必填的待处置项"]}]}},
+                   # 定义文件格式的唯一定位（entry usage 单描述面）：骨架与字段闭集在模板，
+                   # 结构问题由 `definition validate` 按 stage 返回；help 不复制第二份 schema。
+                   "format": "定义文件 = 唯一 `<!-- wf-definition:v1 -->` 标记 + 紧邻 json 块；"
+                             "以 `.wf/templates/user-workflow.md` 为骨架，字段闭集与引用规则由 "
+                             "`definition validate` 的 problems[].stage 逐项给出",
                    "example": "wf.py definition prepare --id \"<wf-id>\" --authorization \"auth.json\" --json"},
     # `prepare --end` 结束准备代次：与 `prepare` 同命令，属于同一入口的动作切换（见 args）。
     "run": {"purpose": "实例生命周期：create / advance / pause / resume / locate / finish / terminate",
@@ -3663,7 +3877,14 @@ COMMAND_HELP = {
                                    "terminate：记录组提交授权（空计划时是唯一授权通道，与 finish 同形）",
                      "--reason": "pause：暂停原因（必填）", "--plan": "terminate：处置计划 JSON",
                      "--preview": "terminate：只读预览（不落盘）"},
-            "example": "wf.py run locate --run \"<run-id>\" --json"},
+            "inputs": {
+                "--creation": {"definition_id": "工作流定义 id", "definition_digest": "sha256:确认时的定义字节",
+                               "inputs": {"<输入名>": "值（secret_ref 只接受引用）"},
+                               "steps": {"<step id>": "applicable|skipped（skipped 须同步 skip_basis）"}},
+                "--authorization": {"source": "human:<来源>", "at": "时间", "subject": "人读的线索",
+                                    "object_digest": "sha256:创建输入摘要（--authorization-draft 预填）",
+                                    "choice": "创建实例", "reason": "为什么确认这组版本/输入/适用性"}},
+                "example": "wf.py run locate --run \"<run-id>\" --json"},
     "writer": {"purpose": "项目写入权：acquire 获取 / release 释放（锁内核验）",
                "args": {"acquire|release": "子命令"},
                "example": "wf.py writer acquire --json"},
@@ -3688,10 +3909,18 @@ COMMAND_HELP = {
     "task-rework": {"purpose": "返工：新建返工任务并挂起原任务（继承前置与上下文）",
                     "args": {"--task": "必填：原任务 id", "--decision": "必填：返工决定文件",
                              "--draft": "只读生成返工决定草稿"},
+                    "inputs": {"--decision": {
+                        "source": "human:<来源>", "at": "时间", "subject": "人读的线索（含原任务 id）",
+                        "object_digest": "", "choice": "返工|rework",
+                        "reason": "为什么返工、返工范围（必填）"}},
                     "example": "wf.py task-rework --task \"2026-xxxx\" --decision \"rework.json\" --json"},
     "task-replace": {"purpose": "替换：废弃原任务并由新任务承接（支持 --preview）",
                      "args": {"--task": "必填：原任务 id", "--decision": "必填：替换决定文件",
                               "--preview": "可选：只读预览，不写记录"},
+                     "inputs": {"--decision": {
+                         "source": "human:<来源>", "at": "时间", "subject": "人读的线索（含原任务与继任者）",
+                         "object_digest": "当前规划批准的对象摘要", "choice": "替换",
+                         "reason": "为什么替换、继承范围与后继承接方式"}},
                      "example": "wf.py task-replace --task \"2026-xxxx\" --decision \"r.json\" --preview --json"},
     "task-reassess": {"purpose": "挂起任务复评（单任务复评：核该任务的挂起条件并清挂起（未挂起时幂等返回））",
                       "args": {"--task": "必填：任务 id"},
@@ -3708,7 +3937,12 @@ COMMAND_HELP = {
                      "args": {"--task": "必填：任务 id", "--decision": "必填：停止决定",
                               "--disposition": "有未提交改动或需逐项处置时必填：逐项去向计划"
                                                "（形状见下方 inputs）"},
-                     "inputs": {"--disposition": {"changes": [
+                     "inputs": {"--decision": {
+                                    "source": "human:<来源>", "at": "时间",
+                                    "subject": "人读的线索（含任务 id 与放弃范围）",
+                                    "object_digest": "规划批准的对象摘要（当前版本）",
+                                    "choice": "放弃", "reason": "停止决定与逐项去向的依据"},
+                                "--disposition": {"changes": [
                          {"object": "覆盖 preview.uncommitted 的路径或 glob（逐项都要覆盖）",
                           "decision_ref": "可选：字符串引用（不是 Decision 对象）；随处置留痕，不参与门禁",
                           "reason": "可选：去向理由（随处置留痕）"}]}},
@@ -3717,6 +3951,7 @@ COMMAND_HELP = {
     "task-retrospect": {"purpose": "复盘结论留痕（覆盖触发事实集合）",
                         "args": {"--task": "必填：任务 id",
                                  "--evidence": "必填：复盘证据文件（入口只读其 conclusion 字段并记入复盘）"},
+                        "inputs": {"--evidence": {"conclusion": "复盘结论（必填，字符串）"}},
                         "example": "wf.py task-retrospect --task \"2026-xxxx\" --evidence \"r.json\" --json"},
     "review-accept-unknown": {"purpose": "不可核实证据（unverifiable）的人裁放行/撤销（批次全有或全无；码级留痕）",
                               "args": {"--task": "必填：任务 id", "--file": "accept：放行决定文件（必填）",
@@ -3898,10 +4133,12 @@ def cmd_authorize(ctx, args):
                                 "action": action})
             # 乙口径：K6 的信任根不能只靠"决定文件里有 quote"。要求显式的来源声明
             # （`source: user-declared` + `by: human:<来源>`），并在入库副本里留下摘要可审计。
+            # `by` 必须由决定文件显式给出：不从 `source` 合成 `human:<source>`——
+            # 那会让"谁给的"退化成"写了 source 字段"，且入库副本反而没有 `by`
+            # （attestation 的 REQUIRED_FIELDS 本就要求它）。
             _problems = attestation_mod.problems_of(
-                {"by": entry.get("by") or (entry.get("source") and "human:" + str(entry.get("source"))),
-                 "at": entry.get("at"), "quote": entry.get("quote"),
-                 "source": entry.get("source") or "user-declared"}, action=action)
+                {"by": entry.get("by"), "at": entry.get("at"), "quote": entry.get("quote"),
+                 "source": entry.get("source")}, action=action)
             if _problems:
                 raise CliError("WF_SEMANTIC_DECISION",
                                {"reason": '授权确认要能指明"谁给的"（乙口径：by=human:<来源>）',
@@ -3958,7 +4195,16 @@ def cmd_sampling(ctx, args):
         task = tasks_mod.load_task(ctx.root, task_id)
         if task is None:
             raise CliError("WF_TARGET_MISSING", {"reason": "task not found", "task": task_id})
-        evaluations = records.load_json(file_value if os.path.isabs(file_value) else join(ctx.root, file_value))
+        path_value = file_value if os.path.isabs(file_value) else join(ctx.root, file_value)
+        evaluations = records.load_json(path_value)
+        if not isinstance(evaluations, dict):
+            # 此前把数组喂给 `dict(...)`：TypeError 冒到 main 的兜底 70，用户只看到
+            # "dictionary update sequence element #0 has length 5; 2 is required"。
+            raise CliError("WF_RECORD_INVALID",
+                           {"reason": "评估文件必须是 JSON 对象（不是数组）", "path": path_value,
+                            "actual": type(evaluations).__name__,
+                            "shape": {"<class>:<event>": "ok | wrong | missing"}},
+                           next_="按 `wf help sampling` 的 inputs 形状写评估对象后重试")
         selection = sampling_mod.selection(task)
         if not selection["picks"]:
             raise CliError("WF_SEMANTIC_DECISION",
@@ -4205,7 +4451,11 @@ def cmd_judgments(ctx, args):
         raise CliError("WF_USAGE_INVALID", {"reason": "judgments add requires --file <json>"})
     entry = records.load_json(path_value if os.path.isabs(path_value) else join(ctx.root, path_value))
     if not isinstance(entry, dict):
-        raise CliError("WF_PATH_INVALID", {"reason": "judgment file must be a JSON object", "path": path_value})
+        # 路径本身有效，是内容形状不成立：用记录类原因码（此前报 WF_PATH_INVALID，出口词不达意）。
+        raise CliError("WF_RECORD_INVALID",
+                       {"reason": "判断文件必须是单个 JSON 对象（不是数组）", "path": path_value,
+                        "actual": type(entry).__name__},
+                       next_="按 `wf help judgments` 的 --draft 骨架写单个对象后重试")
     with _lock(ctx.root, hint="judgments add"):
         _record, holder = tasks_mod.require_held_for(ctx, task_id)
         directory = tasks_mod.task_dir(ctx.root, task_id)

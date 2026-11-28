@@ -478,6 +478,8 @@ def skeleton_ids(task):
 # ---- v42 §5.3：判断质量对照 / 依据对照 -------------------------------------
 # 前提是「只增不撤」：judgments[] 是 append-only，所以"这类判断有没有少报"才可比。
 # 设计上**不算分、不设阈值、不据此判退步**——只把差异与新旧依据摆出来，是否退步由人看。
+# 子串计数，不是"这份依据只引了 hunk"的语义结论：basis 里写"不只是引 hunk"同样命中。
+# 标签必须如实写成计数（设计稿 §1.1 护栏①：不得用输入里出现某词直接推出语义结论）。
 HUNK_ONLY_MARKERS = ("hunk", "只引 hunk", "仅 hunk", "diff-hunk")
 
 
@@ -530,7 +532,7 @@ def _shared_kind_items(task, kind):
 
 
 def _counts(task):
-    """对照用三类计数（§5.3）：waived / escalated / 结构化差异只引 hunk。"""
+    """对照用三类计数（§5.3）：waived / escalated / basis 提到 hunk 的条数（子串计数）。"""
     items = [item for item in task.get("judgments") or [] if isinstance(item, dict)]
     waived = [item for item in items if item.get("waived_by")]
     escalated = [item for item in items if item.get("outcome") == "escalated"]
@@ -581,7 +583,7 @@ def quality_comparison(root, task):
         f"依据变弱 {len(weaker)} 条{'（' + '、'.join(weaker) + '）' if weaker else ''}",
         f"          waived {now_counts['waived']}（上次 {then_counts['waived']}）/ "
         f"escalated {now_counts['escalated']}（上次 {then_counts['escalated']}）/ "
-        f"结构化差异只引 hunk {now_counts['hunk_only']} 次（上次 {then_counts['hunk_only']}）",
+        f"依据提到 hunk {now_counts['hunk_only']} 条（上次 {then_counts['hunk_only']}；子串计数，不是语义结论）",
         "          ↑ 以上只是提示，不算分、不设阈值；是否退步由你看下面的新旧依据对照",
     ]
     # 依据对照：basis **全文**并列，不摘要化（§5.3 明确要求）
