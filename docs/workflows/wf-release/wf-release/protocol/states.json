@@ -54,7 +54,7 @@
   {
    "id": "check",
    "action": "task-check",
-   "from": [{"status": "in_progress", "phase": "execute"}, {"status": "in_progress", "phase": "check"}],
+   "from": [{"status": "in_progress", "phase": "execute"}, {"status": "in_progress", "phase": "check"}, {"status": "in_progress", "phase": "finish"}],
    "to": [
     {"status": "in_progress", "phase": "finish", "when": "结果 pass"}
    ],
@@ -63,10 +63,10 @@
   },
   {
    "id": "finish-invalidate",
-   "action": "baseline-apply",
+   "action": ["baseline-apply", "spec-update"],
    "from": [{"status": "in_progress", "phase": "finish"}],
    "to": [{"status": "in_progress", "phase": "check"}],
-   "notes": "Finish 中对象/规范变化使旧结果失效，回 check 受控重检（spec-update 同）；不沿用旧 pass",
+   "notes": "Finish 中对象/规范变化使旧结果失效，回 check 受控重检；baseline-apply 与 spec-update 同用此迁移，不沿用旧 pass",
    "fail_codes": ["WF_CHECK_STALE"]
   },
   {
@@ -127,7 +127,7 @@
   "in_progress/plan": "wf task-start（核对批准与开工前置后进入 Execute）",
   "in_progress/execute": "wf task-check（对象稳定且范围合法后执行检查）",
   "in_progress/check": "wf task-check（按 fail 项修复后重新检查；失败不改变阶段）",
-  "in_progress/finish": "wf archive（人调用 finish：最终门禁 + 归档）",
+  "in_progress/finish": "门禁成立用 wf archive（人调用 finish：最终门禁 + 归档）；C1 失效先 wf task-check 重检",
   "archived": "wf status（只读查看结果）；下一个对象由新会话经 wf bind 选择"
  },
  "next_by_mark": {

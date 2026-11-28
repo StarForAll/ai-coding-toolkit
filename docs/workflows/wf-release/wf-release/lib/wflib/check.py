@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import os
 import re
 import shutil
@@ -995,11 +996,24 @@ def _parse_review_notes(path):
     if not isinstance(requirement, dict) or requirement.get("conclusion") not in allowed:
         return None, {"reason": "requirement axis conclusion missing or invalid",
                       "conclusion": (requirement or {}).get("conclusion")}
+    # 发布条件是 pass 必须有依据：否则 Check 写出 pass、Finish 门禁再按缺 basis 拒绝，
+    # 同一记录两套结论（2026-11-28 外审 A1-3）。
+    for axis, entry in (("standard", standard), ("requirement", requirement)):
+        if entry.get("conclusion") == "pass" and not str(entry.get("basis") or "").strip():
+            return None, {"reason": f"{axis} axis pass lacks basis",
+                          "field": f"internal_review.{axis}",
+                          "hint": "在 review notes 的该轴补 basis（规范/契约/PRD 依据与核对结果）后重跑"}
     return {
         "standard": standard,
         "requirement": requirement,
         "tdd_evidence": data.get("tdd_evidence"),
     }, None
+
+
+def _review_notes_digest(path):
+    """notes 文件的字节摘要：锁外执行期间被改即让本次结论失效（与锚点同型）。"""
+    with open(path, "rb") as handle:
+        return "sha256:" + hashlib.sha256(handle.read()).hexdigest()
 
 
 # --------------------------------------------------------------------------
@@ -1385,6 +1399,31 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
     if unresolved:
         raise CheckError("WF_VERIFICATION_UNREADY", {"unresolved": unresolved})
 
+    # ③ 双轴 notes 在**执行验证之前**解析：路径错、结论非法、pass 缺 basis 都不该先跑长测
+    # 再拒绝。先取字节摘要、再解析，保证状态里的结论对应同一份输入；定稿段重算摘要，
+    # 锁外被执行期间被改即让结论失效。
+    review_notes_digest = None
+    internal_review, review_problem = None, None
+    if not review_notes_path:
+        review_problem = {"reason": "internal review notes missing",
+                          "hint": "用 task-check --review-notes-draft 取骨架，填好后带 --review-notes 重跑"}
+    else:
+        try:
+            review_notes_digest = _review_notes_digest(review_notes_path)
+        except OSError as exc:
+            review_problem = {"reason": "internal review notes unreadable",
+                              "path": str(review_notes_path), "error": str(exc),
+                              "hint": "用 task-check --review-notes-draft 取骨架，填好后带 "
+                                      "--review-notes 重跑"}
+        else:
+            internal_review, review_problem = _parse_review_notes(review_notes_path)
+        if review_problem:
+            raise CheckError("WF_SEMANTIC_DECISION",
+                             {"reason": review_problem.get("reason"),
+                              "problem": review_problem,
+                              "exits": ["按 `--review-notes-draft` 回显的 path 修正文件位置与内容",
+                                        "双轴 pass 必须写 basis；结论取 pass|fail|undecided"]})
+
     return {
         "scope_facts": scope_facts,
         "coverage": coverage,
@@ -1396,6 +1435,9 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         "started": started,
         "decisions": decisions,
         "review_notes_path": review_notes_path,
+        "internal_review": internal_review,
+        "review_notes_problem": review_problem,
+        "review_notes_digest": review_notes_digest,
         # 本次 Check 新登记的排除声明：定稿段重读任务记录后按它重放（见 `cmd_task_check` ③段）
         "exclusion_records": exclusion_records,
         # 动作结果由决定派生：定稿段重读记录后按同一份决定重放（与排除声明同型）
@@ -1410,7 +1452,8 @@ def check_step_contract(ctx, task, plan, decisions):
     """实例步骤契约的兑现核对（唯一实现）：必做动作、步骤内人判点、声明验证。
 
     只核**声明是否被兑现**，不判业务内容：动作"做没做完"由 AI 给出结论（`--decision` 的
-    `action_result` 域），人判点由人给结论，验证声明要求同 id 出现在**已批准 plan** 里。
+    `action_result` 域），人判点由人按声明选项给结论，验证声明要求落点（新契约取
+    `stored_in.verification_id`，旧契约取声明 id）出现在**已批准 plan** 并对齐 `consume_at`。
     非实例任务（无 `execution.step`）直接通过——不给普通任务新增门禁。
     """
     from . import decisions as decisions_mod
@@ -1418,13 +1461,19 @@ def check_step_contract(ctx, task, plan, decisions):
     execution = task.get("execution") or {}
     step = execution.get("step") or {}
     if not step:
-        return {"problems": [], "action_results": [], "human_points": [], "applied": []}
-    approved_ids = {str(item.get("id")) for item in plan.get("verifications") or []
-                    if isinstance(item, dict) and item.get("id")}
+        return {"problems": [], "exits": [], "action_results": [], "human_points": [],
+                "legacy_verifications": [], "applied": []}
+    plan_by_id = {str(item.get("id")): item for item in plan.get("verifications") or []
+                  if isinstance(item, dict) and item.get("id")}
+    approved_ids = set(plan_by_id)
     action_results, pending_actions, applied = [], [], []
+    waived_actions = set()
     for entry in execution.get("actions") or []:
         if not isinstance(entry, dict) or not isinstance(entry.get("id"), str):
             continue
+        if entry.get("result") == "waived":
+            # 历史事实不回判；但它的动作级人判点不再有执行对象。
+            waived_actions.add(entry["id"])
         decision = _action_decision(decisions, entry["id"])
         result = None
         if decision is not None:
@@ -1434,7 +1483,17 @@ def check_step_contract(ctx, task, plan, decisions):
                                         "choice": decision.get("choice"),
                                         "accepted": list(decisions_mod.domain("action_result"))})
                 continue
+            # waived 只对**定义声明可略**的动作成立：required 且没有 skip 声明时必须做，
+            # 不能用 waived 把必做动作结掉（2026-11-28 外审 A1-1）。
+            if normalized == "waived" and entry.get("required") and not entry.get("skip"):
+                pending_actions.append({"id": entry["id"], "text": entry.get("text"),
+                                        "reason": "waived_requires_skip_declaration",
+                                        "choice": decision.get("choice"),
+                                        "accepted": list(decisions_mod.domain("action_result"))})
+                continue
             result = normalized
+            if result == "waived":
+                waived_actions.add(entry["id"])
             action_results.append({"id": entry["id"], "result": result,
                                    "decision": {"choice": decision.get("choice"),
                                                 "why": decision.get("reason"),
@@ -1444,32 +1503,122 @@ def check_step_contract(ctx, task, plan, decisions):
             continue
         if entry.get("required") and entry.get("result") in ("pending", None):
             pending_actions.append({"id": entry["id"], "text": entry.get("text")})
-    missing_points = []
+
+    # 步骤级与动作级人判点都是**声明**：只要求"有一条命中 id 的答复"不够，还要答复
+    # 真的落在声明的选项域内。动作级此前完全不消费（2026-11-28 外审 A1-1）。
+    # 合法略过的动作没有执行对象，其动作级人判点随之不再要求（否则 waived 无法结案）。
+    points = []
+    seen_points = set()
     for point in execution.get("human_points") or []:
-        if not isinstance(point, dict) or not isinstance(point.get("id"), str):
+        if (isinstance(point, dict) and isinstance(point.get("id"), str)
+                and point["id"] not in seen_points):
+            points.append(point)
+            seen_points.add(point["id"])
+    for entry in execution.get("actions") or []:
+        if not isinstance(entry, dict) or entry.get("id") in waived_actions:
             continue
-        if not any(_subject_mentions(decision.get("subject"), point["id"]) for decision in decisions or []):
+        for point in entry.get("human_points") or []:
+            if (isinstance(point, dict) and isinstance(point.get("id"), str)
+                    and point["id"] not in seen_points):
+                points.append(point)
+                seen_points.add(point["id"])
+    missing_points = []
+    for point in points:
+        answer = next((decision for decision in decisions or []
+                       if isinstance(decision, dict)
+                       and _subject_mentions(decision.get("subject"), point["id"])), None)
+        choices = point.get("choices") if isinstance(point.get("choices"), list) else []
+        accepted = [str(item) for item in choices]
+        if answer is None:
             missing_points.append({"id": point["id"], "question": point.get("question"),
-                                   "choices": point.get("choices")})
-    missing_verifications = [item for item in execution.get("verifications") or []
-                             if isinstance(item, dict) and str(item.get("id")) not in approved_ids]
+                                   "choices": point.get("choices"), "reason": "no decision"})
+            continue
+        choice = answer.get("choice")
+        if not isinstance(choice, str) or not choice.strip():
+            missing_points.append({"id": point["id"], "question": point.get("question"),
+                                   "choices": point.get("choices"),
+                                   "reason": "decision lacks choice", "accepted": accepted})
+            continue
+        if accepted and choice not in accepted:
+            missing_points.append({"id": point["id"], "question": point.get("question"),
+                                   "choices": point.get("choices"),
+                                   "reason": "choice not in declared choices",
+                                   "choice": choice, "accepted": accepted})
+
+    # 验证声明：落点必须命中已批准 plan，并把 `consume_at` 对齐到那一项。声明 id 是
+    # **本地引用标识**（命令参数、debug-ruling 拼接用），plan 项 id 由 `stored_in.verification_id`
+    # 解析，两者可以不同；旧契约没有 stored_in 时按声明 id 消费（legacy，不回写历史）。
+    missing_verifications = []
+    legacy_verifications = []
+    for item in execution.get("verifications") or []:
+        if not isinstance(item, dict):
+            continue
+        vid = str(item.get("id"))
+        stored = item.get("stored_in") if isinstance(item.get("stored_in"), dict) else None
+        if stored is None:
+            # 旧契约没有落点：只按 id 消费，不拿新增的 consume_at 对齐去追溯阻断。
+            if vid not in plan_by_id:
+                missing_verifications.append({
+                    "id": item.get("id"), "reason": "declaration id is not in the approved plan",
+                    "approved_plan_verifications": sorted(approved_ids)})
+                continue
+            legacy_verifications.append(vid)
+            continue
+        # existing_project 的落点是一个真实存在的项目文件；文件不存在时不能拿 plan 里
+        # "同名同消费时点"的另一条命令抵账（2026-11-28 外审 A2-3）。
+        if stored.get("kind") == "project_file":
+            path = stored.get("path")
+            if not isinstance(path, str) or not path.strip():
+                missing_verifications.append({
+                    "id": item.get("id"), "reason": "stored_in.project_file.path is missing",
+                    "stored_in": stored})
+                continue
+            normalized = os.path.normpath(path)
+            if os.path.isabs(normalized) or normalized == ".." or normalized.startswith("../"):
+                missing_verifications.append({
+                    "id": item.get("id"),
+                    "reason": "stored_in.project_file.path must stay inside the project",
+                    "path": path})
+                continue
+            if not os.path.isfile(os.path.join(ctx.root, normalized)):
+                missing_verifications.append({
+                    "id": item.get("id"),
+                    "reason": "stored_in.project_file.path not found",
+                    "path": path})
+                continue
+        resolved = stored.get("verification_id")
+        resolved_id = str(resolved) if isinstance(resolved, str) and resolved else vid
+        planned = plan_by_id.get(resolved_id)
+        if planned is None:
+            missing_verifications.append({
+                "id": item.get("id"), "reason": "stored_in.verification_id is not in the approved plan",
+                "stored_in": stored, "approved_plan_verifications": sorted(approved_ids)})
+            continue
+        planned_point = planned.get("consume_at")
+        if planned_point is not None and item.get("consume_at") != planned_point:
+            missing_verifications.append({
+                "id": item.get("id"),
+                "reason": "consume_at differs from the approved plan entry",
+                "declared": item.get("consume_at"), "approved": planned_point})
     problems = []
     exits = []
     if pending_actions:
         problems.append({"kind": "pending_actions", "actions": pending_actions})
-        exits.append("对每个必做动作下一条决定：subject 含动作 id、choice=done（已做）或 "
-                     "waived（本次不适用，理由写 reason）后重跑 task-check")
+        exits.append("对每个必做动作下一条决定：subject 含动作 id、choice=done（已做）；"
+                     "choice=waived 仅限定义声明可略（skip）的动作，理由写 reason 后重跑 task-check")
     if missing_points:
         problems.append({"kind": "missing_human_points", "points": missing_points})
-        exits.append("请人给出步骤内人判结论（subject 含该人判点 id）后带 --decision 重跑 task-check")
+        exits.append("请人按声明的选项给出步骤/动作内人判结论（subject 含该 id、choice 命中 "
+                     "choices）后带 --decision 重跑 task-check")
     if missing_verifications:
         problems.append({"kind": "declared_verification_not_in_plan",
                          "verifications": missing_verifications,
                          "approved_plan_verifications": sorted(approved_ids)})
-        exits.append("回 Plan 把定义声明的验证 id 写进 plan.verifications 并重新批准（tag 同一 id）")
+        exits.append("回 Plan 把定义声明的验证 id、consume_at 与 stored_in.verification_id "
+                     "对齐到已批准项并重新批准后重检")
     return {"problems": problems, "exits": exits, "action_results": action_results,
-            "human_points": [item.get("id") for item in execution.get("human_points") or []
-                             if isinstance(item, dict)],
+            "human_points": [item.get("id") for item in points],
+            "legacy_verifications": legacy_verifications,
             "applied": applied, "step": step}
 
 
@@ -1606,7 +1755,23 @@ def run_check_finish(ctx, task, state, commands):
     started = state["started"]
     decisions = state["decisions"]
     review_notes_path = state["review_notes_path"]
-    internal_review, review_problem = _parse_review_notes(review_notes_path)
+    internal_review = state.get("internal_review")
+    review_problem = state.get("review_notes_problem")
+    review_notes_digest = state.get("review_notes_digest")
+    if review_notes_path:
+        try:
+            current_digest = _review_notes_digest(review_notes_path)
+        except OSError as exc:
+            raise CheckError("WF_CHECK_STALE",
+                             {"reason": "review notes unreadable at finish",
+                              "path": review_notes_path, "error": str(exc)}) from exc
+        if review_notes_digest and current_digest != review_notes_digest:
+            # 锁外执行期间文件被改：本次的结论不再对应该输入（与锚点/扫描同型）。
+            raise CheckError("WF_CHECK_STALE",
+                             {"reason": "review notes changed during check",
+                              "path": review_notes_path})
+        if internal_review is None:
+            internal_review, review_problem = _parse_review_notes(review_notes_path)
     tdd_evidence = (internal_review or {}).get("tdd_evidence")
     # TDD 适用性由**已批准的规划声明**（`plan.tdd_applicability`，进 plan_version）：文档/调查类
     # 对象按独立可观察验证（验收项的命令通过或人判）承担验收，不再强迫造红绿（task-flow 已承诺）。
@@ -1681,6 +1846,16 @@ def run_check_finish(ctx, task, state, commands):
         "spec_review": coverage,
         "governance": {"violations": governance_violations},
     }
+    # 发布端与消费端复用同一份结构校验（机制稿 §3.5/§11.2）：不写出一个 Finish 门禁
+    # 会按缺证据拒绝的 pass（2026-11-28 外审 A1-3）。
+    if check["result"] == "pass":
+        problems = validate_check_result(task, check)
+        if problems:
+            raise CheckError("WF_CHECK_FAILED",
+                             {"reason": "check would not survive the finish gate",
+                              "problems": problems,
+                              "exits": ["按 problems 补齐双轴 basis / 验证记录后重跑 task-check",
+                                        "不要用同一份记录继续 archive"]})
     facts = {
         "check": check_id,
         "failed_commands": failed_commands,
