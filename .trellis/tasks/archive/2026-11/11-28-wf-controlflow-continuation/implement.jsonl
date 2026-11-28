@@ -1,0 +1,17 @@
+{"file": "docs/workflows/wf/payload/lib/wflib/runs.py", "reason": "F1 步骤契约保留 established_by/stored_in"}
+{"file": "docs/workflows/wf/payload/lib/wflib/check.py", "reason": "F1 消费契约 + F3 发布条件/摘要/结构复用"}
+{"file": "docs/workflows/wf/payload/lib/wflib/projection.py", "reason": "F2 验收处置边界"}
+{"file": "docs/workflows/wf/payload/lib/wflib/gates.py", "reason": "F2 Finish 出口"}
+{"file": "docs/workflows/wf/payload/lib/wflib/cli.py", "reason": "F2 verify 出口 + F4 释放 WIP + F6 C2 表述"}
+{"file": "docs/workflows/wf/payload/lib/wflib/tasks.py", "reason": "F5 收工归属 + F6 docstring"}
+{"file": "docs/workflows/wf/payload/lib/wflib/identity_store.py", "reason": "F6 登记口径"}
+{"file": "docs/workflows/wf/payload/protocol/states.json", "reason": "F6 迁移登记"}
+{"file": "docs/workflows/wf/skills/wf-finish/SKILL.md", "reason": "F2 未核实出口同步"}
+{"file": "docs/workflows/wf-framework-design.md", "reason": "F6 §1.3 表述"}
+{"file": "docs/workflows/wf-framework-mechanism.md", "reason": "F1/F6 机制稿登记"}
+{"file": "scripts/tests/wf_runtime/test_step_contract.py", "reason": "F1 用例"}
+{"file": "scripts/tests/wf_runtime/test_verify_resolve.py", "reason": "F2 用例"}
+{"file": "scripts/tests/wf_runtime/test_check_publish.py", "reason": "F3 用例"}
+{"file": "scripts/tests/wf_runtime/test_run_release_wip.py", "reason": "F4 用例"}
+{"file": "scripts/tests/wf_runtime/test_stop_ownership.py", "reason": "F5 用例"}
+{"file": "scripts/tests/wf_runtime/test_states_contract.py", "reason": "F6 用例"}
