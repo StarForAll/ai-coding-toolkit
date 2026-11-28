@@ -16,7 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
-from wflib import cli, tasks  # noqa: E402
+from wflib import check, cli, tasks  # noqa: E402
 
 
 class ReviewNotesDraftTest(unittest.TestCase):
@@ -31,6 +31,37 @@ class ReviewNotesDraftTest(unittest.TestCase):
 
     def tearDown(self):
         self._tmp.cleanup()
+
+    def _write_plan(self, plan):
+        task_dir = self.root / ".wf/tasks/t-20261123-1-alpha"
+        record = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
+        record["plan"] = plan
+        (task_dir / "task.json").write_text(json.dumps(record), encoding="utf-8")
+
+    def test_draft_includes_tdd_evidence_when_tdd_code(self):
+        """TDD 开启（applicability=code）时，骨架必须列出 Check 真正读取的 `tdd_evidence`。
+
+        2026-11-28 独立复审 F1.1/F3.4：字段只存在于消费方（`_parse_review_notes`），
+        help inputs 与骨架都没有它 —— "按骨架填"永远过不了 Check。
+        """
+        self._write_plan({"tdd": True})
+        ctx = type("Ctx", (), {"root": str(self.root)})()
+        payload = tasks.cmd_task_check(ctx, cli.Args(
+            ["--task", "t-20261123-1", "--review-notes-draft"]))
+        draft = payload["facts"]["draft"]
+        self.assertTrue(payload["facts"]["tdd_required"])
+        evidence = draft.get("tdd_evidence") or {}
+        # 形状由机制常量派生：骨架与消费方不再各写一份字面清单
+        self.assertEqual(set(evidence), set(check.TDD_EVIDENCE_FIELDS))
+        self.assertIn("tdd_evidence", payload["next"])
+
+    def test_draft_omits_tdd_evidence_for_docs_applicability(self):
+        self._write_plan({"tdd": True, "tdd_applicability": "docs"})
+        ctx = type("Ctx", (), {"root": str(self.root)})()
+        payload = tasks.cmd_task_check(ctx, cli.Args(
+            ["--task", "t-20261123-1", "--review-notes-draft"]))
+        self.assertFalse(payload["facts"]["tdd_required"])
+        self.assertNotIn("tdd_evidence", payload["facts"]["draft"])
 
     def test_draft_prints_path_and_skeleton_without_writing(self):
         ctx = type("Ctx", (), {"root": str(self.root)})()

@@ -1110,6 +1110,19 @@ def verification_run_commands(task):
     return found
 
 
+def tdd_scope(plan, check=None):
+    """TDD 红绿是否本次硬要求（唯一谓词，2026-11-28 终审 F3）：返回 `(required, applicability)`。
+
+    适用性由已批准规划声明；`check` 只作存量记录的回退（旧 Check 记录自带
+    `tdd_applicability`）。三处消费（Check 定稿、归档门禁、draft 骨架）共用本函数，
+    不在各入口重复写 `plan.tdd and applicability == "code"`。
+    """
+    # 已批准规划是权威；check 只作存量记录的回退（旧 Check 记录自带 applicability）。
+    applicability = ((plan or {}).get("tdd_applicability")
+                     or (check or {}).get("tdd_applicability") or "code")
+    return bool((plan or {}).get("tdd")) and applicability == "code", applicability
+
+
 def tdd_evidence_problem(evidence, commands, history_commands=None):
     """TDD 证据结构核对（机制稿 §3.5）：五段齐全；红引用历史失败项、绿引用本次通过项，
     且两者覆盖**同一个验证项**（六轮复核 a.5：只核"一次失败 + 一次通过"能被两条无关命令拼凑）。"""
@@ -1594,7 +1607,8 @@ def run_check_finish(ctx, task, state, commands):
     tdd_evidence = (internal_review or {}).get("tdd_evidence")
     # TDD 适用性由**已批准的规划声明**（`plan.tdd_applicability`，进 plan_version）：文档/调查类
     # 对象按独立可观察验证（验收项的命令通过或人判）承担验收，不再强迫造红绿（task-flow 已承诺）。
-    tdd_applicability = plan.get("tdd_applicability") or "code"
+    # 谓词唯一实现：`tdd_scope`（Check/门禁/draft 共用）。
+    tdd_required, tdd_applicability = tdd_scope(plan)
     history_entries = list(task.get("check_history") or [])
     if task.get("check"):
         history_entries.append(task["check"])  # 本次即将被替换的旧检查同样是历史
@@ -1602,7 +1616,7 @@ def run_check_finish(ctx, task, state, commands):
     # 单次验证运行（`task-check --run-verification`）也是历史运行：红证据不必来自整轮 Check
     history_commands.extend(verification_run_commands(task))
     tdd_problem = None
-    if plan.get("tdd") and tdd_applicability == "code":
+    if tdd_required:
         tdd_problem = tdd_evidence_problem(tdd_evidence, commands, history_commands)
     tdd_ok = tdd_problem is None
 

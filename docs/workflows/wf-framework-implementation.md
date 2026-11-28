@@ -260,7 +260,7 @@ docs/workflows/wf-cli/         # 系统级 wf 命令发行包（不投放项目�
 | `ready` | `[--json]` | 只读就绪视图（机制稿 §6.1 候选枚举） | 无（不写判定字段） | 设计稿 §5.6 / 机制稿 §6.1 | 1 |
 | `bind` | `--task <id>` \| `--run <id>`（**2026-11-12 交付**：新会话接续在途实例） | `session.bind`（在写权获取动作内成组写入；机制稿 §4.2「首次绑定按本文 §5 成组写入」） | 空闲态下新会话对**既有就绪对象**的首次绑定；实例绑定只确认「接哪个在途实例」，游标正确性由写入口核（`tasks.bind_task_for_write`）；**不承担首次创建**（见 `task-new` / `run create`），**不承担交接接收**（见 `writer-handover accept`） | 机制稿 §3.1、机制稿 §6.1、机制稿 §4.4 工作区分类 | 1（实例分支属第二轮，2026-11-12 交付） |
 | `writer` | `acquire` \| `release` | `writer.acquire` / `writer.release` | 写权获取/释放 | 机制稿 §4.4 | 1 |
-| `writer-handover` | `begin --to <session-key>` \| `accept` | `writer.handover.begin` / `writer.handover.accept` | 两段交接：`begin` 由旧写者发起（失效旧代次、写接收者与待恢复）；**`accept` 由接收方一次性完成绑定核验与代次授予**，接收方不再单独调 `bind` | 机制稿 §4.3、§4.4 | 1 |
+| `writer-handover` | `begin --to <session-key> --decision <path>` \| `accept` | `writer.handover.begin` / `writer.handover.accept` | 两段交接：`begin` 由旧写者发起（失效旧代次、写接收者与待恢复）；**`accept` 由接收方一次性完成绑定核验与代次授予**，接收方不再单独调 `bind` | 机制稿 §4.3、§4.4 | 1 |
 | `stop` | `--decision <path> [--preview]`（`--preview` 只读预览逐路径归属，不写任何记录；2026-11-07 增补）（数组：收工选择一条 commit/keep/reverse/transfer + 提交/反向修正授权若干条；subject 列覆盖路径或承接对象）（信封） | `session.stop` + `task.pause` | 日常收工（设计稿 §4.4） | 机制稿 §4.3（同对象 WIP）、机制稿 §4.4 | 1 |
 | `task-new` | `--kind ordinary\|initialize\|bootstrap --title <t> --template <path>`（信封） | `writer.acquire` + `session.bind` + `task.create`（**单一父 action**，主记录 writer） | 创建规划 + 首次绑定 | 机制稿 §3.1、机制稿 §5.2 目录防撞 | 1 |
 | `task-approve` | `--task <id> --decision <path>` | `task.transition` | 批准规划（含复杂度/TDD/plan-q 答复） | 机制稿 §2.3 提取、机制稿 §3.4 条件① | 1 |

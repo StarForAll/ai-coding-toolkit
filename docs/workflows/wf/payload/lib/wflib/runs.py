@@ -1137,12 +1137,14 @@ def prepare(ctx, args):
             # 准备不例外于写权：held 是别人在写；recovering 是交接中间态（双方都没写权）。
             # 两种都不能写准备记录——否则入口会回 WF_OK，让 AI 误以为已取得准备写权
             # （六轮审查 b-4：recovering 下确实跳过取权分支照写了记录）。
-            raise DefinitionError("WF_WRITER_BUSY",
-                                  {"reason": "writer is not available for preparation",
-                                   "state": state, "holder": holder,
-                                   "exits": ["等对方释放或走已确认的交接/恢复出口",
-                                             "交接中断（recovering）时先按恢复流程确认写者归属"]},
-                                  next_="写权未就绪：先让写权回到空闲，再准备定义")
+            from . import cli as _cli_mod
+
+            _busy = _cli_mod.writer_busy_error(
+                record, extra={"reason": "writer is not available for preparation"}, caller=key)
+            # 本入口的契约异常类型保持 DefinitionError（既有消费者按它捕获）；
+            # facts 补 `state` 别名，保留旧断言与旧消费面。
+            raise DefinitionError("WF_WRITER_BUSY", dict(_busy.facts, state=state),
+                                  next_=_busy.next)
 
         previous = records.load_json(preparation_path(ctx.root, workflow_id), {}) or {}
         if args.flag("--end"):
@@ -1432,7 +1434,8 @@ def _preparation_problems(root, workflow_id, key, definition_rel):
         return problems
     if record.get("session_key") != key:
         problems.append({"reason": "preparation belongs to another session",
-                         "exit": "由原会话创建实例，或用 `wf enable --new-session` 换新会话后重跑 definition prepare"})
+                         "exit": f"本会话先重跑 `definition prepare --id {workflow_id}` 接续准备"
+                                 "（记录转属本会话后 run create 才可用）；交接后的入口是这条，不是换会话"})
     # 已结束（`--end`）的准备记录仍可用于创建：结束只表示"准备写权释放 + 未提交编辑已处置"，
     # 定义内容由 `validation`/`digest`（创建时按当前字节重核）保证，不因结束而失效。
     if definition_rel not in (record.get("scope_paths") or []):
@@ -1655,9 +1658,10 @@ def create(ctx, args):
                                    "object": (session_mod.load_binding(ctx.root, key) or {}).get("object")},
                                   next_="继续当前对象；要开新实例：完成/放弃当前对象并释放写权后"
                                         "用 `wf enable --new-session` 在同边界换新会话（真正并行才另开终端）")
-        cli.assert_no_foreign_wip(ctx, exclude_id=None)
+        # 写权状态先于工作区：recovering 下接收方要先看到 accept 出口，而不是被发送方的 WIP 挡住。
         if record.get("state") != "idle":
-            raise cli.CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
+            raise cli.writer_busy_error(record, caller=key)
+        cli.assert_no_foreign_wip(ctx, exclude_id=None)
 
         run_id = uuid.uuid4().hex
         record_rel = f"{RUNS_REL}/{run_id}.json"

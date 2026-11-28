@@ -33,6 +33,7 @@ disable-model-invocation: false
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止。决定文件结构拿不准时先跑 `archive` 的只读草稿（只打印不落盘）。试点期可跑一次 `sampling pick`（先冻结再落盘；不跑不阻断，入口会在 Check next_ 里提示） |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | PRD 只改排版/转义等、验收与触碰面不变（机械修订） | 取人签的 `choice=机械修订` 决定 → `task-approve`：入口经等价链核验后**不重复人批**，回到执行继续。该签认是对散文等价性（只改排版/转义）的人签，"不重复问人"由"不重复批准"承载；前置是本任务已有批准（改语义仍走上一行的 replan，不经 task-replan） |
+| 写权被占用 / 交接中间态 | 读 `status --short` 的 `writer{state,checkpoint,handover}`：接收方（`handover.receiver_session_key` 是本会话）运行 `writer-handover accept`；发起方/第三方等其接收或 `repair`；`checkpoint` 是最后核实点，按它核对占据者是否仍在动作 |
 | 暂停 / 恢复（任务） | `task-pause` / `task-resume` |
 | 绑定对象是**实例**（`run locate` 显示 `terminal=null`） | `run advance` 推进；`run pause` 受控暂停；只读回读用 `run locate` |
 | 实例处于暂停态（`paused=true`） | 先读 `paused_reason`（原因/时间/停在哪一步）；解除与继续的判读见下节「实例暂停之后」 |

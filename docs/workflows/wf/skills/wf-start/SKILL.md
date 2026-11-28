@@ -25,11 +25,17 @@ user-invoked: true
    （宿主无关，普通宿主与有会话标识的宿主都走这一条）；只有需要**真正并行**推进两个对象时才另开终端/窗口。**不要用 `task-new` 试探**——对象在途时它只会报 `WF_BINDING_MISMATCH`。
 3. 未绑定：由人选择
    - 新普通任务：`task-new`（`kind`/`title`/`template` 的取值见 `wf help task-new`）；
-   - 既有就绪任务：`bind --task <id>`；
+   - 既有就绪任务：`bind --task <id>`（可先 `wf ready` 看候选与阻断；`handover_pending` 表示对象在交接中间态）；
    - **工作流实例**（顺序见下节「定义与实例」：先取人的准备范围授权，再起草；定义还不存在时
      `definition validate` 必然报路径错误，不要先跑它）：`definition prepare`（取准备写权与校验） →
      `run create --authorization <人的创建授权>`；已有实例换到新会话接续用 `bind --run <id>`。
      实例的首次绑定由 `run create` 完成。
+   - **接收写权交接**（四步不可换序）：① 接收方在**新执行边界**运行 `wf.py enable --json` 取得
+     `facts.session_key`（此时项目还没有交接，`writer` 为空或由发起方持有都是正常的），把 key 转交发起方；
+     ② 发起方 `writer-handover begin --to <key> --decision <文件>`；③ 接收方运行 `status --short`
+     （或再次 `enable`），确认 `writer.handover.receiver_session_key` 是本会话 / `handover_for_me=true`；
+     ④ 运行 `writer-handover accept` 接收对象。接收前不要 `task-new`/`bind`；key 打错只能按
+     `wf repair` 恢复，转抄时核对回显。
 4. 需要重新取得已被释放的写权时：`writer acquire`。
 5. **自动模式下不手写 session 信封**：直接 `wf.py enable --json`，身份由执行边界派生
    （会话 leader + 进程链），`activation`/`instance_id` 由入口写进运行态附件并由后续命令自动读取。

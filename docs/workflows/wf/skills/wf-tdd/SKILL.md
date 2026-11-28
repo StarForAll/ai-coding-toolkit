@@ -19,8 +19,10 @@ disable-model-invocation: false
    该入口只跑这一条、只记一次运行（验证 id + 定义摘要 + 退出码 + 日志），不产生 Check 结论——
    **不必为了留痕提前跑整轮 Check**。
 2. 最小实现使其通过；再补边界用例。
-3. 把证据写成 `check.tdd_evidence`：`{assertion, red_command_ref, red_reason, green_command_ref, properties}`。
-   `red_command_ref` 取那条失败运行的身份（验证 id），绿仍取**最终 Check** 里同一验证的通过运行。
+3. 把证据写进 **review-notes 文件顶层**的 `tdd_evidence`（字段形状见 `wf help task-check` 的
+   `inputs.--review-notes.tdd_evidence`；`task-check --review-notes-draft` 在 TDD 适用时已含该块；
+   Check 会把它记入 `check.tdd_evidence`）。`red_command_ref` 取那条失败运行的身份（验证 id），
+   绿仍取**最终 Check** 里同一验证的通过运行。
 4. `properties` 逐项说明：可红、确定性、快速、可无人执行。
 
 ## 不做

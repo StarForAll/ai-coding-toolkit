@@ -292,6 +292,43 @@ class HelpAliasTest(unittest.TestCase):
             self.assertEqual(payload["facts"]["command"], "task-check")
 
 
+class DescriptionSurfaceTest(unittest.TestCase):
+    """帮助与骨架必须登记"消费方真正读取的字段"（2026-11-28 独立复审 F1.1/F1.2/F1.4）。
+
+    三个真实失败：TDD 证据只在 `check._parse_review_notes` 被读、帮助与骨架都没有；
+    示例里的 `wf.py` 没有任何定义（照抄即 command not found）；accept 的 `--decision`
+    是死旗标（帮助标必填、实现不读）。
+    """
+
+    def test_review_notes_inputs_register_tdd_evidence(self):
+        from wflib import check
+
+        inputs = cli.COMMAND_HELP["task-check"]["inputs"]["--review-notes"]
+        self.assertIn("tdd_evidence", inputs)
+        self.assertEqual(set(inputs["tdd_evidence"]), set(check.TDD_EVIDENCE_FIELDS))
+
+    def test_writer_handover_flags_match_subcommands(self):
+        args = cli.COMMAND_HELP["writer-handover"]["args"]
+        self.assertTrue(args["--decision"].startswith("begin"), args["--decision"])
+        self.assertEqual(cli.COMMAND_SUB_FLAGS["writer-handover"]["accept"], set())
+        with self.assertRaises(cli.CliError) as caught:
+            cli.validate_usage("writer-handover", ["accept", "--decision", "h.json"])
+        self.assertEqual(caught.exception.code, "WF_USAGE_INVALID")
+        # begin 的两个必填参数仍被放行
+        cli.validate_usage("writer-handover",
+                           ["begin", "--to", "session-key", "--decision", "h.json"])
+
+    def test_help_examples_point_to_wf_py_definition(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ctx = cli.Context(tmp, [])
+            entry = cli.dispatch(ctx, ["help", "task-check"])
+            bare = cli.dispatch(ctx, ["help"])
+        # 定义只在 session-flow 一处；help 只指针，不复写扩展式
+        self.assertIn("session-flow", entry["facts"]["envelope"])
+        self.assertIn("session-flow", bare["facts"]["hint"])
+        self.assertIn(".wf/bin/wf.py", bare["facts"]["hint"])
+
+
 def textwrap_dedent(text):
     import textwrap
 

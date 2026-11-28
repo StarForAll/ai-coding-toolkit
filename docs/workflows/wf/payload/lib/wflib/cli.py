@@ -55,6 +55,98 @@ class CliError(Exception):
         )
 
 
+def writer_handover_projection(record):
+    """`WF_WRITER_BUSY` 与 `status` 共用的交接投影（唯一实现，2026-11-28 终审 F1/F3.1）。
+
+    只投影审计与发现所需字段：谁发起、接收会话 key、对象、失效代次。决定内容留在
+    `writer.handover.decision`（审计面），不扩大投影面。
+    """
+    handover = (record or {}).get("handover") or {}
+    if not handover:
+        return None
+    return {
+        "from": handover.get("from"),
+        "receiver_session_key": handover.get("receiver_session_key"),
+        "object": handover.get("object_or_preparation"),
+        "invalidated_generation": handover.get("invalidated_generation"),
+    }
+
+
+def writer_snapshot(root):
+    """容错读 writer 记录：缺失返回空、损坏返回 `(空, True)`，供只读/enable 事实面使用。
+
+    只读面不能因运行态文件缺失/损坏在写盘后才拒绝；损坏要如实报告（由 repair 处置），
+    但 enable 的启用核对不应因此写后失败。
+    """
+    try:
+        record = writer_mod.load(root, {}) or {}
+    except Exception:  # noqa: BLE001 — 运行态损坏按事实上报，不阻断只读/启用核对
+        return {}, True
+    if not isinstance(record, dict):
+        return {}, True
+    return record, False
+
+
+def handover_begin_scope_problem(binding, object_ref):
+    """交接第一段的资格（唯一实现）：未绑定会话只能交接 preparation 范围。
+
+    准备通道按设计只给未绑定会话（§5.7），因此准备范围的交接不能要求 instance_id；
+    反过来，未绑定会话也不得借交接把任务/实例对象交出去（§4.4 不凭准备范围建立绑定）。
+    """
+    if binding:
+        return None
+    if (object_ref or {}).get("kind") != "preparation":
+        return {"reason": "未绑定会话只能交接准备范围（preparation）",
+                "object": object_ref,
+                "exits": ["任务/实例交接由持有该对象绑定的会话发起",
+                          "准备范围交接只核准备授权，不建立任务/实例绑定"]}
+    return None
+
+
+def handover_accept_creates_binding(object_ref):
+    """交接第二段是否建立会话绑定：只有 task/run 对象；preparation 不建立（§1.3/§4.4）。"""
+    return (object_ref or {}).get("kind") in ("task", "run")
+
+
+def writer_busy_error(record, extra=None, caller=None):
+    """构造写权占用的统一 `WF_WRITER_BUSY`（主要入口共用；run 族在 require_held 之后的自有兜底保留）。
+
+    交接中间态（recovering）的 `holder` 已清空：这里点名唯一可执行入口
+    `writer-handover accept`，并给出发起方不可写的事实；其他状态按维护/会话持有分档。
+    facts 带 `checkpoint`，供设计稿 §4.4 的"报告检查点"消费（`status` 同源投影）。
+    """
+    state = (record or {}).get("state")
+    holder = (record or {}).get("holder") or {}
+    handover = writer_handover_projection(record)
+    if state == "recovering":
+        exits = ["接收方运行 `wf writer-handover accept`（只有 handover.receiver_session_key 声明的会话可接收）",
+                 "发起方已让出写权、不能继续写；交接中断由人确认后走 `wf repair` 恢复"]
+        next_ = ("recovering：接收方运行 `writer-handover accept`；发起方/第三方等其接收或按 `wf repair`"
+                 "（按 facts.handover 的 from/receiver_session_key 判断你属于哪一方）")
+    elif holder.get("kind") == "maintenance":
+        exits = ["维护操作持有写权：等其完成/释放，或按 `wf repair` 处置残留",
+                 "恢复后重入本条命令"]
+        next_ = exits[0]
+    elif holder:
+        exits = ["等持有者释放写权",
+                 "由人确认旧写者停止后走 `wf repair` 恢复（不要删记录或改 writer）"]
+        next_ = exits[0]
+    else:
+        exits = ["写权记录不完整：按 `wf repair` 核对写者后再重入本条命令"]
+        next_ = exits[0]
+    facts = {"writer_state": state, "holder": holder or None,
+             "checkpoint": (record or {}).get("checkpoint"), "exits": exits}
+    if handover:
+        facts["handover"] = handover
+        # 调用者角色：同一 busy 由发起方/接收方/第三方都会命中，事实里给出"你是哪一方"，
+        # 让判读不必从两个 key 反推（终审 F2.2）。
+        facts["you_are"] = ("receiver" if caller == handover.get("receiver_session_key")
+                            else "initiator" if caller == handover.get("from") else "other")
+    if extra:
+        facts.update(extra)
+    return CliError("WF_WRITER_BUSY", facts, next_=next_)
+
+
 class Args:
     """极简参数解析：`--key value`、`--key=value` 与位置参数。"""
 
@@ -652,11 +744,7 @@ class Context:
                      "exits": [f"先取得写权：`wf {hint}` 后重入"]},
                     next_=f"`wf {hint}` 取得写权后重入本条命令",
                 )
-            raise CliError(
-                "WF_WRITER_BUSY",
-                {"writer_state": record.get("state"), "holder": holder},
-                next_="等待写权释放，或走已确认的交接/恢复出口",
-            )
+            raise writer_busy_error(record, caller=key)
         holder = record.get("holder") or {}
         # 代次三处一致：顶层、holder、请求；不一致即所有权事实矛盾，不按「未知字段保留」放行
         top_generation = record.get("generation")
@@ -897,7 +985,23 @@ def cmd_status(ctx, args):
         "writer_state": record.get("state"),
         "generation": record.get("generation"),
         "holder": record.get("holder"),
+        # 设计稿 §4.4：已有写者时报告标识/对象/范围/检查点；交接中间态另报接收方与对象。
+        # 这是 checkpoint 的读取消费点（不只在写侧落盘）——2026-11-28 终审 F1.4。
+        "checkpoint": record.get("checkpoint"),
     }
+    handover = writer_handover_projection(record)
+    if handover:
+        facts["handover"] = handover
+        # 统一投影：未绑定/实例绑定的只读面也要看到交接与检查点（不能只在 task 绑定的
+        # --short 分支里出现）。
+        facts["writer"] = {"state": record.get("state"), "generation": record.get("generation"),
+                           "holder": record.get("holder"), "checkpoint": record.get("checkpoint"),
+                           "handover": handover}
+    else:
+        facts["writer"] = ({"state": record.get("state"), "generation": record.get("generation"),
+                            "holder": record.get("holder"), "checkpoint": record.get("checkpoint"),
+                            "handover": None}
+                           if record.get("state") != "idle" else None)
     # W3-2 可见性：宿主映射状态投影（hit/absent/import-error）——映射缺失/导入失败
     # 不再不可见；只读 facts，不参与判定。
     try:
@@ -952,6 +1056,7 @@ def cmd_status(ctx, args):
                                               "status": task.get("status"), "phase": task.get("phase"),
                                               "complexity": plan.get("complexity"), "tdd": plan.get("tdd"),
                                               **_short_check(ctx, task)},
+                                     "writer": facts.get("writer"),
                                      "repair_scope": _short_repair(
                                          review_mod.repair_scope(ctx, task), precheck,
                                          review_mod.acceptance_echo(task)),
@@ -1379,6 +1484,8 @@ def _rotate_session(ctx):
                        {"reason": "写权仍在持有（对象终态但未释放）——不得把在途写权带进新会话",
                         "holder": _holder, "held_by_this_session": _mine},
                        next_=("先 `writer release` 释放写权，再重试 enable --new-session" if _mine else
+                              "写权处于交接中间态：接收方先 `writer-handover accept`（或 `wf repair`）后重试轮换"
+                              if writer_record.get("state") == "recovering" else
                               "写权由其他写者（他会话/维护）持有：那不是本会话可释放的资源——"
                               "等其释放，或由人确认旧写者停止后走 `wf repair` 恢复，再重试轮换"))
     # 续期放在轮换资格全部核完之后：被拒的轮换不该顺手改启用状态（旧会话是否"已重新启用"
@@ -1588,6 +1695,9 @@ def _identity_warnings(identity_facts, state, applicable, disabled):
 def cmd_enable(ctx, args):
     """启用本会话：**所有拒绝都在写盘之前**（被拒时不留 `enabled=true`）。"""
     _check_layout(ctx.root)
+    # 先读 writer 快照（写盘之前）：运行态缺失/损坏不能让 enable 在写附件后拒绝。
+    writer_record, writer_corrupt = writer_snapshot(ctx.root)
+    writer_state = writer_record.get("state")
     # W3-1：`--new-session` —— 人在当前执行边界显式换新会话身份（宿主无关）。
     if args.flag("--new-session"):
         return _rotate_session(ctx)
@@ -1651,6 +1761,9 @@ def cmd_enable(ctx, args):
     applicable = [item for item in state["host_files"] if item["host"] == host_id]
     disabled = bool((ctx.inputs() or {}).get("trellis_disabled_confirmed"))
     warnings = _identity_warnings(identity_facts, state, applicable, disabled)
+    if writer_corrupt:
+        warnings.append({"reason": "writer record unreadable",
+                         "note": "writer.json 损坏：只读启用事实已降级，写权相关动作按 `wf repair` 核对后再做"})
     # 首次启用时调用方通常还没带 activation：这里给出**可直接缓存的模板**，
     # 由适配层在后续每次请求里重放（机制稿 §1.4：由宿主/skill 按本次真实调用形成缓存）
     binding = session_mod.load_binding(ctx.root, session_key)
@@ -1675,6 +1788,22 @@ def cmd_enable(ctx, args):
         terminal_state = session_mod.object_terminal_state(ctx.root, binding)
         binding_terminal = terminal_state == "terminal"
         binding_terminal_unknown = terminal_state == "unknown"
+    # 交接发现面（设计稿 §4.4 的"报告标识/对象/范围/检查点"）：接收方在 enable 就能看到
+    # "有交接给我"，不必先 bind/task-new 撞一圈；发起方也能看到接收方是谁。
+    # writer 快照在函数入口已读（写盘之前）；这里只投影，不再二次读盘。
+    handover = writer_handover_projection(writer_record)
+    handover_for_me = bool(handover and writer_state == "recovering"
+                           and handover.get("receiver_session_key") == ctx.key())
+    if handover_for_me:
+        enable_next = ("写权交接已就绪：运行 `writer-handover accept` 接收对象"
+                       f"（对象 {handover.get('object')}，发起方 {handover.get('from')}）；"
+                       "接收前不要 task-new/bind")
+    elif writer_state == "recovering":
+        enable_next = ("写权处于交接中间态：接收方是另一会话（见 facts.writer.handover）；"
+                       "本会话不要写，等接收方 accept 或按 `wf repair` 恢复"
+                       + ("；之后再 `enable --new-session` 轮换已终态对象" if binding_terminal else ""))
+    else:
+        enable_next = None
     return ok(
         facts={
             "session_key": ctx.key(),
@@ -1694,9 +1823,19 @@ def cmd_enable(ctx, args):
             "trellis_disabled_confirmed": disabled,
             # W3-2③：建立/接管事实透传（旧会话路由让出须可见，不静默丢弃）
             **({"established": established_facts} if established_facts else {}),
+            "writer": ({"state": "unknown", "corrupt": True, "checkpoint": None, "handover": None}
+                       if writer_corrupt else
+                       {"state": writer_state,
+                        "generation": writer_record.get("generation"),
+                        "holder": writer_record.get("holder"),
+                        "checkpoint": writer_record.get("checkpoint"),
+                        "handover": handover}
+                       if writer_state not in (None, "idle") else None),
+            "handover_for_me": handover_for_me,
         },
         position=codes.position(scope="session"),
-        next_=(("绑定的对象已到终态：本会话不能继续推进它。"
+        next_=(enable_next if enable_next else
+               ("绑定的对象已到终态：本会话不能继续推进它。"
                 "同边界开新对象用 `wf enable --new-session` 换新会话后 task-new；"
                 "或开新执行边界/新会话（同进程无法区分时开新终端）" if binding_terminal else
                 "绑定对象状态暂无法确认：先跑 `status`（任务）或 `run locate`（实例）核实后再决定；"
@@ -1906,15 +2045,16 @@ def cmd_bind(ctx, args, kind="task"):
     else:  # 实例绑定：新会话接续在途实例（机制稿 §6.1 的绑定面）
         object_ref = _eligible_run_bind(ctx, target)
     with _lock(ctx.root, hint="bind"):
-        # 同对象接续允许进入核验路径（保留 WIP 随响应交回新会话）；其他对象仍阻断
-        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         record = ctx.writer()
         # 中断恢复：本会话已有未完成的 session.bind 时续做，不报 WRITER_BUSY
         resumed = _resume_bind(ctx, key, session, object_ref, target, kind, record)
         if resumed is not None:
             return resumed
+        # 写权状态先于工作区：recovering 下接收方要先看到 accept 出口，而不是被 WIP 挡住。
         if record.get("state") != "idle":
-            raise CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
+            raise writer_busy_error(record, caller=key)
+        # 同对象接续允许进入核验路径（保留 WIP 随响应交回新会话）；其他对象仍阻断
+        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         generation = record.get("generation")
         if isinstance(generation, bool) or not isinstance(generation, int) or generation < 0:
             raise CliError("WF_HISTORY_UNRESOLVED", {"reason": "writer generation not readable",
@@ -2262,8 +2402,11 @@ def _writer_acquire(ctx):
     key = ctx.key()
     binding = session_mod.load_binding(ctx.root, key)
     if not binding:
-        raise CliError("WF_BINDING_MISMATCH", {"reason": "no persistent binding", "session_key": key},
-                       next_="先由人选择对象（bind / task-new）")
+        raise CliError("WF_BINDING_MISMATCH",
+                       {"reason": "no persistent binding", "session_key": key,
+                        "exits": ["由人选择对象：bind / task-new（先 enable 取得本会话身份）",
+                                  "若收到他人交接：用 `writer-handover accept` 接收（本会话 key 由发起方转交）"]},
+                       next_="先获得对象：bind/task-new，或收到交接时用 `writer-handover accept`")
     session = ctx.session()
     code, profile_facts = session_mod.check_platforms(ctx.platforms(), session)
     if code:
@@ -2271,10 +2414,11 @@ def _writer_acquire(ctx):
     _require_instance_match(ctx, binding)
     object_ref = binding.get("object") or {}
     with _lock(ctx.root, hint="writer acquire"):
-        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         record = ctx.writer()
+        # 写权状态先于 WIP：recovering 下接收方要先看到 accept 出口，而不是被发送方的 WIP 挡住。
         if record.get("state") != "idle":
-            raise CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
+            raise writer_busy_error(record, caller=key)
+        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         updated = writer_mod.acquire(
             record,
             kind="session",
@@ -2412,7 +2556,7 @@ def cmd_writer_handover(ctx, args):
     if sub == "begin":
         return _handover_begin(ctx, args)
     if sub == "accept":
-        ctx.require_activation()   # 模型可调入口同样先确认本会话已启用（机制稿 §1.3）
+        # activation 由 dispatch 的 `_needs_activation` 统一核（begin/accept 同口径），不在 handler 重复。
         return _handover_accept(ctx)
     raise CliError("WF_USAGE_INVALID", {"reason": "writer-handover requires begin --to <session-key>|accept"})
 
@@ -2422,10 +2566,20 @@ def _handover_begin(ctx, args):
     decision_path = args.value("--decision")
     if not receiver or not decision_path:
         raise CliError("WF_USAGE_INVALID", {"reason": "handover begin requires --to <session-key> --decision <path>"})
+    # 接收方 key 的形态校验暂不做：会话 key 是 sha256 hex，但既有测试/夹具使用短占位 key；
+    # 收紧形态会要求同步 candidate audit（cp1/r71 脚本字节），成本高于收益。存在性在显式
+    # 信封模式下也无法核实；打错时由 accept 按 key 拒绝，出口是 repair/核对回显（§71 边界）。
     decision = _load_decision(decision_path)
     record, holder = ctx.require_held()
-    _require_instance_match(ctx, session_mod.load_binding(ctx.root, ctx.key()) or {})
     object_ref = (holder.get("scope") or {}).get("object") or {}
+    binding = session_mod.load_binding(ctx.root, ctx.key())
+    if binding:
+        _require_instance_match(ctx, binding)
+    else:
+        problem = handover_begin_scope_problem(None, object_ref)
+        if problem:
+            raise CliError("WF_BINDING_MISMATCH", problem,
+                           next_="核对写权作用域：未绑定会话只能交接准备范围")
     if object_ref.get("kind") == "task":
         from . import tasks as tasks_mod
 
@@ -2455,7 +2609,7 @@ def _handover_begin(ctx, args):
     return ok(
         facts={"writer_state": updated.get("state"), "handover": updated.get("handover")},
         position=codes.position(scope="session"),
-        next_="接收会话在新会话执行 writer-handover accept",
+        next_="接收会话在新会话执行 writer-handover accept；接收方 key 打错时先核对，再按 `wf repair` 恢复写者记录",
     )
 
 
@@ -2468,26 +2622,46 @@ def _handover_accept(ctx):
     with _lock(ctx.root, hint="handover accept"):
         record = ctx.writer()
         if record.get("state") != "recovering":
-            raise CliError("WF_WRITER_BUSY", {"writer_state": record.get("state")})
+            # accept 的 activation 检查统一由 dispatch 的 `_needs_activation` 承担（单一判定），
+            # 这里不再调用 `require_activation`。
+            raise CliError("WF_WRITER_BUSY",
+                           {"writer_state": record.get("state"), "holder": record.get("holder"),
+                            "exits": ["交接只能从 recovering 状态接收",
+                                      "核对发起方是否已执行 `wf writer-handover begin`",
+                                      "写者记录异常时按 `wf repair` 核对旧写者"]},
+                           next_="当前无待接收的交接：核对 begin 是否完成，或按 `wf repair` 核对写者记录")
         handover = record.get("handover") or {}
         if handover.get("receiver_session_key") != key:
-            raise CliError("WF_BINDING_MISMATCH", {"reason": "not the declared receiver", "handover": handover})
+            raise CliError(
+                "WF_BINDING_MISMATCH",
+                {"reason": "not the declared receiver", "handover": handover},
+                next_="用 `handover.receiver_session_key` 声明的会话接收；key 打错时由发起方/人核对，"
+                      "必要时先按 `wf repair` 恢复写者记录再重发 begin")
         object_ref = handover.get("object_or_preparation") or {}
         binding = session_mod.load_binding(ctx.root, key)
         if binding:
             # 接收入口同样核实例标识与能力状态（统一实现，不在个别入口补检查）
             _require_instance_match(ctx, binding)
         if binding and (binding.get("object") or {}).get("id") not in (None, object_ref.get("id")):
-            raise CliError("WF_BINDING_MISMATCH", {"binding": binding.get("object"), "handover": object_ref})
-        # 接收方也要核真实工作区：外来未处置 WIP 不得随交接一并接收（设计稿 §4.4）
-        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
+            raise CliError(
+                "WF_BINDING_MISMATCH",
+                {"binding": binding.get("object"), "handover": object_ref},
+                next_="本会话已绑定另一对象：用未绑定的新会话接收，或完成/放弃当前对象后按交接范围内对象接续")
+        # 接收方也要核真实工作区：外来未处置 WIP 不得随交接一并接收（设计稿 §4.4）。
+        # preparation 对象不在任务/实例工作区语义内，不套该门禁。
+        if handover_accept_creates_binding(object_ref):
+            assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         updated = writer_mod.handover_accept(
             record,
             session_key=key,
             scope={"object": object_ref, "preparation": None},
+            # session-flow 的「补检查点」：交接后写权属于新会话，检查点必须记录这次接收
+            # （原实现传 None，status/占用提示里的 checkpoint 被抹掉——2026-11-28 独立复审 F3.1）。
+            checkpoint={"step": "handover-accepted", "at": records.now_str(),
+                        "from": handover.get("from"), "object": object_ref.get("id")},
         )
         writer_mod.save(ctx.root, updated)
-        if not binding:
+        if not binding and handover_accept_creates_binding(object_ref):
             updated_binding = {
                 "schema_version": 1,
                 "id": key,
@@ -2502,9 +2676,18 @@ def _handover_accept(ctx):
                 "bound_at": records.now_str(),
             }
             session_mod.save_binding(ctx.root, key, updated_binding)
+    kind = (object_ref or {}).get("kind")
+    if kind == "preparation":
+        workflow_id = object_ref.get("id")
+        return ok(
+            facts={"generation": updated.get("generation"), "object": object_ref},
+            position=codes.position(scope="maintenance"),
+            next_=f"在本会话重跑 `definition prepare --id {workflow_id}` 接续准备"
+                  "（准备记录转属本会话后 `run create` 才可用）",
+        )
     return ok(
         facts={"generation": updated.get("generation"), "object": object_ref},
-        position=codes.position(scope=object_ref.get("kind"), task_id=object_ref.get("id")),
+        position=codes.position(scope=kind, task_id=object_ref.get("id")),
         next_="按原对象记录继续",
     )
 
@@ -2778,6 +2961,8 @@ def cmd_ready(ctx, args):
             unreadable_runs.append(os.path.relpath(path, str(ctx.root)).replace(os.sep, "/"))
             continue
         run_records.append(record)
+    _ready_record, _ = writer_snapshot(ctx.root)
+    _ready_handover = writer_handover_projection(_ready_record)
     for _path, task in tasks_mod.iter_tasks(ctx.root):
         if task.get("status") == "archived":
             continue
@@ -2804,10 +2989,17 @@ def cmd_ready(ctx, args):
         # 「进行中且未暂停」不是可接续对象：它仍被原会话推进（设计稿 §5.6）
         if task.get("status") == "in_progress" and not (task.get("paused") or task.get("suspended")):
             blockers.append("in_progress")
-        record = ctx.writer()
+        record = _ready_record
         holder = (record.get("holder") or {}) if isinstance(record, dict) else {}
         if isinstance(record, dict) and record.get("state") == "held" and holder.get("id") != ctx.key(required=False):
             blockers.append("WF_WRITER_BUSY")
+        # 交接中间态不是"就绪"：目标被交接给某个接收方时，先列 handover_pending（细节见
+        # status/enable 的 writer.handover），不要让接收方按 ready 去 bind 撞零出口（终审 F1.6）。
+        _handover = writer_handover_projection(record) if isinstance(record, dict) else None
+        if (_handover and (record or {}).get("state") == "recovering"
+                and (_handover.get("object") or {}).get("kind") == "task"
+                and (_handover.get("object") or {}).get("id") == task.get("id")):
+            blockers.append("handover_pending")
         entries.append({
             "id": task.get("id"),
             "title": task.get("title"),
@@ -2854,6 +3046,10 @@ def cmd_ready(ctx, args):
             blockers_for_run.append(exc.code)
         if record.get("paused"):
             blockers_for_run.append("paused")
+        if (_ready_handover and _ready_record.get("state") == "recovering"
+                and (_ready_handover.get("object") or {}).get("kind") == "run"
+                and (_ready_handover.get("object") or {}).get("id") == run_id):
+            blockers_for_run.append("handover_pending")
         run_candidates.append({
             "id": run_id,
             "workflow_id": record.get("workflow_id"),
@@ -3187,9 +3383,10 @@ COMMAND_HELP = {
                             "--workspace-exclusion": "外来改动排除声明文件：数组元素 {choice: \"排除外来改动\", paths: [具体路径], by: \"human:<来源>\", at, quote, source: \"user-declared\"}（人确认不属于本任务；按记录时摘要绑定，内容一变即失效）"},
                    "example": "wf.py task-start --task \"<id>\" --json"},
     "task-check": {
-        "purpose": "按批准验证实际执行并写 check 结果（复杂任务还需双轴内部审查）",
-        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（复杂任务必填；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）",
-                 "--review-notes-draft": "只读生成双轴审查结论骨架（打印目标路径与 TODO，不落盘、不要求写权）",
+        "purpose": "按批准验证实际执行并写 check 结果（所有任务都要双轴内部审查）",
+        "args": {"--task": "任务 id（必填）", "--review-notes": "双轴内部审查结论 JSON（**所有任务必填**：Check 的双轴是固定步骤；放在当前任务目录内——用 `wf.py status` 回显的 directory（形如 `<id>-<slug>`），如 .wf/tasks/<id>-<slug>/notes.json；放错目录会被当成外来改动）。TDD 开启且 `tdd_applicability=code` 时，同一文件顶层还要写 `tdd_evidence`（形状见 inputs；`--review-notes-draft` 骨架在适用时已含该块）",
+                 "--review-notes-draft": "只读生成双轴审查结论骨架（TDD 适用时含 `tdd_evidence` 块并回显 `tdd_required`；"
+                                        "打印目标路径与 TODO，不落盘、不要求写权）",
                  "--decision": "可选：决定文件（数组，每条仍须满足 Decision 六字段）。**人工验收**（`kind=manual` 或空 `verification_ids` 的直接验收）"
                                "每条给 `choice=passed|failed`、`subject` **以整词**含该验证项 id、"
                                "`object_digest` 取规划批准的对象摘要（或给 `plan_version` = `status --json` 的 `facts.task.plan_version`）、"
@@ -3203,7 +3400,14 @@ COMMAND_HELP = {
                  "--run-verification": "只跑一条已批准验证并记一次运行（不产生 Check 结论、不动 check/锚点；供 TDD 红证据），"
                                        "与 --decision/--review-notes/--workspace-exclusion 互斥"},
         "inputs": {"--review-notes": {"standard": {"conclusion": "pass|fail|undecided", "basis": "依据"},
-                                      "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"}},
+                                      "requirement": {"conclusion": "pass|fail|undecided", "basis": "依据"},
+                                      "tdd_evidence": {
+                                          "assertion": "先红的断言（TDD 开启且 applicability=code 时必填）",
+                                          "red_command_ref": "`--run-verification` 记录的失败运行所用验证 id",
+                                          "red_reason": "为什么这次失败源于行为缺失（不是环境启动失败）",
+                                          "green_command_ref": "同一验证 id 在本次 Check 中的通过运行",
+                                          "properties": {"可红": "说明", "确定性": "说明",
+                                                         "快速": "说明", "可无人执行": "说明"}}},
                    "--decision": {
                        "manual": {"choice": "passed|failed", "subject": "以整词含该验证项 id",
                                   "object_digest": "规划批准的对象摘要",
@@ -3465,9 +3669,11 @@ COMMAND_HELP = {
                "example": "wf.py writer acquire --json"},
     "writer-handover": {"purpose": "写权交接两段式：begin 出交按声明 / accept 接收方核验后授予",
                         "args": {"begin|accept": "子命令",
-                                 "--to": "begin：接收会话标识（必填）",
-                                 "--decision": "accept：交接确认决定（必填）"},
-                        "example": "wf.py writer-handover accept --decision \"h.json\" --json"},
+                                 "--to": "begin：接收会话标识（必填，取自接收方 `enable --json` 的 `facts.session_key`）",
+                                 "--decision": "begin：交接决定文件（必填；Decision 六字段；choice/subject 建议写清接收会话标识，"
+                                               "机制只核六字段并原样存入 writer.handover.decision 供审计；"
+                                               "accept 只核接收者、不比对 choice，且不收该旗标）"},
+                        "example": "wf.py writer-handover begin --to \"<session-key>\" --decision \"handover.json\" --json"},
     "task-pause": {"purpose": "受控暂停任务（挂起点等实际答复）",
                    "args": {"--task": "必填：任务 id", "--reason": "可选：暂停原因"},
                    "example": "wf.py task-pause --task \"2026-xxxx\" --reason \"等人答复\" --json"},
@@ -4306,7 +4512,8 @@ def cmd_help(ctx, args):
             break
     if name is None:
         return ok(facts={"commands": sorted(COMMAND_HELP),
-                         "hint": "wf.py help <命令> 看输入结构与最小示例"},
+                         "hint": ".wf/bin/wf.py help <命令> 看输入结构与最小示例"
+                                 "（示例里的 `wf.py` 指项目脚本；定义见 `session-flow` 运行约定）"},
                   position=codes.position(scope="session"),
                   next_="按需要查看具体命令")
     entry = COMMAND_HELP.get(name)
@@ -4315,7 +4522,8 @@ def cmd_help(ctx, args):
                                            "known": sorted(COMMAND_HELP)})
     facts = dict(entry)
     facts["command"] = name
-    facts["envelope"] = ("自动模式（默认）不手写信封：直接运行 `wf.py <子命令>`，身份由执行边界派生、"
+    facts["envelope"] = ("自动模式（默认）不手写信封：示例里的 `wf.py` 指项目脚本"
+                         "（定义见 `session-flow` 运行约定），身份由执行边界派生、"
                          "写权代次由会话运行态携带。仅显式信封模式（拿不到执行边界时）才从 stdin 或 "
                          "--envelope <file> 提供请求信封（provider=host + identity.host_id + session_id）")
     return ok(facts=facts, position=codes.position(scope="session"), next_="按 example 调用")
@@ -4398,7 +4606,7 @@ def _needs_activation(command, argv):
     if command == "writer":
         return sub in ("release", "acquire")
     if command == "writer-handover":
-        return sub == "begin"
+        return sub in ("begin", "accept")
     return False
 
 
@@ -4478,6 +4686,12 @@ COMMAND_SUB_FLAGS = {
         # `--decision`：终止记录组的提交授权通道（与 `run finish` 同形）。空计划（实例一步未展开）
         # 没有任务条目可承载内联 `decision_ref`，缺它则记录组永久停在 persist_pending（无出口）。
         "terminate": {"--run", "--plan", "--preview", "--decision"},
+    },
+    # 交接两段式的参数面按子命令收窄：`--decision` 只在 begin 被读（accept 是核验事实，
+    # 不写决定）；不登记子命令集合会让 accept 静默吞掉 --decision（2026-11-28 独立复审 F1.4）。
+    "writer-handover": {
+        "begin": {"--to", "--decision"},
+        "accept": set(),
     },
 }
 

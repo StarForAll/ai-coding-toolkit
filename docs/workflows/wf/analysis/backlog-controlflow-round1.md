@@ -505,3 +505,257 @@ F2：`test_startup_probe` 断言 run 绑定会话也出 marker/assets，且 temp
 F3：五入口的 `require_held` 断言具体 `run=` 值（不再 `mock.ANY`）；
 F4：预览的 `pending_stop_request` 只带本实例（清除点登记 §63）；
 F6：实现稿 514 计数句改为"④与②两项显式不在启动面"。
+
+## 66. 已修：2026-11-28 独立复审的描述面与交接缺陷（F1.1/F3.4/F1.4/F3.1/F2.1/F2.2）
+
+**触发与证据**（干净子代理只读复审 HEAD 3c090797，未改工作树）：
+- F1.1/F3.4 **TDD 证据不在任何描述面**：`check._parse_review_notes` 从 review-notes 顶层读
+  `tdd_evidence`，而 `wf help task-check` 的 `inputs.--review-notes` 只登记两轴、
+  `--review-notes-draft` 骨架也只有两轴 → TDD 开启时按骨架填写必报 `WF_CHECK_FAILED`，只能读源码猜字段。
+- F1.4 **交接两段的旗标漂移**：help 把 `--decision` 标成 accept 必填、`--to` 标成 begin 必填；
+  实现是 begin 要求 `--to` **和** `--decision`，accept 不收任何参数（`--decision` 是死旗标，
+  `COMMAND_SUB_FLAGS` 缺 writer-handover 条目，命令级并集放行）。
+- F2.1/F2.2 **交接中间态不可发现、拒绝不可行动**：recovering 时 holder 已清空，
+  `writer acquire` 与通用 `require_held` 都只回 `WF_WRITER_BUSY`，不点名
+  `writer-handover accept`，也没有 exits/next。
+- F3.1 **accept 抹掉检查点**：`writer.handover_accept` 被调用时不传 checkpoint，
+  `status` 的 checkpoint 变 null，与 session-flow「补检查点」相反。
+
+**处置（已落实现）**：
+- help `task-check` 的 `--review-notes` 增 `tdd_evidence` 形状；`--review-notes-draft` 在
+  `plan.tdd` 且 `tdd_applicability=code` 时生成该块并回显 `tdd_required`；`wf-tdd` 指明显式位置。
+- help `writer-handover` 改为 begin 必填 `--to/--decision`、accept 不收 `--decision`；
+  新增 `COMMAND_SUB_FLAGS["writer-handover"]`（begin 两旗标、accept 空集），accept 带
+  `--decision` 现在按 `WF_USAGE_INVALID` 拒绝；示例改为 begin。
+- 交接中间态的 `WF_WRITER_BUSY`（通用 `require_held`、`writer acquire`、`handover accept`）
+  补齐 `writer_state/handover/exits/next`，recovering 时点名 `writer-handover accept`。
+- `_handover_accept` 传 `checkpoint={step: handover-accepted, at, from, object}`；
+  `session-flow` 的 accept 段同步「不收 --decision」。
+- 断言：`test_task_check_draft` 新增 TDD 骨架两例；`test_help_contract` 新增
+  DescriptionSurfaceTest 三例（inputs 登记、accept 拒收死旗标、`wf.py` 简写定义）；
+  `repro/handover-two-stage.py` 新增两条目标断言（中间态点名 accept、accept 后检查点为
+  handover-accepted）与第二个注入面（接受时抹掉检查点）。
+
+**验证**：定向单测 20/20；`repro/run.sh --only handover-two-stage --mode both` GATE-OK
+（run_id 1795834766152-2986444-c6395a19fae4）。
+
+## 67. 已核实不成立 / 只做定义的最小修（2026-11-28 复审 F1.2、F2.3、F2.4、F2.5）
+
+- F1.2（示例里的 `wf.py` 无定义）：成立的是"没有定义位"，不是"示例要全改"。本批在
+  `session-flow` 运行约定里定义一次（`wf.py <子命令>` = `<解释器> .wf/bin/wf.py <子命令>`，
+  项目根也可直接写 `.wf/bin/wf.py`），help 的 `hint/envelope` 同批改为可照抄形态；
+  47 条示例保留简写，不再另造 PATH shim 或软链（新安装/卸载面，charter T5.5）。
+- F2.3（首任务规模确认"无消费点"）：**不成立为无消费点**——`cumulative.confirmed_net`
+  是 `scale.history_max` 的唯一输入，后者进入 `wf-finish` 预览的 `[规模]` 行；它是给人判断的事实，
+  机制明令不设阈值。命令名（`sampling confirm`）与措辞摩擦登记为观察项，不升格门禁。
+- F2.4（验证通过后无路可走）与 F2.5（已授权再确认）：复审逐条核对出口后**未发现真实实例**；
+  与本账本 §53 的收敛结论一致。
+
+## 68. 登记（不属本轮）：复审的其余相邻项
+
+- F1.3 **repo_rules 改前同意与改后摘要的绑定缺口**：`authorize record` 在改动后按路径算摘要，
+  人同意时被绑定内容尚不存在；record 只防"再改"，不证明人看过规模。属授权语义变更
+  （设计稿 §4.2/K6 的确认对象），登记待裁，不在本轮改实现。
+- F3.3 **旗标消费断言按命令级并集**：`command_introspection` 的消费集合是全部子动作并集，
+  子命令级死旗标会漏（本批 F1.4 即由此躲过）。修法（真子命令级消费提取）影响全部帮助断言，
+  成本高，登记下一轮。
+- **交接发现面投影**：`status`/`enable` 目前不报"有交接给你"（只靠 begin 的 next_ 与人工转抄
+  `session-key`）。新增投影是可选改进（新增字段与消费点），登记候选。
+- **plan-q 行格式的静默不识别**：`PLAN_Q_RE` 只认行首 `plan-q-<n>：`，列表符号/编号会让
+  `pending_plan_questions=[]`，冷启动实例为此读源码确认格式。模板注释已写"起始行"，机制可加
+  "发现疑似 plan-q 行但不在行首"的可行动提示；登记候选。
+- §63 侧车 `stop_request` 的清除点：**无消费者可见面**——`_terminate_preview` 对终态实例直接
+  拒绝（`WF_BINDING_MISMATCH`），成功终止后预览不再带出该请求；清除只影响侧车字节，登记观察，不新增机制。
+- §64 启动 ① 的代次子项：见 §69（需人裁契约方向）。
+
+## 69. 待裁（契约级，2026-11-28 复审 F3.2 与 §1.1 三处）
+
+- **设计稿未登记同边界轮换**：`enable --new-session` 已交付且机制稿 §1.4 有登记，
+  设计稿 §1.3 仍写"同一执行边界内的下一个普通任务需要新的执行边界"，设计稿与索引无"轮换"。
+  可选方向：①在设计稿 §1.3/§3 与索引登记同边界轮换（推荐，事实同步 + 回扫）；②保持设计稿，
+  把 `--new-session` 降为机制实现细节并删 skill 指引。需具体修订授权。
+- **§1.1 三处措辞**（复审第 5 项）：①「主动触发」——机制只核 activation 存在，不核调用者，
+  建议写明"调用者由纪律约束、机制不核"；②「本地完整路径」——"外部服务不是前置"与"复杂任务
+  审查需两个异种审查 CLI"同格易读成审查可省，建议把审查环境前提单列；③「强度如实声明」——
+  建议补一句"review-decide 的 pass/fail 来自主会话五轴声明，机制只核人数/异名/锚点/未关闭 blocking"。
+  均属设计稿修订（revision gate），未获授权前只登记。
+- **§64 启动 ① 代次**：机制稿 §5.2 ① 明列代次与 `WF_GENERATION_STALE`，实现只回显
+  `holder.generation`、从不判定（写入口已由 `require_held` 拦）。方向：①补一次只读比对
+  （与 `require_held` 共用实现）；②把 ① 的代次子项登记为"入口自查、启动报告面不列"。
+  两向都改契约文本，需人裁。
+
+## 70. 已修：终审第二轮（交接发现面、唯一实现、checkpoint 消费者、TDD 谓词）
+
+**输入**：2026-11-28 终审（干净子代理，只读 HEAD 3c090797 + 候选改动）指出上一批交接修复
+"打在了错误的调用者上"：新增 `exits/next` 只在有绑定的会话可达，接收方真实路径
+（enable/ready/bind/task-new/run create/definition prepare）没接上；`checkpoint` 只写不读；
+TDD 谓词三处实现；`--review-notes` 的"复杂任务必填"与 Check 消费不符；begin 的 decision 内容
+要求无机制。
+
+**已修**：
+- **单一交接出口**：`cli.writer_handover_projection` + `cli.writer_busy_error` 唯一实现；
+  `require_held`、`writer acquire`、`bind`、`task-new`、`run create`、`definition prepare` 统一使用；
+  recovering 点名 `writer-handover accept`，facts 带 `checkpoint` 与 `handover{from,receiver,object,invalidated_generation}`。
+- **发现面**：`status` facts 增 `checkpoint` 与 `handover`（设计稿 §4.4 的消费者）；`ready` 对
+  被交接对象标 `handover_pending`（不再当"就绪"）；`enable` 增 `facts.writer` 与
+  `handover_for_me`，接收方 `next` 直接指向 accept。
+- **拒绝可行动**：`handover accept` 的"非声明接收者/已绑另一对象"补 `next_`；begin 的 `next_`
+  补"key 打错先按 `wf repair` 恢复"；不做接收者附件存在性校验——显式信封模式不落附件，
+  校验会拒绝合法接收方（证据边界，登记 §71）。
+- **checkpoint 消费**：`status`/`enable`/busy facts 输出；repro 断言从直读 `writer.json` 改为
+  同时经 `status` 消费（订正 §66 F3.1 中"status 的 checkpoint 变 null"的表述——status 此前不输出该字段）。
+- **TDD 谓词唯一**：`check.tdd_scope(plan, check=None)` 返回 `(required, applicability)`，
+  Check 定稿/归档门禁/draft 骨架共用；`wf-tdd` 删除字段形状副本，改为指向
+  `wf help task-check` inputs；`--review-notes-draft` 帮助说明 TDD 块与 `tdd_required`。
+- **描述面订正**：`--review-notes` 改为"所有任务必填"（Check 双轴是固定步骤，轻量任务也消费）；
+  `acceptance-fixtures.md` 的 begin 示例补 `--decision`；`wf-start` 增"接收写权交接"步骤
+  （新执行边界 + enable 取 key + accept，不先 task-new/bind）。
+- **断言**：新增 `test_handover_discovery.py`（busy 投影 recovering/held/maintenance、`tdd_scope`）；
+  `handover-two-stage` 增接收方真实路径断言（ready 的 handover_pending、bind 点名 accept、
+  enable `handover_for_me`、status 的 handover/checkpoint）与第三个注入面（删掉 accept 出口文案）。
+- **验证**：定向单测通过；`repro --only handover-two-stage --mode both` GATE-OK
+  （run_id 1795836572898-3442292-b6d59e12c55f）；T0 与全量见 §72。
+
+## 71. 登记/证据边界（终审剩余，不属本轮）
+
+- **begin 的 `--to` 存在性不可核实**：显式信封模式没有附件，auto 模式才有；本轮不做校验，
+  只在 begin facts 回显 key、在 accept 拒绝时给出口。打错 key 的恢复仍是 `wf repair`
+  （登记候选：auto 模式可核附件，混合模式不可靠）。
+- **无 handover cancel**：交接中间态只能 accept 或 repair；新增取消入口须过 T5.5 缺口三问，
+  本轮不做（终审明确不建议）。
+- **`--to` 的跨会话转抄**：属跨会话外部通道，机制不替；`wf-start` 已写明取 key 与接收步骤。
+- **`checkpoint` 的决定内容**：只投影交接元数据（from/receiver/object/invalidated_generation），
+  `writer.handover.decision` 留审计面；终审建议不扩大投影。
+- **`run create`/`definition prepare` recovering 路径**：已用统一 helper 补出口，但未写专项断言
+  （前置重，repro 不覆盖）；登记下一轮补。
+
+## 72. 已修：终审第三轮（准备范围交接、调用者角色、写后拒绝、谓词顺序等）
+
+**输入**：2026-11-28 更新快照终审（干净子代理，只读 16 改 1 增）。结论摘录与处置：
+
+**已修（本轮）**：
+- **准备范围交接（高）**：`_handover_begin` 原无条件 `_require_instance_match`，未绑定会话的 preparation
+  永远拿不到 begin；`accept` 又无条件给 preparation 写会话绑定（违反 §1.3/§4.4）。修法：
+  `handover_begin_scope_problem`（未绑定只能交 preparation）+ `handover_accept_creates_binding`
+  （preparation 不建绑定、不套工作区门禁）；accept 的 writer scope 仍为 preparation，接收方直接
+  `definition prepare` 接续。纯决策有单测；**完整 preparation 交接的端到端断言仍缺（登记 §73）**。
+- **`invalidated_generation` 消费（中）**：新增 `handover_generation_problem`，accept 前核
+  `generation == invalidated + 1`；不符报 `WF_GENERATION_STALE` 并指 repair/重发 begin。单测覆盖。
+- **TDD 谓词顺序（中）**：`tdd_scope` 改为 plan 优先、check 仅缺键回退；补冲突用例（旧 check docs +
+  新 plan code 等）。
+- **写权状态先于 WIP（中）**：`task-new`/`run create` 的 busy 判定移到 `assert_no_foreign_wip` 之前，
+  接收方在发送方登记 WIP 时也能看到 accept 入口（WIP 门禁对普通路径不变）。
+- **调用者角色（中）**：`writer_busy_error` 增 `you_are`（receiver/initiator/other，按 caller 与
+  handover 的 from/receiver 判），next 改为"接收方 accept；发起方/第三方等其接收或 repair"；
+  repro 断言 mid=initiator、bind=receiver。
+- **`enable` 写后拒绝（中）**：writer 读改为容错 `writer_mod.load`（缺失按空闲），不再在写附件后抛
+  `WF_CAPABILITY_UNAVAILABLE`；recovering 且本会话绑定已终态时，next 追加"之后轮换"。
+- **status --short 投影（中）**：`--short` 现带 `writer{state,checkpoint,handover}`（skills 默认路由可见）；
+  repro 增断言。
+- **accept activation 单一判定（低）**：`_needs_activation` 覆盖 begin/accept，handler 不再重复调用。
+- **轮换入口文案（低）**：recovering 下 `enable --new-session` 的 busy 出口改为"接收方先 accept 或 repair"。
+- **描述面回扫（低）**：实现稿 begin 示例补 `--decision`；acceptance-fixtures 的 TDD 行证据改列
+  `test_sixth_round_guards.py`/`test_single_verification.py`；repro 注释改为"begin 不核附件"。
+- **ready 消费（低）**：`wf-start` 增"可先 `wf ready` 看候选与 `handover_pending`"；run 候选也标
+  `handover_pending`。
+- **TDD 形状一致性（低）**：单测改为从 `check.TDD_EVIDENCE_FIELDS` 派生（help inputs 与 draft 骨架
+  各一条），加字段会同步变红；字面副本仍 3 处（常量/help 描述/骨架），由派生断言锁一致。
+- **本地完整路径与强度声明的措辞**：本地完整路径补"经人重新评估后降级并留理由"（charter T4 的第三
+  条，终审指出）；强度声明补"主会话复核存在、覆盖缺口的人签接受、材料身份 drift"的机制核对面；
+  索引 138 行回扫并更新输入摘要。
+
+**验证**：定向单测（含新 8 例）通过；handover repro both GATE-OK；T0/全量见 §74。
+
+## 73. 登记（终审第三轮剩余，不属本轮）
+
+- **preparation 交接端到端断言**：纯决策（begin 资格/accept 是否建绑定）已有单测，但"begin→accept→
+  definition prepare 接续"的集成路径无夹具；登记下一轮补（需要 preparation 授权与未绑定会话夹具）。
+- **TDD 字段形状仍 3 处字面**（常量/help 描述/骨架）：由 `TDD_EVIDENCE_FIELDS` 派生断言锁一致，
+  但未把 help 描述表/骨架改为运行时派生；登记候选（避免为省一处字面引入 import 环）。
+- **`ready` 的 preparation 对象无候选行**：ready 只列 task/run；准备范围交接的接收方靠 enable 的
+  `handover_for_me` 与 wf-start 步骤，登记观察。
+- **`activation.start_source="human:enable"` 由入口自写、无读取者**：字段名容易被读成"人调用证明"；
+  改字段/删除属 schema 变更，登记候选（与本轮 §1.1 的"机制不核调用者"一致，但字段命名仍需单独裁）。
+- **begin 的 `--to` 存在性**：显式信封不落附件，无法核；auto 模式可核但会误拒混合模式，维持 §71 的边界。
+
+## 74. 终审第三轮后的验证记录
+
+- T0：见 `tmp/wf-goal-round-new/t0-final4.log`（预期 2222 例，OK）。
+- 全量：见 `tmp/wf-goal-round-new/run-full-final3.log`（预期 GATE-OK）。
+- 设计/文本：`validate-wf-design` 100%/100%（输入摘要 4/4）、doc-refs 0、analysis 0、skills 25。
+
+## 75. 已修：终审第四轮（准备交接出口/位置、status 短路、bind 顺序、key 形态）
+
+**输入**：2026-11-28 终局定向复审（只读，18 M + 1 ??）。
+
+- **准备范围交接（高）**：accept 成功后 `next_` 只写"按原对象记录继续"，`run create` 会被
+  `_preparation_problems` 以"preparation belongs to another session"拒，而其出口（原会话创建/换会话）
+  在交接后都不可执行。修法：accept 对 preparation 返回
+  "在本会话重跑 `definition prepare --id <id>` 接续准备（记录转属本会话后 run create 才可用）"，
+  `position` 用 `scope=maintenance`；`_preparation_problems` 的 exit 同批改为这条真出口。
+- **`status --short` 的 writer 投影（中）**：原实现只在已绑定 task 分支；未绑定接收方与 run 绑定看不到。
+  修法：`status` 顶层统一 `facts.writer{state,generation,holder,checkpoint,handover}`，`--short` 直接复制；
+  repro 增"accept 前未绑定会话的 --short 投影"断言。
+- **bind 顺序（中）**：`assert_no_foreign_wip` 仍在写权状态之前；recovering+第三方 WIP 会挡住 accept 指针。
+  修法：`_resume_bind` 后先判写权状态，再核工作区。
+- **`enable` 的写后拒绝（中）**：`writer_mod.load` 对损坏记录抛错、缺失返回空且 state=None。修法：
+  函数入口用 `writer_snapshot`（缺失→空、损坏→`(空, True)`）读一次（写盘前）；损坏只加 warning 并
+  投影 `writer{state:unknown,corrupt:true}`；缺失按空闲、不输出 `state:null`。
+- **`--to` 形态校验（中）**：begin 之前不核 key 形态，粘贴错就进 recovering 无法重发。修法：
+  `--to` 必须 64 位小写十六进制，否则 `WF_USAGE_INVALID` + 转抄出口（存在性仍受显式信封限制）。
+- **描述面回扫（低）**：`session-flow` 删除"accept 不收 --decision"的参数复述（help 是唯一入口用法面）；
+  设计稿 §1.1 本地完整路径补"满足轻量判据 + 重跑受影响检查"、强度声明把"才是"改"例如"、指令分工补
+  "运行期命令形态（含 `wf.py` 简写）由 session-flow 定义一次"；索引/机制稿输入摘要同步。
+
+**验证**：定向单测 28/28；handover repro both GATE-OK；T0/全量/设计校验见 §76。
+
+## 76. 终审第四轮后的验证与剩余边界
+
+- T0、全量、validate/doc-refs/analysis/skills 结果见 `tmp/wf-goal/worklog.md` 与 `tmp/wf-goal-round-new/`。
+- 剩余边界：preparation 交接的**端到端**断言仍缺（begin→accept→definition prepare→run create 的顺序只由
+  纯决策单测与静态走查覆盖）；`ready` 的 `handover_pending` 仍无专门出口文案；`activation.start_source`
+  命名/消费者未核；TDD 形状仍有常量/help/骨架三处字面（派生断言锁一致）；`status --short` 的写入
+  等价性未跑完整冷启动（H 是第三轮快照，未覆盖第四轮 incremental 改动）。
+
+## 77. 已修与登记：终审第五轮（摘要范围、失效代次空判定、帮助内部矛盾、时序指引）
+
+**输入**：2026-11-28 最终定向复核（只读）。
+
+- **H1 机制稿摘要越界**：2026-11-28 段末"未改任何判定、字段、门禁或原因码"与本批代码差异相反。修法：
+  改成"本段只改契约文本；同批代码侧变更（用法校验、facts 键、错误顺序等）见实现稿与各入口，
+  不能按纯文案同步审阅"。
+- **H2 失效代次空判定**：`handover_generation_problem` 在工具内无可达触发点（begin 后恒等、
+  repair 清空 handover 后 accept 先报 busy），是"只有形式没有消费点"。修法：删除该函数/调用/单测；
+  机制稿 §? "handover 消费 invalidated_generation"改为"保存失效代次供核对，交接中断由 repair 清空
+  交接并恢复空闲（不另设工具内 stale 分支）"。
+- **M2 时序不可达的发现事实**：`enable` 的 `handover_for_me` 只在 begin 之后为真，而接收方必须先
+  enable 取 key；首次 enable 看到 `writer:null` 是正常。修法：`wf-start` 的接收段改成四步不可换序
+  （① enable 取 key 并说明 writer 为空正常 → ② begin → ③ status --short/再次 enable 确认 receiver →
+  ④ accept），并写明 key 打错只能 repair。
+- **M3 task-check 帮助内部矛盾**：purpose 仍写"复杂任务还需双轴"，与 `--review-notes 所有任务必填`
+  相反。修法：purpose 改"所有任务都要双轴内部审查"。
+- **L1/L2/L4/ready 双读**：`writer_busy_error` docstring 收窄为"主要入口共用，run 族自有兜底保留"；
+  `writer_snapshot` 非 dict 返回 `(空, True)`（损坏）；`enable.writer` 补 `holder`；`ready` 改用一次
+  `writer_snapshot`（不再 per-task `ctx.writer()` + 另一次 load）。
+- **登记（不属本轮）**：
+  - **M1 `--to` 只核 64-hex 形态、不核接收方存在**：自动模式有附件可核，显式信封模式不落附件；
+    混合模式无法安全区分，维持"形状校验 + 转抄核对 + 打错走 repair"的边界（§71 同族）。
+  - **L3** `gates` 机械修订等价性另有一处 `or "code"` 默认（语义不同，登记候选）；
+  - **L5** `begin --decision` 的审计消费面（人/审计）未单独登记，防止下轮误删（backlog 记录）；
+  - **preparation 交接端到端断言**仍缺（纯决策单测 + 静态走查）；**最终快照冷启动未再复跑**
+    （第五轮为文档/工具/时序改动，start 路径未变；以 H 的快照为最近冷启动证据，边界如实写）。
+
+**验证**：定向单测 27/27；handover repro both GATE-OK；T0/全量/校验见 §78。
+
+## 78. 终审第五轮后的验证
+
+- T0、全量、validate/doc-refs/analysis/skills 结果见 `tmp/wf-goal/worklog.md` 与 `tmp/wf-goal-round-new/`。
+
+## 79. 撤回：`--to` 的 64-hex 形态校验（终审第五轮后的成本判定）
+
+终审建议对 `writer-handover begin --to` 做 64 位十六进制形态校验（零成本拦截转抄错）。实现后
+`cp1_tests`/`r71_tests` 的短占位 key 被新拒绝面挡住，必须改这两个脚本的字节；而它们属于
+candidate audit 的登记面，改字节会把 T0 的 `test_source_coverage` 打红（`script_sha256` 与
+`declared-candidate-unverified`），需要重跑候选审计才恢复。按"范围收敛/成本不扩大本轮"判定：
+**撤回形态校验**，`cp1_tests`/`r71_tests` 恢复 HEAD 字节；`--to` 仍只做转抄核对，打错由 accept
+按 key 拒绝并给 `wf repair` 出口（§71 的边界不变）。登记为下一轮与 candidate audit 同批处理。
