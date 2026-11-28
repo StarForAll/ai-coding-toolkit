@@ -2000,17 +2000,28 @@ def step_contract(doc, step, *, run_id, run, workflow_id):
                         "text": action.get("text"),
                         "required": action.get("required") is not False,
                         "skip": action.get("skip"),
-                        "human_points": [item for item in action.get("human_points") or []
+                        "human_points": [dict(item) for item in action.get("human_points") or []
                                          if isinstance(item, dict)],
                         "result": "pending"})
     human_points = [{"id": item.get("id"), "question": item.get("question"),
-                     "choices": item.get("choices")}
+                     "choices": list(item.get("choices")) if isinstance(item.get("choices"), list)
+                     else item.get("choices")}
                     for item in step.get("human_points") or []
                     if isinstance(item, dict) and isinstance(item.get("id"), str)]
-    verifications = [{"id": item.get("id"), "source": item.get("source"),
-                      "consume_at": item.get("consume_at")}
-                     for item in step.get("verifications") or []
-                     if isinstance(item, dict) and isinstance(item.get("id"), str)]
+    verifications = []
+    for item in step.get("verifications") or []:
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            continue
+        entry = {"id": item.get("id"), "source": item.get("source"),
+                 "consume_at": item.get("consume_at")}
+        # 验证来源的身份必须随契约一起落进任务记录：Check 要在**已批准 plan** 里解析
+        # `stored_in.verification_id` 与 `consume_at`。只留 id 会让"同名不同消费时点"的
+        # 声明通过契约核对（2026-11-28 外审 A1-1）。旧契约没有这两项时按 legacy 消费。
+        if isinstance(item.get("established_by"), dict):
+            entry["established_by"] = dict(item["established_by"])
+        if isinstance(item.get("stored_in"), dict):
+            entry["stored_in"] = dict(item["stored_in"])
+        verifications.append(entry)
     return {"step": {"workflow_id": workflow_id, "step_id": step.get("id"),
                      "definition_digest": (run.get("definition") or {}).get("digest")},
             "actions": actions,

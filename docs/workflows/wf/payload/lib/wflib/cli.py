@@ -437,7 +437,8 @@ class Context:
             raise CliError("WF_IDENTITY_UNRESOLVED",
                            {"reason": verdict["reason"], "facts": verdict.get("facts"),
                             "owners": l2_owners,
-                            "exits": ["人调 /wf-start 显式登记当前调用者",
+                            "exits": ["由人调用 /wf-start 显式登记当前调用者（启用入口是唯一登记通道；"
+                                      "机制不核调用者身份）",
                                       "结束另一个调用者后重试",
                                       EXPLICIT_ENVELOPE_EXIT]},
                            next_="按 facts.reason 的出口处置后重试")
@@ -666,7 +667,7 @@ class Context:
         "run", "baseline-apply", "task-knowledge", "review-launch", "review-import",
         "review-decide",
         # 启用入口也是 roots 的**登记通道**（设计稿 §1.3）：C2 阻断的出口指向它，
-        # 它必须在写盘前经过同一维护点，否则"人调 /wf-start 登记"永远不会发生。
+        # 它必须在写盘前经过同一维护点，否则"由人调用 /wf-start 时启用入口登记"永远不会发生。
         "enable",
     })
 
@@ -691,7 +692,8 @@ class Context:
             facts = dict(verdict.get("facts") or {})
             facts["reason"] = reason
             if reason == store.CONCURRENT_CALLER:
-                facts["exits"] = ["人调 /wf-start 显式登记当前调用者",
+                facts["exits"] = ["由人调用 /wf-start 显式登记当前调用者（启用入口是唯一登记通道；"
+                                  "机制不核调用者身份）",
                                   "结束另一个调用者后重试"]
                 next_ = "按 C2 分级：未登记的调用者不得自动继承会话"
             else:
@@ -1910,7 +1912,7 @@ def cmd_enable(ctx, args):
                         "handover": handover}
                        if writer_state not in (None, "idle") else None),
             "handover_for_me": handover_for_me,
-            # 启用登记（设计稿 §1.3）：人调启用入口登记并发调用者时，事实必须可见。
+            # 启用登记（设计稿 §1.3）：启用入口登记并发调用者时，事实必须可见。
             **(_roots_registration_facts(ctx)),
         },
         position=codes.position(scope="session"),
@@ -2579,6 +2581,37 @@ def _ensure_run_releasable(ctx, run_id):
                            {"reason": "run task keeps undisposed WIP", "task": task_id,
                             "paths": still},
                            next_="先处置这些路径（提交/反向修正/承接）再释放")
+    # 已登记 WIP 之外的**本任务归属未提交路径**同样不能因释放而丢交接记录：暂停实例的
+    # 当前任务若尚未登记 `handoff.wip`，旧实现只看到空列表就直接放行（2026-11-28 外审 A1-4）。
+    # 分类失败 fail-closed：读不到工作区不等于可以释放。
+    if not task.get("terminal"):
+        from . import scope as scope_mod
+
+        try:
+            receipts = tasks_mod.task_receipts(ctx.root)
+            classified = scope_mod.classify_candidates(ctx.root, task, receipts=receipts)
+            dirty = set(scope_mod.uncommitted_paths(ctx.root))
+        except Exception as exc:  # noqa: BLE001 — 证据不可读按阻断（不静默放行）
+            if isinstance(exc, (CliError, tasks_mod.TaskError)):
+                raise
+            raise CliError("WF_WORKSPACE_UNRESOLVED",
+                           {"reason": "cannot classify workspace before release",
+                            "task": task_id, "error": f"{type(exc).__name__}: {exc}",
+                            "exits": ["先 `status`/`wf repair` 核对工作区与写权记录",
+                                      "保持写权，不带证据释放"]},
+                           next_="先恢复可读的工作区事实，再决定是否释放")
+        owned = set(classified["buckets"].get("e") or []) | set(classified["buckets"].get("a") or [])
+        unregistered = sorted(owned & dirty)
+        if unregistered:
+            raise CliError("WF_WORKSPACE_UNRESOLVED",
+                           {"reason": "run task has uncommitted work not registered as WIP; "
+                                     "releasing would lose handover facts",
+                            "task": task_id, "paths": unregistered,
+                            "registered_wip": retained,
+                            "exits": ["保持写权（不释放），先在该任务处置这些路径（提交/反向修正/具名承接）",
+                                      "处置后重跑 writer release",
+                                      "需要跨会话交接时用 writer-handover（不释放写权）"]},
+                           next_="先处置或登记这些路径；不要把未登记的 WIP 留在工作区后释放")
 
 
 def _release_writer_locked(ctx, holder):
@@ -4032,6 +4065,8 @@ def cmd_verify(ctx, args):
             raise CliError("WF_SEMANTIC_DECISION",
                            {"problems": problems,
                             "exits": ["补齐四项依据后重跑（required 不接受『接受风险』结案）",
+                                      "failed 是已核实缺陷：修复后重检，不能收窄",
+                                      "pending 项记录依据后按 task-replan 收窄规划并重批重检",
                                       "按设计稿 §5.6 异常归档"]})
         fresh, action_ref = tasks_mod._start_task_action(
             ctx, directory, fresh, "task.verify.resolve", holder,
@@ -4042,8 +4077,11 @@ def cmd_verify(ctx, args):
             evidence_refs=[str(acceptance_id)])
     return codes.result("WF_OK", object={"id": task_id, "name": fresh.get("title")},
                         position_=codes.position(scope="task", phase=fresh.get("phase"), task_id=task_id),
-                        next_="继续推进；required 未结案会阻断归档",
-                        facts={"resolution": record, "control_assertion": assertion})
+                        next_=("处置依据已落档；它不改变当前 Check。要实际收窄 required 验收项："
+                               "按 task-replan 修改 PRD 验收口径 → 重新批准 → 重跑 task-check；"
+                               "失败项先修复后重检，不能以收窄结案；放弃目标按设计稿 §5.6 异常归档"),
+                        facts={"resolution": record, "changes_check": False,
+                               "control_assertion": assertion})
 
 
 def cmd_authorize(ctx, args):

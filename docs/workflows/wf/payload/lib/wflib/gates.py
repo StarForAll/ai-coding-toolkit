@@ -1149,7 +1149,21 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
     """
     check = task.get("check") or {}
     if check.get("result") != "pass":
-        return False, "WF_CHECK_FAILED", {"reason": "current check is not pass", "check": check.get("id")}
+        # 当前 Check 不是 pass 时也要把 "required 验收项未核实" 的**可执行出口**说出来：
+        # 否则 `verify resolve` 落档后仍被同一句「check 不是 pass」送回重试（2026-11-28 A1-2）。
+        from . import projection as projection_mod
+
+        pending_required = projection_mod.required_unverified(ctx, task)
+        facts = {"reason": "current check is not pass", "check": check.get("id")}
+        if pending_required:
+            facts["pending_required_unverified"] = pending_required
+            facts["exits"] = [
+                "failed 是已核实缺陷：先修复，再重跑 task-check；不能以收窄/接受风险结案",
+                "pending（未核实）项：用 `verify resolve --kind narrow` 落四项依据，"
+                "再按 `task-replan` 收窄 PRD 验收口径、重新批准并重检",
+                "目标/范围确实放弃时按设计稿 §5.6 异常归档",
+            ]
+        return False, "WF_CHECK_FAILED", facts
     # 「判断不了」只挂起最终结论，不冻结中途动作（v42 §5.3）：在归档口拦下即可
     # 只按**当前有效**判断算待决：被人回答/更正过的条目由新条目 supersedes 承接，
     # 历史照留（append-only），但不再算"还没回答"。否则诚实求助会变成流程死路。
@@ -1171,9 +1185,9 @@ def final_gate_nonstep(ctx, task, ignore_action_id=None):
     if pending_required:
         return False, "WF_SEMANTIC_DECISION", {
             "pending_required_unverified": pending_required,
-            "reason": "required 验收项未核实：只能收窄（四项依据齐全）或异常归档",
-            "exits": ["`wf verify resolve --kind narrow` 给齐 id/原因/影响/补偿 后重入",
-                      "`wf verify resolve --kind inspection` 记录人工核验证据",
+            "reason": "required 验收项未核实：只能收窄规划或异常归档",
+            "exits": ["`verify resolve --kind narrow` 落四项依据（只落档，不改 Check）",
+                      "按 `task-replan` 收窄 PRD 验收口径、重新批准并重检",
                       "按设计稿 §5.6 异常归档"],
         }
     # S6 的第 3/4 项：blocking 必须已被处置（"不处置"不是关闭，K10/K4b）

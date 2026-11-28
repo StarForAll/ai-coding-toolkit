@@ -4288,10 +4288,12 @@ def _deleted_paths(root, paths):
 
 
 def _commit_gate_problems(ctx, task, paths):
-    """K6 第 2/5 类提交前置（删除、仓库级规则文件）：所有提交入口共用。
+    """K6 第 2/5 类提交前置（删除、仓库级规则文件）：**任务侧提交入口**共用。
 
-    此前只有 `archive` 核，`stop`/`task-abandon`/`run terminate` 直接 `_commit_paths`，
-    同一批删除或规则变更可从这些出口绕过人签确认。返回 `(code, facts)` 或 None。
+    `stop`/`task-abandon` 的任务侧提交走这里；`archive` 在业务提交前内联消费同一组判据
+    （见 `archive` 的 ⑥ 段）。实例**记录组**（`.wf/workflow-runs/<id>.json` 与定义快照）
+    的提交不在此列：其路径不含环境级规则文件，也不会产生删除，故
+    `runs.py::_run_persist` 直接调 `_commit_paths`。返回 `(code, facts)` 或 None。
     """
     from . import authorize as authorize_mod
 
@@ -6215,22 +6217,27 @@ def stop_work(ctx, decisions, choice):
                              "exits": ["把这些条目改写为实际路径后重试（可用 `stop --draft` 的预填）",
                                        "或先按 `--workspace-exclusion` 声明排除，再只列本任务路径"]})
         choice_now = decisions[0].get("choice")
+        # 空 subject 守卫只看**本任务业务 WIP**：`scope.uncommitted_paths` 含归档前恒脏的
+        # `.wf/tasks/<本任务>/**` 控制记录与 a 桶回执路径，直接拿它判会把"没有业务 WIP 的
+        # 正常收工"误拒（2026-11-28 外审 A2-2）。b 桶控制记录、a 桶本任务回执都不算待处置。
+        touch = approved_touch_paths(task)
+        receipts = task_receipts(ctx.root)
+        classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
+        dirty = set(scope.uncommitted_paths(ctx.root))
+        pending = sorted(set(classified["buckets"]["e"]) & dirty)
         if not paths and choice_now != "transfer":
-            # 无 WIP 时允许空路径：只显式记载没有任何覆盖路径（P3）
-            if scope.uncommitted_paths(ctx.root):
+            if pending:
                 raise TaskError("WF_SEMANTIC_DECISION",
-                                {"reason": "工作区有未提交差异，收工决定须在 subject 列出覆盖路径"})
+                                {"reason": "本任务仍有未提交改动，收工决定须在 subject 列出覆盖路径",
+                                 "unlisted": pending,
+                                 "exits": ["用 `stop --draft` 取预填路径后重试",
+                                           "没有业务 WIP 时 subject 可留空；控制记录不列入"]})
         items = []
         for relative in paths:
             try:
                 items.append(fingerprint.item(ctx.root, relative))
             except records.RecordInvalid as exc:
                 raise TaskError("WF_PATH_INVALID", {"reason": str(exc), "path": relative})
-        # 损坏的快照必须显式拒绝：静默折叠成空批准面会放行越界 keep
-        touch = approved_touch_paths(task)
-        receipts = task_receipts(ctx.root)
-        classified = scope.classify_candidates(ctx.root, task, receipts=receipts)
-        pending = sorted(set(classified["buckets"]["e"]) & set(scope.uncommitted_paths(ctx.root)))
 
         def covered(candidate, patterns):
             return any(candidate == pattern or paths_mod.match_path(pattern, candidate) for pattern in patterns)
@@ -6247,8 +6254,9 @@ def stop_work(ctx, decisions, choice):
                                 {"reason": "保留 WIP 只适用于当前批准范围内且归属明确的路径",
                                  "out_of_scope": out_of_scope, "approved": touch})
             # 机制稿 §4.3（2026-11-27 人裁）：无归属、跨任务混杂或外来改动不能纳入 keep 例外。
-            # 归属按本任务 e 桶判（与 classify 同一判据），不按 glob 命中判。
-            owned = set(classified["buckets"]["e"])
+            # 归属按本任务 e ∪ a 判：a 是**本任务回执**路径（baseline-apply 等），同样是本任务
+            # 交付，不能因它在 receipts 里就被判 foreign（2026-11-28 外审 A2-2 死路 B）。
+            owned = set(classified["buckets"]["e"]) | set(classified["buckets"]["a"])
             foreign = [item for item in paths if item not in owned]
             if foreign:
                 raise TaskError("WF_WORKSPACE_UNRESOLVED",
@@ -6273,7 +6281,7 @@ def stop_work(ctx, decisions, choice):
             # 归属同口径（机制稿 §4.3，2026-11-27 人裁 §20）：授权覆盖后再核归属——提交只能覆盖
             # 本任务 e 桶路径，不能借人签 grant 把 d/c 档（他人登记的未处置 WIP）一并入库。
             # 顺序先授权后归属：未覆盖的授权仍报 WF_COMMIT_NOT_AUTHORIZED（既有契约）。
-            owned_commit = set(classified["buckets"]["e"])
+            owned_commit = set(classified["buckets"]["e"]) | set(classified["buckets"]["a"])
             foreign_commit = [item for item in paths if item not in owned_commit]
             if foreign_commit:
                 raise TaskError("WF_WORKSPACE_UNRESOLVED",

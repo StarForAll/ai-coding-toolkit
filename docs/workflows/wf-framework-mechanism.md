@@ -30,7 +30,7 @@ baseline: 2026-11-01 人工确认的框架设计及 charter
 
 | 文件 | SHA-256 |
 |---|---|
-| wf-framework-design.md | 0ee7d5fc229abaf9ed9d0df44828dccf7df822411efddcaf357c2fa921239813 |
+| wf-framework-design.md | f63664015f400bdf26d101490ef68a9d681f164308d63767f85719d1638b3f0f |
 | wf-framework-charter.md | 8b816ee4cb1fad0341ad7b3806748622c6c66f26040ec894da49d43d2ba33c16 |
 | wf-framework-design.index.md | 799a69555ff5cf624b387d1285b6fdb191c6a334d8479ceeaef027cac00c11e7 |
 | wf-framework-design.sources.md | 47484498fc23c6292c394fa1b4a7fa0b9eac5a9ca5c9aeb739916b1c16e4a25b |
@@ -553,7 +553,7 @@ task 步骤另有 `task_kind`（ordinary/initialize/bootstrap）、`goal`、`acc
 
 普通任务仅接受 project/secret_ref，因其没有实例 inputs/步骤/动作引用上下文；工作流按顺序边界使用全表。工作流创建时 type=secret_ref 的输入值采用本表 secret_ref 对象，type=artifact_ref 的值采用可解析的 project/step 引用；type=path/text 分别为安全路径/文本。通过 from=input 取得秘密引用后仍按 secret_ref 对象处理，不解析为要落盘的明文。秘密不可用仅报告引用名与缺失事实，不要求抄入定义/快照/实例输入；具体秘密通道由宿主能力及当前授权确认，不提供秘密通道的调用不能改用 argv。
 
-验证声明保存 `id`、`source`、`established_by`、`stored_in`、`consume_at`（start/check/finish）。建立者与落点采用下表带类型引用，禁止把步骤名、任务 id 和自由文本混用；静态校验核类型和来源顺序，消费前解析为具体任务/文件/验证声明并固定版本。
+验证声明保存 `id`、`source`、`established_by`、`stored_in`、`consume_at`（start/check/finish）。建立者与落点采用下表带类型引用，禁止把步骤名、任务 id 和自由文本混用；静态校验核类型和来源顺序，消费前解析为具体任务/文件/验证声明并固定版本。任务 Check 消费该声明时，按已批准 plan 对齐 `stored_in.verification_id` 与 `consume_at`；旧任务记录没有这两项时按 id 消费并标 legacy，不回写历史（2026-11-28 控制流修复批）。
 
 | source | established_by | stored_in 与解析 |
 |---|---|---|
@@ -604,7 +604,7 @@ project_file/step_output 的验证说明在对应文件内使用唯一 `<!-- wf-
 
 顺序前置只直接引用上一未略过 task 步骤的正常归档任务；human 步骤不生成任务边。额外前置、返工、替换按本文 §6 的人发起动作处理。整个任务四阶段完成且归档持久化可核后，才记录该步骤 satisfied 并推进 cursor。已有产物核条件通过可记复用，但任务 Check/finish 仍执行。
 
-actions 的判定进度与人判保存在所属 task.execution，叙述与证据引用保存在 handoff/检查材料中，实例只引用任务事实；脚本核必须动作的结果/必要验证留痕，AI 在批准范围执行工作说明。cursor.task_id 为受控返工 R 时只执行 R 及既定返回定位，不把 R 归档当作原定义步骤完成。结果不明的业务命令先查真实产物与结果，控制动作幂等不授权重放业务副作用。
+actions 的判定进度与人判保存在所属 task.execution，叙述与证据引用保存在 handoff/检查材料中，实例只引用任务事实；脚本核必须动作的结果/必要验证留痕，AI 在批准范围执行工作说明。步骤级与动作级 `human_points` 都必须有命中声明选项的答复；required 且无 `skip` 声明的动作不得以 `waived` 结案（2026-11-28 控制流修复批）。cursor.task_id 为受控返工 R 时只执行 R 及既定返回定位，不把 R 归档当作原定义步骤完成。结果不明的业务命令先查真实产物与结果，控制动作幂等不授权重放业务副作用。
 
 可略步骤在生成任务前先处理 skip.decision_point，人确认条件与下游替代成立后在实例 step_results 保存决定并记 skipped，不为保存答复强建任务。已生成 task 则先明确放弃/替换及改动去向，未完对象不能被游标绕过。必需步骤变更必须按定义版本迁移/退出路径处理；口头略过不放宽框架 required 门禁。可略 action 同样要核其下游使用，不能把必要测试编码成可略业务动作。下游引用解析按本文 §7.1 的统一消费规则执行（来源正常完成核原产物；合法略过且已确认替代映射则核替代来源声明的真实产物就绪并固定到当前任务批准验证材料；两者皆无才阻断；三类消费方同用该规则），替代产物核验等同前序产物，不降低验证要求。
 

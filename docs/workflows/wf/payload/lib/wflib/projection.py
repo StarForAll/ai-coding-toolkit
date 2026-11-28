@@ -205,6 +205,10 @@ def resolve(task, acceptance_id, *, kind, evidence, reason=None, impact=None, co
 
     `kind=narrow`（收窄口径）必须给齐 4.9 的四项：被收窄项 id（本参数）、不可验证的客观原因、
     影响面与被放弃的保障、补偿措施；`kind=inspection` 是人工核验，必须有 evidence。
+
+    本入口只**落档**，不改变当前 Check（`check.acceptance_results` 与 `result` 不动）：
+    实质收窄是规划变化，须走 `task-replan` + 重新批准 + 重检；失败是已核实缺陷，不能收窄。
+    这两句由 `verify resolve` 的 next 与 Finish 门禁的 exits 共同消费（2026-11-28 A1-2）。
     """
     problems = []
     if kind not in ("narrow", "inspection"):
@@ -215,13 +219,47 @@ def resolve(task, acceptance_id, *, kind, evidence, reason=None, impact=None, co
         for name, value in (("reason", reason), ("impact", impact), ("compensation", compensation)):
             if not str(value or "").strip():
                 problems.append({"reason": f"收窄必须给 {name}（4.9 四项缺一不接受）"})
+    plan = task.get("plan") or {}
+    plan_ids = {str(item.get("id")) for item in plan.get("acceptance") or []
+                if isinstance(item, dict) and item.get("id")}
+    results = {str(item.get("acceptance_id") or item.get("id")): item
+               for item in ((task.get("check") or {}).get("acceptance_results") or [])
+               if isinstance(item, dict) and (item.get("acceptance_id") or item.get("id"))}
+    key = str(acceptance_id)
+    if key not in plan_ids and key not in results:
+        problems.append({
+            "reason": "验收项不在当前批准 plan.acceptance 或本次 Check 结果中",
+            "acceptance": acceptance_id,
+            "known": sorted(plan_ids | set(results)),
+            "exits": ["核对 --id；不存在的 id 不产生处置",
+                      "若验收项换过 id：回 Plan 对齐后再处置"]})
+        return None, problems
+    result = results.get(key) or {}
+    conclusion = result.get("conclusion")
+    if kind == "narrow":
+        if conclusion == "passed":
+            problems.append({"reason": "验收项已 passed，无需处置", "acceptance": acceptance_id})
+            return None, problems
+        if key not in results:
+            problems.append({
+                "reason": "当前 Check 没有该验收项结果；先跑 task-check 再决定是否收窄",
+                "acceptance": acceptance_id,
+                "exits": ["先重跑 task-check；只有 pending（未核实）项才可收窄"]})
+            return None, problems
+        if conclusion == "failed":
+            problems.append({
+                "reason": "failed 是已核实的缺陷，不是不可验证；不能以收窄结案",
+                "acceptance": acceptance_id,
+                "exits": ["修复对应缺陷后重跑 task-check",
+                          "范围/目标确实要放弃时按设计稿 §5.6 异常归档"]})
+            return None, problems
     if problems:
         return None, problems
     resolutions = dict(task.get("unverified_resolutions") or {})
     record = {"kind": kind, "evidence": evidence, "by": by, "at": records.now_str()}
     if kind == "narrow":
         record.update({"reason": reason, "impact": impact, "compensation": compensation})
-    resolutions[str(acceptance_id)] = record
+    resolutions[key] = record
     task["unverified_resolutions"] = resolutions
     return record, []
 
