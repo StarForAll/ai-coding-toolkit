@@ -22,7 +22,7 @@ user-invoked: true
      使宿主身份换新；宿主标识缺位时同边界按在途会话续用（`host_identity_present`/`session_provider`
      facts 如实报告），在途期内 /clear 仍不可区分是已声明边界。
 2. `enable` 的 `facts.binding` 给出当前绑定。已绑定：只恢复原对象，不换对象。人想开新任务时：旧对象已终态的，用 `wf.py enable --new-session` 在本边界换新会话后 `task-new`
-   （宿主无关，普通宿主与有会话标识的宿主都走这一条）；只有需要**真正并行**推进两个对象时才另开终端/窗口。**不要用 `task-new` 试探**——对象在途时它只会报 `WF_BINDING_MISMATCH`。
+   （宿主无关，普通宿主与有会话标识的宿主都走这一条）；需要**真正并行**推进两个对象、或普通任务返工后要绑定承接任务 R（本会话仍绑定 T）时，另开终端/新执行边界。**不要用 `task-new` 试探**——对象在途时它只会报 `WF_BINDING_MISMATCH`。
 3. 未绑定：由人选择
    - 新普通任务：`task-new`（`kind`/`title`/`template` 的取值见 `wf help task-new`）；
    - 既有就绪任务：`bind --task <id>`（可先 `wf ready` 看候选与阻断；`handover_pending` 表示对象在交接中间态）；
@@ -34,10 +34,11 @@ user-invoked: true
      `facts.session_key`（此时项目还没有交接，`writer` 为空或由发起方持有都是正常的），把 key 转交发起方；
      ② 发起方 `writer-handover begin --to <key> --decision <文件>`；③ 接收方运行 `status --short`
      （或再次 `enable`），确认 `writer.handover.receiver_session_key` 是本会话 / `handover_for_me=true`；
-     ④ 运行 `writer-handover accept` 接收对象。接收前不要 `task-new`/`bind`；key 打错只能按
-     `wf repair` 恢复，转抄时核对回显。
+     ④ 运行 `writer-handover accept` 接收对象。接收前不要 `task-new`/`bind`。key 打错时：接收前由发起方
+     用正确 key 重发 `begin` 更正（中间态保持 recovering、不动代次）；已接收/接收中断后按 `wf repair`
+     恢复写者记录，转抄时核对回显。
 4. 需要重新取得已被释放的写权时：`writer acquire`。
-5. **自动模式下不手写 session 信封**：直接 `wf.py enable --json`，身份由执行边界派生
+5. **自动模式下不手写 session 信封**：直接 `enable`（JSON 输出按需），身份由执行边界派生
    （会话 leader + 进程链），`activation`/`instance_id` 由入口写进运行态附件并由后续命令自动读取。
    **写权代次同样不用手填**：取得写权时入口把代次记进本会话运行态，后续写命令缺省取它；
    显式 `inputs.generation` 仍可覆盖（过期会被 `WF_GENERATION_STALE` 拒）。
@@ -46,12 +47,10 @@ user-invoked: true
    `enable` 的 `facts.activation` 就是可缓存的启用事实——`activation_source=carried` 表示请求里已带，
    `formed_by_enable` 表示由本次启用形成；两种都原样缓存，并按 `facts.cache_hint` 随每次请求放进 `session.activation`。
    缓存丢了就重跑 `enable` 重新形成（`enable` 幂等，不改对象绑定）。
-7. **显式模式**下记录入口回显的两项事实，后续请求都要携带：
-   - `generation` → 信封 `inputs.generation`；
-   - `enable`/`task-new`/`bind` 回显的 `activation`（`{enabled, start_source, enabled_at}`）→ 信封 `session.activation`，
-     以及首次绑定生成的 `instance_id` → 信封 `session.instance_id`。
-   **不携带 activation 会被 `WF_NOT_ENABLED` 拒（`bind`/`task-new`/`task-approve` 等都在核验集里）；不携带或携带不一致的
-   `instance_id` 会被 `WF_IDENTITY_UNRESOLVED`/`WF_BINDING_MISMATCH` 拒**。这两项由适配层按每次请求重放，不靠模型记忆。
+7. **显式模式**下由适配层把入口回显的启用事实与实例标识随每次请求重放（字段名、信封形状与
+   缓存口径见 `wf help enable` 的 inputs 与 `session-flow` 运行约定，本 skill 不复制）。
+   **不携带启用事实会被 `WF_NOT_ENABLED` 拒（`bind`/`task-new`/`task-approve` 等都在核验集里）；
+   不携带或携带不一致的实例标识会被 `WF_IDENTITY_UNRESOLVED`/`WF_BINDING_MISMATCH` 拒**。
 
 ## 定义与实例（2026-11-12）
 
@@ -64,6 +63,7 @@ user-invoked: true
    因此仍是单写者，别的会话拿不到写权。**没有授权就停在需人决策**（不会写一条自报 `source=human` 的记录）；
    定义还不存在时也可以先跑这一步固定范围（校验必然不过，准备记录照常保留为草稿）。
    **准备通道只给未绑定会话**：已绑定对象（含实例内任务）要改定义，走其已批准任务的 Plan 范围，不借准备通道改绑。
+   准备会话丢失（终端关闭/宿主会话不可续）时，按 `instance-flow` 的 repair 出口复位写者后由新会话接续。
 2. **在已授权的范围内起草** `.wf/user-workflows/<workflow-id>.md`：唯一 `<!-- wf-definition:v1 -->` 标记 + 紧邻 `json` 块。
    机制会拒的（`WF_DEFINITION_INVALID`，按 `problems[].stage` 顺序修）：结构/schema、id 重复与保留前缀
    （人判点 id 不得以 `plan-q-`/`debug-ruling-` 开头）、引用来源与顺序（`from` 只能取 input/project/secret_ref/step/action，

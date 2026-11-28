@@ -20,6 +20,15 @@ class CheckNextHintTest(unittest.TestCase):
         self.assertIn("finish", hint)
         self.assertNotIn("review-launch", hint)
 
+    def test_finish_hint_names_the_real_command(self):
+        """终验主链实测（2026-11-28）：`next_` 只写「finish（wf-finish）」会被读成命令，
+        照它跑 `wf help finish` 得到 unknown subcommand。收工是宿主 skill，归档命令是
+        `archive`——提示必须同时点名两者，否则读者只能靠猜。"""
+        hint = tasks.check_next_hint({"plan": {"complexity": "light"}}, {"result": "pass"})
+        self.assertIn("wf-finish", hint)
+        self.assertIn("archive", hint)
+        self.assertIn("宿主 skill", hint)
+
     def test_failed_check_routes_to_repair_loop(self):
         hint = tasks.check_next_hint({"plan": {"complexity": "complex"}}, {"result": "fail"})
         self.assertIn("wf-repair-loop", hint)
@@ -150,7 +159,11 @@ class CheckNextHintTest(unittest.TestCase):
         with mock.patch("wflib.gates.review_binding", return_value={"binding": True}):
             hint = tasks.check_next_hint(task, {"result": "pass"}, ctx=stub)
         self.assertIn("第 2 轮审查仍在进行", hint)
-        self.assertIn("判定后即可请人 finish", hint)
+        # 2026-11-28 终验主链：next_ 里的「finish（wf-finish）」被读成命令（`wf help finish`
+        # 报 unknown subcommand）。收工入口是宿主 skill，归档命令是 archive，两处都要点名。
+        self.assertIn("判定后即可", hint)
+        self.assertIn("wf-finish", hint)
+        self.assertIn("archive", hint)
 
     def test_legacy_result_only_record_not_reported_as_in_flight(self):
         """N5（2026-11-24）：存量 rounds=[] + result=pass——判据走 latest_decision 回退。
@@ -248,8 +261,9 @@ class CheckNextHintTest(unittest.TestCase):
                            return_value={"blocking": [open_finding], "unaddressed": [],
                                          "unavailable": [], "closed": [], "ambiguous": []}):
             hint = tasks.check_next_hint(task, {"result": "pass"}, ctx=stub)
-        self.assertIn("才能请人 finish", hint)
-        self.assertNotIn("判定后即可请人 finish", hint)
+        self.assertIn("才能", hint)
+        self.assertIn("wf-finish", hint)
+        self.assertNotIn("判定后即可", hint)
 
     def test_in_flight_hint_mentions_fixed_materials(self):
         """P1-2（2026-11-24）：在途轮提示写明材料按首轮物化固定，不随 Check 重跑改写。"""

@@ -8,7 +8,7 @@ import re
 import shutil
 import tempfile
 
-from . import check as check_mod, config, records, scope as scope_mod, writer as writer_mod
+from . import check as check_mod, config, protocol as protocol_mod, records, scope as scope_mod, writer as writer_mod
 from .paths import join
 
 REPORT_MARKER = "<!-- wf-review-report:v1 -->"
@@ -5773,7 +5773,7 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         code,
         object={"id": task.get("id"), "name": task.get("title")},
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
-        next_=("verdict=pass（全部已知 blocking 已关闭）后由人调用 finish（wf-finish）" if verdict == "pass" else
+        next_=("verdict=pass（全部已知 blocking 已关闭）后" + protocol_mod.FINISH_NEXT if verdict == "pass" else
                ("按异常退出处置：暂停，或经人重新分级后按轻量完成" if verdict == "unavailable" else
                 "有未关闭 blocking：在批准范围内修复→重跑 task-check→用 review-launch 发起新一轮"
                 "（内容变了旧轮不可重判）；误报/重分类经复核登记 accepted 后可同轮重判")),

@@ -131,8 +131,14 @@ class States:
         if problems:
             raise ProtocolError("protocol/states.json failed its own schema check", {"problems": problems})
 
-    def next_for(self, status=None, phase=None, *, paused=False, suspended=False):
-        """`wf status` 的 `next` 唯一来源：挂起 > 暂停 > 位置 > 会话。"""
+    def next_for(self, status=None, phase=None, *, paused=False, suspended=False, approved=None):
+        """`wf status` 的 `next` 唯一来源：挂起 > 暂停 > 位置 > 会话。
+
+        `approved` 只对 `phase=plan` 有意义（None = 不求值，保持位置表原文）：
+        批准是否覆盖当前 PRD 是位置表之外的事实，但**下一步的合法入口**由它决定——
+        未批准（含 replan 后）是 `task-approve`，已批准是 `task-start`。两个文案仍取
+        位置表的既有条目，不新增协议键（协议资产冻结不是这里改的理由：语义只借用既有文本）。
+        """
         if suspended and "suspended" in self.next_by_mark:
             return self.next_by_mark["suspended"]
         if paused and "paused" in self.next_by_mark:
@@ -142,8 +148,21 @@ class States:
         if status is not None and phase is not None:
             key = f"{status}/{phase}"
             if key in self.next_by_position:
+                if phase == "plan" and approved is not None:
+                    return self.next_by_position[
+                        "in_progress/plan" if approved else "not_started/plan"]
                 return self.next_by_position[key]
         return self.next_by_position["session"]
+
+
+# --------------------------------------------------------------------------
+# 「收工」的下一步文案（唯一实现）
+# --------------------------------------------------------------------------
+# 收工入口是**宿主 skill** `wf-finish`（人显式调用），不是 `wf` 子命令；`wf` 侧的归档
+# 命令是 `archive`。此前多处 `next_` 只写「finish（wf-finish）」，终验主链实例据此
+# `wf help finish` 得到 unknown subcommand（2026-11-28）。需要写"请人收工"的入口共用
+# 这一句，避免各写一份再漂。
+FINISH_NEXT = "由人调用 wf-finish 收工（宿主 skill；归档命令是 `archive`）"
 
 
 # --------------------------------------------------------------------------

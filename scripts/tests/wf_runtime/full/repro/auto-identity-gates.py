@@ -14,8 +14,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _harness as H
 
-FROM = '        if attachment and attachment.get("activation_stale"):'
-TO = '        if False and attachment and attachment.get("activation_stale"):  # 注入：忽略降级'
+FROM = ('            if attachment and attachment.get("activation_stale") '
+        'and getattr(self, "command", "") != "enable":')
+TO = ('            if False and attachment and attachment.get("activation_stale") '
+      'and getattr(self, "command", "") != "enable":  # 注入：忽略降级')
 
 
 def run(project, args, inputs=None):

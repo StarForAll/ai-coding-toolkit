@@ -70,12 +70,21 @@ def check():
         raise H.Precondition(f"接收方 key 不一致：{enable_b}")
     dec_path = os.path.join(root, "handover.json")
     json.dump([F.decision(f"handover {task_id}", "handover")], open(dec_path, "w"), ensure_ascii=False)
+    # 接收前更正：先用错 key 发起，再在同一 recovering 重发正确 key；不应升级为 repair。
+    rc_wrong, payload_wrong = H.cli(
+        project, ["writer-handover", "begin", "--to", "f" * 64,
+                  "--decision", dec_path, "--json"],
+        sid=sid_a, inputs={"generation": H.generation(project)})
     rc_begin, payload_begin = H.cli(
         project, ["writer-handover", "begin", "--to", _receiver_key(project, sid_b),
                   "--decision", dec_path, "--json"],
         sid=sid_a, inputs={"generation": H.generation(project)})
 
     problems = []
+    if rc_wrong != 0 or ((payload_wrong or {}).get("facts") or {}).get("writer_state") != "recovering":
+        problems.append(f"错 key 发起未进入 recovering：{payload_wrong}")
+    if ((payload_begin or {}).get("facts") or {}).get("redeclared") is not True:
+        problems.append(f"重发 begin 未走接收更正：{payload_begin}")
     H.require_business_code(payload_begin, rc_begin)
     if rc_begin != 0:
         raise H.Precondition(f"begin 失败：{payload_begin}")

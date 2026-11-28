@@ -33,6 +33,9 @@ STEP_LINE = re.compile(
     r"^###\s+(?P<id>(?:task|control)\.[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)*)\s+\[required\s+·\s+(?P<mode>once|repeatable)\]"
 )
 ENFORCEMENT_LINE = re.compile(r"^-\s+`?enforcement`?\s*[:：]\s*(?P<value>.+)$")
+# enforcement 行里声明的 `module.py::symbol`（登记面指向不存在符号时，
+# `§1.1 固定流转程序化` 承诺的"清单内步骤缺脚本实现按缺口处理"实际没有机械落点）。
+ENFORCEMENT_SYMBOL = re.compile(r"`([A-Za-z0-9_./<>\-]+\.py)::([A-Za-z_][A-Za-z0-9_]*)`")
 
 PROJECT_CLASSES = (
     ("payload/bin/", "project_wf", ".wf/bin/", "bin", True),
@@ -192,13 +195,54 @@ def parse_workflow_steps(source_root=SOURCE_ROOT):
     return steps
 
 
+def _enforcement_source_file(module, source_root):
+    """把 enforcement 行的模块 token 映射到源树文件。
+
+    只认本框架自己的实现文件；`<发行根>/install.py` 这类前缀按 basename 归一。
+    """
+    module = module.strip()
+    if module.startswith("wflib/"):
+        return os.path.join(source_root, "payload", "lib", module)
+    base = os.path.basename(module)
+    if base == "install.py":
+        return os.path.join(source_root, "payload", "install.py")
+    if base in ("repair.py", "uninstall.py"):
+        return os.path.join(source_root, "payload", "bin", base)
+    return None
+
+
+def enforcement_symbol_problems(parsed, source_root=SOURCE_ROOT):
+    """逐条核 enforcement 行声明的符号在源树真实存在（构建门禁，不是运行时判定）。"""
+    problems = []
+    for step in parsed:
+        value = step.get("enforcement") or ""
+        symbols = ENFORCEMENT_SYMBOL.findall(value)
+        if not symbols:
+            continue  # 外部层入口（系统级 wf 命令）不在此机械核对
+        for module, symbol in symbols:
+            path = _enforcement_source_file(module, source_root)
+            if path is None:
+                problems.append(f"enforcement module not resolvable: {module}::{symbol} ({step['id']})")
+                continue
+            try:
+                with open(path, "r", encoding="utf-8") as handle:
+                    body = handle.read()
+            except OSError as exc:
+                problems.append(f"enforcement target unreadable: {module} ({step['id']}): {exc}")
+                continue
+            if not (re.search(r"(?m)^(?:def|class)\s+" + re.escape(symbol) + r"\b", body)
+                    or re.search(r"(?m)^" + re.escape(symbol) + r"\s*=", body)):
+                problems.append(f"enforcement symbol missing: {module}::{symbol} ({step['id']})")
+    return problems
+
+
 def build_required_steps(source_root=SOURCE_ROOT):
     """按固定声明表补 scope/applies/due；与流程文档双向核对。"""
     from wflib import gates
 
     specs = gates.required_step_specs()
     parsed = parse_workflow_steps(source_root)
-    problems = []
+    problems = list(enforcement_symbol_problems(parsed, source_root))
     seen = {}
     for step in parsed:
         if step["id"] in seen:

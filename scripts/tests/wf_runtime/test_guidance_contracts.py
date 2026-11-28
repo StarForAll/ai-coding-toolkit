@@ -101,7 +101,9 @@ class GuidanceLandingTest(unittest.TestCase):
         self.assertIn("wf help task-check", SKILL_FINISH)
 
     def test_scale_confirmation_names_the_write_command(self):
-        self.assertIn("wf sampling confirm --task <id>", SKILL_FINISH)
+        # 只断言"点名了写入命令"（对象：任务）；旗标拼写归 `wf help sampling`（§1.1 单描述面）。
+        self.assertIn("`sampling confirm`", SKILL_FINISH)
+        self.assertIn("wf help sampling", SKILL_FINISH)
 
     def test_review_chain_names_the_round_explicitly(self):
         # 断言的是**能力与判断**（必须显式给轮次、且给出该旗标），不是连续的调用行：

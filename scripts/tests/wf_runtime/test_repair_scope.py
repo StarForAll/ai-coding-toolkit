@@ -17,7 +17,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO / "docs" / "workflows" / "wf" / "payload" / "lib"))
 
-from wflib import cli, gates, judgments, records, review  # noqa: E402
+from wflib import cli, gates, judgments, protocol, records, review  # noqa: E402
 from wflib import tasks as tasks_mod  # noqa: E402
 
 RULE = "wf-rules-test"
@@ -449,12 +449,14 @@ class RepairScopeTest(unittest.TestCase):
         self.assertEqual(short["blocking"], precheck["blocking"])
         self.assertEqual(short["unknown_acceptances"], ["acceptance"])   # #46：--short 也强制回显
 
-    # 22：协议零改动（phase.enum / 迁移数 / next_by_position 逐字节）
-    def test_22_protocol_untouched(self):
-        result = subprocess.run(["git", "diff", "--name-only", "8da2f23", "--",
-                                 "docs/workflows/wf/protocol"], cwd=str(REPO),
-                                capture_output=True, text=True)
-        self.assertEqual(result.stdout.strip(), "", result.stdout)
+    # 22：Check 失败阶段契约与实现一致（2026-11-28 人裁：改契约文本为实际模型）
+    def test_22_check_fail_keeps_phase(self):
+        states = protocol.states()
+        transition = next(item for item in states.transitions if item.get("id") == "check")
+        targets = [(item.get("status"), item.get("phase")) for item in transition.get("to") or []]
+        self.assertEqual(targets, [("in_progress", "finish")])
+        self.assertIn("不迁移阶段", transition.get("notes"))
+        self.assertIn("失败不改变阶段", states.next_by_position["in_progress/check"])
 
     # 23：C4 未满足时 pause_for_human / abandon_task 始终出现，且 abandon 不是推荐
     def test_23_terminal_actions_always_listed(self):
@@ -787,13 +789,15 @@ class SkillDocTest(unittest.TestCase):
 
     def test_48_c2_semantics(self):
         body = self.text("wf-review-action")
-        self.assertIn("只有 `accepted` 清零", body)
-        self.assertIn("不得写 `accepted`", body)
+        # 判断语义留在 skill；处置取值拼写归 `wf help review-decide` 的 inputs（§1.1 单描述面）。
+        self.assertIn("只有\"接受\"会关闭", body)
+        self.assertIn("不得写“接受”", body)
+        self.assertIn("accepted", str(cli.COMMAND_HELP["review-decide"].get("inputs") or {}))
 
     def test_52_54_review_action_and_repair_loop(self):
         action = self.text("wf-review-action")
-        self.assertIn("必须显式传 --round", action)
-        self.assertIn("误报也写 `accepted`", action)
+        self.assertIn("轮次必须显式给", action)
+        self.assertIn('误报也写"接受"', action)
         loop = self.text("wf-repair-loop")
         for token in ("rerun_check", "record_disposition", "restore_bytes", "human_release",
                       "resume_inflight", "redecide_round", "await_material", "relaunch_review",

@@ -2,7 +2,7 @@
 
 > 本文件是设计稿 §8.2 与机制稿 §12.3 在**实现侧**的登记面：把"场景行 → 夹具 → 初态 → 触发 → 预期输出 → 实跑证据"放在一处，供复审逐行核对。
 > 只登记**已被实际断言覆盖**的行；未覆盖的行在 §4 单列，不写成"预期应该如此"。
-> 维护规则：新增或改动夹具场景时，本表、夹具脚本与 `validation.md` 三处同批更新；预期输出只能抄实际断言，不得按设计意图补写。
+> 维护规则：新增或改动夹具场景时，本表、夹具脚本与 `validation.md` 三处同批更新；预期输出只能抄实际断言，不得按设计意图补写。`validation.md` 是作者仓库 `.trellis/tasks/archive/**` 的历史证据，不随发行包投放；发行产品只带本表与夹具脚本，引用它是为了在作者仓库可回查，不表示目标项目内存在该文件。
 
 ## 1. 夹具与构造方式
 
@@ -51,7 +51,7 @@
 | 夹具 | 机制稿要求的专属场景 | 当前状态 |
 |---|---|---|
 | F0 | `初始化自举`、`Git 就绪`、`无 MCP 全流程`（至少一次） | 已覆盖（§2） |
-| F0 | `准备定义与自举`、`验证分时解析` | **未覆盖**：依赖 `definition`/`run`，属第二轮；第二轮交付后须补，缺这两行时 F0 不能算完整通过（机制稿 §12.3 原文） |
+| F0 | `准备定义与自举`、`验证分时解析` | **已覆盖（第三轮）**：`definition prepare`/`run *` 由 `scripts/tests/wf_runtime/full/repro/prepare-authorization.py`、`run-create-once.py`、`run-advance-creates-task.py`、`run-advance-after-human-step.py`、`instance-task-phases.py` 断言，并随 `run_all.sh --full --repro both` 实跑；`CURRENT_DELIVERY_ROUND=3` |
 | F1 | `extracted 生命周期`、`无 MCP 全流程`、spec 新增/更新/拆分/合并/改名/删除各至少一次正反断言 | 全部覆盖：`extracted`、新增/更新/合并/改名/删除见 `validation.md` §2.1；拆分的「原文件移除」分支见 §16.1（B5），「旧文件停用并保留」分支见 §16.6（2026-11-05 补跑，`p5_spec` 6 条用例，含拆分前 active 正对照） |
 | F2 | `共存与重装`、`Trellis 互斥`（有效指令/纯残留两分支）、卸载期提交、相关路径外部变更 | 已覆盖（`validation.md` §16） |
 
@@ -59,7 +59,7 @@
 
 | 项 | 归属 | 出口 |
 |---|---|---|
-| F0 的 `准备定义与自举`、`验证分时解析` | 第二轮 | 第二轮交付 `definition`/`run` 后补跑 |
+| F0 的 `准备定义与自举`、`验证分时解析` | 第三轮已交付 | 已由 §3 的 run repro 覆盖，不再是未覆盖项 |
 | 真实压缩的"绑定仍可读"增量观察 | 环境触发 | 下一次真实压缩后按 `d1-compaction-checkpoint.md` §1 补记 |
 | 与旧模块共存/迁移路径 | 不适用范围 | 旧内嵌模块 2026-10-28 退役，无迁移路径；见设计稿 §3 共存策略 |
 | 执行器确认的集合语义与失效传播负例（多 clone 并存不覆盖、目录移动不失效、venv 重建沿用、purge 后须重确认、repair 重建 project_id 时旧记录失效） | **已覆盖**（`repro/d21-executor-set-multi-clone.py`、`d21-executor-set-move.py`、`d21-executor-set-venv-rebuild.py`、`d21-executor-set-purge-reconfirm.py`，2026-11-06 人裁后补，双模可证伪）；其中 purge 用 project_id 重建的等价构造（`uninstall --purge` 入口第三轮），**repair 重建 project_id 时旧记录失效仍留第三轮** | 已按设计稿 §8.2「执行器配置可信」行补齐夹具用例；repair 重建标识第三轮交付后另补失效负例（`pending-decisions.md` §6） |

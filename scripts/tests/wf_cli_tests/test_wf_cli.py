@@ -553,6 +553,16 @@ class CliDispatchTest(GitFixture):
         self.assertEqual(payload["facts"]["version"], "0.0.8")
         self.assertEqual(payload["facts"]["installed"], "0.0.7")
 
+    def test_version_reports_dev_install_without_blocking(self):
+        # 开发态部署记录 0.0.0-dev：version 是只读报告，不该被发行版本规则拦死；
+        # 维护命令仍按发行身份拒绝（install/upgrade/repair 的 installed_version 不放松）。
+        self._install_record("0.0.0-dev")
+        code, out = self._run(["--project", str(self.project), "version", "--json"])
+        self.assertEqual(code, 0)
+        payload = json.loads(out)
+        self.assertEqual(payload["facts"]["installed"], "0.0.0-dev")
+        self.assertTrue(payload.get("warnings"))
+
     def test_project_flag_is_optional_from_inside_the_project(self):
         # `--project` 可选：缺省取当前目录（向上找 .wf/），维护命令照样拿到同一个项目根。
         _write(self.project / ".wf/bin/uninstall.py", "print('uninstall')\n")

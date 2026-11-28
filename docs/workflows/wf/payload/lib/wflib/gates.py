@@ -125,7 +125,11 @@ STEP_DELIVERY_ROUND = {
     "control.task.replace": 2,
     "control.asset.apply": 3,
 }
-CURRENT_DELIVERY_ROUND = 1
+# 当前发行包含到第几轮（此前清单停在 1，而 definition/run/dep/rework/
+# replace/asset 早已交付——按"声明轮次 <= 当前轮次"判桩的自检对它们永远不触发，且与
+# `instance-flow` 的"均为当前发行已交付能力"相反）。第 2/3 轮能力已全部进入 0.0.21 发行，
+# 故当前轮次为 3；步骤自身的交付轮次仍保留历史值（STEP_DELIVERY_ROUND 不改）。
+CURRENT_DELIVERY_ROUND = 3
 
 # 固定分派表：required step id → 处理器（task 走 verify_step；control 走对应子命令）
 HANDLERS = {step_id: "verify_step" for step_id, _mode, _condition, _due in TASK_STEP_SPECS}
@@ -799,6 +803,9 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
         if tdd_required:
             history_commands = [command for entry in task.get("check_history") or []
                                 for command in entry.get("commands") or []]
+            # 单次验证运行（`task-check --run-verification`）也是历史红证据：Check 定稿段
+            # 已经并入，门禁重核必须用同一份历史（否则 TDD 正常路径通过 Check 后被归档拦死）。
+            history_commands.extend(check_mod.verification_run_commands(task))
             problem = check_mod.tdd_evidence_problem(evidence, check.get("commands") or [], history_commands)
             if problem:
                 return False, "WF_CHECK_FAILED", dict({"reason": "tdd evidence incomplete"}, **problem)
@@ -1022,12 +1029,19 @@ def evaluate_cli(ctx, due):
         return codes.result(
             "WF_OK",
             facts={"bound": False, "due": due},
-            next_="wf-start 选择对象后可查询门禁",
+            next_="人显式调用 /wf-start 选择对象后可查询门禁",
         )
     binding = session_mod.load_binding(ctx.root, key)
     if not binding:
-        return codes.result("WF_OK", facts={"bound": False, "due": due}, next_="wf-start 选择对象")
+        return codes.result("WF_OK", facts={"bound": False, "due": due}, next_="人显式调用 /wf-start 选择对象")
     object_ref = binding.get("object") or {}
+    if object_ref.get("kind") == "task":
+        task = tasks_mod.load_task(ctx.root, object_ref.get("id"))
+        if task and task.get("status") == "archived":
+            # 归档是终态：门禁已在归档时消费完；再按"到点"求值会把已经批准的旧版本
+            # 报成 WF_APPROVAL_MISSING（归档后计划版本不再等于批准时的版本是正常事实）。
+            return codes.result("WF_OK", facts={"archived": True, "due": due},
+                                next_="任务已归档；用 `wf enable --new-session` 选择下一对象")
     if object_ref.get("kind") == "run":
         run = runs_mod.load_run(ctx.root, object_ref.get("id")) or {}
         current_task_id = (run.get("cursor") or {}).get("task_id")

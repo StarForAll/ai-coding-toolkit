@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import uuid
 
-from . import actions, codes, config, decisions as decisions_mod, fingerprint, records, scope, session as session_mod, writer as writer_mod
+from . import actions, codes, config, decisions as decisions_mod, fingerprint, protocol as protocol_mod, records, scope, session as session_mod, writer as writer_mod
 from .paths import join
 
 TASKS_REL = ".wf/tasks"
@@ -1332,7 +1332,7 @@ def write_scope(ctx, task_id):
     binding = session_mod.load_binding(ctx.root, key)
     if not binding:
         raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": key},
-                        next_="由人先用 wf-start 选择对象")
+                        next_="由人先显式调用 /wf-start 选择对象")
     object_ref = binding.get("object") or {}
     kind = object_ref.get("kind")
     if kind == "task" and object_ref.get("id") == task_id:
@@ -1589,6 +1589,13 @@ def cmd_task_new(ctx, args):
         if record.get("state") != "idle":
             raise cli.writer_busy_error(record, caller=key)
         cli.assert_no_foreign_wip(ctx, exclude_id=None)
+        if kind == "ordinary":
+            # 自举前置在**创建时**就核：否则批准后开工才被拦，会话已绑定不可开工对象，
+            # "先建 initialize 任务"的出口在本会话不可执行（回归：创建时未拦会让批准后无法开工）。
+            prerequisite = bootstrap_prerequisite(ctx.root)
+            if prerequisite:
+                raise TaskError("WF_CAPABILITY_UNAVAILABLE", prerequisite,
+                                next_="先走 initialize（新项目）或 bootstrap（存量接入）自举，再建普通任务")
 
         task = new_task_record(kind, title)
         task_id = task["id"]
@@ -2707,6 +2714,25 @@ def _apply_exclusion_entries(ctx, task, classified, entries, *, receipts=None):
     return scope_mod.classify_candidates(ctx.root, task, receipts=receipts)
 
 
+def bootstrap_prerequisite(root):
+    """普通任务开工前的自举前置（唯一实现）：项目配置与活基线必须已存在。
+
+    `task-new` 与 `task-start` 共用同一判据：**首次偏离发生在创建时**——若只在开工时才拦，
+    会话已绑定这个不可开工的任务，而"先建 initialize 任务"的出口要求先放弃对象并换会话，
+    对一个尚未开工的责任来说是不可执行的指引（新项目第一个普通任务的失败形态）。
+    """
+    config_record, _problems = config.load_project_config(root, allow_missing=True)
+    if config_record is None or not os.path.exists(join(root, ".wf/baseline.md")):
+        missing = ".wf/project-config.json" if config_record is None else ".wf/baseline.md"
+        return {
+            "missing": missing,
+            "reason": "ordinary task requires project config and baseline",
+            "exits": ["新项目：`task-new --kind initialize` 建立基线/配置/spec 骨架后再建普通任务",
+                      "存量项目：按项目既有配置补齐这两个文件，或先 `task-new --kind bootstrap` 接入"],
+        }
+    return None
+
+
 def cmd_task_start(ctx, args):
     from . import gates, lock
 
@@ -2759,14 +2785,10 @@ def cmd_task_start(ctx, args):
                                        "只是排版/进度/说明改动：写 choice=机械修订 的决定文件后"
                                        "重跑 task-approve（接等价链，不重复人批准）"]})
         if task.get("kind") == "ordinary":
-            config_record, problems = config.load_project_config(ctx.root, allow_missing=True)
-            if config_record is None or not os.path.exists(join(ctx.root, ".wf/baseline.md")):
-                # 与 task-approve 同口径：新项目冷启动要给可执行出口，不能只报"缺文件"让人猜
-                missing = (".wf/project-config.json" if config_record is None else ".wf/baseline.md")
-                raise TaskError("WF_CAPABILITY_UNAVAILABLE",
-                                {"missing": missing, "reason": "ordinary task requires project config and baseline",
-                                 "exits": ["新项目：先建一个 initialize 任务，产出基线/配置/spec 骨架后重试",
-                                           "存量项目：按项目既有配置补齐这两个文件，或先建 bootstrap 任务接入"]},
+            prerequisite = bootstrap_prerequisite(ctx.root)
+            if prerequisite:
+                # 与 task-new 同口径（同一判据）：新项目冷启动要给可执行出口，不能只报"缺文件"让人猜
+                raise TaskError("WF_CAPABILITY_UNAVAILABLE", prerequisite,
                                 next_="先走 initialize（新项目）或 bootstrap（存量接入）自举，再回本任务开工")
         if not scope.has_git(ctx.root):
             raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"reason": "Git HEAD required", "missing": "git HEAD"})
@@ -3497,32 +3519,33 @@ def check_next_hint(task, check, ctx=None):
                 hint += "（材料身份没核成：先看 `review-status` 再决定是否继续）"
             if _binding and open_blocking:
                 hint += ("；已有绑定当前锚点的 pass 结论，但 blocking 仍未关闭——"
-                         "该轮判定后还需" + blocking_fix + "，才能请人 finish")
+                         "该轮判定后还需" + blocking_fix + "，才能" + protocol_mod.FINISH_NEXT)
                 mentions_blocking = True
             elif _binding:
-                hint += "；已有绑定当前锚点的 pass 结论，该轮判定后即可请人 finish"
+                hint += "；已有绑定当前锚点的 pass 结论，该轮判定后即可" + protocol_mod.FINISH_NEXT
         elif _binding:
             if open_blocking:
                 hint = ("已有审查结论绑定当前内容锚点，但 blocking 仍未关闭：先"
-                        + blocking_fix + "，再请人 finish——直接 finish 会被归档门禁拦下")
+                        + blocking_fix + "，再" + protocol_mod.FINISH_NEXT
+                        + "——未关闭的 blocking 会让归档门禁拦下")
                 mentions_blocking = True
             else:
-                hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可请人直接 finish；"
-                        "内容或规划再变才需要重新 review-launch")
+                hint = ("已有审查结论绑定当前内容锚点（同内容重跑）：可" + protocol_mod.FINISH_NEXT
+                        + "；内容或规划再变才需要重新 review-launch")
         elif _result.get("verdict") == "pass" and _bound and _bound == _current:
             hint = ("已有审查结论，但引用报告已失效或不再绑定（摘要失配/文件被改）："
-                    "重新导入同一份报告，或 review-launch 换一轮后再 finish")
+                    "重新导入同一份报告，或 review-launch 换一轮后再" + protocol_mod.FINISH_NEXT)
         else:
-            hint = ("复杂任务：先 review-launch 发起一轮审查（wf-review），"
-                    "导入/判定通过后再请人调用 finish" + export_note)
+            hint = ("复杂任务：先 review-launch 发起一轮审查（reviewer 侧 skill `wf-review`），"
+                    "导入/判定通过后再" + protocol_mod.FINISH_NEXT + export_note)
             if open_blocking:
                 hint += "；发起前" + blocking_fix
                 mentions_blocking = True
     else:
         # 轻量任务本可直收工，但已有 blocking（返工/复核遗留）时先收口再 finish：
         # 否则 finish 必然撞归档门禁 C2。
-        hint = ("人了解结果后调用 finish（wf-finish）" if not open_blocking
-                else "先" + blocking_fix + "，再请人调用 finish（wf-finish）")
+        hint = ("结果可直接收工：" + protocol_mod.FINISH_NEXT if not open_blocking
+                else "先" + blocking_fix + "，再" + protocol_mod.FINISH_NEXT)
         mentions_blocking = bool(open_blocking)
     if blocking_fix and not mentions_blocking:
         hint += "；注意：" + blocking_fix
@@ -4060,6 +4083,9 @@ def _apply_abandon(ctx, task_id, task, path, decisions, disposition, holder):
                  if any(path == grant_path or paths_mod.match_path(grant_path, path)
                         for grant_path in grant_paths)]
     if to_commit:
+        gate = _commit_gate_problems(ctx, task, sorted(to_commit))
+        if gate:
+            raise TaskError(gate[0], gate[1])
         _commit_paths(ctx.root, sorted(to_commit), f"wf: abandon {task_id}\n\nwf-task: {task_id}")
     leftover = [path for path in scope.uncommitted_paths(ctx.root) if path in set(preview_uncommitted)]
     if leftover:
@@ -4259,6 +4285,39 @@ def _deleted_paths(root, paths):
         if code == 0:                      # HEAD 里有、工作树里没有 = 真删除
             deleted.append(path)
     return deleted
+
+
+def _commit_gate_problems(ctx, task, paths):
+    """K6 第 2/5 类提交前置（删除、仓库级规则文件）：所有提交入口共用。
+
+    此前只有 `archive` 核，`stop`/`task-abandon`/`run terminate` 直接 `_commit_paths`，
+    同一批删除或规则变更可从这些出口绕过人签确认。返回 `(code, facts)` 或 None。
+    """
+    from . import authorize as authorize_mod
+
+    task_path = task_dir(ctx.root, task.get("id")) if task.get("id") else None
+    if not task_path:
+        return None
+    rule_hits = authorize_mod.repo_rule_paths(ctx, paths)
+    if rule_hits:
+        covered, uncovered = authorize_mod.covers(task_path, "repo_rules", rule_hits, root=ctx.root)
+        if not covered:
+            return ("WF_REPO_RULES_NOT_AUTHORIZED",
+                    {"missing_action": "repo_rules", "repo_rule_paths": rule_hits,
+                     "uncovered": uncovered,
+                     "reason": "提交范围含环境级规则文件（K6 第 5 类），但确认未覆盖这些路径",
+                     "exits": ["用 authorize record 登记 choice=repo_rules 的确认（paths 覆盖未覆盖项）后重试",
+                               "把这些路径移出本次提交范围"]})
+    deleted = _deleted_paths(ctx.root, paths)
+    if deleted:
+        covered, uncovered = authorize_mod.covers(task_path, "delete", deleted, root=ctx.root)
+        if not covered:
+            return ("WF_DELETE_NOT_AUTHORIZED",
+                    {"missing_action": "delete", "deleted_paths": uncovered,
+                     "reason": "提交范围含删除，但缺删除动作的确认（K6 第 2 类）",
+                     "exits": ["删除前用 authorize record 登记 choice=delete 的确认后重试",
+                               "把删除移出本次提交范围"]})
+    return None
 
 
 def _commit_paths(root, paths, message, moved_from=None):
@@ -5617,7 +5676,7 @@ def cmd_task_reassess(ctx, args):
     binding = session_mod.load_binding(ctx.root, ctx.key())
     if not binding:
         raise TaskError("WF_BINDING_MISMATCH", {"reason": "no binding", "session_key": ctx.key()},
-                        next_="由人先用 wf-start 选择对象")
+                        next_="由人先显式调用 /wf-start 选择对象")
     _mine_early, writer_facts = reassess_write_right(ctx)
     mine, holder = False, None
     if _mine_early:
@@ -6050,7 +6109,7 @@ def cmd_task_rework(ctx, args):
                                  action_state=task["action"]["state"]),
         next_=("同一实例：cursor 已临时定位到 R，完成 R 后 task-reassess 恢复 T"
                if same_instance else
-               "T 已暂停且写权已释放：在新会话绑定 R（R 须独立批准与开工，不消费 T 的批准）"),
+               "T 已暂停且写权已释放；T 仍绑定本会话，当前会话不能 bind R——由人新开终端/新执行边界后 bind R（R 须独立批准与开工，不消费 T 的批准）"),
         facts={"task": task_id, "rework": rework_id,
                "directory": os.path.relpath(directory, str(ctx.root)).replace(os.sep, "/"),
                "prerequisites": task["prerequisites"], "suspended": True,
@@ -6222,6 +6281,9 @@ def stop_work(ctx, decisions, choice):
                                  "foreign": foreign_commit, "owned": sorted(owned_commit),
                                  "exits": ["把这些路径从 subject 移除，或先按归属处置（排除/承接/人裁）",
                                            "改选 transfer/reverse（同样只覆盖本任务路径）"]})
+            gate = _commit_gate_problems(ctx, task, paths)
+            if gate:
+                raise TaskError(gate[0], gate[1])
             commit_result = _commit_paths(ctx.root, paths, f"wf: wip {task_id}\n\nwf-task: {task_id}")
             leftover = [item for item in scope.uncommitted_paths(ctx.root)
                         if any(item == path or paths_mod.match_path(path, item) for path in paths)]

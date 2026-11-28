@@ -735,12 +735,38 @@ def validate_definition(doc, root=None, workflow_id=None):
     problems.extend(_local_id_problems(doc))
     problems.extend(_reference_problems(doc))
     problems.extend(_path_problems(doc, root))
+    problems.extend(_bootstrap_first_step_problems(doc, root))
     problems.extend(_skip_problems(doc))
     problems.extend(_completion_problems(doc))
     if workflow_id and doc.get("workflow_id") and doc["workflow_id"] != workflow_id:
         problems.append(_problem(1, "workflow_id must equal the definition file name",
                                  "workflow_id", expected=workflow_id, got=doc["workflow_id"]))
     return sorted(problems, key=lambda item: item.get("stage", 0))
+
+
+def _bootstrap_first_step_problems(doc, root):
+    """全新项目（无活基线/配置）的首个 task 步骤必须是 initialize/bootstrap（设计稿 §3.3）。
+
+    只核可机械判定的部分：首个 task 步骤的 `task_kind`；`human` 步骤可先存在。
+    已有基线的项目不受此限。此前不核，实例会建出普通任务，随后 `task-start` 的
+    自举前置拒绝且出口在已绑定实例的会话不可执行。
+    """
+    if root is None:
+        return []
+    from . import config as config_mod
+
+    config_record, _problems = config_mod.load_project_config(root, allow_missing=True)
+    if config_record is not None and os.path.exists(join(root, ".wf/baseline.md")):
+        return []
+    first_task = next((step for step in doc.get("steps") or []
+                       if isinstance(step, dict) and step.get("type") == "task"), None)
+    if first_task is None:
+        return []
+    if first_task.get("task_kind") in ("initialize", "bootstrap"):
+        return []
+    return [_problem(3, "new project's first task step must be initialize or bootstrap",
+                     f"steps[{first_task.get('id')}].task_kind",
+                     got=first_task.get("task_kind"), expected=["initialize", "bootstrap"])]
 
 
 def _require_workflow_id(args):

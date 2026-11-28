@@ -753,9 +753,12 @@ def _run_argv(ctx, task, verification, log_dir):
     cwd = verification.get("cwd") or "."
     workdir = ctx.root if cwd == "." else join(ctx.root, cwd)
     started = records.now_str()
-    # 验证命令跑在 OS 锁内（机制稿 §4.1 的已知偏差，见实现稿 §2.3.11）：至少给出超时上界，
-    # 避免挂起的命令无限期占锁（第二十三轮复审外部 P2-NEW 的部分缓解）。
-    # 开工验证与 Check 共用这一处（`verification_timeout`）：同一个配置键、同一套非法值归因。
+    # Check 的验证在**锁外**执行（`cmd_task_check` 的三段式：锁内准备 → 锁外执行 → 锁内定稿，
+    # 实现稿 §2.3.11）；项目配置 `verification_timeout_seconds` 只给单条命令加上界，
+    # 未配置（0）即无界——这一档是项目选择，不是机制默认兜底。
+    # 开工验证（`tasks._run_start_verifications`）仍在锁内、共用同一个超时键：顺序上它必须
+    # 在所有开工前置之后执行。挂起的开工命令需终止该进程后重入/repair，`status`/`gate`/
+    # `inspect` 不取项目锁，仍可读。
     timeout = verification_timeout(ctx.root)
     output = ""
     try:

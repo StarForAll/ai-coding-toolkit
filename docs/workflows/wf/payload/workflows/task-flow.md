@@ -30,7 +30,7 @@
 ### task.check-passed [required · repeatable]
 
 - 时点：归档前（before_archive）
-- enforcement: `wflib/check.py::run_check`（执行）＋ `wflib/gates.py::verify_step`（锚点核验）
+- enforcement: `wflib/check.py::run_check_scope` / `run_check_execute` / `run_check_finish`（执行三段）＋ `wflib/gates.py::verify_step`（锚点核验）
 - 动作：固定五步：范围核对 → 验证就绪 → 实际执行 → 双轴内部审查（判断指引见 `wf-code-review`）→ 写结果与指纹。
 - 出口：范围越界 `WF_SCOPE_VIOLATION`；检查失败 `WF_CHECK_FAILED`；对象变化 `WF_CHECK_STALE`。
 
@@ -94,7 +94,10 @@
 - 时点：task-new 动作结束
 - enforcement: `wflib/tasks.py::cmd_task_new`（writer 主记录单一父 action）
 - 动作：创建任务规划记录：目录防撞、写记录、首次绑定与写权获取成组完成。
-- 出口：目标占用 → `WF_TARGET_COLLISION`；记录不可解析 → `WF_RECORD_INVALID`。
+  普通任务在**创建时**就核自举前置（项目配置与活基线已存在）；缺前置只能在创建 `initialize`/`bootstrap`
+  任务前拦，不能等开工——那时会话已绑定这个不可开工对象，出口（另建 initialize 任务）在本会话不可执行。
+- 出口：目标占用 → `WF_TARGET_COLLISION`；记录不可解析 → `WF_RECORD_INVALID`；
+  普通任务缺基线/配置 → `WF_CAPABILITY_UNAVAILABLE`（出口指向 `--kind initialize|bootstrap`）。
 
 ### control.task.transition [required · repeatable]
 
@@ -107,7 +110,7 @@
 
 - 时点：归属裁决动作结束
 - enforcement: `wflib/tasks.py::cmd_task_attribute`
-- 动作：人把未归属提交裁决给本任务；一个提交至多归属一个任务。
+- 动作：持写权会话按证据把未归属提交裁决给本任务（与 §1.1 的自证口径一致；证据冲突或要改验收/承诺时才交人）；一个提交至多归属一个任务。
 - 出口：提交不存在 → `WF_HISTORY_UNRESOLVED`；trailer 冲突 → `WF_SEMANTIC_DECISION`。
 
 ### control.baseline.apply [required · repeatable]
@@ -127,7 +130,7 @@
 ### control.task.check [required · repeatable]
 
 - 时点：Check 动作结束
-- enforcement: `wflib/tasks.py::cmd_task_check`（五步由 `wflib/check.py::run_check` 执行）
+- enforcement: `wflib/tasks.py::cmd_task_check`（五步由 `wflib/check.py::run_check_scope` / `run_check_execute` / `run_check_finish` 执行）
 - 动作：写检查记录、指纹与回执；pass 时阶段进入 Finish。
   带 `execution.step` 的实例任务还要兑现该步骤的契约：必做动作须有 `--decision` 的
   `choice=done|waived`（subject 含动作 id）、步骤内人判点须有对应决定、定义声明的验证 id 须出现在

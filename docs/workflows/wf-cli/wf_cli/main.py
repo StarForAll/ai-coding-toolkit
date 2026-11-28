@@ -452,7 +452,21 @@ def cmd_version(argv, leading, exec_fn):
     version = require_release_version(cli_version())
     explicit = _project_value(parsed, leading)
     project = open_project(explicit) if explicit else open_project()
-    installed = installed_version(project) if project is not None else None
+    installed = None
+    warnings = []
+    if project is not None:
+        try:
+            installed = installed_version(project)
+        except ProjectError:
+            # 开发态部署（`wf-dev-deploy.py`）的安装记录版本是 `0.0.0-dev`：它没有发行身份，
+            # 但 `version` 是只读报告，不应被发行解析规则阻断（维护命令仍会拒绝它）。
+            raw = project.installed_version
+            if raw and raw.endswith("-dev"):
+                installed = raw
+                warnings.append("开发态部署：安装记录版本不是发行版本；version 只报告事实，"
+                                "install/upgrade/repair 仍按发行身份拒绝该记录")
+            else:
+                raise
     facts = {"version": version, "source": current_source_url()}
     if project is not None:
         facts["project"] = project.root
@@ -460,7 +474,7 @@ def cmd_version(argv, leading, exec_fn):
         facts["installed"] = installed
     message = f"wf {version}"
     return passed(message, facts, "用 `wf install` / `wf upgrade` / `wf uninstall` 维护项目",
-                  json_mode)
+                  json_mode, warnings=warnings)
 
 
 def _forward_help(argv, leading, exec_fn):

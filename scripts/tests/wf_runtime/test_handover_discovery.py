@@ -94,3 +94,33 @@ class TddScopeTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AcceptBindingSyncTest(unittest.TestCase):
+    """接收方 accept 后的身份载体（实测：只写绑定文件会让接收方无法写）。
+
+    只写绑定文件时，自动身份模式的接收方附件仍缺 instance_id：下一条写命令被
+    `_require_instance_match` 以 WF_IDENTITY_UNRESOLVED 拒绝，接收方持权却无法写/释放。
+    """
+
+    def test_accept_syncs_attachment_and_runtime(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from wflib import session as session_mod
+
+        binding = {"instance_id": "inst-1", "object": {"kind": "task", "id": "t-1"}}
+        with tempfile.TemporaryDirectory() as root:
+            ctx = SimpleNamespace(root=root)
+            with mock.patch.object(session_mod, "save_binding") as save_binding, \
+                    mock.patch.object(cli, "_sync_attachment_instance") as sync, \
+                    mock.patch.object(session_mod, "update_runtime") as runtime:
+                cli._accept_binding_state(ctx, "key-1", {"kind": "task", "id": "t-1"}, binding)
+        save_binding.assert_called_once()
+        sync.assert_called_once_with(ctx, "key-1", "inst-1")
+        kwargs = runtime.call_args.kwargs
+        self.assertEqual(kwargs["instance_id"], "inst-1")
+        self.assertEqual(kwargs["object"], {"kind": "task", "id": "t-1"})
+        self.assertEqual(kwargs["current_task"], "t-1")
+        self.assertIn("binding_digest", kwargs)
