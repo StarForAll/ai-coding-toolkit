@@ -140,6 +140,28 @@ class WipBlockersScopeTest(unittest.TestCase):
             return cli.wip_blockers("/nonexistent", exclude_id=exclude_id,
                                     exclude_scope=exclude_scope)
 
+    def test_settled_digest_mismatch_restores_block(self):
+        """已处置豁免绑内容（R13 F2 / R25 §30）：摘要失配即恢复阻断；匹配则豁免。"""
+        record = _task(OTHER)
+        record["handoff"] = {"wip": {"paths": [{"path": "pkg/x.py", "digest": "sha256:old"}],
+                                     "resolved": {"choice": "commit", "at": "t"}}}
+        classified = {"buckets": {"a": [], "b": [], "c": [], "d": [], "e": ["pkg/x.py"], "f": []},
+                      "candidates": ["pkg/x.py"], "touch_paths": ["pkg/**"]}
+
+        def _run(digest):
+            with mock.patch.object(tasks_mod, "iter_tasks", return_value=[(None, record)]), \
+                    mock.patch.object(scope_mod, "uncommitted_paths", return_value=["pkg/x.py"]), \
+                    mock.patch.object(runs_mod, "load_run", return_value=None), \
+                    mock.patch("wflib.fingerprint.item",
+                               return_value={"path": "pkg/x.py", "digest": digest, "exists": True}), \
+                    mock.patch.object(scope_mod, "classify_candidates", return_value=classified):
+                return cli.wip_blockers("/nonexistent",
+                                        exclude_scope={"kind": "task", "id": "2026-" + "d" * 32})
+
+        self.assertIn(OTHER, {item.get("task") for item in _run("sha256:new")},
+                      "内容变了就不该继续豁免")
+        self.assertEqual(_run("sha256:old"), [], "内容未变仍应豁免")
+
     def test_transferred_path_belongs_to_receiver(self):
         """transfer 后归属承接方（人裁 §13）：承接方取写权不被挡，其他第三方被承接方挡。"""
         record = _task(OTHER)
@@ -157,6 +179,26 @@ class WipBlockersScopeTest(unittest.TestCase):
                                      exclude_scope={"kind": "task", "id": "2026-" + "d" * 32})
         self.assertIn(TASK, {item.get("task") for item in blocked},
                       "第三方必须被承接方挡住")
+
+    def test_nested_rework_lineage_is_transitive(self):
+        """谱系闭包（§45）：R2 的祖父 T 的保留 WIP 不阻断 R2；未相连的祖先仍阻断（对照）。"""
+        grandparent = _task(OTHER)
+        grandparent["handoff"] = {"wip": {"paths": ["pkg/x.py"], "resolved": None}}
+        parent = _task("2026-" + "b" * 32)
+        parent["rework_of"] = OTHER
+        child = _task("2026-" + "d" * 32)
+        child["rework_of"] = parent["id"]
+        linked = self._blocked_with([grandparent, parent, child], None, ["pkg/x.py"],
+                                    exclude_scope={"kind": "task", "id": child["id"]})
+        self.assertEqual({item.get("task") for item in linked}, set(),
+                         "祖先的登记都应由当前的返工任务承接")
+        # 对照：链未连到祖父时不豁免（证明断言不是恒真）
+        stranger = _task("2026-" + "e" * 32)
+        stranger["rework_of"] = "2026-" + "f" * 32
+        unlinked = self._blocked_with([grandparent, parent, stranger], None, ["pkg/x.py"],
+                                      exclude_scope={"kind": "task", "id": stranger["id"]})
+        self.assertIn(OTHER, {item.get("task") for item in unlinked},
+                      "未与祖父相连的返工任务不应被豁免")
 
     def test_two_keep_registrations_still_block(self):
         """存量双登记（A、B 对同一路径各有一条 keep）仍阻断第三方（人裁 §8 的存量核验）。"""

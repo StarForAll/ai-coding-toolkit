@@ -2793,6 +2793,12 @@ def cmd_ready(ctx, args):
             state = runs_mod.binding_state(ctx.root, task)
             if state["state"] == runs_mod.BINDING_IN_FLIGHT:
                 blockers.append("run_in_flight")
+            elif (state["state"] == runs_mod.BINDING_NONE
+                  and (exc.facts or {}).get("reason")
+                  == "task belongs to an in-flight run via rework sequence"):
+                # 受控返工 R：binding_state 看不到（无 run_id），但 §48 已拒绝 task 绑定；
+                # 细分事实与实例内任务同形，人才看得出"应绑哪个实例"（R27 F5）。
+                blockers.append("run_in_flight")
         if not tasks_mod._is_approved_plan(task, ctx.root):
             blockers.append("WF_APPROVAL_MISSING")
         # 「进行中且未暂停」不是可接续对象：它仍被原会话推进（设计稿 §5.6）

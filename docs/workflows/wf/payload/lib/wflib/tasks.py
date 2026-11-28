@@ -968,11 +968,11 @@ STARTUP_STEPS = (
     ("instances", "在途实例的快照/游标/结束中断"),
 )
 
-# 机制稿 §5.2 的启动固定顺序里，首轮不进入 startup_check 的项：
-# ④ 维护写者与本次预览范围的对应（只有维护入口有预览上下文，由维护入口自核）；
-# ⑥ 未结束实例的快照/游标/任务归属（实例属第二轮）。
+# 机制稿 §5.2 的启动固定顺序里，不进入 startup_check 的项：
+# ④ 维护写者与本次预览范围的对应（只有维护入口有预览上下文，由维护入口自核）。
 STARTUP_OUT_OF_SCOPE = (
     ("maintenance", "维护写者与预览范围对应：仅维护入口有预览上下文，由该入口自核"),
+    ("writer-binding", "会话写者与绑定的对应：各写入口在锁内自查（require_held_for），启动报告面不重复列"),
 )
 
 
@@ -1064,34 +1064,7 @@ def startup_check(ctx, task=None):
         # 机制稿 §5.3：复评在**启动校验固定顺序通过后**触发。这里只算事实，投影在排序之后
         # （见下方 `reassess_finding`），不占用固定顺序的位次，也不改变首报项。
         reassessment = _reassess_empty_set(ctx)
-        # ⑧ 写者标记按记录锚点核对（机制稿 §5.2 ⑧）：持有/恢复态必须有可识别的锁标记
-        state = record.get("state")
-        if state in ("held", "recovering"):
-            from . import lock as lock_mod
 
-            mark = None
-            try:
-                with open(lock_mod.lock_path(ctx.root), "r", encoding="utf-8") as handle:
-                    mark = (handle.readline() or "").strip()
-            except OSError:
-                mark = None
-            if mark != "wf-lock-v1":
-                findings.append({"step": "marker", "status": "blocked",
-                                 "code": "WF_HISTORY_UNRESOLVED",
-                                 "reason": "lock marker missing or unknown", "marker": mark})
-            else:
-                findings.append({"step": "marker", "status": "ok"})
-        else:
-            findings.append({"step": "marker", "status": "ok", "note": "writer idle"})
-        # ⑨ 框架资产可用性（机制稿 §5.2 ⑨）：必需资产缺失即报对应入口不可用
-        required = (".wf/bin/wf.py", ".wf/bin/repair.py", ".wf/bin/uninstall.py",
-                    ".wf/lib/wflib/module_main.py")
-        missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]
-        if missing:
-            findings.append({"step": "assets", "status": "blocked",
-                             "code": "WF_CAPABILITY_UNAVAILABLE", "missing": missing})
-        else:
-            findings.append({"step": "assets", "status": "ok"})
         from . import cli as cli_mod
 
         foreign = cli_mod.wip_blockers(ctx.root,
@@ -1101,6 +1074,35 @@ def startup_check(ctx, task=None):
         findings.append({"step": "graph", "status": "unknown", "reason": "no bound object"})
         findings.append({"step": "workspace", "status": "unknown", "reason": "no bound object"})
         findings.append(_instance_startup_probe(ctx))
+    # ⑧ 写者标记 / ⑨ 框架资产：机制稿 §5.2 的无条件项，run 绑定与未绑定会话同样要报（R27 F3）
+    # ⑧ 写者标记按记录锚点核对（机制稿 §5.2 ⑧）：持有/恢复态必须有可识别的锁标记
+    state = record.get("state")
+    if state in ("held", "recovering"):
+        from . import lock as lock_mod
+
+        mark = None
+        try:
+            with open(lock_mod.lock_path(ctx.root), "r", encoding="utf-8") as handle:
+                mark = (handle.readline() or "").strip()
+        except OSError:
+            mark = None
+        if mark != "wf-lock-v1":
+            findings.append({"step": "marker", "status": "blocked",
+                             "code": "WF_HISTORY_UNRESOLVED",
+                             "reason": "lock marker missing or unknown", "marker": mark})
+        else:
+            findings.append({"step": "marker", "status": "ok"})
+    else:
+        findings.append({"step": "marker", "status": "ok", "note": "writer idle"})
+    # ⑨ 框架资产可用性（机制稿 §5.2 ⑨）：必需资产缺失即报对应入口不可用
+    required = (".wf/bin/wf.py", ".wf/bin/repair.py", ".wf/bin/uninstall.py",
+                ".wf/lib/wflib/module_main.py")
+    missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]
+    if missing:
+        findings.append({"step": "assets", "status": "blocked",
+                         "code": "WF_CAPABILITY_UNAVAILABLE", "missing": missing})
+    else:
+        findings.append({"step": "assets", "status": "ok"})
     order = {name: index for index, (name, _label) in enumerate(STARTUP_STEPS)}
     ordered = sorted(findings, key=lambda item: order.get(item["step"], 99))
     reassess_finding = None
@@ -5654,7 +5656,9 @@ def cmd_task_reassess(ctx, args):
                 wip["resolved"] = {"choice": "rework-completed",
                                    "rework": archived[-1].get("id"), "at": records.now_str()}
             elif archived and still_dirty:
-                unresolved_after_rework = still_dirty
+                # facts 面统一成路径字符串（记录里的历史形状可能是字符串或 fingerprint.item）
+                unresolved_after_rework = [item if isinstance(item, str) else item.get("path")
+                                           for item in still_dirty]
         # 清挂起保留 paused；若因此会出现第二个执行候选，同时记 paused + 等待人恢复（机制稿 §6.2）
         others = [other for _p, other in iter_tasks(ctx.root)
                   if other.get("id") != task_id and other.get("status") == "in_progress"

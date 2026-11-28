@@ -181,7 +181,7 @@ run 记录缺失报 `WF_HISTORY_UNRESOLVED`（`cli.wip_blockers`），而机制�
 只收紧了 keep。人签 grant（可含 glob）可把 d/c 档路径一并提交，从而"用提交绕过 d 档"。
 机制稿 §4.3 只禁了 keep 例外；是否把"无归属、跨任务混杂、外来改动"同口径扩到 commit 需人裁。
 
-## 21. 待补断言（R11 发现 3）
+## 21. 已补断言（test_stop_ownership.py 两例）：keep/commit 归属拒绝面
 
 `stop --keep` 的 e 桶归属收紧目前无断言（现有 keep 夹具路径都在 e 档，回退注入仍绿）。
 补法：构造 d/c 路径写进 keep subject → 断言 `WF_WORKSPACE_UNRESOLVED` + `facts.foreign`。
@@ -196,7 +196,7 @@ run 记录缺失报 `WF_HISTORY_UNRESOLVED`（`cli.wip_blockers`），而机制�
 九轮 b-1"这类路径只证明允许改、仍进交付并事实上抛，不是门禁"冲突——已回退为**不落任何字段**：事实由 Check/status 的 `preexisting_in_scope` 上抛。是否对它们设门禁（要求先出排除声明）需人裁；
 若设，须同批改设计稿 §4.2/§4.4 与四个 repro 的夹具，并核存量记录。
 
-## 23. 待补断言：startup check ⑩ 的收窄（R12 发现 3）
+## 23. 已补断言（test_startup_probe.py）：startup ⑩ 的 exclude_scope
 
 `tasks.startup_check` 的 WIP 项改按 `exclude_scope` 后，全仓无测试引用 `startup_check`。
 放行风险低（bind/acquire 前端仍拦），但事实面会静默少报一条阻断；与 §21 同批补。
@@ -206,7 +206,7 @@ run 记录缺失报 `WF_HISTORY_UNRESOLVED`（`cli.wip_blockers`），而机制�
 设计稿 §4.2/§4.4/§5.4 已补"返工谱系例外见 §5.6"，§5.6 补承接方与核销点；机制稿 §0.1 的
 design.md 输入摘要同批更新（validate-wf-design 输入摘要 4/4、覆盖率 100%/100%）。
 
-## 25. 待补断言：keep 归属/startup ⑩/reassess 核销（R13 发现 6）
+## 25. 待补断言：核销"全或不动"（下一轮独立小轮）
 
 `stop --keep` 的 e 桶拒绝、`startup_check` 的 `exclude_scope`、`task-reassess` 的核销三处均无区分力断言
 （删掉实现仍全绿）。构造 stop 的完整写权/锁桩成本高；`startup_check` 可直接构造 task + mock `cli.wip_blockers`
@@ -241,7 +241,7 @@ design.md 输入摘要同批更新（validate-wf-design 输入摘要 4/4、覆�
 需人裁：①改 draft 预填为 e∩dirty；②或在 §4.3 声明 stop 提交面窄于交付面并同步帮助；
 ③或让 commit 接受 delivery_set 口径（但需先定义这些路径的归属）。
 
-## 30. 待补断言：settled 的摘要失配分支（R14 发现 8）
+## 30. 已补断言（test_wip_blockers_scope.py 匹配/失配对照）：settled 摘要失配
 
 `test_wip_blockers_scope.py` 把 `fingerprint.item` 恒定 patch 为同一摘要，因此"已 resolved 路径
 再变脏即恢复阻断"（第十三轮 F2 的修复）没有区分力断言。补法：两组用例（摘要匹配 / 失配）+ 可变 mock。
@@ -287,7 +287,7 @@ F2（实现稿 D12/D13「未交付」）同批同步为「2026-11-12 已交付�
 这一子句；建议补一例 `{"terminal": None}` 正例，避免将来按 `wip_blockers` 口径改判为
 `WF_HISTORY_UNRESOLVED` 时该断言阻碍修正。
 
-## 37. 待补断言：挂起复评的接缝（R17 发现 3）
+## 37. 已补断言（test_startup_probe.py）：复评投影在固定顺序之后
 
 `test_reassess_trigger.py` 只测纯函数；全仓无测试引用 `startup_check`；唯一消费 startup facts 的
 repro 夹具无挂起任务；没有"兄弟任务挂起时 archive"的用例。以下注入全绿：删 startup finding、
@@ -300,7 +300,7 @@ repro 夹具无挂起任务；没有"兄弟任务挂起时 archive"的用例。�
 故文档与实现方向相反。需人选边：改稿（触发面只给事实）或补实现（触发面在可写时自动清挂起）。
 R17 亦确认：两分支的 `task-reassess` 入口都可达，无新死路。
 
-## 39. 待裁：`stop` subject 的字面 vs 模式两套语义（R18 发现 2）
+## 39. 已落地（2026-11-28 人裁）：subject 字面化（stop 预检拒 glob）
 
 `stop --keep|--commit` 的归属门禁按**字面成员**比 e 桶，而同函数其余判据（`covered`/`unlisted`/
 `out_of_scope`）把 subject 当**模式**（`pkg/**` 能过覆盖核却被判 foreign）。帮助只写"路径或承接对象"，
@@ -312,7 +312,7 @@ R17 亦确认：两分支的 `task-reassess` 入口都可达，无新死路。
 `STARTUP_STEPS` 恢复七步；复评事实改为**固定顺序之后**的第 8 项投影（`waiting|unknown`），不占序位、
 不改首报项；实现稿的覆盖面声明与机制稿 §5.2/§5.3 同批登记；陈旧注释删除。
 
-## 41. 待裁：启动项 ⑥ 的排除理由失效（R19 发现 4）
+## 41. 已落地（2026-11-28 人裁：补齐实例三探针；⑧⑨在 run 绑定分支仍缺，见 §60）
 
 `STARTUP_OUT_OF_SCOPE` 与实现稿 514 仍以"实例属于第二轮"排除 ⑥（未结束实例的快照/游标/任务归属/结束中断），
 但 run advance/pause/terminate 已交付（同文 536 与 D11–D13 已改）。`status` 的实例分支走 `startup_check(ctx)`
@@ -335,7 +335,7 @@ F1（链式 transfer 归属按 `resolved.at` 收敛到最近一次，不再按�
 R20 复核：被 transfers 挡住的 A 若要 `stop --keep` 重新登记，必须先取写权，而取写权会再次被同一条
 transfers 条目挡住 → A 无法自救；§32 的候选出口应改为 `repair` 或由承接方处置。
 
-## 45. 待裁：返工谱系豁免只有一层（R21 发现 4）
+## 45. 已落地（2026-11-28 人裁）：谱系闭包（附断言 test_nested_rework_lineage_is_transitive 含对照）
 
 `cli.wip_blockers` 的 task 支只比 `bound_record.rework_of` 一层，`scope.cross_task_conflicts` 的 d 档也只跳一层；
 run 支按 `sequence_changes` 可跨层。对返工任务再返工（入口允许）时：普通任务支 `bind R2` 被祖父 T 挡回
@@ -357,7 +357,7 @@ advance/pause/finish/terminate/resume 只手工核 state/held/holder.id，从不
 态度相反。`run finish`/`run resume` 不在 must-carry 清单。需人裁：补实现（`require_held(run=)` + 补表）
 或在 §2.2 如实声明"实例族只核 holder/scope"。无任何 run 族的 `WF_GENERATION_STALE` 用例。
 
-## 48. 待裁：在途实例的受控返工 R 能否被"任务绑定"独立接续（R23 发现 6）
+## 48. 已落地（2026-11-28 人裁）：R 不允许 task 绑定；锚点补实例快照（断言 test_rework_bind_scope.py）
 
 `binding_state` 只看 `task.run_id`（R 为 BINDING_NONE），`_eligible_task_bind` 放行，`ready` 把 R 当普通任务，
 task 绑定不经 run 的 paused/terminal 守卫。若判定"不允许"：实例 paused 后另一会话仍可 bind R 写它，
@@ -427,7 +427,7 @@ R26：runtime 侧 0 新成立项、0 新死路（2 项码值/文案，已修）�
 
 §48：`_eligible_task_bind` 拒绝"在途实例的受控返工 R"的 task 绑定（出口绑实例）；`workflow_snapshot_digest`
 对 R 解析所属在途实例、锚点含实例快照。
-§47：**未实施**（见 §57）。
+§47：**已实施**（见 §59）。
 §45：谱系闭包——`wip_blockers._mine` 与 `scope.cross_task_conflicts` 沿 `rework_of` 上溯全部祖先。
 §46：`check` 在 d 档前对"实例记录缺失"同口径报 `WF_HISTORY_UNRESOLVED`（出口 repair/§5.5）。
 §38：设计稿 §5.4 与机制稿 §5.3 改为"触发面只报告事实，清挂起由持写权 `task-reassess` 执行"。
@@ -450,3 +450,58 @@ R26：runtime 侧 0 新成立项、0 新死路（2 项码值/文案，已修）�
 §45 的二层嵌套（R2 的祖父 T 不再阻断、d 档不判争抢）与 §48 的"R 的 task 绑定被拒/锚点含实例快照"
 均无区分力断言；§46 的 history 出口分支由既有 d 桶用例的 mock 改造间接覆盖（在途 run 记录）。
 下轮补 §45/§48 各 1–2 例。
+
+## 59. 已实施：§47 run 族代次面（2026-11-28）
+
+五个写入口统一 `ctx.require_held(run=…)`：`advance`/`pause`/`resume` 在锁内入口核；`finish` 在
+"已结束"只读诊断之后、真实写路径之前核；`terminate` 在"写权不可核→只读收停止请求"分支之后、
+非预览时核（保留 §7.4 的窄例外与 §5.2 的重入诊断）。must-carry 表补 `run resume`/`run finish`。
+新增 `test_run_generation.py`（四入口断言 STALE、terminate 断言只读收请求优先）与
+`test_rework_bind_scope.py`（§48 两例）、`test_nested_rework_lineage_is_transitive`（§45 闭包）。
+回归中修掉两处顺序副作用：`instance-task-phases`（终态诊断须先于代次核）与
+`terminate-stop-request`（只读收请求须先于代次核）。
+
+## 60. 已落地（2026-11-28）：启动面 ⑧⑨ 统一到两支；② 登记为入口自查
+
+`startup_check` 的 marker/assets 两项只在 `task is not None` 分支内；run 绑定与未绑定会话的启动报告
+缺 ⑧（写者标记锚点）与 ⑨（框架资产）。机制稿 §5.2 把二者列为固定顺序的无条件项；
+② 会话写者与绑定的对应由各入口自查、启动报告面未列。`_instance_startup_probe` 的 blocked 项只有
+英文自由文本 `problems`、无原因码与出口。修法：把 marker/assets 移出 task 分支（或 else 分支补发），
+或把 ②⑧⑨ 的排除理由写进 `STARTUP_OUT_OF_SCOPE` 并同步实现稿 514 的计数句。
+
+## 61. 已修：R27 的 F1/F2/F4/F5（2026-11-28）
+
+F1：§45 闭包测试的夹具 id 撞车（child 与 grandparent 同 id → id 相等先行豁免，闭包从未被走），
+改为独立 id 并加"链未相连必须阻断"的对照；
+F2：`test_run_generation` 对五入口断言 `require_held` 的实参 `run=`，并补 terminate 写路径的
+`WF_GENERATION_STALE` 用例（holder 本会话 + scope 正确）；
+F4：本账本各节标题按实际证据更新（§21/§23/§30/§37 已补断言，§25 留待下一轮，§39/§41/§45/§48 已落地）；
+F5：`ready` 对 §48 拒绝的 R 补 `run_in_flight` 细分（与实例内任务同形）。
+
+## 62. 已修：R27 后续（2026-11-28）
+
+§25：`test_reassess_consumption.py` 两例（残留→不核销并报路径、干净→核销）；`unresolved_after_rework`
+归一为路径字符串（fact 面稳定）。
+§60：marker/assets 移到 task/非 task 两支之后（⑧⑨ 对 run 绑定与未绑定会话也执行）；
+`STARTUP_OUT_OF_SCOPE` 增 `writer-binding`（② 由入口自查），实现稿 514 同步。
+
+## 63. 待补：侧车 `stop_request` 的清除点（R28 F4 后半）
+
+`stop_request` 只在写权不可核时写入（runs.py 的 `_record_stop_request`），全仓无清除点：请求被真正
+执行后仍留在侧车，下一次预览会再带出（现在已按 `run_id` 过滤，不再跨实例误导）。需人裁是否在
+terminate 成功后清 `stop_request`（以及 preview 时是否提示"请求已被执行/作废"）。
+
+## 64. 待裁：启动面 ① 的「代次」子项未核（R28 F5）
+
+机制稿 §5.2 ① 明列代次；`startup_check` 只核 state/holder.id 并回显 generation，从不产出
+`WF_GENERATION_STALE`。本批给 ② 的处理是"各入口自查、启动报告面不列"，同样理由适用于 ①。
+需人裁：补一次比对（startup 里核会话代次）或把 ① 的代次子项登记进启动排除面。
+
+## 65. 已修：R28 的 F1/F2/F3/F4/F6（2026-11-28）
+
+F1（回归）：`ready` 的 `run_in_flight` 细分收窄到 §48 分支（BINDING_NONE + 谱系 reason），
+正常结束/异常无许可/记录缺失不再被标成在途；
+F2：`test_startup_probe` 断言 run 绑定会话也出 marker/assets，且 tempdir 下 assets 必 blocked；
+F3：五入口的 `require_held` 断言具体 `run=` 值（不再 `mock.ANY`）；
+F4：预览的 `pending_stop_request` 只带本实例（清除点登记 §63）；
+F6：实现稿 514 计数句改为"④与②两项显式不在启动面"。

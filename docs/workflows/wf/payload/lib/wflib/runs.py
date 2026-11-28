@@ -2179,6 +2179,8 @@ def advance(ctx, args):
     decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run advance"):
+        # 代次面统一（2026-11-28 人裁 §47）：实例写入与任务写入同一口径，旧代次不得写。
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -2539,6 +2541,7 @@ def pause(ctx, args):
                               {"reason": "run pause requires --run <id> --reason <text>"})
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run pause"):
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -2825,6 +2828,8 @@ def finish(ctx, args):
             raise DefinitionError("WF_BINDING_MISMATCH",
                                   {"reason": "run already ended",
                                    "terminal": run.get("terminal")})
+        # 代次面统一（§47）：真实写路径先核代次（终态诊断不要求，避免掩盖"已结束"事实）。
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -2990,7 +2995,7 @@ def _record_stop_request(ctx, run_id, plan_path, holder):
     from . import session as session_mod
 
     key = ctx.key()
-    request = {"run": run_id, "at": records.now_str(), "plan": plan_path,
+    request = {"run": run_id, "run_id": run_id, "at": records.now_str(), "plan": plan_path,
                "session_key": key, "blocked_by": holder,
                "note": "只读接收：未执行任何项目写入；恢复写权后重入 run terminate 执行"}
     merged = session_mod.update_runtime(ctx.root, key, stop_request=request)
@@ -3080,8 +3085,11 @@ def _terminate_preview(ctx, run_id):
                "cursor": run.get("cursor"), "task_map": task_map,
                "external_dependencies": [{"step": step, "task": (mapping or {}).get("task_id")}
                                          for step, mapping in sorted(task_map.items())],
-               # 上次写权不可核时记在本会话侧车的停止请求（机制稿 §7.4）；不是终止事实
-               "pending_stop_request": runtime.get("stop_request")})
+               # 上次写权不可核时记在本会话侧车的停止请求（机制稿 §7.4）；不是终止事实。
+               # 只带本实例的请求：侧车不按实例分区，旧实例/已完成实例的请求会误导预览（R28 F4）。
+               "pending_stop_request": ((runtime.get("stop_request") or {})
+                                        if (runtime.get("stop_request") or {}).get("run_id") == run_id
+                                        else None)})
 
 
 def terminate(ctx, args):
@@ -3140,6 +3148,9 @@ def terminate(ctx, args):
                  "reason": "stop request received; no project write was performed"},
                 next_=("停止请求已记在本会话侧车（**未执行任何项目写入**）：先恢复写权"
                        "（repair / 交接），再重入 run terminate；预览会把该请求带出来"))
+        # 代次面统一（§47）：写权路径先核代次（预览与"只读收请求"不要求）。
+        if not preview_only:
+            ctx.require_held(run=run_id)
         scope = (holder.get("scope") or {}).get("object") or {}
         if scope.get("kind") != "run" or scope.get("id") != run_id:
             raise DefinitionError("WF_BINDING_MISMATCH",
@@ -3408,6 +3419,7 @@ def resume(ctx, args):
     decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run resume"):
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:

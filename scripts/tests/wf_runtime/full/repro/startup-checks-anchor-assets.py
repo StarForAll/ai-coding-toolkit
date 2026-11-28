@@ -17,8 +17,8 @@ import _harness as H
 import _snapshot as S
 
 SID = "sess-STARTUP"
-FROM = ('        missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]\n')
-TO = ('        missing = []  # 注入：不核资产\n')
+FROM = ('    missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]\n')
+TO = ('    missing = []  # 注入：不核资产\n')
 
 
 def startup(project):
