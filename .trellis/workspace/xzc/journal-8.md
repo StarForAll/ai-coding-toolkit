@@ -1554,3 +1554,25 @@ reviewer 报告改为辅助证据；review-decide 要求主会话五轴复核并
 ### Status
 
 [OK] **Completed**
+
+
+## Session 424: wf 控制流修复与跨会话接续验收
+<!-- trellis-session: v=2 fp=9b3f23fe7b894b02 -->
+
+**Date**: 2026-11-28
+**Task**: wf 控制流修复与跨会话接续验收
+**Branch**: `main`
+
+### Summary
+
+复核 0.0.22 基线历史 dogfood 与外审 A1-1..A2-6：实例步骤契约消费 stored_in/consume_at 与 waived 资格、verify resolve 核 id 并只落档、Check 发布前复用门禁校验并核 notes 摘要、实例暂停释放核 e∪a 未提交路径、stop 空 subject 只看 e 桶、C2 表述与 states.json 对齐；定向 85 例 + 全量 runner 93 repro 全绿，文档闸门 0 问题；未提交前仅工作区候选，未重建发行树/未发布。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `375d9624` | wf: 控制流修复与跨会话接续（0.0.22 之后） |
+
+### Status
+
+[OK] **Completed**
