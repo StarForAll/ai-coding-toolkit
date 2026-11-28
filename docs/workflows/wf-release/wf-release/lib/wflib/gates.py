@@ -793,10 +793,10 @@ def verify_step(ctx, task, step_id, *, rule_version=None):
     if step_id == "task.tdd-verified":
         check = task.get("check") or {}
         evidence = check.get("tdd_evidence")
-        applicability = plan.get("tdd_applicability") or check.get("tdd_applicability") or "code"
-        if plan.get("tdd") and applicability == "code":
-            from . import check as check_mod
+        from . import check as check_mod
 
+        tdd_required, applicability = check_mod.tdd_scope(plan, check)
+        if tdd_required:
             history_commands = [command for entry in task.get("check_history") or []
                                 for command in entry.get("commands") or []]
             problem = check_mod.tdd_evidence_problem(evidence, check.get("commands") or [], history_commands)

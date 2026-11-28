@@ -1576,7 +1576,8 @@ def cmd_task_new(ctx, args):
                              "object": bound.get("object")},
                             next_="继续当前对象；要开新任务：完成/放弃当前对象并释放写权后"
                                   "用 `wf enable --new-session` 在同边界换新会话（真正并行才另开终端）")
-        cli.assert_no_foreign_wip(ctx, exclude_id=None)
+        # 写权状态先于工作区：交接中间态（holder 已清空）必须先给 accept 出口；否则
+        # 发送方登记的 WIP 会让接收方先撞 WF_WORKSPACE_UNRESOLVED，accept 指针不可达。
         # 未完成的父动作不能被任何会话越过（写权空闲不等于没有遗留动作）
         leftover = (record.get("action") or {})
         if leftover.get("kind") == "task.create" and leftover.get("state") != "done":
@@ -1586,11 +1587,8 @@ def cmd_task_new(ctx, args):
                                 "resume": "由原会话重入 task-new 续做，或走受控恢复"},
                                next_="原会话续做该意图；其他会话不得越过未完成动作")
         if record.get("state") != "idle":
-            _holder = record.get("holder") or {}
-            raise cli.CliError(
-                "WF_WRITER_BUSY", {"holder": _holder, "writer_state": record.get("state")},
-                next_=("等持有写权的写者释放；若旧写者已停止而记录未释放，"
-                       "由人确认后走 `wf repair` 恢复（不要删记录或改 writer）"))
+            raise cli.writer_busy_error(record, caller=key)
+        cli.assert_no_foreign_wip(ctx, exclude_id=None)
 
         task = new_task_record(kind, title)
         task_id = task["id"]
@@ -3633,12 +3631,30 @@ def cmd_task_check(ctx, args):
                 "basis": "TODO（依据：PRD/验收项与实际结果）",
             },
         }
+        # TDD 开启且 applicability=code 时，Check 还从同一文件顶层读 `tdd_evidence`
+        # （check._parse_review_notes）；骨架不列该块会让"按骨架填写"永远过不了 Check
+        # （2026-11-28 独立复审 F1.1/F3.4：字段只存在于消费方，不在任何描述面）。
+        plan = task_record.get("plan") or {}
+        tdd_required, _applicability = check_mod.tdd_scope(plan)
+        if tdd_required:
+            skeleton["tdd_evidence"] = {
+                "assertion": "TODO（先红的断言：针对哪个目标行为）",
+                "red_command_ref": "TODO（`--run-verification` 记录的失败运行所用验证 id）",
+                "red_reason": "TODO（为什么失败源于行为缺失，而不是环境启动失败）",
+                "green_command_ref": "TODO（同一验证 id 在本次 Check 中的通过运行）",
+                "properties": {"可红": "TODO", "确定性": "TODO",
+                               "快速": "TODO", "可无人执行": "TODO"},
+            }
+        next_ = ("把两个轴的 TODO 换成结论与依据"
+                 + ("，并按 tdd_evidence 填红/绿运行引用" if tdd_required else "")
+                 + "，写到 facts.path 后再去掉 --review-notes-draft 重跑 task-check")
         return codes.result(
             "WF_OK",
             object={"id": task_id, "name": task_record.get("title")},
             position_=codes.position(scope="task", phase=task_record.get("phase"), task_id=task_id),
-            next_="把两个轴的 TODO 换成结论与依据，写到 facts.path 后再去掉 --review-notes-draft 重跑 task-check",
+            next_=next_,
             facts={"draft": skeleton, "path": os.path.join(path, "review-notes.json"),
+                   "tdd_required": tdd_required,
                    "note": "草稿只读；TODO 原样提交会被判为非法 conclusion"},
         )
     run_verification = args.value("--run-verification")
