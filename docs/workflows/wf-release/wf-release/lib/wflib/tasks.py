@@ -965,21 +965,62 @@ STARTUP_STEPS = (
     ("marker", "写者标记锚点"),
     ("assets", "框架资产可用性"),
     ("workspace", "工作区边界"),
+    ("instances", "在途实例的快照/游标/结束中断"),
 )
 
-# 机制稿 §5.2 的启动固定顺序里，首轮不进入 startup_check 的项：
-# ④ 维护写者与本次预览范围的对应（只有维护入口有预览上下文，由维护入口自核）；
-# ⑥ 未结束实例的快照/游标/任务归属（实例属第二轮）。
+# 机制稿 §5.2 的启动固定顺序里，不进入 startup_check 的项：
+# ④ 维护写者与本次预览范围的对应（只有维护入口有预览上下文，由维护入口自核）。
 STARTUP_OUT_OF_SCOPE = (
     ("maintenance", "维护写者与预览范围对应：仅维护入口有预览上下文，由该入口自核"),
-    ("instances", "未结束实例的快照/游标/任务归属：实例属于第二轮"),
+    ("writer-binding", "会话写者与绑定的对应：各写入口在锁内自查（require_held_for），启动报告面不重复列"),
 )
+
+
+def _instance_startup_probe(ctx):
+    """在途实例的三项启动事实（机制稿 §5.2 ⑥，2026-11-28 人裁 §41）：快照/游标/结束中断。
+
+    只报告事实，不替代任何门禁；绑定不是 run 时明确标注不适用（不制造 unknown）。
+    """
+    try:
+        from . import runs as runs_mod6
+        from . import session as session_mod6
+
+        key = ctx.key(required=False) if hasattr(ctx, "key") else None
+        bound = session_mod6.load_binding(ctx.root, key) if key else None
+        object_ref = (bound or {}).get("object") or {}
+        if object_ref.get("kind") != "run":
+            return {"step": "instances", "status": "ok", "note": "no run binding"}
+        run_id = object_ref.get("id")
+        run = runs_mod6.load_run(ctx.root, run_id)
+        if not isinstance(run, dict):
+            return {"step": "instances", "status": "unknown", "reason": "run record missing",
+                    "run_id": run_id}
+        detail = {"run_id": run_id, "terminal": run.get("terminal")}
+        problems = []
+        if run.get("terminal") is not None:
+            problems.append("run already ended (binding should be refreshed)")
+        definition = run.get("definition") or {}
+        if not definition.get("digest"):
+            problems.append("definition digest missing")
+        cursor = run.get("cursor") or {}
+        cursor_task = cursor.get("task_id")
+        detail["cursor_task"] = cursor_task
+        if cursor_task:
+            task_path = os.path.join(ctx.root, ".wf", "tasks", cursor_task, "task.json")
+            if not os.path.exists(task_path):
+                problems.append("cursor task record missing")
+        if run.get("persist_pending"):
+            problems.append("persist_pending unresolved")
+        return {"step": "instances", "status": "blocked" if problems else "ok",
+                **({"problems": problems} if problems else {}), "detail": detail}
+    except Exception as exc:      # 读不出即未知，不阻断
+        return {"step": "instances", "status": "unknown", "reason": f"probe failed: {exc}"}
 
 
 def startup_check(ctx, task=None):
     """γ 启动校验的固定序列（机制稿 §5.2 ①–⑩ 的可实现子集）：未知优先于判定。
 
-    只读；返回按序的 findings，每项 status 取 ok/unknown/blocked。
+    只读；返回按序的 findings，每项 status 取 ok/unknown/blocked/waiting。
     """
     findings = []
     key = ctx.key(required=False)
@@ -1020,49 +1061,62 @@ def startup_check(ctx, task=None):
     if task is not None:
         blockers = dependency_blockers(ctx.root, task)
         findings.append({"step": "graph", "status": "blocked" if blockers else "ok", "unmet": blockers})
-        # 机制稿 §5.3 还要求「启动校验通过后」触发空集合复评；首轮只在 archive 侧调用，
-        # 这里先留可核事实，第二轮补返工时连启动侧触发一起接上（登记见综合记录）。
-        reassessment = _reassess_empty_set(ctx, task.get("id"))
-        if reassessment.get("empty"):
-            findings.append({"step": "graph", "status": "unknown", "reason": "empty retrospective set pending reassessment",
-                             "reassessment": reassessment})
-        # ⑧ 写者标记按记录锚点核对（机制稿 §5.2 ⑧）：持有/恢复态必须有可识别的锁标记
-        state = record.get("state")
-        if state in ("held", "recovering"):
-            from . import lock as lock_mod
+        # 机制稿 §5.3：复评在**启动校验固定顺序通过后**触发。这里只算事实，投影在排序之后
+        # （见下方 `reassess_finding`），不占用固定顺序的位次，也不改变首报项。
+        reassessment = _reassess_empty_set(ctx)
 
-            mark = None
-            try:
-                with open(lock_mod.lock_path(ctx.root), "r", encoding="utf-8") as handle:
-                    mark = (handle.readline() or "").strip()
-            except OSError:
-                mark = None
-            if mark != "wf-lock-v1":
-                findings.append({"step": "marker", "status": "blocked",
-                                 "code": "WF_HISTORY_UNRESOLVED",
-                                 "reason": "lock marker missing or unknown", "marker": mark})
-            else:
-                findings.append({"step": "marker", "status": "ok"})
-        else:
-            findings.append({"step": "marker", "status": "ok", "note": "writer idle"})
-        # ⑨ 框架资产可用性（机制稿 §5.2 ⑨）：必需资产缺失即报对应入口不可用
-        required = (".wf/bin/wf.py", ".wf/bin/repair.py", ".wf/bin/uninstall.py",
-                    ".wf/lib/wflib/module_main.py")
-        missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]
-        if missing:
-            findings.append({"step": "assets", "status": "blocked",
-                             "code": "WF_CAPABILITY_UNAVAILABLE", "missing": missing})
-        else:
-            findings.append({"step": "assets", "status": "ok"})
         from . import cli as cli_mod
 
-        foreign = cli_mod.wip_blockers(ctx.root, exclude_id=task.get("id"))
+        foreign = cli_mod.wip_blockers(ctx.root,
+                                       exclude_scope={"kind": "task", "id": task.get("id")})
         findings.append({"step": "workspace", "status": "blocked" if foreign else "ok", "blocking": foreign})
     else:
         findings.append({"step": "graph", "status": "unknown", "reason": "no bound object"})
         findings.append({"step": "workspace", "status": "unknown", "reason": "no bound object"})
+        findings.append(_instance_startup_probe(ctx))
+    # ⑧ 写者标记 / ⑨ 框架资产：机制稿 §5.2 的无条件项，run 绑定与未绑定会话同样要报（R27 F3）
+    # ⑧ 写者标记按记录锚点核对（机制稿 §5.2 ⑧）：持有/恢复态必须有可识别的锁标记
+    state = record.get("state")
+    if state in ("held", "recovering"):
+        from . import lock as lock_mod
+
+        mark = None
+        try:
+            with open(lock_mod.lock_path(ctx.root), "r", encoding="utf-8") as handle:
+                mark = (handle.readline() or "").strip()
+        except OSError:
+            mark = None
+        if mark != "wf-lock-v1":
+            findings.append({"step": "marker", "status": "blocked",
+                             "code": "WF_HISTORY_UNRESOLVED",
+                             "reason": "lock marker missing or unknown", "marker": mark})
+        else:
+            findings.append({"step": "marker", "status": "ok"})
+    else:
+        findings.append({"step": "marker", "status": "ok", "note": "writer idle"})
+    # ⑨ 框架资产可用性（机制稿 §5.2 ⑨）：必需资产缺失即报对应入口不可用
+    required = (".wf/bin/wf.py", ".wf/bin/repair.py", ".wf/bin/uninstall.py",
+                ".wf/lib/wflib/module_main.py")
+    missing = [rel for rel in required if not os.path.isfile(join(ctx.root, rel))]
+    if missing:
+        findings.append({"step": "assets", "status": "blocked",
+                         "code": "WF_CAPABILITY_UNAVAILABLE", "missing": missing})
+    else:
+        findings.append({"step": "assets", "status": "ok"})
     order = {name: index for index, (name, _label) in enumerate(STARTUP_STEPS)}
-    return sorted(findings, key=lambda item: order.get(item["step"], 99))
+    ordered = sorted(findings, key=lambda item: order.get(item["step"], 99))
+    reassess_finding = None
+    if task is not None and reassessment:
+        if reassessment.get("waiting_tasks"):
+            reassess_finding = {"step": "reassess", "status": "waiting",
+                                "reason": "suspended tasks pending reassessment",
+                                "reassessment": reassessment}
+        elif reassessment.get("unknown"):
+            reassess_finding = {"step": "reassess", "status": "unknown",
+                                "code": "WF_RECORD_INVALID",
+                                "reason": "suspended records without a rework set or unreadable conditions",
+                                "reassessment": reassessment}
+    return ordered + ([reassess_finding] if reassess_finding else [])
 
 
 def work_satisfied_fact(ctx, task):
@@ -1191,11 +1245,15 @@ def archive_precheck(ctx, task):
     pending = pending_delivery_paths(ctx, task)
     uncovered = uncovered_commit_paths(pending, granted)
     if uncovered:
-        return {"ok": False, "code": "WF_WIP_UNRESOLVED",
+        # 同一条件同一码（第二十六轮 F-1）：「完全没有授权」属授权缺失面，报
+        # WF_COMMIT_NOT_AUTHORIZED（与 changes_persisted_fact 一致）；「有授权但未覆盖」
+        # 才是 WIP 未处置面 WF_WIP_UNRESOLVED。
+        code = "WF_WIP_UNRESOLVED" if granted else "WF_COMMIT_NOT_AUTHORIZED"
+        return {"ok": False, "code": code,
                 "facts": {"pending_paths": uncovered, "granted": sorted(set(granted)),
                           "reason": ("尚未提供提交授权：决定文件里需要 choice=commit"
                                      if not granted else "授权未覆盖全部待提交路径")},
-                "blocking": [{"stage": "authorization", "code": "WF_WIP_UNRESOLVED",
+                "blocking": [{"stage": "authorization", "code": code,
                               "facts": {"pending_paths": uncovered}}]}
     return {"ok": True, "code": None, "facts": {"steps": findings, "pending": pending}, "blocking": []}
 
@@ -1294,7 +1352,7 @@ def write_scope(ctx, task_id):
                              "bound": object_ref, "requested": task_id,
                              "task_run_id": task.get("run_id")},
                             next_="实例内只推进本实例生成的任务或它登记的受控返工；"
-                                   "普通任务须在新会话里选择")
+                                   "普通任务在自己的会话里选择（开新对象用 `wf enable --new-session`）")
         if run.get("paused"):
             raise TaskError("WF_SEMANTIC_DECISION",
                             {"reason": "instance is paused; its task writes are frozen",
@@ -1511,12 +1569,13 @@ def cmd_task_new(ctx, args):
                 raise TaskError("WF_BINDING_MISMATCH",
                                 {"reason": "session already bound (object terminal)",
                                  "object": bound.get("object")},
-                                next_="旧对象已终态：开新对象需新执行边界或换新会话"
-                                      "（或 `wf enable --new-session` 换新会话标识）")
+                                next_="旧对象已终态：同边界用 `wf enable --new-session` 换新会话"
+                                      "后 task-new（真正并行才另开终端）")
             raise TaskError("WF_BINDING_MISMATCH",
                             {"reason": "session already bound",
                              "object": bound.get("object")},
-                            next_="继续当前对象用 continue/bind；要开新任务请在新会话里选")
+                            next_="继续当前对象；要开新任务：完成/放弃当前对象并释放写权后"
+                                  "用 `wf enable --new-session` 在同边界换新会话（真正并行才另开终端）")
         cli.assert_no_foreign_wip(ctx, exclude_id=None)
         # 未完成的父动作不能被任何会话越过（写权空闲不等于没有遗留动作）
         leftover = (record.get("action") or {})
@@ -1527,7 +1586,11 @@ def cmd_task_new(ctx, args):
                                 "resume": "由原会话重入 task-new 续做，或走受控恢复"},
                                next_="原会话续做该意图；其他会话不得越过未完成动作")
         if record.get("state") != "idle":
-            raise cli.CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
+            _holder = record.get("holder") or {}
+            raise cli.CliError(
+                "WF_WRITER_BUSY", {"holder": _holder, "writer_state": record.get("state")},
+                next_=("等持有写权的写者释放；若旧写者已停止而记录未释放，"
+                       "由人确认后走 `wf repair` 恢复（不要删记录或改 writer）"))
 
         task = new_task_record(kind, title)
         task_id = task["id"]
@@ -2704,9 +2767,9 @@ def cmd_task_start(ctx, args):
                 missing = (".wf/project-config.json" if config_record is None else ".wf/baseline.md")
                 raise TaskError("WF_CAPABILITY_UNAVAILABLE",
                                 {"missing": missing, "reason": "ordinary task requires project config and baseline",
-                                 "exits": ["先建一个 bootstrap 任务，用维护入口生成 .wf/project-config.json 与 .wf/baseline.md",
-                                           "存量项目：按项目既有配置补齐这两个文件后重试"]},
-                                next_="建 bootstrap 任务生成基线与配置（与 task-approve 的提示一致）")
+                                 "exits": ["新项目：先建一个 initialize 任务，产出基线/配置/spec 骨架后重试",
+                                           "存量项目：按项目既有配置补齐这两个文件，或先建 bootstrap 任务接入"]},
+                                next_="先走 initialize（新项目）或 bootstrap（存量接入）自举，再回本任务开工")
         if not scope.has_git(ctx.root):
             raise TaskError("WF_CAPABILITY_UNAVAILABLE", {"reason": "Git HEAD required", "missing": "git HEAD"})
         head = scope.head(ctx.root)
@@ -3265,8 +3328,8 @@ def check_next_hint(task, check, ctx=None):
     if open_blocking:
         rounds = sorted({int(item.get("round") or 0) for item in open_blocking})
         blocking_fix = (f"按处置规则关闭未关闭 blocking（轮次 {rounds}：在批准范围内修复 → "
-                        "重跑 task-check → 重新发起判定；误报/重分类经复核登记 accepted 可同轮重判，"
-                        "见 wf-review-action）")
+                        "重跑 task-check → 用 review-launch 发起新一轮（内容变了旧轮不可重判）；"
+                        "误报/重分类经复核登记 accepted 可同轮重判，见 wf-review-action）")
     mentions_blocking = False
     if (task.get("plan") or {}).get("complexity") == "complex":
         export_note = ""
@@ -3385,7 +3448,7 @@ def check_next_hint(task, check, ctx=None):
             else:
                 hint = (f"第 {_open_round} 轮审查在途，但本轮材料目录已不在（当前无材料身份）："
                         "重跑 review-context 重建材料（同 Check 身份会逐字节复现，原报告继续有效），"
-                        "再 review-decide；只有 Check 已重跑换 id 或交付面/规格已变才需重写/开新一轮")
+                        "再 review-decide；只有锚点或交付面/规格已变才需重写/开新一轮")
             if _materials_waiting:
                 hint += "；还有槽位未到，等齐后再判定"
         elif _open_round is not None and _materials_current_missing and _materials_history:
@@ -3402,7 +3465,7 @@ def check_next_hint(task, check, ctx=None):
                 hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift）且有 live 报告："
                         "有备份就把原字节放回材料目录并重跑 review-context；没有备份则删材料内容与 "
                         "manifest 后重建（同 Check 身份会复现，原报告继续有效），再 review-decide；"
-                        "只有 Check 已重跑换 id 或交付面/规格已变才需重写/开新一轮")
+                        "只有锚点或交付面/规格已变才需重写/开新一轮")
         elif _open_round is not None and _materials_drift:
             if _materials_waiting:
                 hint = (f"第 {_open_round} 轮审查在途，材料已被改动（drift），报告都是还原/无身份的历史证据，"
@@ -3877,8 +3940,10 @@ def _abandon_resume(ctx, task_id):
         task = records.load_json(os.path.join(moved, "task.json"))
         record_rel = os.path.relpath(moved, str(ctx.root)).replace(os.sep, "/")
     if _record_committed(ctx.root, record_rel):
+        release_fact = _release_after_archive(ctx, task_id)
         return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                             facts={"terminal": "abnormal", "record_persisted": True,
+                                   "write_release": release_fact,
                                    "note": "放弃已结案，无需重复"})
     _commit_paths(ctx.root, [record_rel], f"wf: abandon {task_id}\n\nwf-task: {task_id}",
                   moved_from=(_moved_from(ctx.root, old_rel) or task.get("moved_from")))
@@ -3886,8 +3951,12 @@ def _abandon_resume(ctx, task_id):
         raise TaskError("WF_PERSISTENCE_FAILED",
                         {"record": record_rel, "reason": "归档记录尚未进入提交"},
                         next_="持写权重入以续做记录提交")
+    release_fact = _release_after_archive(ctx, task_id)
     return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
+                        position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
+                        next_=_archive_next(release_fact),
                         facts={"terminal": "abnormal", "record_persisted": True, "resumed_commit": True,
+                               "write_release": release_fact,
                                "note": "只报告退出完成与保留风险，不报告业务验收通过"})
 
 
@@ -4020,11 +4089,16 @@ def _apply_abandon(ctx, task_id, task, path, decisions, disposition, holder):
                         {"record": record_rel, "reason": "归档记录尚未进入提交",
                          "resume": "持有写权重入 task-abandon 可续做记录提交"},
                         next_="持写权重入以续做记录提交")
+    # 机制稿 §5.3「归档成功后处理写权释放」（不分正常/异常）：对象已终态且持久化成功即释放，
+    # 终态即释放条件、没有业务语义选择；run terminate 复用本函数但收尾自己调本函数
+    # （run 在途时按 §5.8/§5.9 保留为 kept="run"），这里只对任务绑定路径实际释放。
+    release_fact = _release_after_archive(ctx, task_id, holder=holder)
     return codes.result("WF_OK", object={"id": task_id, "name": task.get("title")},
                     position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id),
-                    next_="写权释放后可结束会话",
+                    next_=_archive_next(release_fact),
                     facts={"terminal": "abnormal", "archived_at": task["archived_at"],
                            "record_persisted": True,
+                           "write_release": release_fact,
                            "control_assertion": assertion,
                            "note": "只报告退出完成与保留风险，不报告业务验收通过"})
 
@@ -4498,26 +4572,31 @@ def review_acceptance_echo(task):
     return review_mod.acceptance_echo(task)
 
 
-def _archive_next(write_release, task):
-    """归档后的下一步（唯一措辞）：实例内任务与普通任务不同。
+def _archive_next(write_release):
+    """对象终态收尾后的下一步（唯一措辞）：实例内任务与已终态对象不同。
 
     实例内任务归档时写权**有意**留给实例（`kept="run"`），下一步是 `run advance` 记 satisfied，
     再按实例继续；此前无论哪种情况都说"重跑 writer release"，AI 照做会撞上
     "写权不属于该任务"的死路（八轮审查 b-4）。
+    已终态对象（正常/异常归档的任务，或已结束的实例）持久化完成后写权应已随收尾释放；
+    出口指向同边界轮换入口 `enable --new-session`（机制稿 §1.4 四态③、W3-1），
+    不再把 AI 送回"另开一个新会话"的旧路（dogfood 会话 2/3/4 的实际失败点）。
     """
     if write_release.get("kept") == "run":
         return ("归档已完成；实例写权留着继续推进：下一步 run advance（游标在该步骤上），"
                 "不要在这里再做写权释放")
     if write_release.get("released"):
-        return "归档已完成，写权已释放；下一对象需在新会话选择"
-    return "归档已完成；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
+        return ("对象已终态，写权已释放；同边界用 `wf enable --new-session` 换新会话身份后"
+                "选择下一对象（真正并行推进两个对象才另开终端/窗口）")
+    return "对象已终态；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
 
 
 def _release_after_archive(ctx, task_id, holder=None):
-    """正常归档持久化成功后释放写权：对象已终态，释放没有业务语义选择。
+    """对象终态且持久化成功后释放写权（机制稿 §5.3「归档成功后处理写权释放」、§7.4「最后释放」）：终态即释放条件，没有业务语义选择。
 
-    实例内任务例外：实例仍在途，写权属于实例（设计稿 §5.8/§5.9）——释放它会让实例
-    无法 `run advance` 记 satisfied。此时只报告 `kept="run"`，由实例自己的收尾释放。
+    实例内任务例外：实例仍在途（terminal 为空），写权属于实例（设计稿 §5.8/§5.9）——释放它会让
+    实例无法 `run advance` 记 satisfied。此时只报告 `kept="run"`，由实例自己的收尾释放。
+    实例自身已终态（run.finish/run.terminate 的收尾调用）同样释放：机制稿 §7.4 明列"最后释放"。
     释放失败不把归档报成失败：返回事实并给 `writer release` 恢复出口。
     """
     from . import cli
@@ -4530,8 +4609,18 @@ def _release_after_archive(ctx, task_id, holder=None):
             _record, holder = require_held_for(ctx, task_id)
         scope = (holder.get("scope") or {}).get("object") or {}
         if scope.get("kind") == "run":
-            return {"released": False, "kept": "run", "run": scope.get("id"),
-                    "next": "实例仍在途：写权属于实例，回到实例用 run advance 记 satisfied"}
+            from . import runs as runs_mod
+
+            run = runs_mod.load_run(ctx.root, str(scope.get("id") or ""))
+            if run is None:
+                # 记录读不到不得当作"在途保留"放行（unknown 不充当任一侧）：只报事实，
+                # 给 writer release 的人工出口，不自动释放。
+                return {"released": False, "reason": "run record missing or unreadable",
+                        "run": scope.get("id"),
+                        "next": "只读核对实例记录后再 `wf writer release`；不据猜测释放"}
+            if run.get("terminal") is None:
+                return {"released": False, "kept": "run", "run": scope.get("id"),
+                        "next": "实例仍在途：写权属于实例，回到实例用 run advance 记 satisfied"}
         updated, assertion = cli._release_writer_locked(ctx, holder)
         return {"released": True, "generation": updated.get("generation"),
                 "control_assertion": assertion}
@@ -4712,12 +4801,9 @@ def cmd_archive(ctx, args):
                 position_=codes.position(scope="task", phase=task.get("phase"), task_id=task_id,
                                          action_id=(task.get("action") or {}).get("id"),
                                          action_state=(task.get("action") or {}).get("state")),
-                next_=("归档已持久化，写权已释放；下一对象需在新会话选择"
-                       if persisted.get("persisted") and write_release.get("released")
-                       else "归档已持久化；实例仍在途：回到实例用 run advance 记 satisfied"
-                       if persisted.get("persisted") and write_release.get("kept") == "run"
-                       else "归档已持久化：无需重复归档或重复提交" if persisted.get("persisted")
-                       else "按可达提交查证结果交人核对（不重复归档）"),
+                next_=( _archive_next(write_release)
+                        if persisted.get("persisted")
+                        else "按可达提交查证结果交人核对（不重复归档）"),
                 facts={"archive_persisted": persisted, "terminal": task.get("terminal"),
                        "write_release": write_release,
                        # vendor_dirty 消费点（2026-11-21 批C）：归档收尾同样可见，人确认归属后不阻断
@@ -4880,7 +4966,7 @@ def cmd_archive(ctx, args):
             writer_mod.owner_ref(holder.get("kind"), holder.get("id"), holder.get("scope")),
             task["action"], [record_rel],
         )
-        reassessment = _reassess_empty_set(ctx, task_id)
+        reassessment = _reassess_empty_set(ctx)
         # 归档持久化已在锁内完成；写权释放在同一把锁内做，避免与另一个会话的 acquire 竞态。
         write_release = _release_after_archive(ctx, task_id, holder=holder)
     return codes.result(
@@ -4888,7 +4974,7 @@ def cmd_archive(ctx, args):
         object={"id": task_id, "name": task.get("title")},
         position_=codes.position(scope="task", phase="finish", task_id=task_id,
                                  action_id=task["action"]["id"], action_state=task["action"]["state"]),
-        next_=(_archive_next(write_release, task)),
+        next_=(_archive_next(write_release)),
         facts={"terminal": "normal", "archived_at": task["archived_at"], "moved_to": record_rel,
                "write_release": write_release,
                "commit": commit_result, "control_assertion": assertion, "reassessment": reassessment,
@@ -4941,25 +5027,50 @@ def _inspection_hint(ctx):
         facts["next"] = "用 `wf inspect` 只读核对工作区分类与冲突后继续"
     return facts
 
-def _reassess_empty_set(ctx, task_id):
-    """首轮无返工集合时，复评只能是"无挂起任务"。
+def _reassess_empty_set(ctx):
+    """挂起复评的触发面：报告挂起集合，**不阻断**已成立的归档/启动（第十六/十七轮复审）。
 
-    但若记录里残留 `suspended`（手工编辑/迁移/repair 重建都可能留下），必须先报未知事实，
-    不能谎报"没有"——"读不出 ≠ 没有"（第二十一轮复审外部 P1-2）。
+    分两档（设计稿 §5.4「关键非法组合」）：
+    - 合法挂起（有返工集合）→ `waiting`，由持写权会话 `task-reassess` 清挂起；
+    - 残留/非法挂起（`suspended` 但返工集合为空）→ `unknown`，`task-reassess` 永远无法成功，
+      出口是 `task-abandon` 或 `wf repair`（不能与合法挂起共用一条 waiting）。
+    迭代记录本身按"读不出≠没有"处理：任何记录不可解析只记 `unreadable` 事实，不抛——
+    否则归档会在终态+提交之后抛错、写权不释放。
     """
-    found = []
-    for _path, task in iter_tasks(ctx.root):
-        if task.get("suspended") or task.get("paused") and task.get("suspended"):
-            found.append({"id": task.get("id"), "phase": task.get("phase"),
-                          "suspended": bool(task.get("suspended"))})
-    if found:
-        raise TaskError("WF_HISTORY_UNRESOLVED", {
-            "reason": "记录里存在挂起/暂停残留，首轮无法判定返工集合",
-            "pending": found,
-            "exits": ["由人核对并清理这些记录的 suspended 标记后重试",
-                      "确认属于历史迁移残留时走 repair 处置"],
-        })
-    return {"suspended_tasks": [], "reassessed": [], "note": "首轮无返工能力，挂起集合为空"}
+    try:
+        records = list(iter_tasks(ctx.root))
+    except Exception as exc:      # 兄弟记录损坏：只报告未知，不让归档/启动在收尾处炸
+        return {"suspended_tasks": [], "unknown": [], "waiting": False, "reassessed": [],
+                "unreadable": str(exc), "note": "挂起集合不可读；按未知报告，不阻断调用方"}
+    found, waiting, unknowns, conditions = [], [], [], {}
+    for _path, task in records:
+        if not task.get("suspended"):
+            continue
+        identifier = task.get("id")
+        found.append({"id": identifier, "phase": task.get("phase")})
+        try:
+            items = reassess_problems(ctx.root, task)
+        except Exception:
+            items = None
+        conditions[identifier] = items
+        if items is None:
+            unknowns.append({"id": identifier, "reason": "reassessment conditions unreadable",
+                             "exits": ["task-abandon", "wf repair"]})
+            continue
+        if any(not item.get("ok") for item in items):
+            blocked = [item.get("condition") for item in items if not item.get("ok")]
+            if "rework_set_non_empty" in blocked:
+                unknowns.append({"id": identifier, "reason": "suspended without rework set",
+                                 "unmet": blocked, "exits": ["task-abandon", "wf repair"]})
+                continue
+            waiting.append({"id": identifier, "unmet": blocked})
+        else:
+            waiting.append({"id": identifier, "unmet": []})
+    return {"suspended_tasks": found, "waiting_tasks": waiting, "unknown": unknowns,
+            "conditions": conditions, "reassessed": [],
+            "waiting": bool(waiting),
+            "note": ("存在挂起任务：由持写权会话 `task-reassess` 清挂起（本入口只报告事实）"
+                     if waiting else "无待复评的挂起任务")}
 
 
 def _reenter_check_from_finish(ctx, path, task, action, operation):
@@ -5510,6 +5621,7 @@ def cmd_task_reassess(ctx, args):
         holder = require_held_for(ctx, task_id)[1]
         path = _require_task_dir(ctx, task_id)
         task = records.load_json(os.path.join(path, "task.json"))
+        unresolved_after_rework = []      # 核销被"全或不动"挡下时仍 dirty 的登记路径（受 §19 消费）
         if task.get("status") == "archived":
             raise TaskError("WF_BINDING_MISMATCH", {"reason": "task archived", "task": task_id})
         if not task.get("suspended"):
@@ -5529,6 +5641,24 @@ def cmd_task_reassess(ctx, args):
                 facts={"reassessed": False, "waiting": True, "unmet": unmet,
                        "conditions": conditions})
         task["suspended"] = False
+        # 核销点（机制稿 §6.2）：返工集合全部归档后，T 的保留 WIP 由已归档的 R 承接处置，
+        # 清挂起时把 wip 记为已解除（否则 T 的旧登记会继续挡住其他对象）。
+        wip = ((task.get("handoff") or {}).get("wip")) or {}
+        if wip.get("paths") and not wip.get("resolved"):
+            archived = [item for item in rework_set(ctx.root, task_id)
+                        if item.get("status") == "archived"]
+            # 全或不动（机制稿 §6.2，2026-11-27 人裁 §19）：只有登记路径都已不在工作区差异里
+            # 才核销；仍有残留就保留登记并如实报告，交给承接方/人处置。
+            dirty_now = set(scope.uncommitted_paths(ctx.root))
+            still_dirty = [item for item in wip.get("paths") or []
+                           if (item if isinstance(item, str) else (item or {}).get("path")) in dirty_now]
+            if archived and not still_dirty:
+                wip["resolved"] = {"choice": "rework-completed",
+                                   "rework": archived[-1].get("id"), "at": records.now_str()}
+            elif archived and still_dirty:
+                # facts 面统一成路径字符串（记录里的历史形状可能是字符串或 fingerprint.item）
+                unresolved_after_rework = [item if isinstance(item, str) else item.get("path")
+                                           for item in still_dirty]
         # 清挂起保留 paused；若因此会出现第二个执行候选，同时记 paused + 等待人恢复（机制稿 §6.2）
         others = [other for _p, other in iter_tasks(ctx.root)
                   if other.get("id") != task_id and other.get("status") == "in_progress"
@@ -5550,6 +5680,7 @@ def cmd_task_reassess(ctx, args):
                if waiting_for_human else "已清挂起；按就绪选择恢复"),
         facts={"reassessed": True, "suspended": False, "paused": bool(task.get("paused")),
                "waiting_for_human": waiting_for_human, "conditions": conditions,
+               "unresolved_after_rework": unresolved_after_rework,
                "control_assertion": assertion})
 
 
@@ -5862,7 +5993,10 @@ def cmd_task_rework(ctx, args):
         # 机制稿 §6.2：「T 显式暂停、**保存交接/工作区**并 release」——三件都要做。
         # 只暂停不存 WIP，会让新会话看不到"T 还留着哪些未提交改动"，也让 disposition 无处落地。
         preview = _abandon_preview(ctx, task)
-        retained = sorted(preview.get("uncommitted") or [])
+        # 交接 WIP 与 `stop --keep` 同形：每项是 fingerprint.item（含 digest）。纯字符串会让
+        # `task-resume` 的"有变化重核"与写权前置的按摘要豁免在这条来源上静默失效（R22 F3）。
+        retained = [fingerprint.item(ctx.root, path)
+                    for path in sorted(preview.get("uncommitted") or [])]
         task = dict(task, paused=True,
                     pause_reason={"reason": "rework handover", "at": records.now_str(),
                                   "by": "task.rework", "rework": rework_id},
@@ -5926,6 +6060,28 @@ def wip_paths(task):
 
 def ensure_releasable(task, root=None):
     if task.get("status") == "archived":
+        # 机制稿 §5.3「归档成功后处理写权释放」：终态已落盘但记录组尚未提交时，写权是续做提交
+        # 的唯一在途权威——释放会把它变成 idle，重入只能撞 WF_WRITER_BUSY（2026-11-27 独立审查
+        # F1 实测死路）。判据用 `_record_committed`（记录是否入库）：正常归档与放弃终态共用同一
+        # 事实；`archive_persisted` 的可达提交查证对放弃终态（无 task.archive 动作、无下界）会报
+        # "no archive action" 假阴性，不在此处使用。已入库（或无 root 的单测夹具）即放行。
+        if root is not None:
+            directory = task_dir(root, task.get("id"))
+            record_rel = (os.path.relpath(directory, str(root)).replace(os.sep, "/")
+                          if directory else None)
+            if record_rel and not _record_committed(root, record_rel):
+                # 出口按终态分档（2026-11-27 终审 N3）：放弃类没有 finish_decision，重入
+                # `archive` 的续做分支不会补提交（authorized=False 必然 WF_PERSISTENCE_FAILED），
+                # 正确重入是 `task-abandon`（其自身失败事实给出口）；正常归档类才重入 `archive`。
+                _by_abandon = task.get("terminal") == "abnormal"
+                raise TaskError("WF_SEMANTIC_DECISION",
+                                {"reason": "task archived but record group not committed; "
+                                           "writer is the recovery authority",
+                                 "task": task.get("id"), "record": record_rel},
+                                next_=("先按 `task-abandon` 的出口补提交授权重入续做（已授权时重入同命令），"
+                                       "记录入库后再释放写权" if _by_abandon else
+                                       "先按 `archive` 的出口补提交授权重入续做（已授权时重入同命令），"
+                                       "记录入库后再释放写权"))
         return True
     retained = wip_paths(task)
     if root is not None and retained:
@@ -5942,7 +6098,11 @@ def ensure_releasable(task, root=None):
         raise TaskError("WF_WORKSPACE_UNRESOLVED",
                         {"reason": "task keeps un-disposed WIP", "pending": pending},
                         next_="先按 disposition 落实保留 WIP 再释放写权")
-    if task.get("paused") or task.get("terminal"):
+    if task.get("terminal"):
+        # 非 archived 的 terminal 不是合法组合（机制稿 §2.2）；此处沿用既有行为放行
+        # （archived 分支在上面已做过记录入库门禁），注释如实登记，不新增阻断。
+        return True
+    if task.get("paused"):
         return True
     if task.get("suspended"):
         raise TaskError("WF_SEMANTIC_DECISION", {"reason": "suspended task cannot be released as idle"})
@@ -5970,6 +6130,15 @@ def stop_work(ctx, decisions, choice):
         from . import paths as paths_mod
 
         paths = _subject_paths(decisions[0].get("subject"))
+        # subject 只接受字面路径（2026-11-28 人裁 §39）：归属门禁按字面成员比较，
+        # glob 会"过覆盖核却被判 foreign"，两套语义不再并存。
+        globbed = [item for item in paths if any(token in item for token in "*?[")]
+        if globbed:
+            raise TaskError("WF_SEMANTIC_DECISION",
+                            {"reason": "收工 subject 只接受字面路径，不接受 glob/通配",
+                             "patterns": globbed,
+                             "exits": ["把这些条目改写为实际路径后重试（可用 `stop --draft` 的预填）",
+                                       "或先按 `--workspace-exclusion` 声明排除，再只列本任务路径"]})
         choice_now = decisions[0].get("choice")
         if not paths and choice_now != "transfer":
             # 无 WIP 时允许空路径：只显式记载没有任何覆盖路径（P3）
@@ -6002,6 +6171,19 @@ def stop_work(ctx, decisions, choice):
                 raise TaskError("WF_WORKSPACE_UNRESOLVED",
                                 {"reason": "保留 WIP 只适用于当前批准范围内且归属明确的路径",
                                  "out_of_scope": out_of_scope, "approved": touch})
+            # 机制稿 §4.3（2026-11-27 人裁）：无归属、跨任务混杂或外来改动不能纳入 keep 例外。
+            # 归属按本任务 e 桶判（与 classify 同一判据），不按 glob 命中判。
+            owned = set(classified["buckets"]["e"])
+            foreign = [item for item in paths if item not in owned]
+            if foreign:
+                raise TaskError("WF_WORKSPACE_UNRESOLVED",
+                                {"reason": "保留 WIP 只能登记本任务归属的未提交路径",
+                                 "foreign": foreign, "owned": sorted(owned),
+                                 "exits": ["把这些路径从 subject 移除，或改选 commit/transfer/reverse 处置",
+                                           "由人实际处置这些改动后重试"]})
+            # 开工前就在工作区、归属未确认的路径（e 桶的 preexisting 子集）不机械阻断：设计稿
+            # §4.2 九轮 b-1 明确它们"只证明允许改、不证明是本任务改的"，事实由 Check/status 的
+            # `preexisting_in_scope` 上抛（不落第二事实源，第十三轮复审 F3）。
             commit_result = None
         elif choice == "commit":
             # decisions[0] 是收工选择本身；授权必须是其后的独立 Decision（机制稿 §4.3）
@@ -6013,6 +6195,17 @@ def stop_work(ctx, decisions, choice):
                 raise TaskError("WF_COMMIT_NOT_AUTHORIZED",
                                 {"reason": "提交授权须覆盖本次收工的每个路径",
                                  "uncovered": uncovered, "grant_paths": grant_paths})
+            # 归属同口径（机制稿 §4.3，2026-11-27 人裁 §20）：授权覆盖后再核归属——提交只能覆盖
+            # 本任务 e 桶路径，不能借人签 grant 把 d/c 档（他人登记的未处置 WIP）一并入库。
+            # 顺序先授权后归属：未覆盖的授权仍报 WF_COMMIT_NOT_AUTHORIZED（既有契约）。
+            owned_commit = set(classified["buckets"]["e"])
+            foreign_commit = [item for item in paths if item not in owned_commit]
+            if foreign_commit:
+                raise TaskError("WF_WORKSPACE_UNRESOLVED",
+                                {"reason": "提交只能覆盖本任务归属的路径",
+                                 "foreign": foreign_commit, "owned": sorted(owned_commit),
+                                 "exits": ["把这些路径从 subject 移除，或先按归属处置（排除/承接/人裁）",
+                                           "改选 transfer/reverse（同样只覆盖本任务路径）"]})
             commit_result = _commit_paths(ctx.root, paths, f"wf: wip {task_id}\n\nwf-task: {task_id}")
             leftover = [item for item in scope.uncommitted_paths(ctx.root)
                         if any(item == path or paths_mod.match_path(path, item) for path in paths)]
@@ -6020,6 +6213,9 @@ def stop_work(ctx, decisions, choice):
                 raise TaskError("WF_PERSISTENCE_FAILED",
                                 {"reason": "收工提交后仍有未提交差异", "leftover": leftover})
         elif choice == "reverse":
+            # reverse 只核"撤销是否已实际完成"：归属门禁不能套用（撤销后路径既不在 uncommitted
+            # 也不在 attributed，e 桶为空——门禁会永远拒绝合法的未提交撤销，第十四轮复审 F2）。
+            # 归属风险由"只删不改"与捕获的 dirty 判据承担；commit 才需要 e 桶口径（见下）。
             dirty = [item for item in paths
                      if scope.git(ctx.root, "status", "--porcelain", "--", item)[1].strip()]
             if dirty:

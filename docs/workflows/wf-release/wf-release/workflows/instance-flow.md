@@ -1,6 +1,6 @@
 # 实例流程（instance-flow）
 
-> 用户工作流定义、准备通道与实例编排。第二轮交付，`definition prepare` 与 `run *`
+> 用户工作流定义、准备通道与实例编排。`definition prepare` 与 `run *` 均为当前发行已交付能力，
 > 子命令均已实现；升级/导出入口属维护面（系统级 `wf upgrade`，说明见 maintenance-flow），启动与推进的日常子命令用项目脚本 `.wf/bin/wf.py` 运行，不依赖系统命令。
 
 ## required 步骤
@@ -28,27 +28,27 @@
 ### control.run.terminate [required · repeatable]
 
 - 时点：实例终止动作结束
-- enforcement: `wflib/runs.py::terminate`（第二轮）
+- enforcement: `wflib/runs.py::terminate`（已交付）
 - 动作：按人确认的批量计划逐任务放弃或保留，写实例终态并授权提交。
 - 出口：改动去向未落实 → `WF_WORKSPACE_UNRESOLVED`；只报终止与保留风险，不报验收通过。
 
 ### control.dependency.change [required · repeatable]
 
 - 时点：建边/删边动作结束
-- enforcement: `wflib/cli.py::dep`（第二轮）
+- enforcement: `wflib/cli.py::dep`（已交付）
 - 动作：校验两端存在、无自环无环后落边；删边只改未归档持有侧。
 - 出口：环或悬空 → `WF_DEPENDENCY_UNMET`；无法解析 → `WF_HISTORY_UNRESOLVED`。
 
 ### control.task.rework [required · repeatable]
 
 - 时点：返工动作结束
-- enforcement: `wflib/cli.py::task-rework`（第二轮）
+- enforcement: `wflib/cli.py::task-rework`（已交付）
 - 动作：建 R、继承原前置、给 T 挂起，并按实例/普通任务分别处置定位与写权。
 - 出口：候选图不合法 → `WF_DEPENDENCY_UNMET`；T 挂起未完成 → 阻止 R 提前执行。
 
 ### control.task.replace [required · repeatable]
 
 - 时点：替换动作结束
-- enforcement: `wflib/cli.py::task-replace`（第二轮）
+- enforcement: `wflib/cli.py::task-replace`（已交付）
 - 动作：继任者承接原前置、继承路径与在途实例映射，原任务异常归档。
 - 出口：继任者未覆盖继承路径 → 回规划；图不一致 → `WF_SEMANTIC_DECISION`。

@@ -141,7 +141,7 @@
       "tier": "blocked"
     },
     "WF_SCOPE_UNRESOLVED": {
-      "exit": "归属/范围意图先核清；单点面外路径可走 authorize record choice=expand 轻量通道；其余人核对或回 Plan 补声明重新批准；不自动扩 glob",
+      "exit": "按对象形态分档（普通任务 `stop` 可用；实例任务 `run pause`→`writer release`）；恢复序 `writer acquire`→`task-resume`（实例先 `run resume`）→重跑 `task-check`；d 档的争抢路径只能由持有方处置、expand/排除无效；治理面变体：回 Plan 在 touch_paths 补可证包含的条目后重新批准。",
       "prohibited_repairs": "不自动扩 glob；不以宽命中证明合规",
       "tier": "needs_decision"
     },
@@ -196,7 +196,7 @@
       "tier": "blocked"
     },
     "WF_WORKSPACE_UNRESOLVED": {
-      "exit": "外来未提交改动先判归属：本任务交付按规则记录；人不认领的写排除声明（choice=排除外来改动 + paths + by/at/quote/source）后 --workspace-exclusion 重跑；面外路径不猜，回 Plan 或请人确认",
+      "exit": "外来未提交改动先判归属：本任务交付按规则记录；人不认领的写排除声明（choice=排除外来改动 + paths + by/at/quote/source）后 --workspace-exclusion 重跑；面外路径不猜，回 Plan 或请人确认。写权前置变体（其他对象的未处置保留 WIP）：由各 blocked[].task 的持有方实际处置（提交/移走/具名承接）或 blocked[].preparation 的准备会话 `definition prepare --end` 处置；人裁决只决定由谁处置、不解除；排除声明与重跑 Check 对该变体不适用；写权记录残留走 repair",
       "prohibited_repairs": "不 stash、不捎带、不丢弃他人改动",
       "tier": "needs_decision"
     },

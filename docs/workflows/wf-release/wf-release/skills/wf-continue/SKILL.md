@@ -24,12 +24,12 @@ disable-model-invocation: false
 | in_progress/check | `task-check`；实例任务的**步骤契约**（必做动作/步骤内人判点/声明验证）也在这里兑现——动作结果用 `--decision` 的 `choice=done|waived`（subject 含动作 id）记录；要留一次针对性红测用 `--run-verification`（不产生 Check 结论）。双轴结论与决定输入的字段形状见 `wf help task-check`（拿不准先取只读骨架）。**你要判的是**：双轴结论与依据够不够；人工验收/直接验收的结论是否绑定"人当时看到的交付内容"（内容变了旧结论不沿用——入口会用 `content_digest` 核它，缺该值就按未通过处理）；重复调试的「同一问题/不同问题」是你在授权内的裁定，不要套用验收字段 |
 | 需要记录知识处置（Check/归档前） | `task-knowledge`（取值域见 `wf help task-knowledge`）；spec 变更走 `wf-spec-update` skill（`spec-update`），先看后改 |
 | 复盘触发（入口 facts 的触发集合非空） | `task-retrospect`（结论写在 evidence 的 `conclusion`，形状见 `wf help task-retrospect`）；触发项与证据缺口由入口 facts 给出，不自行缩减 |
-| 需要返工或替换 | `task-rework`（建 R、挂起 T、继承前置）；替换用 `task-replace`（先可取只读预览）；先读 `task-flow` 的返工/替换段 |
-| 任务挂起需要复评 | `task-reassess`（挂起集合为空时入口直接通过，不写记录） |
+| 需要返工或替换 | `task-rework`（建 R、挂起 T、继承前置）；替换用 `task-replace`（先可取只读预览）。**R 是 T 的交接承接方**：T 的保留 WIP 不挡 R 的绑定/取写权；R 完成后由 `task-reassess` 清挂起并核销 T 的旧登记（机制稿 §6.2 是定义位，`wf help task-rework` 给形状） |
+| 任务挂起需要复评 | `task-reassess`（单任务复评；未挂起时幂等返回、不写记录） |
 | 建/删依赖边 | `dep`（建/删边形态见 `wf help dep`）；前置状态与顺序由入口校验，不手改记录 |
 | 基线/项目配置变更 | `baseline-apply`（先只读预览，再由人的批准决定承载）→ 只在已批准任务内，spec 变更走 `wf-spec-update` |
 | 用户工作流定义编辑/校验 | **未绑定会话**才走准备通道：`definition prepare`（先取人的准备范围授权，见 `wf-start`）/ `definition validate`。**已绑定任务或实例的会话不要走它**——入口会报 `WF_BINDING_MISMATCH`；改定义回当前任务的 Plan 重新批准（触碰面覆盖该路径即可），实例推进用 `run advance` |
-| 开工/Check 报 `WF_WORKSPACE_UNRESOLVED`（外来未提交改动） | 先判这些路径是不是本任务的交付：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用该入口的排除声明输入重跑。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
+| 开工/Check/取写权报 `WF_WORKSPACE_UNRESOLVED` | **先把来源分清**：写权前置报的是“其他对象的未处置 WIP”，入口给 `facts.blocked` 与 `exits`——由各持有方实际处置（提交/移走/具名承接）或人 `repair`，排除声明与回 Plan 对该变体无效；开工/Check 的 c 档外来改动才走排除声明。然后：已批准触碰面内的未提交路径按归属规则记录；已提交的历史改动才用 `task-attribute` 裁决归属。人确认"不属于本任务、保持原样"时，写一份排除声明（`choice=排除外来改动` + `paths` + `by/at/quote/source`），用该入口的排除声明输入重跑。面外路径不猜，回 Plan 或请人确认；排除按记录时摘要绑定，内容一变即失效，且不构成提交授权 |
 | in_progress/finish | **先读修复态**（见下节），把 Check 结果、未核实项、待提交路径准备好，再请人核对后由人调用 `wf-finish`；准备完成前不停止。决定文件结构拿不准时先跑 `archive` 的只读草稿（只打印不落盘）。试点期可跑一次 `sampling pick`（先冻结再落盘；不跑不阻断，入口会在 Check next_ 里提示） |
 | 人**明确要求**改方案 | 先取人签的 `choice=replan` 决定文件 → `task-replan` → 重新 `task-approve` → `task-start`（缺决定即 `WF_SEMANTIC_DECISION`） |
 | PRD 只改排版/转义等、验收与触碰面不变（机械修订） | 取人签的 `choice=机械修订` 决定 → `task-approve`：入口经等价链核验后**不重复人批**，回到执行继续。该签认是对散文等价性（只改排版/转义）的人签，"不重复问人"由"不重复批准"承载；前置是本任务已有批准（改语义仍走上一行的 replan，不经 task-replan） |

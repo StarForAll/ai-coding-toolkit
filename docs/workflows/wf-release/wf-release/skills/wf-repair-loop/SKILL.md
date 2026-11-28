@@ -21,8 +21,8 @@ disable-model-invocation: false
   交付面内，且规则变动会改锚点，需重跑 Check 后再关。
   旧轮把某项标 `unable` 不算死结：后续轮提交带证据的 `accepted` 即视为核实完成（不必回头改旧轮复核）。
 - **"不处置"不是"关闭"**：blocking 无处置即阻断项，三条正路是 resolved / reclassification / task-abandon。
-- **"同意某种修法但还没做"不能写 `accepted`**（finding 会立刻消失，light 又没有 C4 兜底）：保持 open，
-  或写 `amended` + 理由（不关闭）。
+- **"同意某种修法但还没做"不能写 `accepted`**：保持 open，或写 `amended` + 理由（不关闭）——
+  完整论述（后果、`rejected/amended` 不关闭、误报写法）在 `wf-review-action`「处置形状」一处，此处只留判断。
 - 人的挑战：「这条测试/这段改动，和这个问题是怎么对上的？」
 
 ## 1. 先读什么

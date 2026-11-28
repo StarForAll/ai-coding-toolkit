@@ -1086,7 +1086,7 @@ def _end_preparation(ctx, args, workflow_id, definition_rel, record, holder, min
                         facts={"workflow_id": workflow_id, "ended_at": ended["ended_at"],
                                "released": released, "held_scope": cross_scope,
                                "retained": retained,
-                               "exits": (["本会话还持着别的准备写权：结束那一份定义，或用新会话继续"]
+                               "exits": (["本会话还持着别的准备写权：结束那一份定义，或用 `wf enable --new-session` 换新会话后继续准备"]
                                          if cross_scope else [])})
 
 
@@ -1125,7 +1125,7 @@ def prepare(ctx, args):
             "reason": "准备通道只给未绑定会话；本会话已绑定对象",
             "bound": existing_binding.get("object"),
             "exits": ["已绑定会话要改定义：走其已批准任务范围（回 Plan 重新批准）",
-                      "确需准备另一份定义：在新会话里选择准备通道"],
+                      "确需准备另一份定义：用 `wf enable --new-session` 换新会话后走准备通道（准备通道只给未绑定会话）"],
         })
     with lock.acquire(ctx.root, holder_hint=f"definition prepare {workflow_id}"):
         record = writer_mod.load(ctx.root) or {}
@@ -1163,7 +1163,7 @@ def prepare(ctx, args):
                 raise DefinitionError("WF_WRITER_BUSY", {
                     "reason": "本会话持有其他对象的写权，不能同时准备定义",
                     "scope": held_scope,
-                    "exits": ["先结束该对象的收工/归档（写权随之释放）", "或在新会话里走准备通道"]})
+                    "exits": ["先结束该对象的收工/归档（写权随之释放）", "或用 `wf enable --new-session` 换新会话后走准备通道"]})
         elif record.get("state") == "idle":
             owner_scope = {"object": {"kind": "preparation", "id": workflow_id},
                            "preparation": {"id": workflow_id,
@@ -1432,7 +1432,7 @@ def _preparation_problems(root, workflow_id, key, definition_rel):
         return problems
     if record.get("session_key") != key:
         problems.append({"reason": "preparation belongs to another session",
-                         "exit": "由原会话创建实例，或在新会话重跑 definition prepare"})
+                         "exit": "由原会话创建实例，或用 `wf enable --new-session` 换新会话后重跑 definition prepare"})
     # 已结束（`--end`）的准备记录仍可用于创建：结束只表示"准备写权释放 + 未提交编辑已处置"，
     # 定义内容由 `validation`/`digest`（创建时按当前字节重核）保证，不因结束而失效。
     if definition_rel not in (record.get("scope_paths") or []):
@@ -1653,7 +1653,8 @@ def create(ctx, args):
             raise DefinitionError("WF_BINDING_MISMATCH",
                                   {"reason": "session already bound",
                                    "object": (session_mod.load_binding(ctx.root, key) or {}).get("object")},
-                                  next_="继续当前对象用 continue/bind；要开新实例请在新会话里选")
+                                  next_="继续当前对象；要开新实例：完成/放弃当前对象并释放写权后"
+                                        "用 `wf enable --new-session` 在同边界换新会话（真正并行才另开终端）")
         cli.assert_no_foreign_wip(ctx, exclude_id=None)
         if record.get("state") != "idle":
             raise cli.CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
@@ -2178,6 +2179,8 @@ def advance(ctx, args):
     decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run advance"):
+        # 代次面统一（2026-11-28 人裁 §47）：实例写入与任务写入同一口径，旧代次不得写。
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -2538,6 +2541,7 @@ def pause(ctx, args):
                               {"reason": "run pause requires --run <id> --reason <text>"})
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run pause"):
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -2763,20 +2767,33 @@ def _pending_persist(ctx, run, run_id, decisions, op, key, scope):
     "补授权后重入"于是变成死出口（六轮审查 b-2）。这里按**事实**续做：有覆盖该路径的
     commit 授权就提交并只读复核，然后把动作收尾；没有就仍停着并给同一个出口。
     """
+    from . import tasks as tasks_mod
+
     outcome = _persist_run_records(ctx, run, run_id, decisions, op, key, scope)
     persisted, commit_result = outcome["persisted"], outcome["commit"]
     record_rel = outcome["record"]
+    # 机制稿 §7.4「最后释放」：重入补完提交后同样释放（终态事实与主路径一致）。
+    # 入参 `scope` 是 holder 的 object 引用；按 `_owner_ref` 的形状重组 holder。
+    record_uncovered = list(outcome.get("uncovered") or [])
+    holder_like = {"kind": "session", "id": key, "scope": {"object": scope}}
+    write_release = (tasks_mod._release_after_archive(ctx, run_id, holder=holder_like)
+                     if persisted else None)
     return codes.result(
         "WF_OK",
         object={"id": run_id},
         position_=codes.position(scope="run", action_id=run["action"]["id"],
                                  action_state=run["action"]["state"]),
-        next_=("实例已结束并持久化：可 writer release 结束会话"
-               if persisted else
-               (f"实例已结束，但**记录组不完整**（缺提交：{', '.join(outcome.get('missing_records') or [])}）："
-                f"给出覆盖这些路径的 commit 授权后重入 run {op} 续做")),
+        next_=("实例已结束并持久化，写权已释放；同边界 `wf enable --new-session` 换新会话后选择下一对象"
+               if persisted and (write_release or {}).get("released")
+               else "实例已结束并持久化；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
+               if persisted
+               # 缺项清单取 `uncovered`（未获授权覆盖的路径）而非 `missing_records`（完整性缺口）：
+               # 无授权早退时后者为空，输出会变成"缺提交："后跟空列表（2026-11-27 独立审查 F2）。
+               else (f"实例已结束，但**记录组尚未提交**（待授权路径：{', '.join(record_uncovered) or '无'}）："
+                     f"给出覆盖这些路径的 commit 授权（`--decision`）后重入 run {op} 续做")),
         facts={"run": run_id, "terminal": run.get("terminal"), "ended_at": run.get("ended_at"),
                "closing": run.get("closing"), "persisted": persisted,
+               "write_release": write_release,
                "record": record_rel, "commit": commit_result, "resumed": True,
                "records": outcome.get("records"), "committed": outcome.get("committed"),
                "missing_records": outcome.get("missing_records"),
@@ -2803,11 +2820,27 @@ def finish(ctx, args):
     decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run finish"):
+        # 「已结束」是只读诊断（机制稿 §5.2 重入：整体后置成立即返回已完成），先于写权核对——
+        # 终态收尾已释放写权，同会话重入不得被 WF_WRITER_BUSY 挡在诊断之外；
+        # 写权核对只拦真正的写路径（persist_pending 续做）。
+        run = load_run(ctx.root, run_id)
+        if isinstance(run, dict) and run.get("terminal") and not _run_persist_pending(ctx, run, run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended",
+                                   "terminal": run.get("terminal")})
+        # 代次面统一（§47）：真实写路径先核代次（终态诊断不要求，避免掩盖"已结束"事实）。
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
-            raise cli.CliError("WF_WRITER_BUSY", {"holder": holder},
-                               next_="由绑定该实例的会话结束实例；他人持有写权时先走交接/恢复出口")
+            # 出口按写权实态分档（2026-11-27 独立审查 F1 后半）：idle 时"他人持有"是假前提，
+            # 本会话重取写权即可继续；他者持有才是等待/交接/恢复。
+            _idle_other = record.get("state") == "idle"
+            raise cli.CliError("WF_WRITER_BUSY",
+                               {"holder": holder, "writer_state": record.get("state")},
+                               next_=("写权空闲而本会话未持有：`wf writer acquire` 取得写权后重入本条命令"
+                                      if _idle_other else
+                                      "由绑定该实例的会话结束实例；他人持有写权时先走交接/恢复出口"))
         scope = (holder.get("scope") or {}).get("object") or {}
         if scope.get("kind") != "run" or scope.get("id") != run_id:
             raise DefinitionError("WF_BINDING_MISMATCH",
@@ -2818,15 +2851,10 @@ def finish(ctx, args):
             raise DefinitionError("WF_BINDING_MISMATCH",
                                   {"reason": "session is not bound to this run",
                                    "binding": binding.get("object")})
-        run = load_run(ctx.root, run_id)
         if not isinstance(run, dict):
             raise DefinitionError("WF_HISTORY_UNRESOLVED", {"reason": "run record missing",
                                                            "run": run_id})
         if run.get("terminal"):
-            if not _run_persist_pending(ctx, run, run_id):
-                raise DefinitionError("WF_BINDING_MISMATCH",
-                                      {"reason": "run already ended",
-                                       "terminal": run.get("terminal")})
             return _pending_persist(ctx, run, run_id, decisions, "finish", key, scope)
         if run.get("paused"):
             raise DefinitionError("WF_SEMANTIC_DECISION",
@@ -2912,11 +2940,16 @@ def finish(ctx, args):
         outcome = _persist_run_records(ctx, run, run_id, decisions, "finish", key, scope)
         persisted = outcome["persisted"]
         commit_result = outcome["commit"]
+        # 机制稿 §7.4「最后释放」：实例已终态且持久化完成即释放；未持久化保持写权待恢复。
+        write_release = (tasks_mod._release_after_archive(ctx, run_id, holder=holder)
+                         if persisted else None)
         if persisted:
             run = records.load_json(run_path(ctx.root, run_id)) or run
-    next_ = ("实例已正常结束并持久化：可 writer release 结束会话"
-             if persisted else
-             "实例已正常结束，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入 run finish 续做")
+    next_ = ("实例已正常结束并持久化，写权已释放；同边界 `wf enable --new-session` 换新会话后选择下一对象"
+             if persisted and (write_release or {}).get("released")
+             else "实例已正常结束并持久化；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
+             if persisted
+             else "实例已正常结束，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入 run finish 续做")
     return codes.result(
         "WF_OK",
         object={"id": run_id},
@@ -2926,6 +2959,7 @@ def finish(ctx, args):
         next_=next_,
         facts={"run": run_id, "terminal": "normal", "ended_at": run["ended_at"],
                "closing": run["closing"], "persisted": persisted,
+               "write_release": write_release,
                "record": record_rel, "commit": commit_result,
                "records": outcome.get("records"), "committed": outcome.get("committed"),
                "missing_records": outcome.get("missing_records"),
@@ -2940,11 +2974,15 @@ def _grant_paths(subject):
     return []
 
 
-def _terminate_decisions(entries):
-    """批量计划里的全部内联决定（含每条任务附带的提交授权）。"""
+def _terminate_decisions(entries, extra=None):
+    """批量计划里的全部内联决定（含每条任务附带的提交授权）。
+
+    `--decision` 的授权（`extra`）与它们同列：空计划时它是记录组提交授权的唯一来源。
+    """
     found = []
     for entry in entries.values():
         found.extend(item for item in entry.get("decisions") or [] if isinstance(item, dict))
+    found.extend(item for item in (extra or []) if isinstance(item, dict))
     return found
 
 
@@ -2957,7 +2995,7 @@ def _record_stop_request(ctx, run_id, plan_path, holder):
     from . import session as session_mod
 
     key = ctx.key()
-    request = {"run": run_id, "at": records.now_str(), "plan": plan_path,
+    request = {"run": run_id, "run_id": run_id, "at": records.now_str(), "plan": plan_path,
                "session_key": key, "blocked_by": holder,
                "note": "只读接收：未执行任何项目写入；恢复写权后重入 run terminate 执行"}
     merged = session_mod.update_runtime(ctx.root, key, stop_request=request)
@@ -3047,8 +3085,11 @@ def _terminate_preview(ctx, run_id):
                "cursor": run.get("cursor"), "task_map": task_map,
                "external_dependencies": [{"step": step, "task": (mapping or {}).get("task_id")}
                                          for step, mapping in sorted(task_map.items())],
-               # 上次写权不可核时记在本会话侧车的停止请求（机制稿 §7.4）；不是终止事实
-               "pending_stop_request": runtime.get("stop_request")})
+               # 上次写权不可核时记在本会话侧车的停止请求（机制稿 §7.4）；不是终止事实。
+               # 只带本实例的请求：侧车不按实例分区，旧实例/已完成实例的请求会误导预览（R28 F4）。
+               "pending_stop_request": ((runtime.get("stop_request") or {})
+                                        if (runtime.get("stop_request") or {}).get("run_id") == run_id
+                                        else None)})
 
 
 def terminate(ctx, args):
@@ -3080,8 +3121,21 @@ def terminate(ctx, args):
         if not isinstance(plan, list):
             raise DefinitionError("WF_SEMANTIC_DECISION",
                                   {"reason": "plan must be an array of {object, decision_ref, reason}"})
+    # 机制稿 §7.4「…授权持久化、释放」：实例记录组的提交授权与 `run finish` 同形（`--decision`）。
+    # 空计划的合法形态（实例一步未展开）没有任务条目可承载内联 `decision_ref`；缺该通道时
+    # 记录组会永久停在 persist_pending，重入出口不可执行（2026-11-27 独立审查）。
+    decision_path = args.value("--decision")
+    extra_decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run terminate"):
+        # 「已结束」是只读诊断（机制稿 §5.2 重入：整体后置成立即返回已完成），先于写权核对——
+        # 终态收尾已释放写权，同会话重入不得被 WF_WRITER_BUSY 挡在诊断之外。
+        _run_probe = load_run(ctx.root, run_id)
+        if isinstance(_run_probe, dict) and _run_probe.get("terminal") \
+                and not _run_persist_pending(ctx, _run_probe, run_id):
+            raise DefinitionError("WF_BINDING_MISMATCH",
+                                  {"reason": "run already ended",
+                                   "terminal": _run_probe.get("terminal")})
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:
@@ -3094,6 +3148,9 @@ def terminate(ctx, args):
                  "reason": "stop request received; no project write was performed"},
                 next_=("停止请求已记在本会话侧车（**未执行任何项目写入**）：先恢复写权"
                        "（repair / 交接），再重入 run terminate；预览会把该请求带出来"))
+        # 代次面统一（§47）：写权路径先核代次（预览与"只读收请求"不要求）。
+        if not preview_only:
+            ctx.require_held(run=run_id)
         scope = (holder.get("scope") or {}).get("object") or {}
         if scope.get("kind") != "run" or scope.get("id") != run_id:
             raise DefinitionError("WF_BINDING_MISMATCH",
@@ -3128,7 +3185,7 @@ def terminate(ctx, args):
                 entries[item["object"]] = {"decisions": [entry for entry in raw
                                                          if isinstance(entry, dict)] if isinstance(raw, list)
                                             else ([raw] if isinstance(raw, dict) else [])}
-            return _pending_persist(ctx, run, run_id, _terminate_decisions(entries),
+            return _pending_persist(ctx, run, run_id, _terminate_decisions(entries, extra_decisions),
                                     "terminate", key, scope)
         # 快照在任何业务写入之前读一次：缺失/失配即零写入退出（不再留半写状态）
         doc, _snapshot_bytes = fixed_snapshot(ctx, run)
@@ -3281,11 +3338,18 @@ def terminate(ctx, args):
                    action=dict(action, state="persist_pending", next_step="persist_record"))
         records.write_json(run_path(ctx.root, run_id), run)
         # ④ 固定提交步骤：与 finish 共用同一实现（先写完成态、再提交、从 Git 读回核对）
-        outcome = _persist_run_records(ctx, run, run_id, _terminate_decisions(entries),
+        outcome = _persist_run_records(ctx, run, run_id, _terminate_decisions(entries, extra_decisions),
                                        "terminate", key, scope)
         persisted = outcome["persisted"]
         commit_result = outcome["commit"]
         record_rel = outcome["record"]
+        # 机制稿 §7.4「…授权持久化、释放」：实例异常终止持久化完成即释放写权；
+        # 保留任务由新会话按 independent_resume 独立接续（释放失败只报告事实，不反转终止结果）。
+        # 释放必须在锁内（机制稿 §4.5、tasks._release_after_archive 的同锁纪律）：锁外读-改-写
+        # 会与另一会话的 writer acquire 竞态（2026-11-27 终审 N2）。
+        write_release = (tasks_mod._release_after_archive(ctx, run_id, holder=holder)
+                         if persisted else None)
+        run = records.load_json(run_path(ctx.root, run_id)) or run
     stale = [step for step in ("save_closing", "apply_tasks", "write_terminal")
              if not _terminate_step_done(ctx, run_id, step, entries)]
     if not persisted:
@@ -3299,13 +3363,16 @@ def terminate(ctx, args):
         object={"id": run_id},
         position_=codes.position(scope="run", action_id=run["action"]["id"],
                                  action_state=run["action"]["state"]),
-        next_=("实例已异常终止并持久化：保留任务在新会话按 independent_resume 独立接续；"
+        next_=("实例已异常终止并持久化，写权已释放：保留任务在新会话按 independent_resume 独立接续；"
                "**只报告退出完成与保留风险，不报告业务验收通过**"
-               if persisted else
-               "实例已异常终止，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入续做"),
+               if persisted and (write_release or {}).get("released")
+               else "实例已异常终止并持久化；写权释放未完成，按 write_release 事实重跑 `wf writer release`"
+               if persisted
+               else "实例已异常终止，但**记录组尚未提交**：给出覆盖该路径的 commit 授权后重入续做"),
         facts={"run": run_id, "terminal": "abnormal", "ended_at": run["ended_at"],
                "closing": run["closing"], "applied": applied,
                "step_results": run["step_results"], "persisted": persisted,
+               "write_release": write_release,
                "record": record_rel, "commit": commit_result,
                "control_assertion": (run["action"].get("result") or {}).get("control_assertion")},
     )
@@ -3352,6 +3419,7 @@ def resume(ctx, args):
     decisions = cli._load_decision(decision_path) if decision_path else []
     key = ctx.key()
     with lock.acquire(ctx.root, holder_hint="run resume"):
+        ctx.require_held(run=run_id)
         record = ctx.writer() or {}
         holder = record.get("holder") or {}
         if record.get("state") != "held" or holder.get("id") != key:

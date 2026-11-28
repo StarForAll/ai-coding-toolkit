@@ -47,7 +47,7 @@ user-invoked: true
    主会话若在你写报告前后重出了材料，`materials.identity` 会与当前不符：按新 facts 重抄该值，
    然后**重核受影响的结论**（材料换了，你引用的行号、证据、覆盖判断都可能变——重抄不等于重审）；
    或由主会话开新一轮。若只是材料目录被清/重建（Check 未重跑、交付面与规格未变），
-   重建会逐字节复现同一身份，报告继续有效；只有 Check 换 id 或字节变化才需重写/开新一轮。
+   重建会逐字节复现同一身份，报告继续有效；只有锚点或字节变化才需重写/开新一轮（同锚点换 check_id 视为同内容重验）。
 7. 材料是**脱敏副本**：`diff.patch` / `prd.md` 在生成时按协议 `secret-mask` 遮罩过（`status.json` 里 `redacted: true`），看到 `***` 是预期，不要据此判「材料缺失」；报告 = 头部状态行 + Markdown 正文 + 唯一协议块（`review-context` 已把整套骨架写到
    `report_path`，含预填的 `task-id`/`round`/`check-anchor`；照它填，不自己另写字段）：
 
@@ -85,5 +85,5 @@ user-invoked: true
 | 许可 | 跟随本仓库（内部私有源，无第三方 NOTICE 义务；上游为同作者资产） |
 | 基线 | 适配基线＝本仓库上述源文件；本副本为唯一发行件，上游改动不自动流入 |
 | 差异 | 改造成 `<!-- wf-review-report:v1 -->` 协议 + 项目树外暂存、只写自己报告；锚点字段按 §6.5 |
-| 最近正例 | 任务记录 `validation.md` §19：codex 与 pi（glm-5.3-flash）两异种 reviewer 各写 `review-<agent>.md` 到本轮暂存路径、锚点与当前 Check 一致，`review-import` 导入成功 |
-| 最近反例 | 实现稿 §7.1 V4：改一个交付文件后重导旧报告 → `WF_REVIEW_INVALID`（锚点失配）；报告缺 `check-anchor` 时无法核对新鲜度 |
+| 最近正例 | 2026-11-03 全链路实测：两个异种 reviewer（codex、pi）各自把 `review-<agent>.md` 写进本轮暂存路径、锚点与当前 Check 一致，`review-import` 导入成功，判定 pass（当时验证记录的摘要复述；authoring 任务记录不随发行投放） |
+| 最近反例 | 同次实测：改一个交付文件后重导旧报告 → `WF_REVIEW_INVALID`（锚点失配）；报告缺 `check-anchor` 时无法核对新鲜度 |

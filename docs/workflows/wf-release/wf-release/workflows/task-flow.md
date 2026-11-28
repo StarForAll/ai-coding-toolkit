@@ -67,7 +67,7 @@
 
 - 时点：收工前建议（2026-11-21 降档：不再是归档门禁，未跑不阻断）
 - 事实：`wflib/gates.py` 投影（P = `{seed, picks}`）＋ `wflib/sampling.py::freeze`
-- 动作：试点期自验证手段（v42 §0.2）：建议收工前跑一次
+- 动作：试点期自验证手段（框架自带机制，来源登记在 authoring 侧、不随发行投放）：建议收工前跑一次
   `wf sampling pick --task <id> --freeze` 冻结选样（种子 + 事件集），AI 不可挑选事件。
 - 提示：未跑抽样时，task-check 的 next_ 与收工预览 facts 附建议语/`pilot_sampling_pending`
   （仅建议，不产生任何错误码）；有 picks 则不提示。

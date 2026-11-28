@@ -43,9 +43,9 @@
 ### control.task.reassess [required · repeatable]
 
 - 时点：归档持久化核实后与启动校验通过后
-- enforcement: `wflib/tasks.py::cmd_task_reassess`（挂起集合为空时通过）
-- 动作：复评挂起任务；挂起集合为空时直接通过（不写记录、不返回不可用）。返工由 `task-rework` 承载（建 R、挂起 T、继承前置，已交付）。
-- 出口：未持写权只报告「待复评」；第二阶段交付完整复评路径。
+- enforcement: `wflib/tasks.py::cmd_task_reassess`（单任务；未挂起时幂等返回）
+- 动作：复评指定任务的挂起条件（`--task` 必填）；未挂起时幂等返回、不写记录。返工由 `task-rework` 承载（建 R、挂起 T、继承前置，已交付）。
+- 出口：未持写权只报告「待复评」；完整复评路径已交付（`task-reassess`，2026-11-12）。
 
 ## 运行约定（会话纪律与执行器）
 
