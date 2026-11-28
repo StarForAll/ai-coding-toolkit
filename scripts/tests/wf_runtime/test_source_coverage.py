@@ -75,8 +75,8 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(counts["units_total"], 67)
         self.assertEqual(counts["units_by_kind"],
                          {"candidate": 1, "extra": 1, "flow": 4, "manual": 2, "suite": 59})
-        self.assertEqual(counts["repro_discovered"], 92)
-        self.assertEqual(counts["repro_grouped"], 62)
+        self.assertEqual(counts["repro_discovered"], 93)
+        self.assertEqual(counts["repro_grouped"], 63)
         self.assertEqual(counts["repro_ungrouped"], 30)
         self.assertEqual(counts["repro_with_metadata"], 7)
         self.assertEqual(counts["repro_candidate_clean"], 3)

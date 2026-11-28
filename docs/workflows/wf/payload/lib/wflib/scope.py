@@ -901,6 +901,24 @@ def cross_task_conflicts(root, task, touch_paths=None):
             continue
         if other.get("status") == "archived" or other.get("terminal"):
             continue
+        # 返工谱系闭包（机制稿 §3.5/§6.2，2026-11-27 方案① + 2026-11-28 人裁 §45）：沿 rework_of
+        # 上溯全部祖先，其未处置登记由当前任务承接，不算争抢。
+        ancestor = task.get("rework_of")
+        seen = set()
+        claimed = False
+        while ancestor and ancestor not in seen:
+            if ancestor == other_id:
+                claimed = True
+                break
+            seen.add(ancestor)
+            try:
+                from . import tasks as tasks_mod2
+                parent = tasks_mod2.load_task(root, ancestor)
+            except Exception:
+                break
+            ancestor = (parent or {}).get("rework_of")
+        if claimed:
+            continue
         wip = ((other.get("handoff") or {}).get("wip") or {})
         if wip.get("resolved"):
             continue

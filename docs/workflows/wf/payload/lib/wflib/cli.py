@@ -1758,6 +1758,20 @@ def _eligible_task_bind(ctx, task):
     state = runs_mod.binding_state(ctx.root, task)
     kind = state["state"]
     if kind == runs_mod.BINDING_NONE:
+        # 在途实例的受控返工 R 不写 run_id（binding_state 看不到），但经 sequence_changes 同属该实例：
+        # 不允许 task 绑定独立接续（2026-11-28 人裁 §48），只能绑实例。
+        from . import tasks as tasks_mod
+
+        for _rid, run in runs_mod.iter_runs(ctx.root):
+            if not isinstance(run, dict) or run.get("terminal") is not None:
+                continue
+            if tasks_mod._task_in_run(task, task.get("id"), run.get("id"), run, ctx.root):
+                raise CliError(
+                    "WF_BINDING_MISMATCH",
+                    {"reason": "task belongs to an in-flight run via rework sequence",
+                     "run_id": run.get("id"), "exits": ["`wf bind --run <id>` 绑定该实例后由实例推进"]},
+                    next_="`wf bind --run <id>` 绑定该实例",
+                )
         return None
     if kind == runs_mod.BINDING_MISSING:
         raise CliError("WF_HISTORY_UNRESOLVED",
@@ -1893,7 +1907,7 @@ def cmd_bind(ctx, args, kind="task"):
         object_ref = _eligible_run_bind(ctx, target)
     with _lock(ctx.root, hint="bind"):
         # 同对象接续允许进入核验路径（保留 WIP 随响应交回新会话）；其他对象仍阻断
-        assert_no_foreign_wip(ctx, exclude_id=(object_ref or {}).get("id"))
+        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         record = ctx.writer()
         # 中断恢复：本会话已有未完成的 session.bind 时续做，不报 WRITER_BUSY
         resumed = _resume_bind(ctx, key, session, object_ref, target, kind, record)
@@ -2033,32 +2047,139 @@ def retained_wip(task):
             "resolved": wip.get("resolved"), "step_id": wip.get("step_id"), "has_wip": bool(wip)}
 
 
-def wip_blockers(root, exclude_id=None):
-    """其他活动任务里仍未处置的保留 WIP：路径仍留在工作树差异中，或 disposition.pending 非空。"""
+def wip_blockers(root, exclude_id=None, exclude_scope=None):
+    """其他活动任务里仍未处置的保留 WIP：路径仍留在工作树差异中，或 disposition.pending 非空。
+
+    `exclude_scope` 是**绑定对象**（`{kind, id}`）：`kind=task` 排除该任务本身，并（返工谱系）
+    排除其 `rework_of` 来源任务；`kind=run` 只排除实例的**当前任务**（`cursor.task_id`）与
+    `sequence_changes` 登记的返工谱系（R 及其恢复目标）——不是实例内全部任务
+    （2026-11-27 人裁口径乙：聚焦＋谱系）。此前只按任务 id 比较，实例内当前任务重新取写权时
+    会被自己的 `e∩dirty` 挡成"外来改动"（第五轮独立审查 F2）。
+    """
     from . import scope as scope_mod
     from . import tasks as tasks_mod
 
     dirty = set(scope_mod.uncommitted_paths(root))
-    tasks = [task for _directory, task in tasks_mod.iter_tasks(root)
-             if task.get("status") != "archived"]
+    all_records = [task for _directory, task in tasks_mod.iter_tasks(root)]
+    tasks = [task for task in all_records if task.get("status") != "archived"]
+    archived = [task for task in all_records if task.get("status") == "archived"]
+    scope_kind = (exclude_scope or {}).get("kind")
+    scope_id = (exclude_scope or {}).get("id")
+    run_record = None
+    if scope_kind == "run" and scope_id:
+        from . import runs as runs_mod
+
+        run_record = runs_mod.load_run(root, scope_id)
+        if not isinstance(run_record, dict):
+            # 绑定对象记录缺失是历史事实不明，不是"工作区有外来 WIP"（第六轮独立审查 F6）。
+            raise CliError("WF_HISTORY_UNRESOLVED",
+                           {"reason": "bound run record missing", "run": scope_id},
+                           next_="先按 `status` 核实例记录，或由人走 `wf repair` 后再重试")
+
+    bound_record = None
+    if scope_kind == "task" and scope_id:
+        bound_record = tasks_mod.load_task(root, scope_id)
+
+    def _mine(task):
+        if scope_kind == "task":
+            if task.get("id") == scope_id:
+                return True
+            # 返工谱系（机制稿 §6.2，2026-11-27 人裁方案①）：绑定 R 时，其**来源 T** 的保留 WIP
+            # 由 R 承接，不构成 R 取得写权的阻断。
+            # 谱系闭包（2026-11-28 人裁 §45）：沿 rework_of 上溯全部祖先，不只一层。
+            source_id = (bound_record or {}).get("rework_of")
+            seen = set()
+            while source_id and source_id not in seen:
+                if task.get("id") == source_id:
+                    return True
+                seen.add(source_id)
+                try:
+                    ancestor = tasks_mod.load_task(root, source_id)
+                except Exception:
+                    break
+                source_id = (ancestor or {}).get("rework_of")
+            return False
+        if scope_kind == "run" and isinstance(run_record, dict):
+            # 聚焦＋谱系（机制稿 §4.3/§4.4，2026-11-27 人裁口径乙）：只排除当前任务与
+            # 返工谱系（R 及其恢复目标 T），不再把实例内所有任务都算"自己"。
+            if task.get("id") == (run_record.get("cursor") or {}).get("task_id"):
+                return True
+            for entry in run_record.get("sequence_changes") or []:
+                if isinstance(entry, dict) and task.get("id") in (entry.get("task_id"),
+                                                                 entry.get("resume_task")):
+                    return True
+            return False
+        return bool(exclude_id) and task.get("id") == exclude_id
     # 已保存的 WIP 归属优先于 glob 重叠：显式记录过的路径不再算到别的任务头上
     explicit = {}
     for task in tasks:
         for path in tasks_mod.wip_paths(task):
             explicit.setdefault(path, task.get("id"))
+    # 已处置（resolved，含 transfer）的登记路径：**只**豁免该任务自己已处置的那部分，
+    # 不写全局 `explicit`——否则第三方（无任何 WIP 登记）把同一路径改脏时会被这行掩盖，
+    # 其未提交改动可被别的任务捎带（2026-11-27 第八轮独立审查 F1，只改一处即可复现）。
+    # `stop --transfer` 把 `transferred_to` 写进 `resolved.evidence`（唯一写入点 tasks.stop_work），
+    # 本函数消费它：路径归属承接方——第三方被承接方挡、承接方自取写权不被挡
+    # （2026-11-27 人裁 §13 落地；requrer 匹配按写权作用域，见下）。
+    # 已处置豁免**绑内容**：只豁免登记时摘要仍匹配的路径；之后再变脏即恢复阻断
+    # （第十三轮复审 F2：按路径永久的豁免会让第三方把重新变脏的改动捎带入库）。
+    settled_by = {}
+    transfers = {}
+    # 归属事实要跨归档保留：transfer 的承接方与已处置路径在原持有方归档后仍是"谁拥有这条路径"
+    # 的唯一证据（活动任务列表会丢掉它们，导致第三方在写权前置面畅通——R19 F2）。
+    for task in tasks + archived:
+        wip = ((task.get("handoff") or {}).get("wip")) or {}
+        resolved = wip.get("resolved")
+        if not resolved:
+            continue
+        own_id = task.get("id")
+        evidence = resolved.get("evidence") if isinstance(resolved, dict) else None
+        target = (evidence or {}).get("transferred_to") if isinstance(evidence, dict) else None
+        for item in wip.get("paths") or []:
+            if not isinstance(item, dict):
+                continue
+            path, digest = item.get("path"), item.get("digest")
+            if not path:
+                continue
+            # transfer 后归属承接方（机制稿 §4.3，2026-11-27 人裁 §13）：第三方被该承接方挡，
+            # 承接方自己取写权不被挡。
+            if target:
+                # 链式 transfer：归属收敛到**最近一次**（按 resolved.at），不按目录名顺序；
+                # 否则后处理的归档记录会覆盖较新的承接方（第二十轮复审 F1）。
+                # 承接方失效（归档/记录不存在）时回落原持有方（2026-11-28 人裁 §32+§44）。
+                at = str(resolved.get("at") or "")
+                previous = transfers.get(str(path))
+                if previous is None or at >= previous[0]:
+                    transfers[str(path)] = (at, target, own_id)
+            if digest:
+                settled_by.setdefault(own_id, {})[str(path)] = digest
+    for path, (_at, target, _own) in transfers.items():
+        explicit.setdefault(path, target)
+
+    from . import fingerprint as fp_mod
+
+    def _settled(own_id, path):
+        digest = (settled_by.get(own_id) or {}).get(path)
+        if not digest:
+            return False
+        try:
+            return fp_mod.item(root, path).get("digest") == digest
+        except Exception:      # 读不到就不豁免（fail-closed）
+            return False
     blocked = []
     for other in tasks:
-        if other.get("id") == exclude_id:
+        if _mine(other):
             continue
         own_id = other.get("id")
         info = retained_wip(other)
         remaining = [path for path in info["paths"]
-                     if path in dirty and explicit.get(path, own_id) == own_id]
+                     if path in dirty and not _settled(own_id, path)
+                     and explicit.get(path, own_id) == own_id]
         owned_dirty = []
         try:
             classified = scope_mod.classify_candidates(root, other, receipts=())
             owned_dirty = sorted(path for path in set(classified["buckets"]["e"]) & dirty
-                                 if explicit.get(path, own_id) == own_id)
+                                 if not _settled(own_id, path) and explicit.get(path, own_id) == own_id)
         except Exception:  # 分类失败不放大为阻断，按登记事实处理
             owned_dirty = []
         paths = sorted(set(remaining) | set(owned_dirty))
@@ -2067,6 +2188,31 @@ def wip_blockers(root, exclude_id=None):
                             "registered": bool(remaining)})
     # 准备通道保留的草稿也占工作区：指名归属并按摘要核（内容变了就要人重新处置，
     # 不能把"写过的摘要"当装饰；也不再让同一个文件在任务侧被当成来路不明的外来改动）。
+    # transfer 承接的路径：写权前置把归属记在承接方名下（即使承接方尚未登记自己的 WIP）。
+    # 请求方是否就是承接方要按**写权作用域**判：run 绑定的 requester 是实例 id，而 transfers 的键是
+    # 任务 id——直接比较会把实例内的承接任务误判成"别人"（第十四轮复审 F1）。
+    def _requester_matches(target):
+        if scope_kind == "task":
+            return target == scope_id
+        if scope_kind == "run" and isinstance(run_record, dict):
+            if target == (run_record.get("cursor") or {}).get("task_id"):
+                return True
+            for entry in run_record.get("sequence_changes") or []:
+                if isinstance(entry, dict) and target in (entry.get("task_id"), entry.get("resume_task")):
+                    return True
+            return False
+        return target == exclude_id
+
+    active_ids = {task.get("id") for task in tasks}
+    for path, (_at, target, own_id) in sorted(transfers.items()):
+        if path not in dirty:
+            continue
+        effective = target if target in active_ids else own_id
+        if _requester_matches(effective):
+            continue
+        blocked.append({"task": effective, "paths": [path], "pending": [],
+                        "registered": False, "transferred": True})
+
     from . import runs as runs_mod
 
     for item in runs_mod.retained_preparation_wip(root):
@@ -2079,13 +2225,17 @@ def wip_blockers(root, exclude_id=None):
     return blocked
 
 
-def assert_no_foreign_wip(ctx, exclude_id=None):
+def assert_no_foreign_wip(ctx, exclude_id=None, exclude_scope=None):
     """授予写权的统一前置：其他对象的保留 WIP 未处置时不得授予（机制稿 §6.4）。"""
-    blocked = wip_blockers(ctx.root, exclude_id=exclude_id)
+    blocked = wip_blockers(ctx.root, exclude_id=exclude_id, exclude_scope=exclude_scope)
     if blocked:
         raise CliError("WF_WORKSPACE_UNRESOLVED",
                        {"reason": "other objects keep un-disposed WIP（含准备通道保留的草稿）",
-                        "blocked": blocked},
+                        "blocked": blocked,
+                        "exits": ["分别由 blocked[].task 的持有方实际处置（提交 / 移走 / 具名承接），"
+                                  "或由 blocked[].preparation 的准备会话 `definition prepare --end` 逐路径处置后重试",
+                                  "人裁决只决定由谁处置（`judgments add` kind=归属 只留痕）；处置仍走第一条出口",
+                                  "写权记录本身残留（旧写者已停止）时由人走 `wf repair` 后再重试"]},
                        next_="先按各任务/准备记录的实际处置落实保留 WIP（提交、移走或重新出处置），再授予写权")
 
 
@@ -2121,7 +2271,7 @@ def _writer_acquire(ctx):
     _require_instance_match(ctx, binding)
     object_ref = binding.get("object") or {}
     with _lock(ctx.root, hint="writer acquire"):
-        assert_no_foreign_wip(ctx, exclude_id=object_ref.get("id"))
+        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         record = ctx.writer()
         if record.get("state") != "idle":
             raise CliError("WF_WRITER_BUSY", {"holder": record.get("holder")})
@@ -2330,7 +2480,7 @@ def _handover_accept(ctx):
         if binding and (binding.get("object") or {}).get("id") not in (None, object_ref.get("id")):
             raise CliError("WF_BINDING_MISMATCH", {"binding": binding.get("object"), "handover": object_ref})
         # 接收方也要核真实工作区：外来未处置 WIP 不得随交接一并接收（设计稿 §4.4）
-        assert_no_foreign_wip(ctx, exclude_id=(object_ref or {}).get("id"))
+        assert_no_foreign_wip(ctx, exclude_scope=object_ref)
         updated = writer_mod.handover_accept(
             record,
             session_key=key,
@@ -2514,8 +2664,21 @@ def cmd_stop(ctx, args):
         task = _tasks_mod.load_task(ctx.root, object_ref.get("id"))
         if task is None:
             raise CliError("WF_RECORD_INVALID", {"missing_task": object_ref.get("id")})
-        pending = _tasks_mod.pending_delivery_paths(
+        pending_all = _tasks_mod.pending_delivery_paths(
             type("C", (), {"root": ctx.root})(), task) or []
+        # 预填面与 `--commit` 的归属门禁同口径（2026-11-28 人裁 §29）：只列本任务 e 桶里
+        # 仍未提交的路径；交付面里落在 c 桶的（策展/baseline 等）不进 draft，避免"照抄必被拒"。
+        from . import scope as _scope_mod
+
+        pending = pending_all
+        try:
+            _classified = _scope_mod.classify_candidates(ctx.root, task, receipts=())
+            _e = set(_classified.get("buckets", {}).get("e") or [])
+            pending = [path for path in pending_all if path in _e]
+            if not pending and _e:
+                pending = sorted(_e)
+        except Exception:
+            pending = pending_all
         entry = {"source": "TODO human:<来源>", "at": records.now_str(),
                  "subject": pending or "TODO（人填写：处置对象或路径）",
                  "object_digest": "", "choice": "TODO（人选一个：commit|keep|reverse|transfer）",
@@ -3318,7 +3481,7 @@ COMMAND_HELP = {
                      "args": {"--task": "必填：原任务 id", "--decision": "必填：替换决定文件",
                               "--preview": "可选：只读预览，不写记录"},
                      "example": "wf.py task-replace --task \"2026-xxxx\" --decision \"r.json\" --preview --json"},
-    "task-reassess": {"purpose": "挂起任务复评（首轮无返工能力时挂起集合为空直接通过）",
+    "task-reassess": {"purpose": "挂起任务复评（单任务复评：核该任务的挂起条件并清挂起（未挂起时幂等返回））",
                       "args": {"--task": "必填：任务 id"},
                       "example": "wf.py task-reassess --task \"2026-xxxx\" --json"},
     "task-attribute": {"purpose": "历史提交归属裁决（已提交改动归属本任务/他人）",
@@ -4015,7 +4178,7 @@ def cmd_review_status(ctx, args):
                  "重建（同 Check 身份会逐字节复现，原报告继续有效），再 review-decide；"
                  + ("待导入报告（%s）也要等材料重建后再 review-import；" % ", ".join(pending_import)
                     if pending_import else "")
-                 + "只有 Check 已重跑换 id 或交付面/规格已变才需重写报告/开新一轮；"
+                 + "只有锚点或交付面/规格已变才需重写报告/开新一轮；"
                  "直接 review-decide 会被拒")
     elif materials_state == "drift" and history_round:
         # 全部 restored/无身份：drift 不阻断 decide；仍可放回原字节恢复可核身份。
@@ -4049,7 +4212,7 @@ def cmd_review_status(ctx, args):
         elif material_stale:
             next_ = ("本轮材料目录已不在（当前无材料身份，报告仍绑定原身份）：有备份就把原字节"
                      "放回材料目录；没有备份则重跑 review-context 重建（同 Check 身份会逐字节复现，"
-                     "原报告继续有效），再 review-decide；只有 Check 已重跑换 id 或交付面/规格已变"
+                     "原报告继续有效），再 review-decide；只有锚点或交付面/规格已变"
                      "才需按新材料重写报告/开新一轮" + import_note)
         else:
             next_ = ("本轮材料目录已不在（当前无材料身份，报告含按记录还原的历史证据）："

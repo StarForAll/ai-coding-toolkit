@@ -56,6 +56,7 @@
       "review-identity-c6",
       "review-material-pending",
       "review-report-boundary",
+      "review-rounds-unbounded",
       "review-unavailable"
     ],
     "task": [
@@ -438,6 +439,13 @@
       "metadata": false
     },
     "review-report-boundary": {
+      "candidate_clean": "<missing>",
+      "groups": [
+        "review"
+      ],
+      "metadata": false
+    },
+    "review-rounds-unbounded": {
       "candidate_clean": "<missing>",
       "groups": [
         "review"

@@ -68,10 +68,10 @@ def build_task(project, root, title="repro 任务", sid="sess-R", complexity=Non
     return task_id, task_dir
 
 
-def main_review(task_id, slots, findings=(), axes=None):
+def main_review(task_id, slots, findings=(), axes=None, round_no=1):
     """主会话复核：五轴 pass、逐报告 primary、逐 finding verified（夹具用）。"""
     axes = axes or {axis: "pass" for axis in AXES}
-    return {"task": task_id, "round": 1,
+    return {"task": task_id, "round": round_no,
             "axes": {axis: {"conclusion": axes.get(axis, "pass"), "basis": "b",
                             "sources": ["main"], "finding_refs": []} for axis in AXES},
             "report_review": [{"slot": slot, "reliance": "primary",
@@ -82,8 +82,12 @@ def main_review(task_id, slots, findings=(), axes=None):
 
 
 def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=None,
-               findings=(), main_axes=None):
-    """check → launch → import 两份报告 → 主会话复核 → decide。返回 (decide_rc, 载荷, 记录)。"""
+               findings=(), main_axes=None, round_no=1, launch_only=False):
+    """check → launch → import 两份报告 → 主会话复核 → decide。返回 (decide_rc, 载荷, 记录)。
+
+    `round_no` 让同一任务在修复后发起下一轮（轮次不设上限）；`launch_only=True` 只做
+    check + launch（供"轮次上限"类断言使用），不写报告也不判定。
+    """
     axes = axes or {axis: {"conclusion": "pass", "basis": "b"} for axis in AXES}
     # 任务记录/绑定/写权属于本次任务的既有改动，先提交，Check 才不会把它们当冲突候选
     # 只提交治理面：业务文件 pkg/a.py 保持未提交，属本任务自己的改动（e 桶）
@@ -128,29 +132,35 @@ def run_review(project, root, task_id, task_dir, slot_clis, sid="sess-R", axes=N
     temp_paths = facts.get("temp_paths") or []
     if len(temp_paths) != len(slot_clis):
         raise H.Precondition(f"review-launch 未给出逐槽位暂存目录：{list(facts)}")
+    if launch_only:
+        record = json.load(open(os.path.join(task_dir, "task.json"), encoding="utf-8"))
+        return 0, payload, record
     for i, cli_name in enumerate(slot_clis):
-        body = {"protocol": "wf-review-v1", "task-id": task_id, "round": 1,
+        body = {"protocol": "wf-review-v1", "task-id": task_id, "round": round_no,
                 "reviewer-id": f"slot-{i}", "source-cli": cli_name, "review-time": AT,
                 "review-focus": "x",
                 "check-anchor": {"check_id": check.get("id"), "check_anchor": anchor},
                 "read-scope": ["pkg/**"],
                 "excluded-scope": ["node_modules/**", ".env", "*.pem", ".codex/**", "../**", ".wf/tasks/**"],
-                "axes": axes, "findings": list(findings), "verdict": "pass"}
+                "axes": axes, "findings": list(findings),
+                # 报告自述 verdict 必须与 findings 一致：带 blocking 却写 pass 属输入矛盾
+                "verdict": ("fail" if any(str(item.get("severity")) == "blocking"
+                                           for item in findings) else "pass")}
         slot_dir = temp_paths[i]
         os.makedirs(slot_dir, exist_ok=True)
         report = os.path.join(slot_dir, "report.md")
         open(report, "w", encoding="utf-8").write(REPORT.format(slot=f"slot-{i}",
                                                                 body=json.dumps(body, ensure_ascii=False, indent=2)))
-        rc, payload = H.cli(project, ["review-import", "--task", task_id, "--round", "1",
+        rc, payload = H.cli(project, ["review-import", "--task", task_id, "--round", str(round_no),
                                       "--slot", f"slot-{i}", "--report", report, "--json"],
                             sid=sid, inputs={"generation": H.generation(project)})
         if rc != 0:
             raise H.Precondition(f"review-import failed: {payload}")
     review_path = os.path.join(root, "main-review.json")
     json.dump(main_review(task_id, [f"slot-{i}" for i in range(len(slot_clis))],
-                          findings=findings, axes=main_axes),
+                          findings=findings, axes=main_axes, round_no=round_no),
               open(review_path, "w"), ensure_ascii=False)
-    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", "1",
+    rc, payload = H.cli(project, ["review-decide", "--task", task_id, "--round", str(round_no),
                                   "--main-review", review_path, "--json"],
                         sid=sid, inputs={"generation": H.generation(project)})
     record = json.load(open(os.path.join(task_dir, "task.json"), encoding="utf-8"))

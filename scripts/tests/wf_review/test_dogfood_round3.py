@@ -411,7 +411,11 @@ class Round2ReviewConsistencyTest(unittest.TestCase):
             hint = tasks_mod.check_next_hint(task, task["check"], ctx=ctx)
         self.assertIn("未关闭 blocking", hint)
         self.assertIn("轮次 [2]", hint)
-        self.assertIn("重新发起判定", hint)
+        # 收敛动作点名唯一可执行入口（2026-11-27 独立审查 F3：旧轮内容变了不可重判，
+        # "重新发起判定"会把人送去 review-decide 旧轮并必被拒）。断言用新文案独有措辞，
+        # 否则基础文案里的 review-launch 会让回退注入同样变绿（第二轮复审 F-B）。
+        self.assertIn("旧轮不可重判", hint)
+        self.assertNotIn("重新发起判定", hint)
         # 无未关闭 blocking 时不出提示（不制造噪声）
         with mock.patch.object(review_mod, "open_findings", return_value={"blocking": []}):
             hint = tasks_mod.check_next_hint(task, task["check"], ctx=ctx)

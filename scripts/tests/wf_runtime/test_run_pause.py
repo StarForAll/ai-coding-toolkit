@@ -7,8 +7,7 @@
 **不能只移动游标绕过任务门禁**」——所以 pause 不动 `cursor`，只写 `paused`/`paused_reason`
 并把当前任务标 `paused`（清执行候选）。
 
-解除路径**不在这里**：机制稿 §2.2 只为任务定义「暂停/恢复」，实例的解除没有出处
-（`run` 的子动作表也没有 resume）。当前 paused 实例的出口是 `run terminate`。
+实例解除暂停由 `run resume` 承载（2026-11-12 交付）；`run terminate` 只是终态出口。
 """
 
 import sys

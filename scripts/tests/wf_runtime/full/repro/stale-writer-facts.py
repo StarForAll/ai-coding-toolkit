@@ -18,9 +18,13 @@ import _snapshot as S
 
 SID = "sess-W688"
 FROM = ('        if holder.get("id") != key:\n'
-        '            raise CliError("WF_WRITER_BUSY", {"holder": holder, "reason": "held by another session"})\n')
+        '            raise CliError("WF_WRITER_BUSY", {"holder": holder, "reason": "held by another session"},\n'
+        '                           next_="那不是本会话的资源，`writer release` 不适用：等持有者释放，"\n'
+        '                                 "或由人确认旧写者停止后走 `wf repair` 恢复")\n')
 TO = ('        if False:  # 注入：不再核他人持有（PID 消失即当空闲的等价形态）\n'
-      '            raise CliError("WF_WRITER_BUSY", {"holder": holder, "reason": "held by another session"})\n')
+      '            raise CliError("WF_WRITER_BUSY", {"holder": holder, "reason": "held by another session"},\n'
+      '                           next_="那不是本会话的资源，`writer release` 不适用：等持有者释放，"\n'
+      '                                 "或由人确认旧写者停止后走 `wf repair` 恢复")\n')
 
 
 def stale_writer(project, task_id):

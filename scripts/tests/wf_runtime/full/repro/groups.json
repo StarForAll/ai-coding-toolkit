@@ -24,7 +24,8 @@
       "inspect-declares-omitted",
       "repair-controlled-apply",
       "baseline-apply-generated",
-      "review-material-pending"
+      "review-material-pending",
+      "review-rounds-unbounded"
     ],
     "archive": [
       "abandon-boundary",

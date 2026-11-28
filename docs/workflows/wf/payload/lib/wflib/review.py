@@ -3551,8 +3551,8 @@ def context(ctx, task, round_no=None, reset=False, as_value=None):
     launch_anchor = (launch.get("anchor") or {}).get("check_anchor")
     identity = anchor_identity_problems(launch.get("anchor"), record)
     if identity or (launch_anchor and launch_anchor != anchor):
-        # 发起后内容/规格/基线又变了，或 Check 重跑换了 id：旧轮只能作废，
-        # 重跑 Check 后重新发起。`check_anchor` 相同不代表同一份 Check。
+        # 发起后内容/规格/基线又变了，或锚点不同：旧轮只能作废。同锚点重跑 Check
+        # 换了 id 属同内容重验、继续有效（2026-11-24 订正）。
         saved = ((record.get("check") or {}).get("anchor") or {})
         facts = {"reason": "launch Check identity or anchor no longer matches the current Check",
                  "round": round_no,
@@ -4312,8 +4312,8 @@ def read_scope_problems(payload, allowed_prd=None):
 def anchor_identity_problems(anchor, task=None):
     """`check-anchor` 的形状与 Check 身份（`check_id` + `check_anchor`）。
 
-    `check_anchor` 相同不代表同一份 Check：重跑 Check 会生成新 id，旧报告必须失效。
-    形状问题与身份问题分开列，调用方按入口语义选择 code。
+    身份以 `check_anchor` 为准：同锚点重跑 Check 生成新 id 属同内容重验、继续有效；
+    只有锚点不同才失效（2026-11-24 订正）。形状问题与身份问题分开列，调用方按入口语义选择 code。
     """
     if not isinstance(anchor, dict):
         return [{"reason": "check-anchor must be an object", "value": anchor}]
@@ -4890,6 +4890,27 @@ def _accept_result(task, facts, kept, assertion):
         facts=dict(facts, unknown_acceptances=active, control_assertion=assertion))
 
 
+def review_input_exits(blockers):
+    """`WF_REVIEW_INVALID`（输入不成立）的出口分档——唯一实现，供 `decide` 与断言共用。
+
+    锚点不符不是"补报告能救"的输入问题：报告绑定被审内容，内容变了它已失去对象，
+    唯一可执行是发起新一轮；其余问题（范围/轴/source-cli）在原内容未变时可以补齐后重导。
+    判据消费输入面的 blocker token（`anchor_stale`），不按 `problems` 的措辞反推——
+    文案一改就会静默回落到通用分支（2026-11-27 第三轮独立复审 R3-3）。
+    """
+    if "anchor_stale" in (blockers or []):
+        base = ["旧报告已失去被审对象（锚点不符）：修复后重跑 task-check，再用 review-launch 发起新一轮",
+                "已导入槽位的摘要不可替换；只有尚未导入的槽位能按问题清单补齐后重新导入"]
+    else:
+        # 已导入槽位的报告摘要锁定（同轮不覆盖、同路径不同摘要即拒绝），"补齐后重导"对它们
+        # 不可执行；未导入的新槽位才可补。首条因此改为新一轮（同锚点可复用），补报告只作次选。
+        base = ["用 review-launch 发起新一轮后在新槽位导入并判定（已导入槽位的报告摘要不可替换；"
+                "同锚点重跑 Check 不失效）",
+                "若该槽位尚未导入且内容未变：按问题清单补齐报告（读/排除范围、轴覆盖、source-cli）后重新导入"]
+    return base + ["本轮改为不审查：`review-decide --unavailable <声明>` 留痕，任务按复杂或降级处置",
+                   "确认无法审查时按异常退出处置，不伪造 pass"]
+
+
 def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, register_only=False,
            gap_acceptance_path=None, main_review_path=None, single_reviewer_acceptance_path=None):
     """判定（2026-11-07）：round 缺省取最新已发起轮；审核者身份取导入记录里的文件名 token。
@@ -5338,12 +5359,11 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
             failures = report_facts["failures"]
             source_clis = report_facts["source_clis"]
             if problems:
-                # 拒绝必须同时给出口（机制稿 §11.1 三档：拒绝不是死路）
+                # 拒绝必须同时给出口（机制稿 §11.1 三档：拒绝不是死路）。出口分档收敛到
+                # `review_input_exits` 一处实现（测试直接消费它；2026-11-27 第三/四轮复审）。
                 raise ReviewError("WF_REVIEW_INVALID", {
                     "problems": problems,
-                    "exits": ["按问题清单补齐报告（读/排除范围、轴覆盖、锚点、source-cli）后重新导入并判定",
-                              "本轮改为不审查：`review-decide --unavailable <声明>` 留痕，任务按复杂或降级处置",
-                              "确认无法审查时按异常退出处置，不伪造 pass"],
+                    "exits": review_input_exits(report_facts.get("blockers")),
                 })
             distinct = sorted(set(source_clis))
             implementation = {implementer}   # 单值口径：只认本轮声明
@@ -5755,8 +5775,8 @@ def decide(ctx, task, round_no=None, plan_path=None, unavailable_path=None, regi
         position_=codes.position(scope="task", phase=task.get("phase"), task_id=task.get("id")),
         next_=("verdict=pass（全部已知 blocking 已关闭）后由人调用 finish（wf-finish）" if verdict == "pass" else
                ("按异常退出处置：暂停，或经人重新分级后按轻量完成" if verdict == "unavailable" else
-                "有未关闭 blocking：在批准范围内修复→重跑 task-check→重新发起；"
-                "误报/重分类经复核登记 accepted 后可重判")),
+                "有未关闭 blocking：在批准范围内修复→重跑 task-check→用 review-launch 发起新一轮"
+                "（内容变了旧轮不可重判）；误报/重分类经复核登记 accepted 后可同轮重判")),
         facts={"result": result, "reviewer_clis": result.get("reviewer_clis"),
                "control_assertion": assertion},
     )

@@ -73,6 +73,30 @@ class CheckNextHintTest(unittest.TestCase):
         self.assertIn("继续这一轮", hint)
         self.assertNotIn("先 review-launch", hint)
 
+    def test_open_blocking_convergence_names_review_launch(self):
+        """未关闭 blocking 时，收敛文案必须点名唯一可执行入口 review-launch。
+
+        内容变了旧轮报告即失绑（锚点/材料冻结），`review-decide` 旧轮必被拒；
+        2026-11-27 独立审查 F3 实测三处文案都只说"重新发起"，未点命令。
+        """
+        import types
+        from unittest import mock
+
+        from wflib import review
+
+        task = {"id": "t1", "plan": {"complexity": "complex"},
+                "check": {"result": "pass", "anchor": {"check_anchor": "A"}},
+                "reviews": {"launches": [{"round": 1, "anchor": {"check_anchor": "A"}}],
+                            "rounds": [], "result": {"verdict": "fail", "anchor": {"check_anchor": "A"}}}}
+        ctx = types.SimpleNamespace(root="/tmp/x", debug_threshold=lambda: 3)
+        with mock.patch.object(review, "open_findings",
+                               return_value={"blocking": [{"round": 1, "id": "f1"}], "unaddressed": []}):
+            hint = tasks.check_next_hint(task, {"result": "pass"}, ctx)
+        # 断言必须能区分修复（第二轮复审 F-B）：基础文案本身已含 review-launch，
+        # 旧的 blocking_fix 也含"重跑 task-check"；只有新文案独有的措辞才证明改动生效。
+        self.assertIn("旧轮不可重判", hint)
+        self.assertNotIn("重新发起判定", hint)
+
     def test_in_flight_round_hinted_without_any_verdict(self):
         task = {
             "plan": {"complexity": "complex"},

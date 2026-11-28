@@ -713,8 +713,8 @@ verdict、`submitted_scope` 不参与物化。
 - 发起/取材料：`review.launch` 复用 `gates.check_validity` 并在发起时核 `submitted_scope`
   与交付集合/PRD/当前 Check 一致；`diff.paths` 必须显式给出，收窄比例记入 launch
   `scope.selected/total/narrowed` 与 `review-context` facts。`review.context` 核 launch 的
-  `check_id` 与 `check_anchor`，任一漂移即拒绝。导入/判定同时核报告 `check-anchor.check_id`；
-  重跑 Check 换 id 即旧报告失效。
+  `check_anchor`（同锚点重跑 Check 换 `check_id` 视为同内容重验、继续有效；锚点漂移才拒绝）。导入/判定同时核报告的 `check_anchor`；`check_id` 只在锚点也不同时判失效；
+  重跑 Check 换 id 不自动失效（同锚点视为同内容重验）；仅锚点不同才失效。
 - 材料：launch 的 `submitted_scope` 是物化输入；`diff.paths` 只能缩小，不能扩大，且不得与本轮
   `exclusions` 交叠；显式 `null`/重复路径按非法/去重处理；旧布尔形状回退交付集合扣除
   `exclusions` 并标 `legacy_scope`。报告 `read-scope` 不得命中 launch `exclusions`，也不得超出 `readable_scope`
@@ -742,7 +742,7 @@ verdict、`submitted_scope` 不参与物化。
 | 请求的 `exclusions` 省略/缩小必排面 | 必排面（`.env`、私钥、配置等）始终并入；请求只能追加；非数组拒绝 |
 | `submitted_scope.diff`/`requirement`/`test_results` 形状非法 | `WF_REVIEW_INVALID`（仅旧布尔形状兼容） |
 | 显式空 `readable_scope` | 表示不授权额外读取；报告有 `read-scope` 即拒绝（缺省未声明才用入口默认） |
-| 报告/launch 的 `check_id` 与当前 Check 不同（即使 `check_anchor` 相同） | `WF_REVIEW_INVALID` / `WF_CHECK_STALE` |
+| 报告/launch 的 `check_anchor` 与当前 Check 不同（同锚点换 `check_id` 有效） | `WF_REVIEW_INVALID` / `WF_CHECK_STALE` |
 | 发起请求 `submitted_scope.diff.paths` 缺失或超出交付集合 | `WF_REVIEW_INVALID`，不写 launch |
 | 主会话 `sources` 引用 `reliance=none`、未覆盖该轴的报告，或 `pass` 引用该轴判 `fail` 的报告 | `WF_REVIEW_INVALID` |
 | `verified` finding 的 `accepted` 关闭无 `evidence_refs` | `WF_REVIEW_INVALID`；跨轮按提出轮复核 check 核，不在当前轮找不到就放过 |

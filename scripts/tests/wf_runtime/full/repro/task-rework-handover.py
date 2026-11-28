@@ -61,9 +61,14 @@ def check():
     handoff = (record.get("handoff") or {}).get("wip") or {}
     if handoff.get("task_id") != task_id or handoff.get("resolved") is not None:
         problems.append(f"未保存交接/工作区：{handoff}")
-    # 4) 处置 WIP 之后，新会话能直接绑定 R（写权已由入口释放，无需人工 release）
-    subprocess.run(["git", "add", "-A"], cwd=project, capture_output=True)
-    subprocess.run(["git", "commit", "-qm", "dispose wip"], cwd=project, capture_output=True)
+    # 3b) WIP 每项必须是 fingerprint.item（含 digest）：纯字符串会让恢复期的"有变化重核"
+    #     与写权前置的按摘要豁免在这条来源上静默失效（R22 F3 / R23 F4）。
+    for item in handoff.get("paths") or []:
+        if not isinstance(item, dict) or not item.get("path") or not item.get("digest"):
+            problems.append(f"交接 WIP 形状不符（应为 fingerprint.item）：{item}")
+            break
+    # 4) 新会话能直接绑定 R（写权已由入口释放，无需人工 release）；T 的交接 WIP 由 R 承接，
+    #    不必先把被否的实现提交入库（2026-11-27 人裁方案①：返工谱系豁免）。
     rc, payload = run(["bind", "--task", rework_id], sid="sess-RWH2")
     if rc != 0:
         problems.append(f"新会话无法绑定 R：{(payload or {}).get('code')} {(payload or {}).get('facts')}")

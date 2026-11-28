@@ -112,6 +112,20 @@ def workflow_snapshot_digest(ctx, task):
     """
     run_id = task.get("run_id")
     if not run_id:
+        # 受控返工 R 不写 run_id，但同属在途实例：锚点必须含该实例的快照（2026-11-28 人裁 §48）。
+        try:
+            from . import runs as runs_mod0
+            from . import tasks as tasks_mod0
+
+            for _rid, run in runs_mod0.iter_runs(ctx.root):
+                if not isinstance(run, dict) or run.get("terminal") is not None:
+                    continue
+                if tasks_mod0._task_in_run(task, task.get("id"), run.get("id"), run, ctx.root):
+                    run_id = run.get("id")
+                    break
+        except Exception:
+            run_id = None
+    if not run_id:
         return None
     from . import runs as runs_mod
 
@@ -1230,9 +1244,85 @@ def run_check_scope(ctx, task, decisions, review_notes_path, exclusion_entries=N
         # 归属语义存疑：交人裁决，不当通过（机制稿 §3.5 d 档）。
         # 争抢判定由 `scope.classify_candidates` 单次给出（它自己调 `cross_task_conflicts`），
         # 这里不再重复计算——两处各算一次就会漂移。
+        # 出口按对象形态条件化（2026-11-27 人裁：§7 条件式全序列）：
+        # d 只报命中批准触碰面的路径（"回 Plan 纳触碰面"是空操作）；`handoff.wip` 只由普通任务的
+        # stop 与 rework 普通分支写入，所以持有方必然是普通任务、按 stop 的 choice 处置；
+        # 报告方若为实例步骤任务，`stop` 不可用，只能 `run pause`→`writer release`。
+        # 形态按"在途实例"判：异常终止实例的保留任务按 task 绑定，出口用普通任务支
+        # （run pause/resume 对已终态实例必拒；第十四轮复审 F5）。
+        run_record = None
+        try:
+            from . import runs as runs_mod2
+
+            run_record = runs_mod2.load_run(ctx.root, task.get("run_id")) if task.get("run_id") else None
+        except Exception:
+            run_record = None
+        # 实例记录缺失：与 `cli.wip_blockers` 同口径报 history，而不是给一条必失败的 d 档出口
+        # （2026-11-28 人裁 §46）。
+        if task.get("run_id") and not isinstance(run_record, dict):
+            raise CheckError("WF_HISTORY_UNRESOLVED",
+                             {"reason": "run record missing for the task's instance",
+                              "run_id": task.get("run_id"),
+                              "exits": ["先恢复/补齐实例记录（`wf repair`）后重试",
+                                        "或由人确认旧写者已停止后按 §5.5 核对工作区与记录"]})
+        # 出口的可执行性由**会话绑定形态**决定（第二十四轮 F24-3）：run 绑定的会话只能用
+        # `run pause`→`writer release`；task 绑定的会话只能用 `stop`/`task-pause`。任务形态
+        # （run_id / sequence_changes）只作关联事实，不能替代绑定事实。
+        bound_kind = None
+        try:
+            key = ctx.key(required=False) if hasattr(ctx, "key") else None
+            if key:
+                from . import session as session_mod3
+
+                bound = session_mod3.load_binding(ctx.root, key)
+                if isinstance(bound, dict):
+                    bound_kind = (bound.get("object") or {}).get("kind")
+        except Exception:
+            bound_kind = None
+        is_instance = bound_kind == "run"
+        if bound_kind is None:
+            is_instance = bool(task.get("run_id")) and (not isinstance(run_record, dict)
+                                                        or run_record.get("terminal") is None)
+        if bound_kind is None and not is_instance:
+            # 受控返工 R 不写 run_id，但经 `sequence_changes` 属于在途实例（第二十三轮 F1）：
+            # 形态必须按"是否属于在途实例"判，否则 run 绑定的会话会拿到 stop 出口（必报 BINDING_MISMATCH）。
+            try:
+                from . import runs as runs_mod3
+                from . import tasks as tasks_mod3
+
+                for _rid, run in runs_mod3.iter_runs(ctx.root):
+                    if not isinstance(run, dict) or run.get("terminal") is not None:
+                        continue
+                    if tasks_mod3._task_in_run(task, task.get("id"), run.get("id"), run, ctx.root):
+                        is_instance = True
+                        break
+            except Exception:
+                pass
+        report_side = ("本任务先 `run pause`→`writer release`（实例任务不支持 `stop`）；其自身未提交交付"
+                       "由人在 Git 层处置（提交/反向修正）后用 `task-attribute` 裁决归属，或另立维护任务处理"
+                       "（实例内提交入口登记为后续能力）"
+                       if is_instance else
+                       "本任务先处置自身未提交交付：`stop` 可用，但 subject 只列本任务 e 档路径、"
+                       "choice 取 `commit`（需提交授权）/`reverse`/`transfer`，不得 `keep`、"
+                       "不得把争抢路径写进 subject（它一并完成暂停与释放）；无自身交付要处置时用"
+                       " `task-pause`→`writer release`")
+        resume_side = ("`writer acquire` → `run resume` → `task-resume` → 重跑 task-check"
+                       if is_instance else
+                       "`writer acquire` → `task-resume` → 重跑 task-check")
         raise CheckError("WF_SCOPE_UNRESOLVED",
                          dict(scope_facts, ambiguous_ownership=buckets["d"],
-                              cross_task_claims=classified.get("conflicts") or []))
+                              cross_task_claims=classified.get("conflicts") or [],
+                              reason="paths claimed by another active task as un-disposed WIP",
+                              exits=[report_side,
+                                     "持有该登记的任务会话处置该路径：`stop` 的 choice 从 `commit`（需人提交授权）/"
+                                     "`transfer`（承接方须已批准且覆盖该路径）/`reverse` 中选——`keep` 会重新登记"
+                                     "保留 WIP 并挡住承接方",
+                                     resume_side,
+                                     "由人裁决归属并留痕（`judgments add` kind=归属，`outcome=applied` 只留痕；"
+                                     "`escalated` 会进待决并在归档口阻断）：裁决只决定由谁处置，"
+                                     "仍走上一出口把该路径移出登记",
+                                     "写权记录本身残留（旧写者已停止）时由人走 `wf repair` 核写者后再重试；"
+                                     "WIP 登记残留仍须按上一出口处置"]))
     governance_violations, governance_state = scope.declaration_violations(
         buckets["e"], classified["touch_paths"], ctx.root
     )

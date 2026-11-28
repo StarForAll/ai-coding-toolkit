@@ -59,7 +59,7 @@ user-invoked: true
 ## 出口
 
 - `WF_COMMIT_NOT_AUTHORIZED`：等人处理，不自行提交。
-- `WF_WORKSPACE_UNRESOLVED` / `WF_SCOPE_UNRESOLVED`：逐路径处置或回 Plan 重批。
+- `WF_SCOPE_UNRESOLVED`：按入口 `facts.exits` 逐路径处置；范围类可回 Plan 补声明重批，归属争抢（d 档）回 Plan 无效——须由持有登记的任务处置其 WIP 后重扫。`WF_WORKSPACE_UNRESOLVED`：按入口 `facts.exits` 分来源处置——写权前置变体（`facts.blocked`）由各持有方实际处置（人裁决只决定由谁处置、不解除阻断）、或 `wf repair`；排除声明对该变体无效。释放前置多数只给 `next_`，以入口回显为准。
 - `WF_REVIEW_INVALID` / `WF_SEMANTIC_DECISION`：按 `facts` 判断来源——复杂任务缺真实审查/主会话复核不合规、
   知识处置缺失、复盘未覆盖触发事实等都会用这两个码；先按 facts 补齐对应项，审查环境确不可用才按异常退出
   处置（不降级归档）。
